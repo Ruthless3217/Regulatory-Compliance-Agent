@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: compliance-postgres
+    environment:
+      POSTGRES_USER: compliance_user
+      POSTGRES_PASSWORD: compliance_pass
+      POSTGRES_DB: compliance_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U compliance_user -d compliance_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: compliance-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: compliance-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://compliance_user:compliance_pass@postgres:5432/compliance_db
+      REDIS_URL: redis://redis:6379
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_BASE_URL: https://generativelanguage.googleapis.com/v1beta/openai/
+      LLM_MODEL: gemini-2.0-flash
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_PROJECT: regulatory-compliance-agent
+      ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
+
+volumes:
+  postgres_data:
+  redis_data:
