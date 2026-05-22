@@ -61,6 +61,7 @@ class ComplianceEngine:
                 "user_id": str(submission.submitted_by) if submission.submitted_by else None,
                 "chunks": [],
                 "active_rules": {},
+                "chunk_rules": {},
                 "violations": [],
                 "active_agents": [],
                 "scores": {},
@@ -84,13 +85,24 @@ class ComplianceEngine:
 
                 final_state = await orchestrator.run_workflow(initial_state, config=config)
 
-                # Check for HITL interrupt
+                # If the graph paused at the HITL refinement_node, auto-resume
+                # with no feedback so analysis finishes in a single call. The
+                # refinement_node is a no-op without user_feedback; the explicit
+                # /compliance/resume endpoint remains for HITL flows that DO
+                # have feedback to apply.
                 snapshot = await orchestrator.get_state(config)
                 if snapshot.next:
-                    logger.info(f"LangGraph PAUSED at {snapshot.next} for submission {submission_id}")
-                    submission.status = "waiting_for_review"
-                    db.commit()
-                    return None
+                    logger.info(
+                        f"LangGraph paused at {snapshot.next} for submission "
+                        f"{submission_id}; auto-resuming (no feedback)."
+                    )
+                    final_state = await orchestrator.resume_workflow(config)
+                    snapshot = await orchestrator.get_state(config)
+                    if snapshot.next:
+                        # Still paused — true HITL hold; surface to caller.
+                        submission.status = "waiting_for_review"
+                        db.commit()
+                        return None
 
                 logger.info("LangGraph execution COMPLETED.")
 
@@ -104,6 +116,20 @@ class ComplianceEngine:
 
                 submission.status = "analyzed"
                 db.commit()
+
+                # 7. Flip RAG chunk status to 'analyzed' so they become eligible
+                # for cross-submission similarity search. Non-fatal on failure.
+                try:
+                    from app.services.rag.indexers.chunks_indexer import mark_submission_analyzed
+                    summary = (
+                        f"{submission.title} · score {compliance_check.overall_score}"
+                        f" · grade {compliance_check.grade}"
+                    )
+                    await mark_submission_analyzed(
+                        submission_id=str(submission_id), db=db, summary=summary
+                    )
+                except Exception as e:
+                    logger.warning(f"RAG mark-analyzed failed (non-fatal): {e}")
 
                 return compliance_check
 

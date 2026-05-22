@@ -1,6 +1,28 @@
 # Regulatory Compliance Agent
 
-An AI-powered regulatory compliance checking system built with LangGraph, Gemini 2.0 Flash, and FastAPI.
+An AI-powered regulatory compliance checking tool for Bajaj Allianz Life marketing content. Paste or upload copy, get inline-highlighted violations against IRDAI / SEBI / Bajaj-brand rules, a shareable report with score + grade, and a chat interface to ask follow-up questions or request compliant rewrites.
+
+Stack: Next.js 15 + TypeScript + Tailwind frontend, FastAPI + LangGraph + Gemini 2.0 Flash backend, PostgreSQL + Redis.
+
+## Quick Start (docker-compose)
+
+```bash
+# 1) Set your LLM key
+export LLM_API_KEY=your_google_gemini_api_key
+
+# 2) Start the full stack (postgres + redis + backend + frontend)
+docker-compose up -d
+
+# 3) Open
+#   Frontend → http://localhost:3000
+#   API docs → http://localhost:8000/docs
+```
+
+The backend runs `alembic upgrade head` on boot. Seed the rule corpus once with:
+
+```bash
+docker-compose exec backend python -m scripts.seed_rules
+```
 
 ## Architecture
 
@@ -34,6 +56,41 @@ An AI-powered regulatory compliance checking system built with LangGraph, Gemini
 │ (Chunked) │  │  active rules│   │(Gemini Flash) │
 └─────────┘   └──────────────┘   └───────────────┘
 ```
+
+## Frontend
+
+Next.js 15 (App Router) + TypeScript + Tailwind + shadcn-style primitives. White + Bajaj blue palette; Source Serif 4 headlines, Inter body, JetBrains Mono for numerals.
+
+### Pages
+
+| Path | What it does |
+|------|--------------|
+| `/` | Submissions inbox |
+| `/new` | New analysis (paste / URL) |
+| `/submissions/[id]` | **Review** tab — inline highlights + ViolationCards |
+| `/submissions/[id]/report` | **Report** tab — score hero, KPI strip, grouped violations, print/PDF |
+| `/submissions/[id]/chat` | **Chat** tab — streamed Q&A grounded in the submission |
+| `/rules` | Rules library — filter, activate/deactivate, inline edit |
+| `/rules/generate` | AI rule extraction from regulator PDFs/text |
+| `/dashboard` | KPIs + category radar + severity distribution |
+| `/settings` | Density toggle, API health, version |
+
+### Local dev
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local   # then edit if backend isn't at :8000
+npm run dev                   # → http://localhost:3000
+```
+
+### Backend additions in this release
+
+- `Dockerfile` runs `alembic upgrade head` on container start
+- Alembic migrations at `backend/alembic/`
+- Seed rules at `backend/scripts/seeds/*.yaml` (IRDAI / Bajaj brand / SEBI)
+- `POST /chat` (SSE) and `POST /chat/quote-violation`, `/chat/suggest-rewrite`
+- `POST /compliance/analyze/{id}/stream` (SSE) — progress events
 
 ## Core Components
 

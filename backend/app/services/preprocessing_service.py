@@ -52,6 +52,9 @@ class ContextEngineeringService:
         content = submission.original_content or ""
         if not content and submission.file_path:
             content = await self._extract_from_file(submission.file_path, submission.content_type)
+        elif content and submission.content_type == "html":
+            # Pasted HTML — surface meta-tags so analysis covers SEO/social fields too
+            content = self._extract_html(content)
 
         if not content:
             logger.warning(f"No content found for submission {submission_id}")
@@ -157,12 +160,71 @@ class ContextEngineeringService:
                 return await self._extract_pdf(file_path)
             elif content_type == "docx":
                 return await self._extract_docx(file_path)
-            elif content_type in ("html", "markdown", "text"):
+            elif content_type == "html":
+                with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                    raw = f.read()
+                return self._extract_html(raw)
+            elif content_type in ("markdown", "text"):
                 with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                     return f.read()
         except Exception as e:
             logger.error(f"Failed to extract content from {file_path}: {e}")
         return ""
+
+    @staticmethod
+    def _extract_html(raw_html: str) -> str:
+        """
+        Pull out meta-tags + visible body text so compliance analysis sees both
+        the SEO/social surface (title, description, og:*, twitter:*, keywords)
+        AND the body copy. Meta-tags are surfaced as a structured prefix so the
+        LLM can attribute violations to them precisely.
+        """
+        if not raw_html or not raw_html.strip():
+            return ""
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(raw_html, "html.parser")
+        except Exception as e:
+            logger.warning(f"HTML parse failed, falling back to raw: {e}")
+            return raw_html
+
+        meta_pairs: list[tuple[str, str]] = []
+
+        if soup.title and soup.title.string:
+            meta_pairs.append(("title", soup.title.string.strip()))
+
+        for tag in soup.find_all("meta"):
+            content_attr = tag.get("content") or ""
+            if not content_attr.strip():
+                continue
+            key = tag.get("name") or tag.get("property") or tag.get("http-equiv")
+            if not key:
+                continue
+            meta_pairs.append((key.strip().lower(), content_attr.strip()))
+
+        # H1 / H2 are often the headline equivalents in marketing pages.
+        for level in ("h1", "h2"):
+            for h in soup.find_all(level):
+                txt = h.get_text(" ", strip=True)
+                if txt:
+                    meta_pairs.append((level, txt))
+
+        # Strip noise before extracting body
+        for noise in soup(["script", "style", "noscript", "template"]):
+            noise.decompose()
+        body_text = soup.get_text("\n", strip=True)
+
+        parts: list[str] = []
+        if meta_pairs:
+            parts.append("[META TAGS]")
+            for k, v in meta_pairs:
+                parts.append(f"{k}: {v}")
+        if body_text:
+            if parts:
+                parts.append("")
+                parts.append("[BODY CONTENT]")
+            parts.append(body_text)
+        return "\n".join(parts)
 
     async def _extract_pdf(self, file_path: str) -> str:
         try:

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: compliance-postgres
     environment:
       POSTGRES_USER: compliance_user
@@ -56,6 +56,25 @@ services:
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/logs:/app/logs
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Build-time so Next.js bakes the rewrites destination correctly.
+        NEXT_PUBLIC_API_BASE: http://localhost:8000
+        INTERNAL_API_BASE: http://backend:8000
+    container_name: compliance-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # Runtime so lib/api.ts can pick INTERNAL_API_BASE for SSR fetches.
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+      INTERNAL_API_BASE: http://backend:8000
+      NEXT_PUBLIC_BUILD_SHA: ${BUILD_SHA:-dev}
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:

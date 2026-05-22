@@ -12,6 +12,10 @@ from typing import Optional, List
 from app.database import get_db
 from app.models.rule import Rule
 from app.services.rule_generator_service import rule_generator_service
+from app.services.rag.indexers.rules_indexer import (
+    delete_rule as rag_delete_rule,
+    upsert_rule as rag_upsert_rule,
+)
 from app.schemas.rule import RuleCreate, RuleResponse
 
 logger = logging.getLogger(__name__)
@@ -19,7 +23,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/rules", tags=["Rules Management"])
 
 
-@router.post("/", response_model=dict)
+async def _safe_rag_upsert(rule_id, db: Session) -> None:
+    """Best-effort RAG upsert. Logs and swallows failures — the DB write is
+    already committed and a backfill catches missed indexings later."""
+    try:
+        await rag_upsert_rule(rule_id, db)
+    except Exception as e:
+        logger.warning(f"RAG upsert failed for rule {rule_id} (non-fatal): {e}")
+
+
+async def _safe_rag_delete(rule_id) -> None:
+    try:
+        await rag_delete_rule(rule_id)
+    except Exception as e:
+        logger.warning(f"RAG delete failed for rule {rule_id} (non-fatal): {e}")
+
+
+@router.post("", response_model=dict)
 async def create_rule(
     rule: RuleCreate,
     db: Session = Depends(get_db)
@@ -33,6 +53,7 @@ async def create_rule(
         keywords=rule.keywords,
         points_deduction=rule.points_deduction
     )
+    await _safe_rag_upsert(new_rule.id, db)
     return {
         "id": str(new_rule.id),
         "category": new_rule.category,
@@ -42,7 +63,7 @@ async def create_rule(
     }
 
 
-@router.get("/")
+@router.get("")
 async def list_rules(
     category: Optional[str] = None,
     is_active: Optional[bool] = True,
@@ -120,6 +141,10 @@ async def update_rule(
     db.commit()
     db.refresh(rule)
 
+    # Keep RAG in sync. If the rule was deactivated, the embedding stays
+    # (filtered out at query time) — same row, just is_active=false.
+    await _safe_rag_upsert(rule.id, db)
+
     return {
         "id": str(rule.id),
         "category": rule.category,
@@ -138,6 +163,8 @@ async def delete_rule(rule_id: str, db: Session = Depends(get_db)):
 
     db.delete(rule)
     db.commit()
+
+    await _safe_rag_delete(rule_id)
 
     return {"message": "Rule deleted", "id": rule_id}
 

@@ -1,0 +1,67 @@
+# SEBI (Securities and Exchange Board of India) seed rules.
+# Relevant to ULIP / market-linked / investment-themed life-insurance marketing.
+# Run with: python -m scripts.seed_rules
+category: sebi
+generation_source: seed/sebi-2024-q1
+confidence_score: 0.9
+rules:
+  - rule_text: "Mutual-fund-style return illustrations require SEBI's standard disclaimer: 'Mutual fund investments are subject to market risks; read all scheme-related documents carefully.'"
+    severity: critical
+    keywords: ["mutual fund", "market risk", "scheme documents"]
+    points_deduction: -10.0
+  - rule_text: "Past-performance display must include the SEBI advisory: 'Past performance may or may not be sustained in future and is not an indicator of future returns.'"
+    severity: critical
+    keywords: ["past performance", "future returns", "indicator"]
+    points_deduction: -10.0
+  - rule_text: "Equity-linked unit-fund advertisements must avoid implying guaranteed equity returns."
+    severity: critical
+    keywords: ["equity", "guaranteed equity", "stock market"]
+    points_deduction: -10.0
+  - rule_text: "Comparison with index returns (Nifty, Sensex) must use total-return data and clearly state benchmark inception date."
+    severity: high
+    keywords: ["nifty", "sensex", "benchmark", "index"]
+    points_deduction: -7.0
+  - rule_text: "Disclosure of expense ratio / fund management charge required when promoting investment performance."
+    severity: high
+    keywords: ["expense ratio", "fund management charge", "tco"]
+    points_deduction: -7.0
+  - rule_text: "Cherry-picked time-period performance (e.g., 'returned 25% in 2024') must be supplemented with rolling-period data."
+    severity: high
+    keywords: ["cherry pick", "rolling return", "time period"]
+    points_deduction: -7.0
+  - rule_text: "Use of 'risk-free' or 'safe' for market-linked products is prohibited."
+    severity: critical
+    keywords: ["risk free", "safe", "no risk"]
+    points_deduction: -10.0
+  - rule_text: "Investment adviser identification: if content recommends action, it must clarify whether the author is SEBI-registered or not."
+    severity: high
+    keywords: ["sebi registered", "investment adviser", "ria"]
+    points_deduction: -7.0
+  - rule_text: "Influencer / finfluencer disclosures: any paid promotion of ULIPs must be marked '#Ad' or '#Sponsored'."
+    severity: high
+    keywords: ["finfluencer", "ad", "sponsored", "paid promotion"]
+    points_deduction: -7.0
+  - rule_text: "Capital protection plans must not be marketed without explicit disclosure of capital-protection mechanism and term."
+    severity: high
+    keywords: ["capital protection", "capital guaranteed"]
+    points_deduction: -7.0
+  - rule_text: "SIP-style messaging for ULIPs must clarify ULIP-vs-mutual-fund differences (lock-in, charges, insurance component)."
+    severity: medium
+    keywords: ["sip", "ulip vs mutual fund", "lock in"]
+    points_deduction: -5.0
+  - rule_text: "Use of words 'risk-adjusted', 'alpha', 'sharpe' requires footnote definition for retail audience."
+    severity: low
+    keywords: ["risk adjusted", "alpha", "sharpe", "beta"]
+    points_deduction: -3.0
+  - rule_text: "Currency-denominated investment claims must use ₹ INR throughout; converting to USD figures requires disclaimer."
+    severity: medium
+    keywords: ["usd", "dollar", "currency conversion"]
+    points_deduction: -5.0
+  - rule_text: "Goal-based planning content must not project returns beyond conservative SEBI-aligned assumptions (typically 8-10% for equity, 4-6% for debt)."
+    severity: medium
+    keywords: ["goal planning", "projection", "assumption rate"]
+    points_deduction: -5.0
+  - rule_text: "Performance presented under 'illustration' must use the IRDAI-stipulated rates (4%/8%) for ULIP benefit illustrations."
+    severity: high
+    keywords: ["benefit illustration", "4 percent", "8 percent", "illustration rate"]
+    points_deduction: -7.0

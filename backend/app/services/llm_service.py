@@ -2,13 +2,14 @@ import json
 import asyncio
 import time
 import os
-from typing import Dict, Any, Optional, Type, TypeVar
+from typing import Dict, Any, Optional, Type, TypeVar, AsyncIterator, List
 from sqlalchemy.orm import Session
 import logging
 from datetime import datetime
 from pydantic import BaseModel, ValidationError
 from ..config import settings
 from openai import AsyncOpenAI
+import httpx
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -30,10 +31,14 @@ class LLMService:
         if not self.api_key:
             logger.warning("LLM_API_KEY is not set. LLM service will fail.")
 
-        self.client = AsyncOpenAI(
-            api_key=self.api_key or "placeholder",
-            base_url=self.base_url
-        )
+        client_kwargs: Dict[str, Any] = {
+            "api_key": self.api_key or "placeholder",
+            "base_url": self.base_url,
+        }
+        if settings.llm_insecure_tls:
+            logger.warning("LLM_INSECURE_TLS=true — disabling TLS verification for LLM calls")
+            client_kwargs["http_client"] = httpx.AsyncClient(verify=False)
+        self.client = AsyncOpenAI(**client_kwargs)
 
     async def health_check(self) -> bool:
         """Check if LLM service is available."""
@@ -66,6 +71,38 @@ class LLMService:
         except Exception as e:
             logger.error(f"LLM generation failed: {str(e)}")
             return self._get_fallback_response(prompt, context)
+
+    async def stream_response(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        history: Optional[List[Dict[str, str]]] = None,
+        temperature: float = 0.7,
+    ) -> AsyncIterator[str]:
+        """Stream response tokens from LLM. Yields text deltas."""
+        messages: List[Dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": prompt})
+
+        try:
+            stream = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=temperature,
+                stream=True,
+            )
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    yield delta.content
+        except Exception as e:
+            logger.error(f"LLM streaming failed: {e}")
+            yield f"\n\n[Error: streaming failed — {str(e)}]"
 
     async def generate_structured_response(
         self,

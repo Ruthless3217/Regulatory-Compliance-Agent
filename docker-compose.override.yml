@@ -1,0 +1,16 @@
+# Local override (auto-merged by docker compose) — pulls Groq config from .env
+# and remaps frontend to 3001 (3000 is taken by another local Next.js dev).
+services:
+  backend:
+    environment:
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/}
+      LLM_MODEL: ${LLM_MODEL:-gemini-2.0-flash}
+      LLM_INSECURE_TLS: "true"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-openai}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-text-embedding-3-small}
+      RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1536}
+  frontend:
+    ports:
+      - "3001:3000"

@@ -111,8 +111,9 @@ class ComplianceOrchestrator:
     async def resume_workflow(self, config: RunnableConfig, feedback: str = None):
         """Resumes the workflow after a HITL interrupt."""
         await self._ensure_checkpointer_setup()
-        update = {"user_feedback": feedback} if feedback else {}
-        return await self.graph.ainvoke(update, config=config)
+        if feedback:
+            await self.graph.aupdate_state(config, {"user_feedback": feedback})
+        return await self.graph.ainvoke(None, config=config)
 
 
 # Singleton orchestrator instance

@@ -3,7 +3,8 @@ from pydantic import BaseModel, Field
 
 
 class ViolationSchema(BaseModel):
-    category: str = Field(..., description="Category of the violation: regulatory, brand, seo")
+    id: Optional[str] = Field(None, description="Persisted violation UUID (set after persist)")
+    category: str = Field(..., description="Category of the violation: irdai, brand, sebi (canonical) or regulatory/seo (legacy)")
     severity: str = Field(..., description="Severity level: critical, high, medium, low")
     rule_id: Optional[str] = Field(None, description="The ID of the violated rule")
     description: str = Field(..., description="Brief description of the violation")
@@ -11,6 +12,7 @@ class ViolationSchema(BaseModel):
     current_text: Optional[str] = Field(None, description="The problematic text")
     suggested_fix: Optional[str] = Field(None, description="Suggested correction")
     auto_fixable: bool = Field(False, description="Whether this can be auto-fixed")
+    chunk_index: Optional[int] = Field(None, description="Index of the content chunk")
 
 
 class ComplianceAnalysisResult(BaseModel):

@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     llm_model: str = "gemini-2.0-flash"
+    llm_insecure_tls: bool = False  # set True to bypass TLS verify (e.g. behind Cisco SSL inspection)
 
     # Redis (LangGraph Persistence)
     redis_url: str = "redis://localhost:6379"
@@ -55,6 +56,46 @@ class Settings(BaseSettings):
     langchain_endpoint: str = "https://api.smith.langchain.com"
     langchain_api_key: str = ""
     langchain_project: str = "regulatory-compliance-agent"
+
+    # RAG — pluggable backend
+    rag_embedding_provider: str = "openai"        # openai | azure_openai | cohere
+    rag_vector_backend: str = "pgvector"          # pgvector | azure_search | pinecone
+    rag_embedding_model: str = "text-embedding-3-small"
+    rag_embedding_dim: int = 1536
+    rag_top_k_analysis: int = 8
+    rag_top_k_chat: int = 5
+    rag_top_k_similar: int = 3
+    rag_score_threshold: float = 0.0              # 0.0 = no floor; RRF scores are unbounded-low
+    rag_recall_pool: int = 30
+    rag_rrf_k: int = 60
+    rag_active_categories: List[str] = ["regulatory", "brand", "seo", "irdai", "sebi"]
+
+    # OpenAI (direct API — v1 default for embeddings)
+    openai_api_key: str = ""
+
+    # Azure OpenAI (v2, embeddings)
+    azure_openai_endpoint: str = ""
+    azure_openai_api_key: str = ""
+    azure_openai_api_version: str = "2024-02-01"
+    azure_openai_embed_deployment: str = "text-embedding-3-small"
+
+    # Azure AI Search (v2, vector store)
+    azure_search_endpoint: str = ""
+    azure_search_api_key: str = ""
+    azure_search_rules_index: str = "rag-rules"
+    azure_search_chunks_index: str = "rag-chunks"
+    azure_search_source_docs_index: str = "rag-source-docs"
+
+    # Cohere (alternative embeddings — 1024-dim)
+    cohere_api_key: str = ""
+    cohere_embedding_model: str = "embed-english-v3.0"
+
+    # Pinecone (alternative v1 vector store)
+    pinecone_api_key: str = ""
+    pinecone_index_name: str = ""
+    pinecone_namespace_rules: str = "rag_rules"
+    pinecone_namespace_chunks: str = "rag_chunks"
+    pinecone_namespace_srcdocs: str = "rag_source_docs"
 
     class Config:
         env_file = ".env"

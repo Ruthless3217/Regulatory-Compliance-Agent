@@ -1,0 +1,1090 @@
+[
+  {
+    "timestamp": "2026-05-22T09:20:17.494137",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 30
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Allianz Life Insurance GUARANTEES you 100% return with ZERO risk! Our ULIP is the BEST in India, beating all competitors. Buy now for assured wealth - no questions asked. Get rich quick with our policy!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### IRDAI RULES:\n1. [CRITICAL] (ID: df526f81-ad8e-4ada-8f1f-a4c390180a90) Insurance advertisements must include the IRDAI registration number of the insurer a",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"irdai\",\n         \"severity\":\"CRITICAL\",\n         \"rule_id\":\"df526f81-ad8e-4ada-8f1f-a4c390180a90\",\n         \"description\":\"Missing IRDAI registration number and contact details in the advertisement\",\n         \"location\":null,\n         \"current_text\":\"Bajaj Allianz Life Insurance GUARANTEES you 100% return with ZERO risk!\",\n         \"suggested_fix\":\"Include the IRDAI registration number and contact details of Bajaj Allianz Life I"
+  },
+  {
+    "timestamp": "2026-05-22T09:23:26.112799",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 30
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Allianz Life Insurance GUARANTEES you 100% return with ZERO risk! Our ULIP is the BEST in India, beating all competitors. Buy now for assured wealth - no questions asked. Get rich quick with our policy!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### IRDAI RULES:\n1. [CRITICAL] (ID: df526f81-ad8e-4ada-8f1f-a4c390180a90) Insurance advertisements must include the IRDAI registration number of the insurer a",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"irdai\",\n         \"severity\":\"CRITICAL\",\n         \"rule_id\":\"df526f81-ad8e-4ada-8f1f-a4c390180a90\",\n         \"description\":\"Insurance advertisement does not include IRDAI registration number and contact details\",\n         \"location\":null,\n         \"current_text\":null,\n         \"suggested_fix\":\"Add IRDAI registration number and contact details to the advertisement\",\n         \"auto_fixable\":false,\n         \"chunk_index\":null\n      "
+  },
+  {
+    "timestamp": "2026-05-22T09:23:26.213514",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 20
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Allianz Life Insurance GUARANTEES you 100% return with ZERO risk! Our ULIP is the BEST in India, beating all competitors. Buy now for assured wealth - no questions asked. Get rich quick with our policy!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### BRAND RULES:\n1. [HIGH] (ID: d9c473f3-61c5-4850-ace0-8f6726cefa92) The brand name must appear as 'Bajaj Allianz Life Insurance' in full at first mention; '",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"brand\",\n         \"severity\":\"high\",\n         \"rule_id\":\"0d0957bb-689e-43e5-8ae5-a673623f33ff\",\n         \"description\":\"Prohibited superlatives without substantiation: 'best'\",\n         \"location\":null,\n         \"current_text\":\"Our ULIP is the BEST in India, beating all competitors.\",\n         \"suggested_fix\":\"Our ULIP is a top-performing option in India, with competitive features.\",\n         \"auto_fixable\":false,\n         \"chunk"
+  },
+  {
+    "timestamp": "2026-05-22T09:23:26.270417",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 15
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Allianz Life Insurance GUARANTEES you 100% return with ZERO risk! Our ULIP is the BEST in India, beating all competitors. Buy now for assured wealth - no questions asked. Get rich quick with our policy!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### SEBI RULES:\n1. [CRITICAL] (ID: 3192f532-b5b2-458e-a8f0-ce5de73786db) Mutual-fund-style return illustrations require SEBI's standard disclaimer: 'Mutual fu",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"sebi\",\n         \"severity\":\"critical\",\n         \"rule_id\":\"e4a41a58-fc86-4c9c-99ae-6933335b829b\",\n         \"description\":\"Guaranteed equity returns implied in ULIP advertisement\",\n         \"location\":null,\n         \"current_text\":\"Bajaj Allianz Life Insurance GUARANTEES you 100% return with ZERO risk!\",\n         \"suggested_fix\":\"Revise to avoid implying guaranteed returns, e.g., 'potential for high returns'\",\n         \"auto_fixa"
+  },
+  {
+    "timestamp": "2026-05-22T09:25:57.618151",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 15
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Allianz Life GUARANTEES 100% returns with ZERO risk! BEST ULIP in India. Get rich quick - buy now for assured wealth!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### SEBI RULES:\n1. [CRITICAL] (ID: 3192f532-b5b2-458e-a8f0-ce5de73786db) Mutual-fund-style return illustrations require SEBI's standard disclaimer: 'Mutual fund investments are subject to market risks; read all scheme-related documents careful",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"sebi\",\n         \"severity\":\"critical\",\n         \"rule_id\":\"e4a41a58-fc86-4c9c-99ae-6933335b829b\",\n         \"description\":\"Equity-linked unit-fund advertisements must avoid implying guaranteed equity returns.\",\n         \"location\":null,\n         \"current_text\":\"Bajaj Allianz Life GUARANTEES 100% returns with ZERO risk!\",\n         \"suggested_fix\":\"Rephrase to avoid implying guaranteed returns, e.g., 'Bajaj Allianz Life offers comp"
+  },
+  {
+    "timestamp": "2026-05-22T09:25:57.706465",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 20
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Allianz Life GUARANTEES 100% returns with ZERO risk! BEST ULIP in India. Get rich quick - buy now for assured wealth!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### BRAND RULES:\n1. [HIGH] (ID: d9c473f3-61c5-4850-ace0-8f6726cefa92) The brand name must appear as 'Bajaj Allianz Life Insurance' in full at first mention; 'Bajaj Allianz Life' is acceptable thereafter. Never 'BALIC' in customer-facing copy.\n",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"brand\",\n         \"severity\":\"high\",\n         \"rule_id\":\"d9c473f3-61c5-4850-ace0-8f6726cefa92\",\n         \"description\":\"Brand name not mentioned in full at first mention\",\n         \"location\":null,\n         \"current_text\":\"Bajaj Allianz Life GUARANTEES 100% returns with ZERO risk!\",\n         \"suggested_fix\":\"Bajaj Allianz Life Insurance GUARANTEES 100% returns with ZERO risk!\",\n         \"auto_fixable\":true,\n         \"chunk_index\""
+  },
+  {
+    "timestamp": "2026-05-22T09:25:58.046877",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 30
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Allianz Life GUARANTEES 100% returns with ZERO risk! BEST ULIP in India. Get rich quick - buy now for assured wealth!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### IRDAI RULES:\n1. [CRITICAL] (ID: df526f81-ad8e-4ada-8f1f-a4c390180a90) Insurance advertisements must include the IRDAI registration number of the insurer and contact details.\n2. [CRITICAL] (ID: c6c59118-7776-4ca5-aa18-9054780fae88) All retu",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"irdai\",\n         \"severity\":\"CRITICAL\",\n         \"rule_id\":\"df526f81-ad8e-4ada-8f1f-a4c390180a90\",\n         \"description\":\"Insurance advertisement does not include IRDAI registration number and contact details\",\n         \"location\":null,\n         \"current_text\":null,\n         \"suggested_fix\":\"Add IRDAI registration number and contact details to the advertisement\",\n         \"auto_fixable\":false,\n         \"chunk_index\":null\n      "
+  },
+  {
+    "timestamp": "2026-05-22T09:37:02.830384",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Allianz Life GUARANTEES 100% returns with ZERO risk! BEST ULIP in India. Get rich quick - buy now for assured wealth!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### SEBI RULES:\n1. [HIGH] (ID: 9d80ca97-96ee-45e3-9faa-1a2395013000) Performance presented under 'illustration' must use the IRDAI-stipulated rates (4%/8%) for ULIP benefit illustrations.\n2. [HIGH] (ID: 58b06fe0-5d61-44ba-a567-b8fa022c6d6e) In",
+    "response": "{\n  \"violations\":[\n      {\n         \"category\":\"sebi\",\n         \"severity\":\"CRITICAL\",\n         \"rule_id\":\"623d2045-52c7-4118-a030-531a7b3129d6\",\n         \"description\":\"Equity-linked unit-fund advertisements must avoid implying guaranteed equity returns.\",\n         \"location\":null,\n         \"current_text\":\"Bajaj Allianz Life GUARANTEES 100% returns with ZERO risk!\",\n         \"suggested_fix\":\"Rephrase to avoid implying guaranteed returns, e.g., 'Bajaj Allianz Life offers competitive returns with"
+  },
+  {
+    "timestamp": "2026-05-22T09:37:03.861645",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Allianz Life GUARANTEES 100% returns with ZERO risk! BEST ULIP in India. Get rich quick - buy now for assured wealth!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### IRDAI RULES:\n1. [CRITICAL] (ID: 493fdea3-2575-4ef3-b50d-fc9bba6f7d44) All return projections in life-insurance advertisements must include the statutory disclaimer that returns are not guaranteed.\n2. [CRITICAL] (ID: 3a3a213e-d384-42c2-9c38",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"irdai\",\n         \"severity\":\"critical\",\n         \"rule_id\":\"493fdea3-2575-4ef3-b50d-fc9bba6f7d44\",\n         \"description\":\"The advertisement does not include the statutory disclaimer that returns are not guaranteed.\",\n         \"location\":null,\n         \"current_text\":\"Bajaj Allianz Life GUARANTEES 100% returns with ZERO risk!\",\n         \"suggested_fix\":\"Add the statutory disclaimer that returns are not guaranteed, e.g., 'Returns"
+  },
+  {
+    "timestamp": "2026-05-22T09:37:04.153091",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Allianz Life GUARANTEES 100% returns with ZERO risk! BEST ULIP in India. Get rich quick - buy now for assured wealth!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### BRAND RULES:\n1. [MEDIUM] (ID: 63868bc1-401b-4474-93da-fc0bf0571a08) Customer testimonials must be from verifiable Bajaj Allianz Life customers; pseudonyms acceptable if disclosed.\n2. [HIGH] (ID: 4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3) The br",
+    "response": "{\n  \"violations\":[\n      {\n         \"category\":\"brand\",\n         \"severity\":\"high\",\n         \"rule_id\":\"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n         \"description\":\"The brand name must appear as 'Bajaj Allianz Life Insurance' in full at first mention\",\n         \"location\":null,\n         \"current_text\":\"Bajaj Allianz Life\",\n         \"suggested_fix\":\"Bajaj Allianz Life Insurance\",\n         \"auto_fixable\":true,\n         \"chunk_index\":null\n      },\n      {\n         \"category\":\"brand\",\n         \"se"
+  },
+  {
+    "timestamp": "2026-05-22T10:14:35.364771",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 15
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nwagdvawhdbawd\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### SEBI RULES:\n1. [CRITICAL] (ID: de27c080-ad33-4946-9575-57d8be553279) Mutual-fund-style return illustrations require SEBI's standard disclaimer: 'Mutual fund investments are subject to market risks; read all scheme-related documents carefully.'\n2. [CRITICAL] (ID: b58b86e2-5523-4cd7-99cd-ce9cbfc5571a) Past-performance display must include the SEBI a",
+    "response": "{\n  \"overall_assessment\": \"Non-compliant\",\n   \"violations\": [\n       {\n           \"id\": null,\n           \"category\": \"sebi\",\n           \"severity\": \"low\",\n           \"rule_id\": null,\n           \"description\": \"The document content does not contain any meaningful text that can be analyzed for SEBI regulatory compliance violations.\",\n           \"location\": null,\n           \"current_text\": \"wagdvawhdbawd\",\n           \"suggested_fix\": \"Provide a meaningful document content for analysis.\",\n          "
+  },
+  {
+    "timestamp": "2026-05-22T10:14:35.501496",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 20
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nwagdvawhdbawd\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### BRAND RULES:\n1. [HIGH] (ID: 4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3) The brand name must appear as 'Bajaj Allianz Life Insurance' in full at first mention; 'Bajaj Allianz Life' is acceptable thereafter. Never 'BALIC' in customer-facing copy.\n2. [MEDIUM] (ID: 2fcd42da-f454-4ad2-97ed-ed1f2c0b03d4) Tagline 'Jiyo Befikar' is the registered brand line; us",
+    "response": "{\n  \"violations\":[],\n   \"overall_assessment\":\"The provided document content does not contain any text that violates the given brand rules.\",\n   \"key_issues\":[]\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:14:35.671873",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 30
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nwagdvawhdbawd\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### IRDAI RULES:\n1. [CRITICAL] (ID: 51cea088-ac6f-4f8e-879e-8f2a678c209f) Insurance advertisements must include the IRDAI registration number of the insurer and contact details.\n2. [CRITICAL] (ID: 493fdea3-2575-4ef3-b50d-fc9bba6f7d44) All return projections in life-insurance advertisements must include the statutory disclaimer that returns are not gua",
+    "response": "{\n  \"overall_assessment\": \"Non-compliant\",\n   \"key_issues\": [\n       \"No IRDAI registration number found\",\n       \"No contact details found\",\n       \"No statutory warning found\"\n   ],\n   \"violations\": [\n       {\n           \"id\": null,\n           \"category\": \"irdai\",\n           \"severity\": \"critical\",\n           \"rule_id\": \"51cea088-ac6f-4f8e-879e-8f2a678c209f\",\n           \"description\": \"Insurance advertisements must include the IRDAI registration number of the insurer and contact details.\",\n   "
+  },
+  {
+    "timestamp": "2026-05-22T10:15:06.382700",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 30
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"irdai\",\n         \"severity\":\"CRITICAL\",\n         \"rule_id\":\"51cea088-ac6f-4f8e-879e-8f2a678c209f\",\n         \"description\":\"Insurance advertisement does not include IRDAI registration number of the insurer and contact details.\",\n         \"location\":null,\n         \"current_text\":null,\n         \"suggested_fix\":\"Add IRDAI registration number and contact details to the advertisement.\",\n         \"auto_fixable\":false,\n         \"chunk_i"
+  },
+  {
+    "timestamp": "2026-05-22T10:15:06.593627",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 15
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"sebi\",\n         \"severity\":\"CRITICAL\",\n         \"rule_id\":\"de27c080-ad33-4946-9575-57d8be553279\",\n         \"description\":\"Missing SEBI standard disclaimer for mutual-fund-style return illustrations\",\n         \"location\":null,\n         \"current_text\":\"Your premium is split \u2014 one part goes to life insurance, and the other part is invested in funds like equity, debt, or balanced.\",\n         \"suggested_fix\":\"Add the SEBI standard di"
+  },
+  {
+    "timestamp": "2026-05-22T10:15:06.677530",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 20
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"brand\",\n         \"severity\":\"high\",\n         \"rule_id\":\"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n         \"description\":\"Brand name not mentioned as per the rule\",\n         \"location\":1,\n         \"current_text\":\"Term life insurance is the most basic type of life cover.\",\n         \"suggested_fix\":\"Bajaj Allianz Life Insurance offers term life insurance, which is the most basic type of life cover.\",\n         \"auto_fixable\":false,\n  "
+  },
+  {
+    "timestamp": "2026-05-22T10:15:21.033115",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 20
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"violations\":[\n       {\n          \"id\":null,\n          \"category\":\"brand\",\n          \"severity\":\"high\",\n          \"rule_id\":\"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n          \"description\":\"Brand name not mentioned as per the rule\",\n          \"location\":\"Term life insurance\",\n          \"current_text\":\"Term life insurance is the most basic type of life cover.\",\n          \"suggested_fix\":\"Bajaj Allianz Life Insurance offers term life insurance, which is the most basic type of life cover.\",\n    "
+  },
+  {
+    "timestamp": "2026-05-22T10:15:38.338773",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 30
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"irdai\",\n         \"severity\":\"CRITICAL\",\n         \"rule_id\":\"51cea088-ac6f-4f8e-879e-8f2a678c209f\",\n         \"description\":\"IRDAI registration number of the insurer and contact details are not included in the advertisement.\",\n         \"location\":null,\n         \"current_text\":null,\n         \"suggested_fix\":\"Include the IRDAI registration number and contact details of the insurer in the advertisement.\",\n         \"auto_fixable\":fals"
+  },
+  {
+    "timestamp": "2026-05-22T10:15:51.625386",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 15
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"violations\":[\n      {\n         \"category\":\"sebi\",\n         \"severity\":\"CRITICAL\",\n         \"rule_id\":\"de27c080-ad33-4946-9575-57d8be553279\",\n         \"description\":\"Missing SEBI standard disclaimer for mutual-fund-style return illustrations\",\n         \"location\":\"ULIPs (Unit Linked Insurance Plans) section\",\n         \"current_text\":\"Your premium is split \u2014 one part goes to life insurance, and the other part is invested in funds like equity, debt, or balanced.\",\n         \"suggested_fix\":\"Add"
+  },
+  {
+    "timestamp": "2026-05-22T10:16:05.375449",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 15
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"sebi\",\n         \"severity\":\"CRITICAL\",\n         \"rule_id\":\"de27c080-ad33-4946-9575-57d8be553279\",\n         \"description\":\"Missing SEBI standard disclaimer for mutual-fund-style return illustrations\",\n         \"location\":null,\n         \"current_text\":\"Your premium is split \u2014 one part goes to life insurance, and the other part is invested in funds like equity, debt, or balanced.\",\n         \"suggested_fix\":\"Add the SEBI standard di"
+  },
+  {
+    "timestamp": "2026-05-22T10:16:22.678888",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 20
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"brand\",\n         \"severity\":\"high\",\n         \"rule_id\":\"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n         \"description\":\"Brand name not mentioned as 'Bajaj Allianz Life Insurance' at first mention\",\n         \"location\":null,\n         \"current_text\":\"Term life insurance is the most basic type of life cover.\",\n         \"suggested_fix\":\"Bajaj Allianz Life Insurance offers term life insurance, which is the most basic type of life cove"
+  },
+  {
+    "timestamp": "2026-05-22T10:16:37.841945",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 20
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"violations\":[\n      {\n         \"id\":null,\n         \"category\":\"brand\",\n         \"severity\":\"high\",\n         \"rule_id\":\"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n         \"description\":\"Brand name not mentioned as per the rule\",\n         \"location\":null,\n         \"current_text\":null,\n         \"suggested_fix\":\"Mention the brand name as 'Bajaj Allianz Life Insurance' at the first mention\",\n         \"auto_fixable\":false,\n         \"chunk_index\":null\n      },\n      {\n         \"id\":null,\n         \"ca"
+  },
+  {
+    "timestamp": "2026-05-22T10:16:54.143004",
+    "model": "llama-3.3-70b-versatile",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 30
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"violations\": [\n       {\n           \"category\": \"irdai\",\n           \"severity\": \"critical\",\n           \"rule_id\": \"51cea088-ac6f-4f8e-879e-8f2a678c209f\",\n           \"description\": \"IRDAI registration number and contact details are missing\",\n           \"location\": null,\n           \"current_text\": null,\n           \"suggested_fix\": \"Include IRDAI registration number and contact details in the advertisement\",\n           \"auto_fixable\": false,\n           \"chunk_index\": null\n       },\n       {\n   "
+  },
+  {
+    "timestamp": "2026-05-22T10:19:03.209311",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\"overall_assessment\":\"Content largely complies with brand rules, with a minor issue regarding use of the word \\\"insurance\\\" instead of \\\"protection\\\" or \\\"cover\\\" as required by brand voice.\",\"key_issues\":[\"Use of the term \\\"insurance\\\" alone in the heading violates brand rule 1.\"],\"violations\":[{\"id\":null,\"category\":\"brand\",\"severity\":\"low\",\"rule_id\":\"53bdd757-56f9-49d5-b60a-5ac5dd7856b6\",\"description\":\"The heading uses \\\"Term Life Insurance\\\" which employs the word \\\"insurance\\\" alone instead"
+  },
+  {
+    "timestamp": "2026-05-22T10:19:03.448217",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\"overall_assessment\":\"The document is largely compliant with SEBI regulations, but it lacks required clarification of ULIP vs mutual fund differences, which is a medium\u2011severity issue.\",\"key_issues\":[\"Missing ULIP vs mutual fund clarification\"],\"violations\":[{\"category\":\"sebi\",\"severity\":\"medium\",\"description\":\"The ULIP description does not clarify key differences between ULIPs and mutual funds such as lock\u2011in period, charges, and the insurance component, as required by SEBI rule 1.\",\"rule_id\":"
+  },
+  {
+    "timestamp": "2026-05-22T10:19:03.646845",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"overall_assessment\": \"The document contains several IRDAI compliance violations related to missing ULIP disclosures, risk statements, mortality charge information, and lack of editorial/promotional distinction.\",\n  \"key_issues\": [\n    \"Missing policy term, premium payment term, and lock\u2011in details for ULIP (high severity).\",\n    \"Mortality charge structure not disclosed for ULIP and term plans (medium severity).\",\n    \"Risk\u2011factor statement required for ULIP advertisements is absent (critic"
+  },
+  {
+    "timestamp": "2026-05-22T10:19:20.959568",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"overall_assessment\": \"The document is generally compliant but fails to meet SEBI rule requiring ULIP messaging to clarify differences from mutual funds.\",\n  \"key_issues\": [\n    \"Missing ULIP vs mutual fund clarification as required by SEBI rule 023117dd-eb37-4b17-90c6-8c2c68633cbb.\"\n  ],\n  \"violations\": [\n    {\n      \"id\": null,\n      \"category\": \"sebi\",\n      \"severity\": \"medium\",\n      \"rule_id\": \"023117dd-eb37-4b17-90c6-8c2c68633cbb\",\n      \"description\": \"The ULIP description does not c"
+  },
+  {
+    "timestamp": "2026-05-22T10:19:42.569289",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\"overall_assessment\":\"The document contains a minor brand language issue: it uses the term \\\"insurance\\\" where brand guidelines require \\\"protection\\\" or \\\"cover\\\" when discussing emotional benefit.\",\"key_issues\":[\"Improper use of the word \\\"insurance\\\" instead of \\\"protection\\\" or \\\"cover\\\"\"],\"violations\":[{\"category\":\"brand\",\"severity\":\"low\",\"description\":\"Uses the word \\\"insurance\\\" instead of the preferred terms \\\"protection\\\" or \\\"cover\\\" when describing the product, violating brand voice "
+  },
+  {
+    "timestamp": "2026-05-22T10:20:02.941296",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\"overall_assessment\":\"The document violates multiple IRDAI rules, mainly missing mandatory ULIP disclosures and lacking clear separation between editorial and promotional content.\",\"key_issues\":[\"Missing policy term, premium payment term and lock\u2011in details for ULIP\",\"No mortality charge disclosure\",\"Risk\u2011factor statement not shown\",\"Editorial content not distinguished from promotional material\"],\"violations\":[{\"category\":\"irdai\",\"severity\":\"high\",\"description\":\"Policy term, premium payment ter"
+  },
+  {
+    "timestamp": "2026-05-22T10:20:12.016781",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\"overall_assessment\":\"The document is generally compliant but contains two brand\u2011related issues: a low\u2011severity wording problem and a missing required brand name mention.\",\"key_issues\":[\"Use of the word 'insurance' instead of 'protection' or 'cover' in emotional context\",\"Brand name not introduced as required\"],\"violations\":[{\"id\":null,\"category\":\"brand\",\"severity\":\"low\",\"rule_id\":\"53bdd757-56f9-49d5-b60a-5ac5dd7856b6\",\"description\":\"Uses the term 'insurance' alone when describing the product, "
+  },
+  {
+    "timestamp": "2026-05-22T10:20:34.241797",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\"overall_assessment\":\"The content is largely compliant with SEBI regulations, but it lacks required clarification distinguishing ULIPs from mutual funds as mandated by Rule 1 (medium severity).\",\"key_issues\":[\"Missing ULIP vs mutual fund differentiation clarification\"],\"violations\":[{\"id\":null,\"category\":\"sebi\",\"severity\":\"medium\",\"rule_id\":\"023117dd-eb37-4b17-90c6-8c2c68633cbb\",\"description\":\"The ULIP description does not clarify the differences between ULIPs and mutual funds regarding lock\u2011in"
+  },
+  {
+    "timestamp": "2026-05-22T10:20:59.947506",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\"overall_assessment\":\"The document omits several mandatory disclosures for ULIP advertisements, including policy term details, mortality charge information, and the required market\u2011risk disclaimer, resulting in high\u2011severity compliance gaps. Minor issues include lack of distinction between educational and promotional content.\",\"key_issues\":[\"Missing policy term, premium payment term and lock\u2011in details for ULIP (Rule 1)\",\"No mortality charge disclosure (Rule 2)\",\"Absent market\u2011risk disclaimer f"
+  },
+  {
+    "timestamp": "2026-05-22T10:23:00.410381",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\"overall_assessment\":\"The content is largely compliant with brand guidelines, but it omits the required first mention of the brand name.\",\"key_issues\":[\"Missing required brand name at first mention.\"],\"violations\":[{\"category\":\"brand\",\"severity\":\"medium\",\"description\":\"Brand name 'Bajaj Allianz Life Insurance' is not present at the first mention as required by brand guidelines.\",\"rule_id\":\"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\"location\":null,\"current_text\":null,\"suggested_fix\":\"Insert the full"
+  },
+  {
+    "timestamp": "2026-05-22T10:23:00.903549",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n  \"overall_assessment\": \"The document violates multiple IRDAI regulations, primarily missing required ULIP disclosures and lacking clear editorial labeling for educational content.\",\n  \"key_issues\": [\n    \"Missing policy term, premium payment term, and lock\u2011in details for ULIPs (high severity).\",\n    \"Mortality charge structure not disclosed for ULIP and term plans (medium severity).\",\n    \"Risk\u2011factor statement not displayed for ULIP advertisement (critical severity).\",\n    \"Educational conte"
+  },
+  {
+    "timestamp": "2026-05-22T10:23:15.361543",
+    "model": "openai/gpt-oss-120b",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\"overall_assessment\":\"The content is largely compliant, but it omits required ULIP vs mutual fund clarification, resulting in a medium severity SEBI violation.\",\"violations\":[{\"id\":null,\"category\":\"sebi\",\"severity\":\"medium\",\"rule_id\":\"023117dd-eb37-4b17-90c6-8c2c68633cbb\",\"description\":\"The ULIP description does not clarify key differences between ULIPs and mutual funds such as lock\u2011in periods, charges, and the insurance component, which is required by SEBI.\",\"location\":\"ULIPs (Unit Linked Insu"
+  },
+  {
+    "timestamp": "2026-05-22T10:23:46.405188",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"low\",\n      \"description\": \"Using 'insurance' alone when discussing emotional benefit; should use 'protection' or 'cover'\",\n      \"rule_id\": \"53bdd757-56f9-49d5-b60a-5ac5dd7856b6\",\n      \"location\": \"Term Life Insurance is the most basic type of life insurance\",\n      \"current_text\": \"life insurance\",\n      \"suggested_fix\": \"life cover\",\n      \"auto_fixable\": true,\n      \"chunk_index\": 0\n    },\n    {\n      \"category\": \"brand\","
+  },
+  {
+    "timestamp": "2026-05-22T10:23:46.899487",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"low\",\n      \"description\": \"Using 'insurance' alone when discussing emotional benefit instead of 'protection' or 'cover'\",\n      \"rule_id\": \"53bdd757-56f9-49d5-b60a-5ac5dd7856b6\",\n      \"location\": \"Term Life Insurance is the most basic type of life insurance\",\n      \"current_text\": \"life insurance\",\n      \"suggested_fix\": \"life cover\",\n      \"auto_fixable\": true,\n      \"chunk_index\": 0\n    },\n    {\n      \"category\": \"brand\",\n"
+  },
+  {
+    "timestamp": "2026-05-22T10:23:47.038833",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Implying guaranteed equity returns for ULIPs\",\n      \"rule_id\": \"623d2045-52c7-4118-a030-531a7b3129d6\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"You can choose your fund type based on your risk level. The value of your money changes with market performance.\",\n      \"suggested_fix\": \"Rephrase to clarify that ULIP returns are market-linked and not gua"
+  },
+  {
+    "timestamp": "2026-05-22T10:23:47.307552",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The ULIP description does not prominently display the risk-factor statement: 'Investments in the units of the funds are subject to market risks.'\",\n      \"rule_id\": \"3a3a213e-d384-42c2-9c38-0fbaa971b325\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"ULIP stands for Unit Linked Insurance Plan. This plan gives you two things: life cover and a way to grow"
+  },
+  {
+    "timestamp": "2026-05-22T10:23:47.459982",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The ULIP section does not prominently display the risk-factor statement: 'Investments in the units of the funds are subject to market risks.'\",\n      \"rule_id\": \"3a3a213e-d384-42c2-9c38-0fbaa971b325\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"ULIP stands for Unit Linked Insurance Plan. This plan gives you two things: life cover and a way to grow you"
+  },
+  {
+    "timestamp": "2026-05-22T10:23:47.541770",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Implying guaranteed equity returns for ULIPs\",\n      \"rule_id\": \"623d2045-52c7-4118-a030-531a7b3129d6\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"You can choose your fund type based on your risk level. The value of your money changes with market performance.\",\n      \"suggested_fix\": \"Rephrase to clarify that ULIP returns are market-linked and not gua"
+  },
+  {
+    "timestamp": "2026-05-22T10:24:36.855458",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n\r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and give",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"low\",\n      \"description\": \"Using 'insurance' alone when discussing emotional benefit instead of 'protection' or 'cover'.\",\n      \"rule_id\": \"53bdd757-56f9-49d5-b60a-5ac5dd7856b6\",\n      \"location\": \"Term Life Insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of mon"
+  },
+  {
+    "timestamp": "2026-05-22T10:24:36.973315",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n\r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and give",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Implying guaranteed equity returns in equity-linked unit-fund advertisement\",\n      \"rule_id\": \"623d2045-52c7-4118-a030-531a7b3129d6\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"You can choose your fund type based on your risk level. The value of your money changes with market performance.\",\n      \"suggested_fix\": \"Rephrase to clarify that returns are"
+  },
+  {
+    "timestamp": "2026-05-22T10:24:37.684364",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n\r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and give",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The ULIP section does not prominently display the risk-factor statement.\",\n      \"rule_id\": \"3a3a213e-d384-42c2-9c38-0fbaa971b325\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"ULIP stands for Unit Linked Insurance Plan. This plan gives you two things: life cover and a way to grow your money. Your premium is split \u2014 one part goes to life insurance, and"
+  },
+  {
+    "timestamp": "2026-05-22T10:26:45.997161",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj GUARANTEES 100 percent returns ZERO risk - BEST policy - get rich quick!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### BRAND RULES:\n1. [MEDIUM] (ID: 63868bc1-401b-4474-93da-fc0bf0571a08) Customer testimonials must be from verifiable Bajaj Allianz Life customers; pseudonyms acceptable if disclosed.\n2. [HIGH] (ID: 4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3) The brand name must appear as 'Bajaj Allianz Life I",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"location\": \"first sentence\",\n      \"current_text\": \"Bajaj GUARANTEES 100 percent returns ZERO risk - BEST policy - get rich quick!\",\n      \"suggested_fix\": \"Rephrase to include the full brand name: 'Bajaj Allianz Life Insurance guarantees...'\",\n      \"auto_fixable\": false,\n      \"rule_id\": \"4e2e2b7c-"
+  },
+  {
+    "timestamp": "2026-05-22T10:26:46.125794",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj GUARANTEES 100 percent returns ZERO risk - BEST policy - get rich quick!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### SEBI RULES:\n1. [CRITICAL] (ID: 5b26bddd-ca56-4406-bec5-d71c2413ea3b) Use of 'risk-free' or 'safe' for market-linked products is prohibited.\n2. [CRITICAL] (ID: 623d2045-52c7-4118-a030-531a7b3129d6) Equity-linked unit-fund advertisements must avoid implying guaranteed equity returns.\n3",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Use of 'risk-free' or 'guarantees' for market-linked products is prohibited.\",\n      \"rule_id\": \"5b26bddd-ca56-4406-bec5-d71c2413ea3b\",\n      \"location\": \"Bajaj GUARANTEES 100 percent returns\",\n      \"current_text\": \"Bajaj GUARANTEES 100 percent returns\",\n      \"suggested_fix\": \"Rephrase to indicate market-linked risks, e.g., 'Bajaj offers potential for high returns'\",\n      \"auto_fixable\": fals"
+  },
+  {
+    "timestamp": "2026-05-22T10:26:46.595794",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj GUARANTEES 100 percent returns ZERO risk - BEST policy - get rich quick!\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### IRDAI RULES:\n1. [CRITICAL] (ID: 7ac328f1-0c1e-4227-8c17-295da1f53ef2) Use of the term 'guaranteed return' is permitted only for traditional plans with explicit guarantees and must specify the rate.\n2. [CRITICAL] (ID: 493fdea3-2575-4ef3-b50d-fc9bba6f7d44) All return projections in lif",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The term 'GUARANTEES 100 percent returns' is used without specifying that it's for a traditional plan with explicit guarantees and without mentioning the rate.\",\n      \"rule_id\": \"7ac328f1-0c1e-4227-8c17-295da1f53ef2\",\n      \"location\": \"Bajaj GUARANTEES 100 percent returns\",\n      \"current_text\": \"Bajaj GUARANTEES 100 percent returns\",\n      \"suggested_fix\": \"Specify that the guarantee is for "
+  },
+  {
+    "timestamp": "2026-05-22T10:26:56.944143",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n2026-05-22 10:24:32,923 - app.services.preprocessing_service - INFO - Created 1 chunks for submission f46397b0-a179-4362-972d-8f32b24499fe\r\n\r\n2026-05-22 10:24:32,923 - app.services.agents.graph.nodes - INFO - Preprocessing complete. Chunk count: 1\r\n\r\nINFO:     172.21.0.5:44014 - \"GET /submissions/f46397b0-a179-4362-972d-8f32b24499fe HTTP/1.1\" 200 OK\r\n\r\nINFO:     172.21.0.5:36548 - \"GET /compliance/res",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"Compliant\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:26:57.004902",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n2026-05-22 10:24:32,923 - app.services.preprocessing_service - INFO - Created 1 chunks for submission f46397b0-a179-4362-972d-8f32b24499fe\r\n\r\n2026-05-22 10:24:32,923 - app.services.agents.graph.nodes - INFO - Preprocessing complete. Chunk count: 1\r\n\r\nINFO:     172.21.0.5:44014 - \"GET /submissions/f46397b0-a179-4362-972d-8f32b24499fe HTTP/1.1\" 200 OK\r\n\r\nINFO:     172.21.0.5:36548 - \"GET /compliance/res",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"COMPLIANT\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:26:57.188587",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n2026-05-22 10:24:32,923 - app.services.preprocessing_service - INFO - Created 1 chunks for submission f46397b0-a179-4362-972d-8f32b24499fe\r\n\r\n2026-05-22 10:24:32,923 - app.services.agents.graph.nodes - INFO - Preprocessing complete. Chunk count: 1\r\n\r\nINFO:     172.21.0.5:44014 - \"GET /submissions/f46397b0-a179-4362-972d-8f32b24499fe HTTP/1.1\" 200 OK\r\n\r\nINFO:     172.21.0.5:36548 - \"GET /compliance/res",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"No violations detected\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:27:41.584915",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"low\",\n      \"description\": \"Using 'insurance' alone when discussing emotional benefit instead of 'protection' or 'cover'\",\n      \"rule_id\": \"53bdd757-56f9-49d5-b60a-5ac5dd7856b6\",\n      \"location\": \"Term Life Insurance is the most basic type of life insurance\",\n      \"current_text\": \"life insurance\",\n      \"suggested_fix\": \"life cover\",\n      \"auto_fixable\": true,\n      \"chunk_index\": 0\n    },\n    {\n      \"category\": \"brand\",\n"
+  },
+  {
+    "timestamp": "2026-05-22T10:27:41.690316",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The ULIP section does not prominently display the risk-factor statement: 'Investments in the units of the funds are subject to market risks.'\",\n      \"rule_id\": \"3a3a213e-d384-42c2-9c38-0fbaa971b325\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"ULIP stands for Unit Linked Insurance Plan. This plan gives you two things: life cover and a way to grow you"
+  },
+  {
+    "timestamp": "2026-05-22T10:27:41.882490",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Implying guaranteed equity returns in equity-linked unit-fund advertisements\",\n      \"rule_id\": \"623d2045-52c7-4118-a030-531a7b3129d6\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section, second paragraph\",\n      \"current_text\": \"The value of your money changes with market performance.\",\n      \"suggested_fix\": \"Rephrase to clarify that returns are not guaranteed, e.g., 'The value of "
+  },
+  {
+    "timestamp": "2026-05-22T10:27:42.189001",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Implying guaranteed equity returns in equity-linked unit-fund advertisements\",\n      \"rule_id\": \"623d2045-52c7-4118-a030-531a7b3129d6\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section, second paragraph\",\n      \"current_text\": \"The value of your money changes with market performance.\",\n      \"suggested_fix\": \"Rephrase to clarify that returns are not guaranteed, e.g., 'The value of "
+  },
+  {
+    "timestamp": "2026-05-22T10:27:42.508386",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The ULIP section does not prominently display the risk-factor statement.\",\n      \"rule_id\": \"3a3a213e-d384-42c2-9c38-0fbaa971b325\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"ULIP stands for Unit Linked Insurance Plan. This plan gives you two things: life cover and a way to grow your money. Your premium is split \u2014 one part goes to life insurance, and"
+  },
+  {
+    "timestamp": "2026-05-22T10:27:42.603967",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n \r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and giv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"low\",\n      \"description\": \"Using 'insurance' alone when discussing emotional benefit instead of 'protection' or 'cover'\",\n      \"rule_id\": \"53bdd757-56f9-49d5-b60a-5ac5dd7856b6\",\n      \"location\": \"Term Life Insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of mone"
+  },
+  {
+    "timestamp": "2026-05-22T10:28:08.917645",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n\r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and give",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"low\",\n      \"description\": \"Using 'insurance' alone when discussing emotional benefit instead of 'protection' or 'cover'.\",\n      \"rule_id\": \"53bdd757-56f9-49d5-b60a-5ac5dd7856b6\",\n      \"location\": \"Term Life Insurance is the most basic type of life insurance.\",\n      \"current_text\": \"life insurance\",\n      \"suggested_fix\": \"life cover\",\n      \"auto_fixable\": true,\n      \"chunk_index\": 0\n    },\n    {\n      \"category\": \"brand\""
+  },
+  {
+    "timestamp": "2026-05-22T10:28:09.814683",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n\r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and give",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"low\",\n      \"description\": \"Using 'insurance' alone when discussing emotional benefit instead of 'protection' or 'cover'\",\n      \"rule_id\": \"53bdd757-56f9-49d5-b60a-5ac5dd7856b6\",\n      \"location\": \"Term Life Insurance is the most basic type of life insurance\",\n      \"current_text\": \"life insurance\",\n      \"suggested_fix\": \"life cover\",\n      \"auto_fixable\": true,\n      \"chunk_index\": 0\n    },\n    {\n      \"category\": \"brand\",\n"
+  },
+  {
+    "timestamp": "2026-05-22T10:28:09.919493",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n\r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and give",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Implying guaranteed equity returns in equity-linked unit-fund advertisement\",\n      \"rule_id\": \"623d2045-52c7-4118-a030-531a7b3129d6\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"You can choose your fund type based on your risk level. The value of your money changes with market performance.\",\n      \"suggested_fix\": \"Rephrase to avoid implying guarantee"
+  },
+  {
+    "timestamp": "2026-05-22T10:28:10.556579",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n\r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and give",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The ULIP section does not prominently display the risk-factor statement.\",\n      \"rule_id\": \"3a3a213e-d384-42c2-9c38-0fbaa971b325\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"ULIP stands for Unit Linked Insurance Plan. This plan gives you two things: life cover and a way to grow your money. Your premium is split \u2014 one part goes to life insurance, and"
+  },
+  {
+    "timestamp": "2026-05-22T10:28:10.744190",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n\r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and give",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The ULIP section does not prominently display the risk-factor statement.\",\n      \"rule_id\": \"3a3a213e-d384-42c2-9c38-0fbaa971b325\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"ULIP stands for Unit Linked Insurance Plan. This plan gives you two things: life cover and a way to grow your money. Your premium is split \u2014 one part goes to life insurance, and"
+  },
+  {
+    "timestamp": "2026-05-22T10:28:10.847883",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nTerm Life Insurance\r\n\r\nTerm life insurance is the most basic type of life cover. It protects your family for a fixed number of years, like 10, 20, or 30 years. You pay a premium, and if you pass away during that time, your family gets a fixed sum of money.\r\n\r\n\r\nThis plan is good if you only want protection. It does not give back any money if you live through the policy term. But it costs less and give",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Implying guaranteed equity returns in equity-linked unit-fund advertisements\",\n      \"rule_id\": \"623d2045-52c7-4118-a030-531a7b3129d6\",\n      \"location\": \"ULIPs (Unit Linked Insurance Plans) section\",\n      \"current_text\": \"You can choose your fund type based on your risk level. The value of your money changes with market performance.\",\n      \"suggested_fix\": \"Rephrase to clarify that returns ar"
+  },
+  {
+    "timestamp": "2026-05-22T10:29:32.333582",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nwagdvawhdbawd\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### SEBI RULES:\n1. [HIGH] (ID: 1649c901-ba70-46eb-b2d9-f71c597401f2) Capital protection plans must not be marketed without explicit disclosure of capital-protection mechanism and term.\n2. [CRITICAL] (ID: 623d2045-52c7-4118-a030-531a7b3129d6) Equity-linked unit-fund advertisements must avoid implying guaranteed equity returns.\n3. [LOW] (ID: a52fb265-0c",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"No violations found\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:29:32.415174",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nwagdvawhdbawd\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### BRAND RULES:\n1. [LOW] (ID: 5feac089-e16f-488c-89e0-b4270432db14) Brand voice avoids 'tension', 'worry', 'problem' as negative anchors; reframe with positive emotional outcomes.\n2. [MEDIUM] (ID: 141dfd99-e803-4783-bf5c-ba46de2fa3b3) Hindi/regional copy: brand name retains English spelling; never transliterated.\n3. [MEDIUM] (ID: 6bfbbf68-83d1-4c71-9",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"The provided document content 'wagdvawhdbawd' does not contain any text that can be evaluated against the given compliance rules.\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:29:32.665604",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nwagdvawhdbawd\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### SEBI RULES:\n1. [HIGH] (ID: 1649c901-ba70-46eb-b2d9-f71c597401f2) Capital protection plans must not be marketed without explicit disclosure of capital-protection mechanism and term.\n2. [CRITICAL] (ID: 623d2045-52c7-4118-a030-531a7b3129d6) Equity-linked unit-fund advertisements must avoid implying guaranteed equity returns.\n3. [LOW] (ID: a52fb265-0c",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"No violations found\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:29:32.770282",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nwagdvawhdbawd\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### IRDAI RULES:\n1. [MEDIUM] (ID: 4926f705-a2e5-4202-8009-1bec35ab1f32) Group insurance ads must disclose that benefits cease on exit from the group.\n2. [HIGH] (ID: b64892d5-8da4-47ab-ae8e-052635baf9fe) Comparative statements with other insurers must be substantiated and not misleading.\n3. [HIGH] (ID: e569e653-5374-4bae-b71b-4bfc50aef704) Advertisemen",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"Not Applicable\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:29:32.860181",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nwagdvawhdbawd\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### BRAND RULES:\n1. [LOW] (ID: 5feac089-e16f-488c-89e0-b4270432db14) Brand voice avoids 'tension', 'worry', 'problem' as negative anchors; reframe with positive emotional outcomes.\n2. [MEDIUM] (ID: 141dfd99-e803-4783-bf5c-ba46de2fa3b3) Hindi/regional copy: brand name retains English spelling; never transliterated.\n3. [MEDIUM] (ID: 6bfbbf68-83d1-4c71-9",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"No violations detected\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:29:33.086327",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nwagdvawhdbawd\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### IRDAI RULES:\n1. [MEDIUM] (ID: 4926f705-a2e5-4202-8009-1bec35ab1f32) Group insurance ads must disclose that benefits cease on exit from the group.\n2. [HIGH] (ID: b64892d5-8da4-47ab-ae8e-052635baf9fe) Comparative statements with other insurers must be substantiated and not misleading.\n3. [HIGH] (ID: e569e653-5374-4bae-b71b-4bfc50aef704) Advertisemen",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"Not Applicable\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:36:42.770683",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### SEBI RULES:\n1. [HIGH] (ID: a99a1551-4956-4e7e-896c-9ac9aebdb61b) Comparison with index returns (Nifty, Sensex) must use total-return data and clearly state benchmark inception date.\n2. [CRITICAL] ",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"Compliant\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:36:42.966646",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### BRAND RULES:\n1. [HIGH] (ID: 4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3) The brand name must appear as 'Bajaj Allianz Life Insurance' in full at first mention; 'Bajaj Allianz Life' is acceptable thereaft",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n      \"location\": \"first sentence\",\n      \"current_text\": \"Bajaj Life Insurance\",\n      \"suggested_fix\": \"Bajaj Allianz Life Insurance\",\n      \"auto_fixable\": true,\n      \"chunk_index\": 0\n    }\n  ],\n  \"overall_assessment\": \"The document content partia"
+  },
+  {
+    "timestamp": "2026-05-22T10:36:44.308059",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### IRDAI RULES:\n1. [MEDIUM] (ID: b45b4cb8-be4e-4b86-aa04-c0d15475d941) Use of celebrities or testimonials in life-insurance ads must comply with ASCI norms and IRDAI advertisement regulations.\n2. [CR",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The IRDAI registration number of the insurer and contact details are missing.\",\n      \"rule_id\": \"51cea088-ac6f-4f8e-879e-8f2a678c209f\",\n      \"location\": \"Entire document\",\n      \"current_text\": \"Bajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\",\n      \"suggested_fix\": \"Include"
+  },
+  {
+    "timestamp": "2026-05-22T10:37:04.483221",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### SEBI RULES:\n1. [HIGH] (ID: a99a1551-4956-4e7e-896c-9ac9aebdb61b) Comparison with index returns (Nifty, Sensex) must use total-return data and clearly state benchmark inception date.\n2. [CRITICAL] ",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"Compliant\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:37:04.622226",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### SEBI RULES:\n1. [HIGH] (ID: a99a1551-4956-4e7e-896c-9ac9aebdb61b) Comparison with index returns (Nifty, Sensex) must use total-return data and clearly state benchmark inception date.\n2. [CRITICAL] ",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"Compliant\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:37:04.730623",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### BRAND RULES:\n1. [HIGH] (ID: 4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3) The brand name must appear as 'Bajaj Allianz Life Insurance' in full at first mention; 'Bajaj Allianz Life' is acceptable thereaft",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name 'Bajaj Life Insurance' does not match the required 'Bajaj Allianz Life Insurance' at first mention.\",\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n      \"location\": \"first sentence\",\n      \"current_text\": \"Bajaj Life Insurance\",\n      \"suggested_fix\": \"Bajaj Allianz Life Insurance\",\n      \"auto_fixable\": true,\n      \"chunk_index\": 0\n    }\n  ],\n  \"overall_assessment\": \"The"
+  },
+  {
+    "timestamp": "2026-05-22T10:37:04.877722",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### BRAND RULES:\n1. [HIGH] (ID: 4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3) The brand name must appear as 'Bajaj Allianz Life Insurance' in full at first mention; 'Bajaj Allianz Life' is acceptable thereaft",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n      \"location\": \"first sentence\",\n      \"current_text\": \"Bajaj Life Insurance\",\n      \"suggested_fix\": \"Bajaj Allianz Life Insurance\",\n      \"auto_fixable\": true,\n      \"chunk_index\": 0\n    }\n  ],\n  \"overall_assessment\": \"The document content partia"
+  },
+  {
+    "timestamp": "2026-05-22T10:37:05.305838",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### IRDAI RULES:\n1. [MEDIUM] (ID: b45b4cb8-be4e-4b86-aa04-c0d15475d941) Use of celebrities or testimonials in life-insurance ads must comply with ASCI norms and IRDAI advertisement regulations.\n2. [CR",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The IRDAI registration number of the insurer and contact details are missing.\",\n      \"rule_id\": \"51cea088-ac6f-4f8e-879e-8f2a678c209f\",\n      \"location\": \"Entire document\",\n      \"current_text\": \"Bajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\",\n      \"suggested_fix\": \"Include"
+  },
+  {
+    "timestamp": "2026-05-22T10:37:07.181714",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nBajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\n\nCOMPLIANCE RULES TO CHECK AGAINST:\n\n### IRDAI RULES:\n1. [MEDIUM] (ID: b45b4cb8-be4e-4b86-aa04-c0d15475d941) Use of celebrities or testimonials in life-insurance ads must comply with ASCI norms and IRDAI advertisement regulations.\n2. [CR",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The IRDAI registration number of the insurer and contact details are missing.\",\n      \"rule_id\": \"51cea088-ac6f-4f8e-879e-8f2a678c209f\",\n      \"location\": \"Entire document\",\n      \"current_text\": \"Bajaj Life Insurance, one of India's leading Private Life Insurers, is committed to offering value-packed and innovative products to help you achieve your Life Goals.\",\n      \"suggested_fix\": \"Include"
+  },
+  {
+    "timestamp": "2026-05-22T10:53:30.042924",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are an expert regulatory compliance analyst.\nExtract specific, actionable compliance rules from documents.\nReturn ONLY valid JSON.",
+    "context": null,
+    "prompt": "Analyze the following regulatory compliance document and extract all compliance rules.\n\nDocument Title: retirement_and_pension_compliance_guidelines_part1\n\nDocument Content:\n# Compliance Guidelines: Retirement and Pension Guidelines (Part 1 of 6)\n## Overview\nThis document (Part 1) compiles consolidated compliance rules and guideline instructions synthesized from historical reviewer comments.\nUse these guidelines to analyze documents and ensure compliance with regulatory, legal, and brand standar",
+    "response": "{\n\"description\": \"Schema for LLM-extracted rules from documents.\",\n  \"properties\": {\n    \"rules\": {\n      \"items\": {\n        \"additionalProperties\": true,\n        \"type\": \"object\"\n      },\n      \"title\": \"Rules\",\n      \"type\": \"array\"\n    },\n    \"document_summary\": {\n      \"default\": \"\",\n      \"title\": \"Document Summary\",\n      \"type\": \"string\"\n    },\n    \"extraction_notes\": {\n      \"default\": \"\",\n      \"title\": \"Extraction Notes\",\n      \"type\": \"string\"\n    }\n  },\n  \"title\": \"RuleExtractionResu"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:38.367610",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\r\nFOLD 1 - \r\nIntro Content - \r\nWhat is Bajaj Life Smart Secure ROP?\r\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\r\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"high\",\n      \"description\": \"The document does not provide a clear disclaimer for mutual-fund-style return illustrations as required by SEBI.\",\n      \"rule_id\": \"de27c080-ad33-4946-9575-57d8be553279\",\n      \"location\": \"Multiple fund options suited to your life goals\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP provides Life Cover alongside Market-linked Returns across multiple fund options suited to your life goals.\",\n"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:38.446960",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n:\r\nDeath Benefit7 \r\nIn the event of the unfortunate death of the Life Assured during the Policy Term, provided all due premiums have been paid and the policy is in force, the Death Benefit is payable, subject to policy terms and conditions.\r\n\r\nAccidental Death Benefit (ADB)8 \r\nIn case of death due to accident, along with Life cover Sum Assured , the Accidental Death Benefit Sum Assured shall be paid w",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"location\": \"DOCUMENT CONTENT\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP\",\n      \"suggested_fix\": \"Use 'Bajaj Allianz Life Smart Secure ROP' or 'Bajaj Allianz Life' thereafter\",\n      \"auto_fixable\": false,\n      \"chunk_index\": null,\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\"\n  "
+  },
+  {
+    "timestamp": "2026-05-22T10:57:38.574083",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n, please refer to sales brochure.\r\n12If all premiums under the policy are paid up to date and provided the policy is in force and the policy has not been terminated as per term and conditions of policy, Amount equal to premium allocation charges deducted every year accrued at a guaranteed rate of 7% p.a. will be added to the regular/single premium fund value at end of 15th policy year.\r\n13Terminal Ill",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"Compliant\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:38.885744",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n.\r\nScenario B: In case of an unfortunate event \r\nIn case of your unfortunate demise during the policy term:\r\n\uf0b7\tYour nominee immediately receives the full Policy Benefit amount as a lump sum to secure their future financially, and the policy ends.\r\n\r\nWho Should Buy Bajaj Life Smart Secure ROP?\r\nBajaj Life Smart Secure ROP is designed for individuals who want a comprehensive plan that offers both protec",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n      \"location\": \"The document content\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP\",\n      \"suggested_fix\": \"Use 'Bajaj Allianz Life Smart Secure ROP' at first mention.\",\n      \"auto_fixable\": false,\n      \"chunk_index\": 0\n    },\n    {\n     "
+  },
+  {
+    "timestamp": "2026-05-22T10:57:39.001567",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n, please refer to sales brochure.\r\n12If all premiums under the policy are paid up to date and provided the policy is in force and the policy has not been terminated as per term and conditions of policy, Amount equal to premium allocation charges deducted every year accrued at a guaranteed rate of 7% p.a. will be added to the regular/single premium fund value at end of 15th policy year.\r\n13Terminal Ill",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Missing SEBI's standard disclaimer for mutual-fund-style return illustrations\",\n      \"rule_id\": \"de27c080-ad33-4946-9575-57d8be553279\",\n      \"location\": \"DOCUMENT CONTENT\",\n      \"current_text\": \"\",\n      \"suggested_fix\": \"Add 'Mutual fund investments are subject to market risks; read all scheme-related documents carefully.'\",\n      \"auto_fixable\": false,\n      \"chunk_index\": null\n    },\n    {"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:39.187642",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n form available under the Bajaj Life Smart Secure ROP?\r\nYes. Customers do not need to fill out separate forms. A single proposal journey is available under Smart Secure, covering both policies together.\r\nWill the future premiums be waived off on occurrence of Terminal illness?\r\nYes. In case a customer is diagnosed with a Terminal Illness, the Terminal Illness with Term Booster Sum Assured will be paid",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Prohibited use of 'risk-free' or 'safe' for market-linked products\",\n      \"rule_id\": \"5b26bddd-ca56-4406-bec5-d71c2413ea3b\",\n      \"location\": \"Is Bajaj Life Smart Secure ROP good for young investors in their 20s or 30s?\",\n      \"current_text\": \"long-term investing can also help manage market volatility more effectively\",\n      \"suggested_fix\": \"Rephrase to focus on the benefits of long-term in"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:39.312066",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n, please refer to sales brochure.\r\n12If all premiums under the policy are paid up to date and provided the policy is in force and the policy has not been terminated as per term and conditions of policy, Amount equal to premium allocation charges deducted every year accrued at a guaranteed rate of 7% p.a. will be added to the regular/single premium fund value at end of 15th policy year.\r\n13Terminal Ill",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"high\",\n      \"description\": \"Commission and charges (premium allocation, policy administration, fund management) must be disclosed in benefit illustrations.\",\n      \"rule_id\": \"8ea70154-603a-4dbe-8186-4341209c8552\",\n      \"location\": \"12\",\n      \"current_text\": \"Amount equal to premium allocation charges deducted every year accrued at a guaranteed rate of 7% p.a. will be added to the regular/single premium fund value at end of"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:39.904706",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n:\r\nDeath Benefit7 \r\nIn the event of the unfortunate death of the Life Assured during the Policy Term, provided all due premiums have been paid and the policy is in force, the Death Benefit is payable, subject to policy terms and conditions.\r\n\r\nAccidental Death Benefit (ADB)8 \r\nIn case of death due to accident, along with Life cover Sum Assured , the Accidental Death Benefit Sum Assured shall be paid w",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The term 'guaranteed return' is used without specifying the rate and type of plan.\",\n      \"rule_id\": \"7ac328f1-0c1e-4227-8c17-295da1f53ef2\",\n      \"location\": \"Section 1. Guaranteed11 Wealth Booster12\",\n      \"current_text\": \"The Premium Allocation Charges deducted from the premiums throughout the Policy Term are accumulated at a guaranteed11 rate of 7% per year (compounded annually) and added"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:40.033952",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\r\nFOLD 1 - \r\nIntro Content - \r\nWhat is Bajaj Life Smart Secure ROP?\r\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\r\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"Missing statutory disclaimer on return projections\",\n      \"rule_id\": \"493fdea3-2575-4ef3-b50d-fc9bba6f7d44\",\n      \"location\": \"FOLD 1 - Intro Content\",\n      \"current_text\": \"Market-linked Growth all in one plan.\",\n      \"suggested_fix\": \"Add statutory disclaimer: 'Returns are not guaranteed'\",\n      \"auto_fixable\": false,\n      \"chunk_index\": 0\n    },\n    {\n      \"category\": \"irdai\",\n      \""
+  },
+  {
+    "timestamp": "2026-05-22T10:57:40.170150",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nOP3 amount - \u20b93,88,260 | Yearly Premium Payment Mode | Sum Assured: \u20b91 Crore. In case of death at age 60 years, death benefit payable at 4% and 8% return will be \u20b91,00,00,000 | This illustration is considering investment in \"Pure Stock Fund (ULIF02721/07/06PURSTKFUN116)  \r\n\r\nbThe assumed rate of returns indicated at 4% and 8% are illustrative and not guaranteed and do not indicate the upper or lower l",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"location\": \"DOCUMENT CONTENT\",\n      \"current_text\": \"OP3 amount - \u20b93,88,260 | Yearly Premium Payment Mode | Sum Assured: \u20b91 Crore.\",\n      \"suggested_fix\": \"The brand name should be mentioned as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"auto_fixable\": false,\n      \"chunk_inde"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:40.321239",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n.\r\nScenario B: In case of an unfortunate event \r\nIn case of your unfortunate demise during the policy term:\r\n\uf0b7\tYour nominee immediately receives the full Policy Benefit amount as a lump sum to secure their future financially, and the policy ends.\r\n\r\nWho Should Buy Bajaj Life Smart Secure ROP?\r\nBajaj Life Smart Secure ROP is designed for individuals who want a comprehensive plan that offers both protec",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Use of 'risk-free' or 'safe' for market-linked products is prohibited.\",\n      \"rule_id\": \"5b26bddd-ca56-4406-bec5-d71c2413ea3b\",\n      \"location\": \"Who Should Buy Bajaj Life Smart Secure ROP?\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP gives you the blend of both Term Life Insurance + Market Linked Returns, with enhanced benefits that make it a truly comprehensive life insurance soluti"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:40.419104",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\r\nFOLD 1 - \r\nIntro Content - \r\nWhat is Bajaj Life Smart Secure ROP?\r\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\r\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"location\": \"FOLD 1 - Intro Content\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP\",\n      \"suggested_fix\": \"Bajaj Allianz Life Smart Secure ROP\",\n      \"auto_fixable\": true,\n      \"chunk_index\": 0,\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\"\n    },\n    {\n      \"category\": \"brand\",\n "
+  },
+  {
+    "timestamp": "2026-05-22T10:57:40.535052",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nOP3 amount - \u20b93,88,260 | Yearly Premium Payment Mode | Sum Assured: \u20b91 Crore. In case of death at age 60 years, death benefit payable at 4% and 8% return will be \u20b91,00,00,000 | This illustration is considering investment in \"Pure Stock Fund (ULIF02721/07/06PURSTKFUN116)  \r\n\r\nbThe assumed rate of returns indicated at 4% and 8% are illustrative and not guaranteed and do not indicate the upper or lower l",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The document does not include the statutory disclaimer that returns are not guaranteed for return projections.\",\n      \"rule_id\": \"493fdea3-2575-4ef3-b50d-fc9bba6f7d44\",\n      \"location\": \"OP3 amount - \u20b93,88,260 | Yearly Premium Payment Mode | Sum Assured: \u20b91 Crore. In case of death at age 60 years, death benefit payable at 4% and 8% return will be \u20b91,00,00,000\",\n      \"current_text\": \"In case "
+  },
+  {
+    "timestamp": "2026-05-22T10:57:40.658598",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n not involve in activities like selling insurance policies, announcing bonus or investment of premiums. Public receiving such phone calls are requested to lodge a police complaint.\r\nRisk Factors and Warning Statements: Bajaj Life Insurance Limited and Bajaj Life Invest Protect Goal Plus and Bajaj Life Secure Plus are the names of the company and the products respectively and do not in any way indicate",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention; instead, it appears as 'Bajaj Life Insurance Limited'.\",\n      \"location\": \"First paragraph\",\n      \"current_text\": \"Bajaj Life Insurance Limited\",\n      \"suggested_fix\": \"Use 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"auto_fixable\": false,\n      \"chunk_index\": 0,\n      \"rule_id\": \"4e2e"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:50.557387",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n:\r\nDeath Benefit7 \r\nIn the event of the unfortunate death of the Life Assured during the Policy Term, provided all due premiums have been paid and the policy is in force, the Death Benefit is payable, subject to policy terms and conditions.\r\n\r\nAccidental Death Benefit (ADB)8 \r\nIn case of death due to accident, along with Life cover Sum Assured , the Accidental Death Benefit Sum Assured shall be paid w",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"high\",\n      \"description\": \"The document does not explicitly disclose the capital-protection mechanism and term for the Bajaj Life Smart Secure ROP plan.\",\n      \"location\": \"Section: How Does Bajaj Life Smart Secure ROP Work? > Step 1 - Choose Your Plan Setup\",\n      \"current_text\": \"Pick Your Protection Cover: Decide how much life insurance cover your family needs. Eligible customers can secure up to \u20b93 Crore without a physi"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:52.294712",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n, please refer to sales brochure.\r\n12If all premiums under the policy are paid up to date and provided the policy is in force and the policy has not been terminated as per term and conditions of policy, Amount equal to premium allocation charges deducted every year accrued at a guaranteed rate of 7% p.a. will be added to the regular/single premium fund value at end of 15th policy year.\r\n13Terminal Ill",
+    "response": "{\n\"violations\": [],\n  \"overall_assessment\": \"Compliant\",\n  \"key_issues\": []\n}"
+  },
+  {
+    "timestamp": "2026-05-22T10:57:56.458663",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "brand",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n:\r\nDeath Benefit7 \r\nIn the event of the unfortunate death of the Life Assured during the Policy Term, provided all due premiums have been paid and the policy is in force, the Death Benefit is payable, subject to policy terms and conditions.\r\n\r\nAccidental Death Benefit (ADB)8 \r\nIn case of death due to accident, along with Life cover Sum Assured , the Accidental Death Benefit Sum Assured shall be paid w",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"location\": \"DOCUMENT CONTENT\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP\",\n      \"suggested_fix\": \"Use 'Bajaj Allianz Life Smart Secure ROP' or 'Bajaj Allianz Life' thereafter\",\n      \"auto_fixable\": false,\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n      \"chunk_index\": 0\n    }"
+  },
+  {
+    "timestamp": "2026-05-22T10:58:01.412931",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "sebi",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n, please refer to sales brochure.\r\n12If all premiums under the policy are paid up to date and provided the policy is in force and the policy has not been terminated as per term and conditions of policy, Amount equal to premium allocation charges deducted every year accrued at a guaranteed rate of 7% p.a. will be added to the regular/single premium fund value at end of 15th policy year.\r\n13Terminal Ill",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Missing SEBI's standard disclaimer for mutual-fund-style return illustrations\",\n      \"rule_id\": \"de27c080-ad33-4946-9575-57d8be553279\",\n      \"location\": \"Entire document\",\n      \"current_text\": null,\n      \"suggested_fix\": \"Add 'Mutual fund investments are subject to market risks; read all scheme-related documents carefully.'\",\n      \"auto_fixable\": false,\n      \"chunk_index\": null\n    },\n    "
+  },
+  {
+    "timestamp": "2026-05-22T10:58:06.692555",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
+    "context": {
+      "agent_category": "irdai",
+      "rules_count": 8
+    },
+    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n, please refer to sales brochure.\r\n12If all premiums under the policy are paid up to date and provided the policy is in force and the policy has not been terminated as per term and conditions of policy, Amount equal to premium allocation charges deducted every year accrued at a guaranteed rate of 7% p.a. will be added to the regular/single premium fund value at end of 15th policy year.\r\n13Terminal Ill",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"high\",\n      \"description\": \"The policy term, premium payment term, and lock-in period are not clearly stated.\",\n      \"rule_id\": \"89e13ed1-52ef-4d90-8ba8-682ec498d7c4\",\n      \"location\": \"Document content\",\n      \"current_text\": \"12If all premiums under the policy are paid up to date and provided the policy is in force and the policy has not been terminated as per term and conditions of policy, Amount equal to premium allocat"
+  },
+  {
+    "timestamp": "2026-05-22T11:03:43.453547",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are an expert regulatory compliance analyst.\nExtract specific, actionable compliance rules from documents.\nReturn ONLY valid JSON.",
+    "context": null,
+    "prompt": "Analyze the following regulatory compliance document and extract all compliance rules.\n\nDocument Title: ulip_compliance_guidelines_part1\n\nDocument Content:\n# Compliance Guidelines: ULIP Compliance Guidelines (Part 1 of 6)\n## Overview\nThis document (Part 1) compiles consolidated compliance rules and guideline instructions synthesized from historical reviewer comments.\nUse these guidelines to analyze documents and ensure compliance with regulatory, legal, and brand standards.\n\n## Taxation & GST Co",
+    "response": "{\n\"description\": \"Schema for LLM-extracted rules from documents.\",\n  \"properties\": {\n    \"rules\": {\n      \"items\": {\n        \"additionalProperties\": true,\n        \"type\": \"object\"\n      },\n      \"title\": \"Rules\",\n      \"type\": \"array\"\n    },\n    \"document_summary\": {\n      \"default\": \"\",\n      \"title\": \"Document Summary\",\n      \"type\": \"string\"\n    },\n    \"extraction_notes\": {\n      \"default\": \"\",\n      \"title\": \"Extraction Notes\",\n      \"type\": \"string\"\n    }\n  },\n  \"title\": \"RuleExtractionResu"
+  },
+  {
+    "timestamp": "2026-05-22T11:04:14.038486",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are an expert regulatory compliance analyst.\nExtract specific, actionable compliance rules from documents.\nReturn ONLY valid JSON.",
+    "context": null,
+    "prompt": "Analyze the following regulatory compliance document and extract all compliance rules.\n\nDocument Title: ulip_compliance_guidelines_part1\n\nDocument Content:\n# Compliance Guidelines: ULIP Compliance Guidelines (Part 2 of 6)\n## Overview\nThis document (Part 2) compiles consolidated compliance rules and guideline instructions synthesized from historical reviewer comments.\nUse these guidelines to analyze documents and ensure compliance with regulatory, legal, and brand standards.\n\n## References & Sour",
+    "response": "{\n\"description\": \"Schema for LLM-extracted rules from documents.\",\n  \"properties\": {\n    \"rules\": {\n      \"items\": {\n        \"additionalProperties\": true,\n        \"type\": \"object\"\n      },\n      \"title\": \"Rules\",\n      \"type\": \"array\"\n    },\n    \"document_summary\": {\n      \"default\": \"\",\n      \"title\": \"Document Summary\",\n      \"type\": \"string\"\n    },\n    \"extraction_notes\": {\n      \"default\": \"\",\n      \"title\": \"Extraction Notes\",\n      \"type\": \"string\"\n    }\n  },\n  \"title\": \"RuleExtractionResu"
+  },
+  {
+    "timestamp": "2026-05-22T11:05:35.546173",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are an expert regulatory compliance analyst.\nExtract specific, actionable compliance rules from documents.\nReturn ONLY valid JSON.",
+    "context": null,
+    "prompt": "Analyze the following regulatory compliance document and extract all compliance rules.\n\nDocument Title: 23226_21859_Revamp_ Benefits of ULIPs\n\nDocument Content:\nBenefits of ULIPs You Should Know About\n\nBenefits of ULIPs\n\n Let us take a look at the various benefits you can expect by investing in ULIPs:\n\n1. Get the dual benefit\n\nA ULIP is a one-stop solution for people who plan to invest their money and are also looking for life cover. Along with coverage, you can invest your money in market-linke",
+    "response": "{\n\"description\": \"Schema for LLM-extracted rules from documents.\",\n  \"properties\": {\n    \"rules\": {\n      \"items\": {\n        \"additionalProperties\": true,\n        \"type\": \"object\"\n      },\n      \"title\": \"Rules\",\n      \"type\": \"array\"\n    },\n    \"document_summary\": {\n      \"default\": \"\",\n      \"title\": \"Document Summary\",\n      \"type\": \"string\"\n    },\n    \"extraction_notes\": {\n      \"default\": \"\",\n      \"title\": \"Extraction Notes\",\n      \"type\": \"string\"\n    }\n  },\n  \"title\": \"RuleExtractionResu"
+  }
+]

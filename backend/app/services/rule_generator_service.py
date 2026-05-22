@@ -123,33 +123,54 @@ class RuleGeneratorService:
         created_by_user_id: uuid.UUID,
         db: Session,
         project_id: Optional[uuid.UUID] = None,
-        instructions: Optional[str] = None
+        instructions: Optional[str] = None,
+        regulator: str = "irdai",
     ) -> Dict[str, Any]:
         """
-        Generate compliance rules from document text using LLM.
+        Generate compliance rules from document text using LLM, and index the
+        source passages into the RAG store so generated rules can carry a
+        verbatim citation back to the regulator passage that produced them.
         """
         logger.info(f"Starting rule generation from document: {document_title}")
 
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "rules_created": 0,
             "rules_failed": 0,
             "rules": [],
-            "errors": []
+            "errors": [],
+            "source_doc_id": None,
+            "source_passages_indexed": 0,
         }
 
         if not document_content or len(document_content) < 50:
             result["errors"].append("Document content too short or empty")
             return result
 
-        # Build extraction prompt
+        # 1. Index the source document into rag_source_docs (non-fatal on failure).
+        document_id = uuid.uuid4()
+        result["source_doc_id"] = str(document_id)
+        indexed_passages: List = []
+        try:
+            from app.services.rag.indexers.source_docs_indexer import index_source_document
+            indexed_passages = await index_source_document(
+                document_id=document_id,
+                document_title=document_title,
+                regulator=regulator,
+                full_text=document_content,
+            )
+            result["source_passages_indexed"] = len(indexed_passages)
+        except Exception as e:
+            logger.warning(f"RAG source-doc indexing failed (non-fatal): {e}")
+
+        # 2. LLM extraction.
         extra_instructions = f"\n\nSpecial Instructions: {instructions}" if instructions else ""
         prompt = f"""Analyze the following regulatory compliance document and extract all compliance rules.
 
 Document Title: {document_title}
 
 Document Content:
-{document_content[:8000]}  
+{document_content[:8000]}
 
 {extra_instructions}
 
@@ -161,7 +182,7 @@ Extract all compliance rules from this document. For each rule, determine:
 
 Return a list of rules in JSON format."""
 
-        system_prompt = """You are an expert regulatory compliance analyst. 
+        system_prompt = """You are an expert regulatory compliance analyst.
 Extract specific, actionable compliance rules from documents.
 Return ONLY valid JSON."""
 
@@ -172,7 +193,7 @@ Return ONLY valid JSON."""
                 system_prompt=system_prompt
             )
 
-            # Save extracted rules to DB
+            created_rule_ids: List[uuid.UUID] = []
             for rule_data in extraction_result.rules:
                 try:
                     rule = self.create_rule(
@@ -183,8 +204,12 @@ Return ONLY valid JSON."""
                         keywords=rule_data.get("keywords", []),
                         created_by=created_by_user_id,
                         project_id=project_id,
-                        metadata={"source": document_title}
+                        metadata={
+                            "source": document_title,
+                            "source_doc_id": str(document_id),
+                        },
                     )
+                    created_rule_ids.append(rule.id)
                     result["rules"].append({
                         "id": str(rule.id),
                         "category": rule.category,
@@ -192,10 +217,29 @@ Return ONLY valid JSON."""
                         "severity": rule.severity
                     })
                     result["rules_created"] += 1
+                    # Best-effort: index this new rule into rag_rules.
+                    try:
+                        from app.services.rag.indexers.rules_indexer import upsert_rule
+                        await upsert_rule(rule.id, db)
+                    except Exception as e:
+                        logger.warning(f"RAG upsert for new rule failed (non-fatal): {e}")
                 except Exception as e:
                     logger.error(f"Failed to save rule: {e}")
                     result["rules_failed"] += 1
                     result["errors"].append(str(e))
+
+            # 3. Coarse-grained backfill: associate every passage of this
+            # document with every rule extracted from it. The chat layer
+            # then quotes the most-similar passage at query time. A
+            # finer-grained per-passage attribution can replace this if/when
+            # the LLM is asked to cite the source passage index per rule.
+            if indexed_passages and created_rule_ids:
+                try:
+                    from app.services.rag.indexers.source_docs_indexer import link_rules_to_passage
+                    for passage_id, _ in indexed_passages:
+                        await link_rules_to_passage(passage_id, created_rule_ids)
+                except Exception as e:
+                    logger.warning(f"RAG link_rules_to_passage failed (non-fatal): {e}")
 
             result["success"] = result["rules_created"] > 0
             logger.info(f"Generated {result['rules_created']} rules from document")

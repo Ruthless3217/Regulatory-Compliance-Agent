@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 from .config import settings
-from .api.routes import submissions, compliance, dashboard, rules
+from .api.routes import submissions, compliance, dashboard, rules, chat, similar, rag_health
 
 # Configure logging
 logging.basicConfig(
@@ -19,18 +19,19 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting Regulatory Compliance Agent Backend")
 
-    # Initialize Database Tables
+    # Database schema is owned by Alembic migrations.
+    # Run `alembic upgrade head` before/at container start.
+    # Models are imported here so SQLAlchemy registers them on Base.metadata
+    # (used by Alembic env.py).
     try:
-        from .database import engine, Base
-        from .models import (
+        from .models import (  # noqa: F401
             User, Submission, Rule, ComplianceCheck,
             Violation, ContentChunk, AgentExecution,
             AgentTrace, ToolInvocation, ComplianceState
         )
-        Base.metadata.create_all(bind=engine)
-        logger.info("✅ Database tables initialized")
+        logger.info("✅ Database models registered (schema managed by Alembic)")
     except Exception as e:
-        logger.error(f"❌ Database initialization failed: {e}")
+        logger.error(f"❌ Model registration failed: {e}")
 
     # Initialize Redis (optional - falls back to MemorySaver)
     try:
@@ -90,7 +91,7 @@ An AI-powered regulatory compliance checking system built with:
 - ⚙️ Dynamic rule generation from regulatory documents
     """,
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # CORS middleware
@@ -107,6 +108,9 @@ app.include_router(submissions.router)
 app.include_router(compliance.router)
 app.include_router(dashboard.router)
 app.include_router(rules.router)
+app.include_router(chat.router)
+app.include_router(similar.router)
+app.include_router(rag_health.router)
 
 
 @app.get("/health", tags=["Health"])

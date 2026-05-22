@@ -10,7 +10,7 @@ import logging
 import uuid
 import datetime
 import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from langchain_core.messages import AIMessage
 
 from .state import ComplianceState
@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 async def preprocess_node(state: ComplianceState) -> Dict:
     """
-    Librarian Node: Prepares document content into chunks.
+    Librarian Node: Prepares document content into chunks, then mirrors
+    them into the RAG `rag_chunks` index. Indexing failure is non-fatal —
+    it degrades downstream retrieval but does not block analysis.
     """
     logger.info("Node: Preprocess (Librarian) running...")
 
@@ -51,9 +53,22 @@ async def preprocess_node(state: ComplianceState) -> Dict:
             for c in submission_chunks
         ]
 
+        # Mirror chunks into RAG index (non-fatal on failure).
+        rag_indexed = 0
+        try:
+            from app.services.rag.indexers.chunks_indexer import upsert_chunks_for_submission
+            rag_indexed = await upsert_chunks_for_submission(
+                submission_id=submission_id, db=db, submission_status="analyzing"
+            )
+        except Exception as e:
+            logger.warning(f"RAG chunk indexing failed (non-fatal): {e}")
+
         return {
             "chunks": chunks_data,
-            "messages": [AIMessage(content=f"Librarian: Prepared {len(chunks_data)} chunks.")]
+            "messages": [AIMessage(
+                content=f"Librarian: Prepared {len(chunks_data)} chunks "
+                        f"(RAG indexed: {rag_indexed})."
+            )]
         }
 
     except Exception as e:
@@ -67,20 +82,23 @@ async def preprocess_node(state: ComplianceState) -> Dict:
 async def dispatch_node(state: ComplianceState) -> Dict:
     """
     Brain Node: Identifies active rules and determines execution plan.
+
+    RAG-aware: tries to fetch top-K most-relevant rules per chunk via the
+    rules retriever (semantic + keyword hybrid). Falls back to the legacy
+    "all active rules per category" path on any RAG failure.
     """
     logger.info("Node: Dispatch (Brain) running...")
 
+    from app.config import settings
     from app.services.rule_generator_service import rule_generator_service
     from .context import GraphContext
 
     db = GraphContext.get_db_session()
 
-    # Load active rules
+    # 1. Always load full active rules (fallback target + populates active_agents).
     rules_orm = rule_generator_service.get_active_rules(db)
-
-    rules_serializable = {}
-    active_agents = []
-
+    rules_serializable: Dict[str, List[Dict]] = {}
+    active_agents: List[str] = []
     for cat, r_list in rules_orm.items():
         if r_list:
             rules_serializable[cat] = [
@@ -88,7 +106,8 @@ async def dispatch_node(state: ComplianceState) -> Dict:
                     "id": str(r.id),
                     "rule_text": r.rule_text,
                     "category": r.category,
-                    "severity": r.severity
+                    "severity": r.severity,
+                    "keywords": r.keywords or [],
                 }
                 for r in r_list
             ]
@@ -96,10 +115,52 @@ async def dispatch_node(state: ComplianceState) -> Dict:
 
     active_rule_count = sum(len(v) for v in rules_serializable.values())
 
+    # 2. Try RAG per-chunk retrieval. On any failure, set rag_degraded=true
+    #    and let analysis_node use the flat rules_serializable.
+    chunks = state.get("chunks", [])
+    categories = list(rules_serializable.keys())
+    chunk_rules: Dict[str, Dict[str, List[Dict]]] = {}
+    rag_degraded = False
+
+    if chunks and categories:
+        try:
+            from app.services.rag.retrievers.rules_retriever import get_rules_retriever
+            retriever = get_rules_retriever()
+            chunk_rules = await retriever.retrieve_per_chunk(
+                chunks=chunks,
+                categories=categories,
+                top_k=settings.rag_top_k_analysis,
+            )
+            retrieved_total = sum(
+                len(rs) for chunk_map in chunk_rules.values() for rs in chunk_map.values()
+            )
+            logger.info(
+                f"RAG: retrieved {retrieved_total} rule slots across "
+                f"{len(chunk_rules)} chunks × {len(categories)} categories"
+            )
+        except Exception as e:
+            logger.warning(f"RAG rule retrieval failed; falling back to all-rules: {e}")
+            rag_degraded = True
+
+    md = dict(state.get("metadata") or {})
+    md["rag_degraded"] = rag_degraded
+    md["rag_rules_per_chunk"] = (
+        {cid: sum(len(rs) for rs in cm.values()) for cid, cm in chunk_rules.items()}
+        if chunk_rules else {}
+    )
+
     return {
         "active_rules": rules_serializable,
+        "chunk_rules": chunk_rules,
         "active_agents": active_agents,
-        "messages": [AIMessage(content=f"Brain: Dispatched {len(active_agents)} agents. Active Rules: {active_rule_count}")]
+        "metadata": md,
+        "messages": [AIMessage(
+            content=(
+                f"Brain: Dispatched {len(active_agents)} agents. "
+                f"Active rules: {active_rule_count}. "
+                f"RAG: {'degraded' if rag_degraded else f'{len(chunk_rules)} chunks targeted'}."
+            )
+        )]
     }
 
 
@@ -118,16 +179,26 @@ async def analysis_node(state: ComplianceState) -> Dict:
 
     chunks_data = state.get("chunks", [])
     rules = state.get("active_rules", {})
+    chunk_rules_map = state.get("chunk_rules") or {}
     submission_id = state.get("submission_id")
     user_id = state.get("user_id")
 
     active_categories = [cat for cat, r_list in rules.items() if r_list]
     new_violations = []
 
+    def _rules_for(category: str, chunk_id: Optional[str]) -> List[Dict]:
+        """Prefer RAG per-chunk rules; fall back to the flat per-category list."""
+        if chunk_id and chunk_id in chunk_rules_map:
+            per_cat = chunk_rules_map[chunk_id].get(category)
+            if per_cat:
+                return per_cat
+        return rules.get(category, [])
+
     async def process_task(category: str, chunk_data: Dict) -> List[Dict]:
         chunk_text = chunk_data.get("text", "")
         chunk_index = chunk_data.get("chunk_index")
         chunk_id = chunk_data.get("id")
+        task_rules = _rules_for(category, chunk_id)
 
         task_violations = []
         task_db = SessionLocal()
@@ -142,7 +213,11 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 session_id=uuid.UUID(submission_id) if submission_id else None,
                 user_id=uuid.UUID(user_id) if user_id else None,
                 status="running",
-                input_data={"chunk_index": chunk_index, "text_preview": chunk_text[:100]}
+                input_data={
+                    "chunk_index": chunk_index,
+                    "text_preview": chunk_text[:100],
+                    "rules_count": len(task_rules),
+                }
             )
             task_db.add(execution)
             task_db.commit()
@@ -151,7 +226,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 start_time = datetime.datetime.now()
                 analysis_result = await agent.analyze(
                     content=chunk_text,
-                    rules=rules[category],
+                    rules=task_rules,
                     execution_id=str(execution.id),
                     db=task_db
                 )

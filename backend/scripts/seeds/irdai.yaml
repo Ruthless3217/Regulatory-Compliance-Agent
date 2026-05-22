@@ -1,0 +1,127 @@
+# IRDAI (Insurance Regulatory and Development Authority of India) seed rules.
+# Run with: python -m scripts.seed_rules
+# Source: IRDAI Advertisement Regulations 2024, ULIP guidelines, claim-process disclosures
+category: irdai
+generation_source: seed/irdai-2024-q1
+confidence_score: 0.9
+rules:
+  - rule_text: "Insurance advertisements must include the IRDAI registration number of the insurer and contact details."
+    severity: critical
+    keywords: ["irdai registration", "insurer details", "advertisement"]
+    points_deduction: -10.0
+  - rule_text: "All return projections in life-insurance advertisements must include the statutory disclaimer that returns are not guaranteed."
+    severity: critical
+    keywords: ["returns", "projection", "guaranteed", "non-guaranteed"]
+    points_deduction: -10.0
+  - rule_text: "ULIP advertisements must prominently display the risk-factor statement: 'Investments in the units of the funds are subject to market risks.'"
+    severity: critical
+    keywords: ["ulip", "market risk", "risk factor"]
+    points_deduction: -10.0
+  - rule_text: "Use of the term 'guaranteed return' is permitted only for traditional plans with explicit guarantees and must specify the rate."
+    severity: critical
+    keywords: ["guaranteed return", "rate", "traditional plan"]
+    points_deduction: -10.0
+  - rule_text: "Past performance disclaimers must accompany any historical fund performance display: 'Past performance is not indicative of future results.'"
+    severity: high
+    keywords: ["past performance", "historical", "fund performance"]
+    points_deduction: -7.0
+  - rule_text: "Claim-settlement ratio claims must cite the most recent IRDAI public disclosure year and exact percentage."
+    severity: high
+    keywords: ["claim settlement ratio", "csr", "irdai disclosure"]
+    points_deduction: -7.0
+  - rule_text: "Advertisements must not promise or imply tax benefits without referencing the relevant Income Tax Act section (e.g., 80C, 10(10D)) and the conditional nature of benefits."
+    severity: high
+    keywords: ["tax benefit", "80c", "10(10d)", "income tax act"]
+    points_deduction: -7.0
+  - rule_text: "Free-look period of 15 days (30 days for distance marketing) must be disclosed in customer-facing material."
+    severity: high
+    keywords: ["free look", "15 days", "30 days", "distance marketing"]
+    points_deduction: -7.0
+  - rule_text: "Surrender value, paid-up value, and lock-in conditions must be disclosed for all unit-linked and endowment products."
+    severity: high
+    keywords: ["surrender value", "paid up", "lock in"]
+    points_deduction: -7.0
+  - rule_text: "Mis-selling: advertisements must not target customers above age 60 with long-term ULIPs without explicit suitability disclaimer."
+    severity: critical
+    keywords: ["senior citizen", "60", "ulip", "suitability"]
+    points_deduction: -10.0
+  - rule_text: "Commission and charges (premium allocation, policy administration, fund management) must be disclosed in benefit illustrations."
+    severity: high
+    keywords: ["commission", "premium allocation", "policy admin charges", "fund management"]
+    points_deduction: -7.0
+  - rule_text: "Use of celebrities or testimonials in life-insurance ads must comply with ASCI norms and IRDAI advertisement regulations."
+    severity: medium
+    keywords: ["celebrity", "testimonial", "asci"]
+    points_deduction: -5.0
+  - rule_text: "Comparative statements with other insurers must be substantiated and not misleading."
+    severity: high
+    keywords: ["compare", "competitor", "comparison"]
+    points_deduction: -7.0
+  - rule_text: "Mandatory inclusion of statutory warning: 'For more details on risk factors, terms and conditions, please read the sales brochure carefully before concluding the sale.'"
+    severity: critical
+    keywords: ["sales brochure", "terms and conditions", "risk factors"]
+    points_deduction: -10.0
+  - rule_text: "Health insurance: pre-existing disease (PED) waiting period must be disclosed in months/years."
+    severity: high
+    keywords: ["pre existing disease", "ped", "waiting period"]
+    points_deduction: -7.0
+  - rule_text: "Insurance ombudsman details (toll-free, website) should be available in customer communications."
+    severity: medium
+    keywords: ["ombudsman", "complaint", "grievance"]
+    points_deduction: -5.0
+  - rule_text: "Misleading visuals: use of medical-emergency imagery without context is prohibited."
+    severity: medium
+    keywords: ["medical emergency", "visual", "misleading"]
+    points_deduction: -5.0
+  - rule_text: "Pension and annuity products: tax treatment on maturity must be disclosed."
+    severity: high
+    keywords: ["pension", "annuity", "tax on maturity"]
+    points_deduction: -7.0
+  - rule_text: "Use of words 'best', 'cheapest', 'India's No.1' requires factual substantiation and time-bounded data source."
+    severity: high
+    keywords: ["best", "cheapest", "no 1", "number one"]
+    points_deduction: -7.0
+  - rule_text: "Online insurance purchase flows must surface the policy bond download and email within 7 days."
+    severity: medium
+    keywords: ["policy bond", "policy document", "7 days"]
+    points_deduction: -5.0
+  - rule_text: "Bonus declaration history claims must reference IRDAI-filed annual statements."
+    severity: medium
+    keywords: ["bonus", "bonus history", "declaration"]
+    points_deduction: -5.0
+  - rule_text: "Riders (Critical Illness, Accidental Death, Waiver of Premium) must list inclusions and exclusions in marketing material."
+    severity: high
+    keywords: ["rider", "critical illness", "accidental death", "waiver of premium"]
+    points_deduction: -7.0
+  - rule_text: "Policy term, premium payment term, and lock-in must be clearly stated for ULIPs."
+    severity: high
+    keywords: ["policy term", "premium payment term", "ppt", "lock in"]
+    points_deduction: -7.0
+  - rule_text: "Mortality charge structure must be disclosed for ULIP and term plans."
+    severity: medium
+    keywords: ["mortality charge", "cost of insurance"]
+    points_deduction: -5.0
+  - rule_text: "Promotional emails/SMS must contain unsubscribe option per IRDAI distance-marketing guidelines."
+    severity: medium
+    keywords: ["unsubscribe", "opt out", "distance marketing"]
+    points_deduction: -5.0
+  - rule_text: "Suitability assessment outcome must be retained for products sold via tele-calling or online channels."
+    severity: medium
+    keywords: ["suitability", "tele calling", "online channel"]
+    points_deduction: -5.0
+  - rule_text: "Section 45 of Insurance Act (claim rejection time bar) reference must appear in claim-related communications."
+    severity: medium
+    keywords: ["section 45", "claim rejection"]
+    points_deduction: -5.0
+  - rule_text: "Group insurance ads must disclose that benefits cease on exit from the group."
+    severity: medium
+    keywords: ["group insurance", "exit", "ceases"]
+    points_deduction: -5.0
+  - rule_text: "GST treatment on premium must be disclosed: 'Premium amount is exclusive/inclusive of GST.'"
+    severity: medium
+    keywords: ["gst", "tax inclusive", "tax exclusive"]
+    points_deduction: -5.0
+  - rule_text: "Insurance education content (e.g., 'What is term insurance?') must distinguish editorial from promotional content."
+    severity: low
+    keywords: ["editorial", "promotional", "education"]
+    points_deduction: -3.0

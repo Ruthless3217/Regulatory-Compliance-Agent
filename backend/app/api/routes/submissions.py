@@ -27,7 +27,7 @@ ALLOWED_CONTENT_TYPES = {
 }
 
 
-@router.post("/")
+@router.post("")
 async def create_submission(
     title: str = Form(...),
     content_type: str = Form(default="text"),
@@ -84,7 +84,7 @@ async def create_submission(
     }
 
 
-@router.get("/")
+@router.get("")
 async def list_submissions(
     skip: int = 0,
     limit: int = 20,

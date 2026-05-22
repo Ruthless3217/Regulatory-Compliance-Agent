@@ -14,8 +14,13 @@ class ComplianceState(TypedDict):
     # Document Content (Librarian's Output)
     chunks: List[Dict[str, Any]]
 
-    # Rules (Teacher's Output)
+    # Rules (Teacher's Output) — flat: category -> all active rules
     active_rules: Dict[str, List[Dict[str, Any]]]
+
+    # RAG: per-chunk per-category top-K rules. Set by dispatch_node when the
+    # rules retriever is available; analysis_node prefers this over active_rules.
+    # Shape: { chunk_id: { category: [rule_dict, ...] } }
+    chunk_rules: Dict[str, Dict[str, List[Dict[str, Any]]]]
 
     # Analysis Results - Using operator.add to append violations from parallel agents
     violations: Annotated[List[Dict[str, Any]], operator.add]
