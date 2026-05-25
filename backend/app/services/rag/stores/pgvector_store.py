@@ -33,6 +33,9 @@ _FILTER_WHITELIST: Dict[IndexName, set] = {
     "rag_rules": {"category", "severity", "is_active"},
     "rag_chunks": {"submission_id", "submission_status", "chunk_index"},
     "rag_source_docs": {"document_id", "regulator"},
+    "rag_compliance_examples": {
+        "reviewer_name", "violation_category", "severity", "document_id",
+    },
 }
 
 # Per-index column lists for return shape.
@@ -48,6 +51,11 @@ _RETURN_COLUMNS: Dict[IndexName, List[str]] = {
     "rag_source_docs": [
         "id", "document_id", "document_title", "regulator", "chunk_index",
         "page_number", "text", "derived_rule_ids",
+    ],
+    "rag_compliance_examples": [
+        "id", "document_id", "title", "task", "section_label", "chunk_text",
+        "anchor_text", "reviewer_name", "comment_text", "final_text_chunk",
+        "violation_category", "severity", "source_file",
     ],
 }
 
@@ -136,6 +144,31 @@ _UPSERT_SQL: Dict[IndexName, str] = {
           embedding = EXCLUDED.embedding,
           derived_rule_ids = EXCLUDED.derived_rule_ids
     """,
+    "rag_compliance_examples": """
+        INSERT INTO rag_compliance_examples (
+            id, document_id, title, task, section_label, chunk_text, anchor_text,
+            reviewer_name, comment_text, final_text_chunk, violation_category,
+            severity, source_file, embed_text, embedding)
+        VALUES (
+            :id, :document_id, :title, :task, :section_label, :chunk_text, :anchor_text,
+            :reviewer_name, :comment_text, :final_text_chunk, :violation_category,
+            :severity, :source_file, :embed_text, CAST(:embedding AS VECTOR))
+        ON CONFLICT (id) DO UPDATE SET
+          document_id = EXCLUDED.document_id,
+          title = EXCLUDED.title,
+          task = EXCLUDED.task,
+          section_label = EXCLUDED.section_label,
+          chunk_text = EXCLUDED.chunk_text,
+          anchor_text = EXCLUDED.anchor_text,
+          reviewer_name = EXCLUDED.reviewer_name,
+          comment_text = EXCLUDED.comment_text,
+          final_text_chunk = EXCLUDED.final_text_chunk,
+          violation_category = EXCLUDED.violation_category,
+          severity = EXCLUDED.severity,
+          source_file = EXCLUDED.source_file,
+          embed_text = EXCLUDED.embed_text,
+          embedding = EXCLUDED.embedding
+    """,
 }
 
 
@@ -176,6 +209,23 @@ def _upsert_params(index: IndexName, doc: VectorDoc) -> Dict[str, Any]:
             "page_number": f.get("page_number"),
             "text": f.get("text", ""),
             "derived_rule_ids": derived_lit,
+        }
+    if index == "rag_compliance_examples":
+        return {
+            **base,
+            "document_id": f.get("document_id", ""),
+            "title": f.get("title"),
+            "task": f.get("task"),
+            "section_label": f.get("section_label"),
+            "chunk_text": f.get("chunk_text", ""),
+            "anchor_text": f.get("anchor_text"),
+            "reviewer_name": f.get("reviewer_name"),
+            "comment_text": f.get("comment_text", ""),
+            "final_text_chunk": f.get("final_text_chunk"),
+            "violation_category": f.get("violation_category", "other"),
+            "severity": f.get("severity", "informational"),
+            "source_file": f.get("source_file", ""),
+            "embed_text": f.get("embed_text", ""),
         }
     raise ValueError(f"Unknown index: {index}")
 
