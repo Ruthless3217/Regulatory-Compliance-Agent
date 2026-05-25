@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     rag_rrf_k: int = 60
     rag_active_categories: List[str] = ["regulatory", "brand", "seo", "irdai", "sebi"]
 
+    # Precedent compliance engine (Phase 1)
+    pgvector_top_k: int = 5                       # precedents retrieved per chunk
+    kb_chunk_size: int = 500
+    kb_chunk_overlap: int = 50
+    kb_batch_size: int = 100
+    kb_min_fuzzy_score: int = 60                  # rapidfuzz partial_ratio threshold
+    viz_points_per_index: int = 2000              # projection point cap per index
+
     # OpenAI (direct API — v1 default for embeddings)
     openai_api_key: str = ""
 
