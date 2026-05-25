@@ -40,12 +40,16 @@ export default async function SubmissionLayout({
       initialScore={overallScore}
       initialGrade={grade}
     >
-      <SubmissionHeader
-        submission={submission}
-        overallScore={overallScore}
-        grade={grade}
-      />
-      <div className="px-6 py-6">{children}</div>
+      {/* Pin to viewport so Review/Chat tabs get exact remaining height for
+          internal pane scroll. Report tab manages its own scroll via overflow. */}
+      <div className="flex h-screen flex-col">
+        <SubmissionHeader
+          submission={submission}
+          overallScore={overallScore}
+          grade={grade}
+        />
+        <div className="min-h-0 flex-1 overflow-hidden px-6 py-6">{children}</div>
+      </div>
     </SubmissionWorkspaceProvider>
   );
 }

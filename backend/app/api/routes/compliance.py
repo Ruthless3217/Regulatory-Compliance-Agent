@@ -147,6 +147,9 @@ def _serialize_violation(v: Violation) -> dict:
         "suggested_fix": v.suggested_fix,
         "auto_fixable": v.auto_fixable,
         "chunk_index": v.chunk_index,
+        "rule_id": str(v.rule_id) if v.rule_id else None,
+        "confidence": v.confidence,
+        "regulator_quote": v.regulator_quote,
     }
 
 
@@ -307,20 +310,7 @@ async def get_compliance_results(
         "compliance_status": check.status,
         "scores": check.scores,
         "checked_at": check.checked_at.isoformat() if check.checked_at else None,
-        "violations": [
-            {
-                "id": str(v.id),
-                "category": v.category,
-                "severity": v.severity,
-                "description": v.description,
-                "location": v.location,
-                "current_text": v.current_text,
-                "suggested_fix": v.suggested_fix,
-                "auto_fixable": v.auto_fixable,
-                "chunk_index": v.chunk_index
-            }
-            for v in violations
-        ],
+        "violations": [_serialize_violation(v) for v in violations],
         "violation_count": len(violations)
     }
 

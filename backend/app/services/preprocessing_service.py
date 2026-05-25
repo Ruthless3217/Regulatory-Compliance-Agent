@@ -3,6 +3,7 @@ Preprocessing Service: Handles document chunking and context engineering.
 Token-based chunking for compliance analysis.
 """
 import logging
+import os
 import uuid
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
@@ -41,6 +42,28 @@ class ContextEngineeringService:
         ).count()
 
         if existing_chunks > 0:
+            # If we previously chunked a file-upload submission but never
+            # persisted the extracted text on the row, backfill it now so
+            # the Review tab can render the body. Cheap one-time fix-up.
+            if (
+                not submission.original_content
+                and submission.file_path
+                and os.path.exists(submission.file_path)
+            ):
+                try:
+                    text = await self._extract_from_file(
+                        submission.file_path, submission.content_type
+                    )
+                    if text:
+                        submission.original_content = text
+                        self.db.add(submission)
+                        self.db.commit()
+                        logger.info(
+                            f"Backfilled original_content for {submission_id} "
+                            f"({len(text)} chars from {submission.content_type})"
+                        )
+                except Exception as e:
+                    logger.warning(f"Original-content backfill failed (non-fatal): {e}")
             logger.info(f"Submission {submission_id} already has {existing_chunks} chunks")
             return existing_chunks
 
@@ -50,8 +73,10 @@ class ContextEngineeringService:
 
         # Get content
         content = submission.original_content or ""
+        extracted_from_file = False
         if not content and submission.file_path:
             content = await self._extract_from_file(submission.file_path, submission.content_type)
+            extracted_from_file = True
         elif content and submission.content_type == "html":
             # Pasted HTML — surface meta-tags so analysis covers SEO/social fields too
             content = self._extract_html(content)
@@ -61,6 +86,14 @@ class ContextEngineeringService:
             submission.status = "preprocessed"
             self.db.commit()
             return 0
+
+        # Persist the extracted text on the submission so the Review tab can
+        # render it for uploaded files (PDF/DOCX/HTML/MD) — the file itself
+        # stays on disk for download, but the user-visible body lives here.
+        if extracted_from_file and not submission.original_content:
+            submission.original_content = content
+            self.db.add(submission)
+            self.db.commit()
 
         # Chunk the content
         chunks = self._chunk_text(content, submission.content_type)
@@ -87,11 +120,21 @@ class ContextEngineeringService:
     def _chunk_text(self, content: str, content_type: str = "text") -> List[Dict]:
         """
         Chunk text into token-limited segments.
-        Uses simple word-based chunking as fallback if tiktoken is unavailable.
+        Falls back to paragraph chunking if tiktoken is unavailable OR if its
+        BPE files can't be downloaded (corporate firewall blocks
+        openaipublic.blob.core.windows.net — common on Bajaj VPN).
         """
         try:
             import tiktoken
-            enc = tiktoken.get_encoding("cl100k_base")
+            try:
+                enc = tiktoken.get_encoding("cl100k_base")
+            except Exception as e:
+                logger.warning(
+                    f"tiktoken encoding download failed ({type(e).__name__}); "
+                    f"falling back to paragraph chunking: {e}"
+                )
+                return self._chunk_by_paragraphs(content, content_type)
+
             tokens = enc.encode(content)
 
             chunks = []
@@ -120,7 +163,6 @@ class ContextEngineeringService:
             return chunks if chunks else [{"text": content, "metadata": {}}]
 
         except ImportError:
-            # Fallback: paragraph-based chunking
             return self._chunk_by_paragraphs(content, content_type)
 
     def _chunk_by_paragraphs(self, content: str, content_type: str) -> List[Dict]:
@@ -252,6 +294,10 @@ class ContextEngineeringService:
     def create_compliance_prompts(self, content: str, rules_dict: Dict[str, List]) -> str:
         """
         Build a compliance analysis prompt from content and rules.
+
+        Each rule is shown with rule_id + a verbatim source passage when
+        available — the LLM MUST cite both. Output is constrained by the
+        ViolationSchema Pydantic model.
         """
         rules_text = ""
         for category, rules in rules_dict.items():
@@ -262,30 +308,52 @@ class ContextEngineeringService:
                         rule_text = rule.get("rule_text", str(rule))
                         severity = rule.get("severity", "medium")
                         rule_id = rule.get("id", "")
+                        source_quote = rule.get("source_quote") or rule.get("regulator_quote")
                     else:
                         rule_text = getattr(rule, "rule_text", str(rule))
                         severity = getattr(rule, "severity", "medium")
                         rule_id = str(getattr(rule, "id", ""))
+                        source_quote = getattr(rule, "source_quote", None) or getattr(rule, "regulator_quote", None)
 
                     rules_text += f"{i}. [{severity.upper()}] (ID: {rule_id}) {rule_text}\n"
+                    if source_quote:
+                        quote = str(source_quote).strip().replace("\n", " ")
+                        if len(quote) > 240:
+                            quote = quote[:237] + "…"
+                        rules_text += f"   regulator_quote: \"{quote}\"\n"
 
-        prompt = f"""Analyze the following document content for regulatory compliance violations.
+        prompt = f"""You are auditing marketing content against insurance/financial compliance rules.
+Be precise — flag only ACTUAL violations of the rules listed, not stylistic gripes.
 
 DOCUMENT CONTENT:
 {content}
 
-COMPLIANCE RULES TO CHECK AGAINST:
+COMPLIANCE RULES TO CHECK AGAINST (each rule has a stable `rule_id` UUID and
+may include a regulator_quote — copy that quote verbatim into your output):
 {rules_text}
 
-For each violation found:
-1. Identify the specific rule violated (include rule_id if possible)
-2. Describe what the violation is
-3. Point to the specific text causing the violation
-4. Suggest a fix
-5. Rate severity (critical/high/medium/low)
-6. Note if it's auto-fixable
+For each violation:
+1. rule_id — MUST be one of the UUIDs shown above. Never invent UUIDs. If you
+   can't tie a finding to a specific listed rule, do not emit it.
+2. category — copy from the rule's section header (lowercase: irdai|sebi|brand|regulatory)
+3. severity — lowercase: critical|high|medium|low
+4. description — what the violation is, in one sentence
+5. current_text — the EXACT problematic phrase from the submission, verbatim
+6. suggested_fix — a compliant rewrite of current_text
+7. auto_fixable — true only if a simple find-and-replace suffices
+8. confidence — your 0.0-1.0 confidence that this is a real violation.
+   Use ≥0.9 for blatant violations with regulator backing, 0.7-0.89 for
+   clear-but-debatable, 0.5-0.69 for borderline. Anything <0.5 should not
+   be emitted at all.
+9. regulator_quote — copy the rule's regulator_quote verbatim if shown.
+   Leave null only if the rule didn't have one.
 
-Be thorough but precise. Only flag actual violations, not minor stylistic issues."""
+Constraints:
+- Do not duplicate the same (rule_id, current_text) twice — collapse if the
+  same phrase violates the same rule in multiple ways.
+- Do not emit a violation just because a rule "could" apply — there must be
+  specific text in the document that triggers it.
+- Output ONLY valid JSON matching the required schema."""
 
         return prompt
 

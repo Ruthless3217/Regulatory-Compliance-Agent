@@ -39,7 +39,7 @@ export function ReportTab() {
   }, []);
 
   return (
-    <div className="rounded-md border border-border bg-background pb-12">
+    <div className="h-full overflow-y-auto rounded-md border border-border bg-background pb-12">
       <ScoreHero score={overallScore} grade={grade} scores={null} />
       <input type="hidden" data-submission-id={submission.id} />
       <KPIStrip violations={violations} />

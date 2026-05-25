@@ -59,8 +59,8 @@ export function ReviewTab() {
   });
 
   return (
-    <div className="grid h-[calc(100vh-3.5rem-3rem)] grid-cols-[1fr_400px] overflow-hidden rounded-md border border-border">
-      <div className="flex flex-col">
+    <div className="grid h-full grid-cols-[1fr_400px] overflow-hidden rounded-md border border-border">
+      <div className="flex h-full min-h-0 flex-col">
         {isAnalyzing && (
           <div className="border-b border-border bg-surface px-4 py-2 text-xs">
             <div className="flex items-center justify-between">

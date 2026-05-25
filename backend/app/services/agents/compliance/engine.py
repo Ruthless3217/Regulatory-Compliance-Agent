@@ -11,6 +11,13 @@ from typing import Dict, List, Any, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
 
+try:
+    from langsmith import traceable
+except Exception:  # pragma: no cover
+    def traceable(*_a, **_kw):  # type: ignore
+        def _d(fn): return fn
+        return _d if not (_a and callable(_a[0])) else _a[0]
+
 from app.models.submission import Submission
 from app.models.compliance_check import ComplianceCheck
 from app.models.violation import Violation
@@ -27,6 +34,7 @@ class ComplianceEngine:
     """
 
     @staticmethod
+    @traceable(run_type="chain", name="ComplianceEngine.analyze_submission")
     async def analyze_submission(submission_id: str, db: Session) -> Optional[ComplianceCheck]:
         """
         Entry point for compliance analysis using LangGraph.
@@ -106,6 +114,21 @@ class ComplianceEngine:
 
                 logger.info("LangGraph execution COMPLETED.")
 
+                # Guard: if preprocessing failed (no chunks) or the graph
+                # marked status=failed, do NOT persist a fake 100/A. That
+                # silent-success on a broken pipeline was masking real
+                # errors (e.g. tiktoken DNS block on corporate VPN).
+                chunk_count = len(final_state.get("chunks") or [])
+                graph_status = final_state.get("status")
+                if chunk_count == 0 or graph_status == "failed":
+                    logger.error(
+                        f"Refusing to persist results: chunks={chunk_count}, "
+                        f"graph_status={graph_status}. Marking submission failed."
+                    )
+                    submission.status = "failed"
+                    db.commit()
+                    return None
+
                 # 6. Persist results
                 compliance_check = ComplianceEngine.persist_results(
                     submission_id=str(submission_id),
@@ -175,17 +198,36 @@ class ComplianceEngine:
             db.flush()  # Get the ID
 
             # Persist violations
+            ALLOWED_SEV = {"critical", "high", "medium", "low"}
             for v_data in violations:
+                # Normalize severity + category casing at the boundary so the
+                # LLM's "CRITICAL" / "Critical" / "critical" all stop forking
+                # dashboard aggregations. Falls back to medium / unknown.
+                raw_sev = str(v_data.get("severity", "medium")).strip().lower()
+                sev = raw_sev if raw_sev in ALLOWED_SEV else "medium"
+                cat = str(v_data.get("category", "unknown")).strip().lower() or "unknown"
+
+                # Clamp confidence to [0,1]; default 0.85 when LLM doesn't supply.
+                try:
+                    conf_raw = v_data.get("confidence")
+                    confidence = float(conf_raw) if conf_raw is not None else 0.85
+                except (TypeError, ValueError):
+                    confidence = 0.85
+                confidence = max(0.0, min(1.0, confidence))
+
                 violation = Violation(
                     compliance_check_id=check.id,
-                    category=v_data.get("category", "unknown"),
-                    severity=v_data.get("severity", "medium"),
+                    category=cat,
+                    severity=sev,
                     description=v_data.get("description", ""),
                     location=v_data.get("location"),
                     current_text=v_data.get("current_text"),
                     suggested_fix=v_data.get("suggested_fix"),
-                    auto_fixable=str(v_data.get("auto_fixable", False)),
-                    chunk_index=v_data.get("chunk_index")
+                    auto_fixable=str(v_data.get("auto_fixable", False)).lower(),
+                    chunk_index=v_data.get("chunk_index"),
+                    confidence=confidence,
+                    regulator_quote=v_data.get("regulator_quote"),
+                    violation_metadata=v_data.get("violation_metadata"),
                 )
 
                 # Try to resolve rule_id as UUID

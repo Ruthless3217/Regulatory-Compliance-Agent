@@ -56,6 +56,11 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
           <SeverityBadge severity={violation.severity} />
           <Badge>{categoryLabel(violation.category)}</Badge>
           {autoFix && <Badge tone="primary">auto-fix</Badge>}
+          {typeof violation.confidence === "number" && (
+            <Badge tone={violation.confidence >= 0.85 ? "success" : violation.confidence >= 0.65 ? "medium" : "critical"}>
+              {Math.round(violation.confidence * 100)}%
+            </Badge>
+          )}
         </div>
         <div className="font-mono text-xs text-muted-foreground">#{String(index + 1).padStart(2, "0")}</div>
       </div>
@@ -72,6 +77,13 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
             </mark>
             ”
           </p>
+        </div>
+      )}
+
+      {violation.regulator_quote && (
+        <div className="mt-3 rounded-sm border border-primary/30 bg-primary-50/50 p-2 text-xs">
+          <div className="micro-label mb-1 text-primary">Regulator citation</div>
+          <p className="line-clamp-3 italic">“{violation.regulator_quote}”</p>
         </div>
       )}
 

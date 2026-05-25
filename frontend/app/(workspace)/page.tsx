@@ -7,7 +7,7 @@ import {
   Search,
   ArrowUpRight,
 } from "lucide-react";
-import { listSubmissions } from "@/lib/api";
+import { listSubmissions, getDashboardSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Masthead, MetaItem } from "@/components/workspace/Masthead";
 import { StatusPill, statusTone } from "@/components/ui/status-pill";
@@ -20,6 +20,16 @@ import type { Submission } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+type DashStats = {
+  total_submissions?: number;
+  total_violations?: number;
+  average_score?: number;
+  submissions_this_week?: number;
+  critical_count?: number;
+  auto_fix_rate?: number;
+  auto_fixable_count?: number;
+};
+
 export default async function SubmissionsPage() {
   let items: Submission[] = [];
   let err: string | null = null;
@@ -28,6 +38,14 @@ export default async function SubmissionsPage() {
     items = Array.isArray(data) ? (data as unknown as Submission[]) : data.submissions ?? [];
   } catch (e) {
     err = (e as Error).message;
+  }
+
+  let stats: DashStats = {};
+  try {
+    const sum = (await getDashboardSummary()) as unknown as { stats?: DashStats };
+    stats = sum?.stats ?? {};
+  } catch {
+    /* dashboard fetch is best-effort */
   }
 
   const reviewed = items.filter((s) => s.status === "analyzed");
@@ -71,28 +89,43 @@ export default async function SubmissionsPage() {
       <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="Submissions / wk"
-          value={items.length}
-          delta={{ value: 12, positive: true, suffix: "%" }}
-          spark={[40, 42, 38, 50, 55, 60, 58, 65, 70, 68, 75, 80]}
+          value={stats.submissions_this_week ?? 0}
+          sub={`${items.length} total`}
           icon={<FileText className="h-3.5 w-3.5" />}
         />
         <StatCard
           label="Avg. score"
-          value="—"
-          sub="needs 1+ analysis"
+          value={
+            stats.average_score && stats.average_score > 0
+              ? stats.average_score.toFixed(1)
+              : "—"
+          }
+          sub={
+            stats.average_score && stats.average_score > 0
+              ? `${stats.total_violations ?? 0} violations`
+              : "needs 1+ analysis"
+          }
           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
         />
         <StatCard
           label="Auto-fix rate"
-          value="—"
-          sub="suggested fixes applied"
+          value={
+            stats.auto_fix_rate !== undefined && stats.total_violations
+              ? `${stats.auto_fix_rate}%`
+              : "—"
+          }
+          sub={
+            stats.auto_fixable_count && stats.total_violations
+              ? `${stats.auto_fixable_count}/${stats.total_violations} fixable`
+              : "no violations yet"
+          }
           icon={<Sparkline values={[20, 22, 19, 24, 26, 28, 27, 30, 32, 31, 34, 36]} width={64} height={20} />}
         />
         <StatCard
           label="Open critical"
-          value={items.length === 0 ? 0 : "—"}
+          value={stats.critical_count ?? 0}
           sub="severity = critical"
-          tone="danger"
+          tone={stats.critical_count && stats.critical_count > 0 ? "danger" : "default"}
           icon={<AlertOctagon className="h-3.5 w-3.5" />}
         />
       </div>

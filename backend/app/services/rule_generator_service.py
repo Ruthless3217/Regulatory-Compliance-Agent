@@ -99,6 +99,10 @@ class RuleGeneratorService:
         metadata: Optional[Dict] = None
     ) -> Rule:
         """Create a new compliance rule."""
+        # project_id is accepted for forward-compat but the Rule model has no
+        # such column yet — silently drop it instead of breaking the insert.
+        _ = project_id
+        is_auto = bool(metadata and metadata.get("source"))
         rule = Rule(
             category=category,
             rule_text=rule_text,
@@ -106,9 +110,9 @@ class RuleGeneratorService:
             keywords=keywords or [],
             points_deduction=points_deduction,
             created_by=created_by,
-            project_id=project_id,
             rule_metadata=metadata,
-            is_active=True
+            is_active=True,
+            is_auto_generated=is_auto,
         )
         db.add(rule)
         db.commit()
@@ -120,7 +124,7 @@ class RuleGeneratorService:
         self,
         document_content: str,
         document_title: str,
-        created_by_user_id: uuid.UUID,
+        created_by_user_id: Optional[uuid.UUID],
         db: Session,
         project_id: Optional[uuid.UUID] = None,
         instructions: Optional[str] = None,
@@ -165,26 +169,42 @@ class RuleGeneratorService:
 
         # 2. LLM extraction.
         extra_instructions = f"\n\nSpecial Instructions: {instructions}" if instructions else ""
-        prompt = f"""Analyze the following regulatory compliance document and extract all compliance rules.
+        category_hint = (
+            f"\n\nDefault category for rules from this document: '{regulator}' "
+            f"(override only if a rule is clearly about a different domain)."
+        )
+        prompt = f"""Extract every compliance rule from this regulatory document.
 
 Document Title: {document_title}
+Regulator: {regulator}
+
+If the document has explicit "### Rule:" or "Rule:" headings, treat each as one
+rule and capture its full text + intent. If it doesn't, extract each distinct
+"must / must not / required / prohibited / mandatory" clause as a rule.
+
+Skip pure background paragraphs, intros, and overviews — only extract rules
+that a marketing reviewer can directly check ad copy against.
 
 Document Content:
-{document_content[:8000]}
-
+{document_content[:16000]}
+{category_hint}
 {extra_instructions}
 
-Extract all compliance rules from this document. For each rule, determine:
-1. rule_text: The exact rule or requirement
-2. category: One of [regulatory, brand, seo, legal, financial, safety]
-3. severity: One of [critical, high, medium, low]
-4. keywords: Key terms associated with this rule
+For each rule output:
+1. rule_text — the rule itself, rewritten as a single concise checkable statement
+2. category — one of: irdai, sebi, brand, seo, regulatory, legal, financial
+3. severity — critical | high | medium | low (default medium)
+4. keywords — 3-6 short terms a reviewer would search for
 
-Return a list of rules in JSON format."""
+Return at least one rule unless the document genuinely has none.
+"""
 
-        system_prompt = """You are an expert regulatory compliance analyst.
-Extract specific, actionable compliance rules from documents.
-Return ONLY valid JSON."""
+        system_prompt = (
+            "You are an expert insurance/financial compliance analyst for Bajaj "
+            "Allianz Life's marketing team. Extract specific, actionable rules "
+            "from regulator documents. Be exhaustive — every distinct rule the "
+            "document contains must be returned. Return ONLY valid JSON."
+        )
 
         try:
             extraction_result = await self.llm.generate_structured_response(

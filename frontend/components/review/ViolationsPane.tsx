@@ -43,9 +43,9 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
   }, [selectedViolationId]);
 
   return (
-    <div className="flex h-full flex-col border-l border-border bg-background">
+    <div className="flex h-full min-h-0 min-w-0 flex-col border-l border-border bg-background">
       <FilterChipBar counts={counts} value={filter} onChange={setFilter} />
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="space-y-3 p-4">
           {filtered.length === 0 ? (
             <div className="rounded-md border border-border bg-surface p-8 text-center text-sm text-muted-foreground">

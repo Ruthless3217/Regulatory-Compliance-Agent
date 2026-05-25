@@ -40,7 +40,7 @@ export function DocumentPane({ text, violations, selectedViolationId, onSelect }
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-background">
+    <div className="min-h-0 flex-1 overflow-y-auto bg-background">
       <article
         ref={containerRef}
         onClick={handleClick}

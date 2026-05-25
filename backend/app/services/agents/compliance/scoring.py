@@ -4,6 +4,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+try:
+    from langsmith import traceable
+except Exception:  # pragma: no cover
+    def traceable(*_a, **_kw):  # type: ignore
+        def _d(fn): return fn
+        return _d if not (_a and callable(_a[0])) else _a[0]
+
 
 class ScoringService:
     """Calculate compliance scores based on violations."""
@@ -16,6 +23,7 @@ class ScoringService:
     }
 
     @staticmethod
+    @traceable(run_type="tool", name="Scoring.calculate_scores")
     def calculate_scores(
         violations: List[Dict],
         db: Optional[Session] = None,

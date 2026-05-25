@@ -23,6 +23,13 @@ from app.services.rag.ports import SearchHit
 
 logger = logging.getLogger(__name__)
 
+try:
+    from langsmith import traceable
+except Exception:  # pragma: no cover
+    def traceable(*_a, **_kw):  # type: ignore
+        def _d(fn): return fn
+        return _d if not (_a and callable(_a[0])) else _a[0]
+
 
 @dataclass
 class ChatContext:
@@ -38,6 +45,7 @@ def _hit_to_dict(h: SearchHit) -> Dict[str, Any]:
 
 
 class ChatRetriever:
+    @traceable(run_type="retriever", name="RAG.chat_retriever")
     async def retrieve(
         self,
         query: str,

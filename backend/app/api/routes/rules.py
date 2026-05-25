@@ -199,7 +199,17 @@ async def generate_rules_from_document(
         temp_db = SessionLocal()
         try:
             service = ContextEngineeringService(temp_db)
-            content_type = "pdf" if file.filename.endswith(".pdf") else "docx" if file.filename.endswith(".docx") else "text"
+            fname = file.filename.lower()
+            if fname.endswith(".pdf"):
+                content_type = "pdf"
+            elif fname.endswith(".docx"):
+                content_type = "docx"
+            elif fname.endswith((".html", ".htm")):
+                content_type = "html"
+            elif fname.endswith(".md"):
+                content_type = "markdown"
+            else:
+                content_type = "text"
             document_content = await service._extract_from_file(file_path, content_type)
         finally:
             temp_db.close()
@@ -207,13 +217,12 @@ async def generate_rules_from_document(
     if not document_content:
         raise HTTPException(status_code=400, detail="No content provided for rule generation")
 
-    # Use a dummy user ID for now (no auth required for POC)
-    dummy_user_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
-
+    # v1 has no auth; created_by is nullable on the rules table. Passing None
+    # avoids the FK to a non-existent system-user row.
     result = await rule_generator_service.generate_rules_from_text(
         document_content=document_content,
         document_title=title,
-        created_by_user_id=dummy_user_id,
+        created_by_user_id=None,
         db=db,
         instructions=instructions
     )

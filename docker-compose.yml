@@ -56,6 +56,30 @@ services:
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/logs:/app/logs
+      - ./docs:/app/docs:ro
+
+  # Daily Postgres backup sidecar — sleeps 24h between dumps, retains 14 days.
+  # Manual trigger: `docker exec compliance-backup /scripts/db_backup.sh`
+  db-backup:
+    image: postgres:15-alpine
+    container_name: compliance-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: compliance_user
+      PGPASSWORD: compliance_pass
+      PGDATABASE: compliance_db
+      BACKUP_DIR: /backups
+      RETAIN_DAYS: "14"
+    volumes:
+      - ./backend/scripts/db_backup.sh:/scripts/db_backup.sh:ro
+      - ./backend/backups:/backups
+    entrypoint: ["sh", "-c"]
+    command: ["while true; do /scripts/db_backup.sh || true; sleep 86400; done"]
 
   frontend:
     build:

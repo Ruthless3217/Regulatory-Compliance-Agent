@@ -13,13 +13,13 @@ export function ChatTab() {
   const hasSelection = Boolean(selectedViolationId);
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem-3rem)] flex-col gap-3">
+    <div className="flex h-full flex-col gap-3">
       <PinnedContextBar
         submission={submission}
         violations={violations}
         selectedViolationId={selectedViolationId}
       />
-      <div className="flex flex-1 flex-col overflow-hidden rounded-md border border-border bg-background">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-background">
         <ChatColumn
           submissionId={submission.id}
           selectedViolationId={selectedViolationId}

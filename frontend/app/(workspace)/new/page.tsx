@@ -23,13 +23,28 @@ const SAMPLE = `Our brand-new ULIP scheme guarantees 25% returns every year — 
 
 Past performance: between 2022 and 2024 our equity-linked fund delivered an average of 22% per annum. Withdraw anytime — there are no lock-ins or surrender penalties.`;
 
+const ACCEPTED_EXT = ".pdf,.docx,.html,.htm,.md,.txt";
+const MAX_FILE_MB = 50;
+
+function contentTypeFor(filename: string): string {
+  const n = filename.toLowerCase();
+  if (n.endsWith(".pdf")) return "pdf";
+  if (n.endsWith(".docx")) return "docx";
+  if (n.endsWith(".html") || n.endsWith(".htm")) return "html";
+  if (n.endsWith(".md")) return "markdown";
+  return "text";
+}
+
 export default function NewAnalysisPage() {
   const router = useRouter();
   const [title, setTitle] = React.useState("");
   const [text, setText] = React.useState("");
   const [url, setUrl] = React.useState("");
+  const [file, setFile] = React.useState<File | null>(null);
+  const [dragOver, setDragOver] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [scope, setScope] = React.useState<string[]>(["irdai", "brand", "sebi"]);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const toggleScope = (k: string) =>
     setScope((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
@@ -40,22 +55,51 @@ export default function NewAnalysisPage() {
     toast.message("Loaded a deliberately non-compliant sample.");
   };
 
-  const submit = async (kind: "text" | "url") => {
-    if (submitting) return;
-    let content = text;
-    if (kind === "url") {
-      if (!url.trim()) { toast.error("Enter a URL"); return; }
-      content = `URL: ${url.trim()}`;
+  const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) handleFile(f);
+  };
+
+  const handleFile = (f: File) => {
+    const sizeMb = f.size / (1024 * 1024);
+    if (sizeMb > MAX_FILE_MB) {
+      toast.error(`File too large (${sizeMb.toFixed(1)} MB). Limit is ${MAX_FILE_MB} MB.`);
+      return;
     }
-    if (!content.trim()) { toast.error("Paste content first"); return; }
-    if (content.length > MAX_CHARS) { toast.error(`Content exceeds ${MAX_CHARS.toLocaleString()} characters`); return; }
+    setFile(f);
+    if (!title.trim()) setTitle(f.name.replace(/\.[^.]+$/, ""));
+  };
+
+  const submit = async (kind: "text" | "url" | "file") => {
+    if (submitting) return;
+    if (kind === "file") {
+      if (!file) { toast.error("Pick a file first"); return; }
+    } else {
+      let content = text;
+      if (kind === "url") {
+        if (!url.trim()) { toast.error("Enter a URL"); return; }
+        content = `URL: ${url.trim()}`;
+      }
+      if (!content.trim()) { toast.error("Paste content first"); return; }
+      if (content.length > MAX_CHARS) { toast.error(`Content exceeds ${MAX_CHARS.toLocaleString()} characters`); return; }
+    }
     setSubmitting(true);
     try {
-      const sub = await createSubmission({
-        title: title.trim() || (kind === "url" ? url.trim() : "Untitled submission"),
-        content_type: kind === "url" ? "html" : "text",
-        content,
-      });
+      const payload =
+        kind === "file" && file
+          ? {
+              title: title.trim() || file.name,
+              content_type: contentTypeFor(file.name),
+              file,
+            }
+          : {
+              title: title.trim() || (kind === "url" ? url.trim() : "Untitled submission"),
+              content_type: kind === "url" ? "html" : "text",
+              content: kind === "url" ? `URL: ${url.trim()}` : text,
+            };
+      const sub = await createSubmission(payload);
       await analyzeSubmission(sub.id);
       toast.success("Submission queued for analysis");
       router.push(`/submissions/${sub.id}`);
@@ -105,7 +149,7 @@ export default function NewAnalysisPage() {
           <Tabs defaultValue="paste">
             <TabsList>
               <TabsTrigger value="paste">Paste text</TabsTrigger>
-              <TabsTrigger value="upload" disabled>Upload (v2)</TabsTrigger>
+              <TabsTrigger value="upload">Upload file</TabsTrigger>
               <TabsTrigger value="url">Pull from URL</TabsTrigger>
             </TabsList>
 
@@ -125,6 +169,68 @@ export default function NewAnalysisPage() {
               <div className="mt-6 flex items-center gap-3">
                 <Button onClick={() => submit("text")} disabled={submitting} size="hero">
                   {submitting ? "Submitting…" : "Run compliance pass →"}
+                </Button>
+                <Button asChild variant="ghost" size="hero">
+                  <Link href="/">Cancel</Link>
+                </Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="upload" className="pt-5">
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  "flex min-h-[180px] cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed p-8 text-center transition-colors",
+                  dragOver
+                    ? "border-primary bg-primary-50"
+                    : file
+                      ? "border-success/50 bg-success/5"
+                      : "border-border bg-surface hover:border-foreground hover:bg-muted/40"
+                )}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPTED_EXT}
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFile(f);
+                  }}
+                />
+                {file ? (
+                  <>
+                    <div className="font-serif text-base">{file.name}</div>
+                    <div className="font-mono text-[11px] text-muted-foreground">
+                      {(file.size / 1024).toFixed(1)} KB · {contentTypeFor(file.name)}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setFile(null); }}
+                      className="mt-1 text-[11px] text-muted-foreground underline hover:text-foreground"
+                    >
+                      Choose a different file
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-serif text-base">Drop a file here or click to browse</div>
+                    <div className="font-mono text-[11px] text-muted-foreground">
+                      PDF · DOCX · HTML · Markdown · TXT · ≤ {MAX_FILE_MB} MB
+                    </div>
+                  </>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                For HTML files, meta-tags (title, description, og:*) are also analyzed.
+              </p>
+              <ScopeChips scope={scope} toggle={toggleScope} />
+              <div className="mt-6 flex items-center gap-3">
+                <Button onClick={() => submit("file")} disabled={submitting || !file} size="hero">
+                  {submitting ? "Uploading…" : "Run compliance pass →"}
                 </Button>
                 <Button asChild variant="ghost" size="hero">
                   <Link href="/">Cancel</Link>

@@ -13,11 +13,19 @@ import asyncio
 from typing import Dict, Any, List, Optional
 from langchain_core.messages import AIMessage
 
+try:
+    from langsmith import traceable
+except Exception:  # pragma: no cover
+    def traceable(*_a, **_kw):  # type: ignore
+        def _d(fn): return fn
+        return _d if not (_a and callable(_a[0])) else _a[0]
+
 from .state import ComplianceState
 
 logger = logging.getLogger(__name__)
 
 
+@traceable(run_type="chain", name="graph.preprocess_node")
 async def preprocess_node(state: ComplianceState) -> Dict:
     """
     Librarian Node: Prepares document content into chunks, then mirrors
@@ -79,6 +87,7 @@ async def preprocess_node(state: ComplianceState) -> Dict:
         }
 
 
+@traceable(run_type="chain", name="graph.dispatch_node")
 async def dispatch_node(state: ComplianceState) -> Dict:
     """
     Brain Node: Identifies active rules and determines execution plan.
@@ -138,6 +147,29 @@ async def dispatch_node(state: ComplianceState) -> Dict:
                 f"RAG: retrieved {retrieved_total} rule slots across "
                 f"{len(chunk_rules)} chunks × {len(categories)} categories"
             )
+            # P1.3 — Enrich each retrieved rule with its regulator source
+            # passage (best-effort lookup from rag_source_docs by rule_id).
+            # The analysis prompt copies this verbatim into the violation's
+            # `regulator_quote` field. Non-fatal on failure.
+            try:
+                from app.services.rag.retrievers.source_docs_retriever import (
+                    get_source_docs_retriever,
+                )
+                src_retr = get_source_docs_retriever()
+                for chunk_map in chunk_rules.values():
+                    for rule_list in chunk_map.values():
+                        for r in rule_list:
+                            rule_id = r.get("id")
+                            if not rule_id or r.get("source_quote"):
+                                continue
+                            try:
+                                passages = src_retr.by_rule(rule_id, limit=1)
+                                if passages:
+                                    r["source_quote"] = (passages[0].get("text") or "")[:300]
+                            except Exception:
+                                pass
+            except Exception as e:
+                logger.debug(f"Citation enrichment skipped (non-fatal): {e}")
         except Exception as e:
             logger.warning(f"RAG rule retrieval failed; falling back to all-rules: {e}")
             rag_degraded = True
@@ -164,6 +196,7 @@ async def dispatch_node(state: ComplianceState) -> Dict:
     }
 
 
+@traceable(run_type="chain", name="graph.analysis_node")
 async def analysis_node(state: ComplianceState) -> Dict:
     """
     Compliance Specialist Node: Runs sub-agents on chunks against rules in parallel.
@@ -243,6 +276,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 execution.total_tokens_used = str(sum(inv.tokens_used for inv in tool_invocations))
                 task_db.commit()
 
+                primary_violations = []
                 for v in analysis_result.violations:
                     v_dict = v.model_dump()
                     v_dict["chunk_id"] = str(chunk_id)
@@ -254,7 +288,15 @@ async def analysis_node(state: ComplianceState) -> Dict:
                         loc += f":page:{meta['page_number']}"
                     v_dict["location"] = loc
 
-                    task_violations.append(v_dict)
+                    primary_violations.append(v_dict)
+
+                # P1.4 — Critic LLM pass. Independently reviews each
+                # violation against the cited rule + the chunk text. Drops
+                # hallucinated rule_ids and downgrades borderline findings.
+                from app.services.agents.compliance.critic import critique_violations
+                task_violations.extend(
+                    await critique_violations(chunk_text, task_rules, primary_violations)
+                )
 
             except Exception as e:
                 logger.error(f"Task failed ({category}, chunk {chunk_index}): {e}")
@@ -288,6 +330,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
     }
 
 
+@traceable(run_type="chain", name="graph.scoring_node")
 async def scoring_node(state: ComplianceState) -> Dict:
     """
     Scoring Node: Calculates final compliance grades.

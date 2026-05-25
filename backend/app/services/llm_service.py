@@ -11,6 +11,15 @@ from ..config import settings
 from openai import AsyncOpenAI
 import httpx
 
+# LangSmith tracing — no-op decorator if the SDK isn't installed.
+try:
+    from langsmith import traceable
+except Exception:  # pragma: no cover
+    def traceable(*_a, **_kw):  # type: ignore
+        def _decorate(fn):
+            return fn
+        return _decorate if not (_a and callable(_a[0])) else _a[0]
+
 T = TypeVar("T", bound=BaseModel)
 
 logger = logging.getLogger(__name__)
@@ -50,6 +59,7 @@ class LLMService:
             logger.warning(f"LLM health check failed: {str(e)}")
             return False
 
+    @traceable(run_type="llm", name="LLM.generate_response")
     async def generate_response(
         self,
         prompt: str,
@@ -72,6 +82,7 @@ class LLMService:
             logger.error(f"LLM generation failed: {str(e)}")
             return self._get_fallback_response(prompt, context)
 
+    @traceable(run_type="llm", name="LLM.stream_response")
     async def stream_response(
         self,
         prompt: str,
@@ -104,6 +115,7 @@ class LLMService:
             logger.error(f"LLM streaming failed: {e}")
             yield f"\n\n[Error: streaming failed — {str(e)}]"
 
+    @traceable(run_type="llm", name="LLM.generate_structured_response")
     async def generate_structured_response(
         self,
         prompt: str,
