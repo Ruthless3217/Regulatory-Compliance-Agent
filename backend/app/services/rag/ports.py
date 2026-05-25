@@ -16,7 +16,7 @@ IndexName = Literal["rag_rules", "rag_chunks", "rag_source_docs", "rag_complianc
 
 @dataclass
 class VectorDoc:
-    """A single row destined for any of the three indexes.
+    """A single row destined for any of the four indexes.
 
     `id` and `embedding` are required; everything else lives in `fields`
     and is interpreted per-index by the store implementation.
@@ -53,7 +53,7 @@ class Embedder(Protocol):
 class VectorStore(Protocol):
     """Backend for indexing + retrieving vectors.
 
-    The same instance handles all three logical indexes; methods take the
+    The same instance handles all four logical indexes; methods take the
     index name as a parameter so we don't fan out to three clients.
     """
 

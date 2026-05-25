@@ -53,6 +53,13 @@ def test_upsert_params_maps_all_columns():
     assert p["source_file"] == "10699_request_10699.json"
     # embedding serialized to pgvector literal
     assert p["embedding"].startswith("[") and p["embedding"].endswith("]")
+    assert p["embed_text"] == "Document chunk: draft chunk text\nCompliance comment: Add product disclaimer below."
+    assert p["task"] == "insurance_compliance_rewrite"
+    assert p["chunk_text"] == "draft chunk text"
+    assert p["comment_text"] == "Add product disclaimer below."
+    assert p["anchor_text"] == "anchor"
+    assert p["final_text_chunk"] == "final rewrite"
+    assert p["title"] == "Untitled"
 
 
 def test_upsert_params_defaults_missing_optionals():
