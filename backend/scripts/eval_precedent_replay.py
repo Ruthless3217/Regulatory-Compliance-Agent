@@ -39,6 +39,21 @@ def split_by_hash(files: List[str], eval_frac: float = 0.1) -> Tuple[List[str], 
 
 
 def precision_recall(predicted: Set[str], actual: Set[str]) -> Tuple[float, float]:
+    """Return (precision, recall) for set-based matching.
+
+    Conventions:
+    - Both empty → (0.0, 0.0): no signal in either direction.
+    - ``predicted`` empty, ``actual`` non-empty → precision=0.0, recall=0.0:
+      the model produced nothing, so it missed everything.
+    - ``predicted`` non-empty, ``actual`` empty → precision=0.0, recall=1.0:
+      vacuous recall (nothing to recall, so recall is vacuously satisfied);
+      precision=0.0 already signals that every prediction is a false positive,
+      so over-prediction is still caught at the precision dimension.
+      Aggregate recall is computed once over the union of all eval ground-truth
+      sets, so this branch is only reached when the *entire* eval split has
+      zero aligned ground-truth comments — a degenerate run that should be
+      investigated independently.
+    """
     if not predicted and not actual:
         return 0.0, 0.0
     tp = len(predicted & actual)
@@ -81,13 +96,29 @@ async def _run(folder: str, eval_frac: float) -> Dict:
     batch: List[Dict] = []
     from app.services.rag.indexers.compliance_examples_indexer import upsert_examples
     for path in train:
+        # Parse failure: skip only this file; leave the batch intact.
         try:
-            batch.extend(svc.parse_file(path)["rows"])
-            if len(batch) >= settings.kb_batch_size:
-                inserted += await upsert_examples(batch); batch = []
+            rows = svc.parse_file(path)["rows"]
         except Exception as e:
-            logger.warning(f"train ingest skip {os.path.basename(path)}: {e}")
-    inserted += await upsert_examples(batch)
+            logger.warning(f"train parse skip {os.path.basename(path)}: {e}")
+            continue
+        batch.extend(rows)
+        # Flush failure: always reset the batch so failed rows are not
+        # re-submitted on the next successful flush.
+        if len(batch) >= settings.kb_batch_size:
+            try:
+                inserted += await upsert_examples(batch)
+            except Exception as e:
+                logger.warning(f"train flush failed ({len(batch)} rows): {e}")
+            finally:
+                batch = []
+    # Final flush for any remaining rows; guard so a failure here does not
+    # crash the whole eval run.
+    if batch:
+        try:
+            inserted += await upsert_examples(batch)
+        except Exception as e:
+            logger.warning(f"train final flush failed ({len(batch)} rows): {e}")
     logger.info(f"Ingested {inserted} train precedents")
 
     retriever = get_precedent_retriever()
