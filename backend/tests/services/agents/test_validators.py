@@ -67,3 +67,10 @@ def test_score_impact_in_range_if_present():
     ok, errs = validate_agent_output(v)
     assert ok is False
     assert any("score_impact" in e for e in errs)
+
+
+def test_boolean_confidence_fails():
+    v = _valid(); v["confidence"] = True
+    ok, errs = validate_agent_output(v)
+    assert ok is False
+    assert any("confidence" in e for e in errs)

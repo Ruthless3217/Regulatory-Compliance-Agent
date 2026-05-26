@@ -35,7 +35,7 @@ def validate_agent_output(output: Any) -> Tuple[bool, List[str]]:
     for key in ("score_impact", "confidence"):
         if key in output and output[key] is not None:
             val = output[key]
-            if not isinstance(val, (int, float)) or not (0.0 <= float(val) <= 1.0):
+            if isinstance(val, bool) or not isinstance(val, (int, float)) or not (0.0 <= float(val) <= 1.0):
                 errors.append(f"{key} must be a number in [0, 1]")
 
     return (len(errors) == 0), errors
