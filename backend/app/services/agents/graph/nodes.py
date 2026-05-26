@@ -182,6 +182,19 @@ async def dispatch_node(state: ComplianceState) -> Dict:
     )
 
     # --- Precedent path (primary analysis driver) ---
+    # Guard: if preprocessing produced no chunks (empty document, extraction
+    # failure, or DB returned nothing), mark it explicitly as "no_content" so
+    # consumers can distinguish "not analyzed" from "clean document".  This is
+    # set BEFORE the precedents block so it cannot be overwritten by the
+    # "knowledge_base_empty" label below.
+    if not chunks:
+        md["degraded"] = "no_content"
+        logger.warning(
+            "dispatch_node: state contains zero chunks — preprocessing produced "
+            "no analyzable content. This document will NOT be graded. "
+            "Check preprocess_node logs for extraction/chunking errors."
+        )
+
     retrieved_examples: Dict[str, List[Dict]] = {}
     try:
         from app.services.rag.retrievers.precedent_retriever import get_precedent_retriever
@@ -194,7 +207,10 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         retrieved_examples = {str(c.get("id")): [] for c in chunks}
 
     total_precedents = sum(len(v) for v in retrieved_examples.values())
-    if total_precedents == 0:
+    # Only label "knowledge_base_empty" when chunks exist but the knowledge
+    # base returned nothing — the empty-chunks case is already labelled
+    # "no_content" above and must not be overwritten with a misleading reason.
+    if chunks and total_precedents == 0:
         md["degraded"] = "knowledge_base_empty"
         logger.warning(
             "Knowledge base returned ZERO precedents across all chunks — "
