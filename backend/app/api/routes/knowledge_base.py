@@ -4,8 +4,10 @@ Projection endpoint (GET /knowledge-base/projection) is added in a later task.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+from functools import partial
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -66,7 +68,10 @@ async def knowledge_base_projection(
     refresh: bool = False,
 ):
     try:
-        return compute_projection(method=method, refresh=refresh)
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, partial(compute_projection, method=method, refresh=refresh)
+        )
     except Exception as e:
         logger.error(f"Projection failed: {e}")
         raise HTTPException(status_code=500, detail=f"Projection failed: {e}")
