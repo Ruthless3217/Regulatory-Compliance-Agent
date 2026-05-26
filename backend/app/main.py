@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 from .config import settings
-from .api.routes import submissions, compliance, dashboard, rules, chat, similar, rag_health
+from .api.routes import submissions, compliance, dashboard, rules, chat, similar, rag_health, knowledge_base
 
 # Configure logging
 logging.basicConfig(
@@ -111,6 +111,7 @@ app.include_router(rules.router)
 app.include_router(chat.router)
 app.include_router(similar.router)
 app.include_router(rag_health.router)
+app.include_router(knowledge_base.router)
 
 
 @app.get("/health", tags=["Health"])
