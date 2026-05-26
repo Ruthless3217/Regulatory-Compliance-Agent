@@ -4,8 +4,8 @@ from pydantic import BaseModel, Field
 
 class ViolationSchema(BaseModel):
     id: Optional[str] = Field(None, description="Persisted violation UUID (set after persist)")
-    category: str = Field(..., description="Category of the violation: irdai, brand, sebi (canonical) or regulatory/seo (legacy)")
-    severity: str = Field(..., description="Severity level: critical, high, medium, low")
+    category: str = Field(..., description="Category of the violation: one of terminology issue, legal language, missing reference, disclaimer issue, other")
+    severity: str = Field(..., description="Severity level: one of critical, moderate, informational")
     rule_id: Optional[str] = Field(None, description="The ID of the violated rule — MUST be one of the rule_id values shown in the input rules block")
     description: str = Field(..., description="Brief description of the violation")
     location: Optional[str] = Field(None, description="Location reference in the text")

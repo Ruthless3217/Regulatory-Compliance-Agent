@@ -198,7 +198,7 @@ class ComplianceEngine:
             db.flush()  # Get the ID
 
             # Persist violations
-            ALLOWED_SEV = {"critical", "high", "medium", "low"}
+            ALLOWED_SEV = {"critical", "high", "medium", "low", "moderate", "informational"}
             for v_data in violations:
                 # Normalize severity + category casing at the boundary so the
                 # LLM's "CRITICAL" / "Critical" / "critical" all stop forking
