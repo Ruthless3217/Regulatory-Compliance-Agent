@@ -19,7 +19,9 @@ class ScoringService:
         "critical": 20,
         "high": 10,
         "medium": 5,
-        "low": 2
+        "low": 2,
+        "moderate": 8,        # added — new precedent vocab
+        "informational": 2,   # added — new precedent vocab
     }
 
     @staticmethod
