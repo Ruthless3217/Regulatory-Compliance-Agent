@@ -302,10 +302,15 @@ async def analysis_node(state: ComplianceState) -> Dict:
 
                 result = await _call(prompt)
                 raw = [v.model_dump() for v in result.violations]
-                all_ok = all(validate_agent_output(v)[0] for v in raw)
-                if not all_ok:
-                    result = await _call(prompt + CORRECTIVE_SUFFIX)
-                    raw = [v.model_dump() for v in result.violations]
+                if not all(validate_agent_output(v)[0] for v in raw):
+                    # One corrective retry. Keep whichever pass yields more VALID
+                    # violations so a degenerate retry (fewer/empty) can't discard
+                    # valid first-pass findings.
+                    retry_raw = [v.model_dump() for v in (await _call(prompt + CORRECTIVE_SUFFIX)).violations]
+                    valid_first = sum(1 for v in raw if validate_agent_output(v)[0])
+                    valid_retry = sum(1 for v in retry_raw if validate_agent_output(v)[0])
+                    if valid_retry >= valid_first:
+                        raw = retry_raw
 
                 for v in raw:
                     ok, errs = validate_agent_output(v)
