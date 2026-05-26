@@ -57,6 +57,7 @@ services:
       - ./backend/uploads:/app/uploads
       - ./backend/logs:/app/logs
       - ./docs:/app/docs:ro
+      - ./dataset:/app/dataset:ro
 
   # Daily Postgres backup sidecar — sleeps 24h between dumps, retains 14 days.
   # Manual trigger: `docker exec compliance-backup /scripts/db_backup.sh`
