@@ -9,6 +9,7 @@ from app.services.knowledge_base_ingestion import (
     classify_category,
     classify_severity,
     align_comment_to_chunk,
+    _pair_final_chunk,
     ParsedComment,
 )
 
@@ -74,3 +75,42 @@ def test_align_returns_none_below_threshold():
     chunks = ["completely different content about taxation"]
     idx, score = align_comment_to_chunk("zzz qqq never appears", chunks, min_fuzzy=60)
     assert idx is None
+
+
+# ---------------------------------------------------------------------------
+# Finding #7 — word-boundary fix for classify_severity
+# ---------------------------------------------------------------------------
+
+def test_classify_severity_paralegal_not_critical():
+    """'Paralegal' contains 'legal' as a substring but must NOT match \bLegal\b."""
+    assert classify_severity("Paralegal Team") == "informational"
+
+
+# ---------------------------------------------------------------------------
+# Finding #8 — disclaimer issue takes priority over legal language
+# ---------------------------------------------------------------------------
+
+def test_classify_category_disclaimer_beats_regulatory():
+    """A comment mentioning both 'disclaimer' and 'regulatory' should resolve
+    to 'disclaimer issue' (more specific) now that it appears first in the
+    keyword list."""
+    assert classify_category("this disclaimer doesn't meet regulatory requirements") == "disclaimer issue"
+
+
+# ---------------------------------------------------------------------------
+# Finding #6 — _pair_final_chunk only pairs when counts match
+# ---------------------------------------------------------------------------
+
+def test_pair_final_chunk_equal_counts_returns_positional():
+    """When draft and final chunk counts match, the positional chunk is returned."""
+    final = ["chunk A", "chunk B", "chunk C"]
+    # draft_idx=1, n_draft_chunks=3 → counts match → return final[1]
+    assert _pair_final_chunk(final, 1, 3) == "chunk B"
+
+
+def test_pair_final_chunk_differing_counts_returns_none():
+    """When draft and final chunk counts differ, return None to avoid a wrong pairing."""
+    final = ["merged chunk covering paragraphs 1 and 2", "chunk C"]
+    # n_draft_chunks=3 but only 2 final chunks → mismatch → None
+    assert _pair_final_chunk(final, 0, 3) is None
+    assert _pair_final_chunk(final, 1, 3) is None

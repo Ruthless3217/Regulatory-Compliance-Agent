@@ -41,9 +41,9 @@ _COMMENT_RE = re.compile(
 
 _CATEGORY_KEYWORDS = [
     ("terminology issue", ("terminology", "rephrase", "word", "rename", "phrase")),
-    ("legal language", ("legal", "legally", "irdai", "regulatory", "regulation", "compliance")),
     ("missing reference", ("link", "url", "reference", "refer", "source", "cite")),
     ("disclaimer issue", ("disclaimer", "disclosure", "disclaim")),
+    ("legal language", ("legal", "legally", "irdai", "regulatory", "regulation", "compliance")),
 ]
 
 PARSE_ERROR_LOG = os.path.join("logs", "parse_errors.log")
@@ -104,9 +104,9 @@ def classify_category(comment: str) -> str:
 
 def classify_severity(reviewer_name: str) -> str:
     r = reviewer_name or ""
-    if re.search(r"Legal|Compliance", r, re.IGNORECASE):
+    if re.search(r"\bLegal\b|\bCompliance\b", r, re.IGNORECASE):
         return "critical"
-    if re.search(r"Marketing", r, re.IGNORECASE):
+    if re.search(r"\bMarketing\b", r, re.IGNORECASE):
         return "moderate"
     return "informational"
 
@@ -142,13 +142,17 @@ def _chunk_text(content: str) -> List[str]:
     return [c for c in splitter.split_text(content or "") if c.strip()]
 
 
-def _pair_final_chunk(final_chunks: List[str], draft_idx: int) -> Optional[str]:
-    """Best-effort positional pairing of a draft chunk to a final chunk."""
-    if not final_chunks:
+def _pair_final_chunk(final_chunks: List[str], draft_idx: int, n_draft_chunks: int) -> Optional[str]:
+    """Positional pairing of a draft chunk to a final chunk.
+
+    Returns a final chunk only when the draft and final chunk counts match,
+    ensuring positional alignment is reliable.  When counts differ (reviewer
+    merged or split paragraphs) we return None rather than attach a wrong
+    approved rewrite to the precedent.
+    """
+    if not final_chunks or len(final_chunks) != n_draft_chunks:
         return None
-    if draft_idx < len(final_chunks):
-        return final_chunks[draft_idx]
-    return None
+    return final_chunks[draft_idx] if draft_idx < len(final_chunks) else None
 
 
 class KnowledgeBaseIngestionService:
@@ -188,7 +192,7 @@ class KnowledgeBaseIngestionService:
                 continue
             chunk_text = draft_chunks[idx]
             comment_text = pc.comment
-            key = f"{source_file}|{chunk_text}|{comment_text}"
+            key = f"{source_file}|{chunk_text}|{comment_text}|{pc.anchor}|{pc.reviewer}"
             rows.append(
                 {
                     "id": str(uuid.uuid5(_NS, key)),
@@ -200,7 +204,7 @@ class KnowledgeBaseIngestionService:
                     "anchor_text": pc.anchor,
                     "reviewer_name": pc.reviewer,
                     "comment_text": comment_text,
-                    "final_text_chunk": _pair_final_chunk(final_chunks, idx),
+                    "final_text_chunk": _pair_final_chunk(final_chunks, idx, len(draft_chunks)),
                     "violation_category": classify_category(comment_text),
                     "severity": classify_severity(pc.reviewer),
                     "source_file": source_file,
