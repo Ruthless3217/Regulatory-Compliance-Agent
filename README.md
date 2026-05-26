@@ -234,3 +234,58 @@ This implementation follows **12-Factor Agent** principles:
 - **Small, Focused Agents**: Each agent handles exactly one rule category
 - **Immutable Observability**: Every agent action is traced and logged
 - **Parallel Execution**: chunks × categories analyzed concurrently
+
+## Vector Memory System (Precedent Compliance Engine)
+
+The agent grades documents by imitating **real past reviewer decisions**, not
+just static rules. Precedents `(draft chunk → reviewer comment → anchor → final
+rewrite → reviewer name → severity)` are mined from the reviewed corpus and
+stored in a dedicated pgvector index, `rag_compliance_examples`, alongside the
+existing `rag_rules` / `rag_chunks` / `rag_source_docs` indexes.
+
+**How it differs from `rag_rules`:** rules are abstract policy statements;
+precedents are concrete, human-made review decisions used as few-shot examples.
+On the analysis path, `dispatch_node` retrieves the top-K most similar
+precedents per document chunk and `analysis_node` grades each chunk against them
+at temperature 0. (The rule CRUD/generation endpoints and rule retrieval remain
+fully operational; they are simply no longer the analysis driver.)
+
+**Vocabulary:** severities `critical | moderate | informational`; categories
+`terminology issue | legal language | missing reference | disclaimer issue |
+other`.
+
+### Ingest the knowledge base
+
+```bash
+# In the backend container (dataset is mounted read-only at /app/dataset):
+docker exec compliance-backend python -m scripts.ingest_knowledge_base --limit 50 --preview
+docker exec compliance-backend python -m scripts.ingest_knowledge_base
+
+# Or on the host (Postgres exposed on localhost:5432):
+cd backend && python -m scripts.ingest_knowledge_base --folder ../dataset/Dataset/Dataset/dataset_2.1_rl
+```
+
+### Endpoints
+
+- `POST /knowledge-base/ingest` — `{ folder_path, preview?, limit? }`
+- `GET  /knowledge-base/stats` — counts by category/severity/reviewer, distinct files
+- `GET  /knowledge-base/projection?method=umap&refresh=false` — 2-D embedding map
+
+### Visualization
+
+The `/knowledge-base` page plots precedents, rules and source passages in a
+shared 2-D space (single UMAP fit, PCA fallback), colored by index with
+severity/category filters.
+
+### Evaluation
+
+`python -m scripts.eval_precedent_replay --folder <dataset_2.1_rl> --eval-frac 0.1`
+runs a leakage-safe replay (train/eval split by file hash; same-document
+precedents excluded) and writes precision/recall, missed-criticals and
+comment-cosine metrics to `logs/eval_replay.json`.
+
+### Operational note
+
+If the knowledge base is empty, analysis produces **no** violations and the run
+metadata carries `degraded: "knowledge_base_empty"` with a prominent log warning
+— ingest the corpus to enable grading.
