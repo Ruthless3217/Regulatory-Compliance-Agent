@@ -88,3 +88,22 @@ export interface SSEAnalyzeScore {
   grade: string;
   scores: Record<string, number>;
 }
+
+export interface ProjectionPoint {
+  id: string;
+  index: "rag_compliance_examples" | "rag_rules" | "rag_source_docs" | string;
+  x: number;
+  y: number;
+  category?: string | null;
+  severity?: string | null;
+  reviewer_name?: string | null;
+  label?: string | null;
+  snippet?: string | null;
+}
+
+export interface ProjectionResponse {
+  method: "umap" | "pca" | string;
+  computed_at: string;
+  counts: Record<string, number>;
+  points: ProjectionPoint[];
+}

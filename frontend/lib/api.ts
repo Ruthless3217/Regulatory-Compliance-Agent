@@ -6,6 +6,7 @@
 import type {
   ComplianceResults,
   DashboardSummary,
+  ProjectionResponse,
   Rule,
   Submission,
 } from "./types";
@@ -150,4 +151,11 @@ export async function getViolationsBySeverity() {
 /* ---------- health ---------- */
 export async function health(): Promise<{ status: string; llm_available: boolean }> {
   return jsonFetch(`${base()}/health`);
+}
+
+/* ---------- knowledge base ---------- */
+export async function getKnowledgeBaseProjection(
+  method: "umap" | "pca" = "umap"
+): Promise<ProjectionResponse> {
+  return jsonFetch(`${base()}/knowledge-base/projection?method=${method}`);
 }

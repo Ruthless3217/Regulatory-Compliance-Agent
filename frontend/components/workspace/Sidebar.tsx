@@ -9,6 +9,7 @@ import {
   LineChart,
   Settings,
   Search,
+  Boxes,
 } from "lucide-react";
 import { DensityToggle } from "./DensityToggle";
 import { ApiHealthDot } from "./ApiHealthDot";
@@ -34,7 +35,10 @@ const SECTIONS: Section[] = [
   },
   {
     title: "Insights",
-    items: [{ label: "Dashboard", href: "/dashboard", icon: <LineChart className="h-3.5 w-3.5" />, kbd: "D" }],
+    items: [
+      { label: "Dashboard", href: "/dashboard", icon: <LineChart className="h-3.5 w-3.5" />, kbd: "D" },
+      { label: "Knowledge base", href: "/knowledge-base", icon: <Boxes className="h-3.5 w-3.5" />, kbd: "K" },
+    ],
   },
   {
     title: "Settings",
