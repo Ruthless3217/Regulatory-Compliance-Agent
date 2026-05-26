@@ -225,135 +225,124 @@ async def dispatch_node(state: ComplianceState) -> Dict:
 @traceable(run_type="chain", name="graph.analysis_node")
 async def analysis_node(state: ComplianceState) -> Dict:
     """
-    Compliance Specialist Node: Runs sub-agents on chunks against rules in parallel.
+    Compliance Specialist Node (precedent path): grades each chunk against its
+    retrieved reviewer-decision precedents, in parallel. One LLM call per chunk
+    at temperature 0. Output contract (ComplianceAnalysisResult) is unchanged.
     """
-    logger.info("Node: Analysis running...")
+    logger.info("Node: Analysis (precedent) running...")
 
     from app.services.preprocessing_service import ContextEngineeringService
-    from app.services.agents.agent_factory import AgentFactory
+    from app.services.llm_service import llm_service
+    from app.services.agents.validators import validate_agent_output
+    from app.schemas.compliance_schemas import ComplianceAnalysisResult
     from app.models.agent_execution import AgentExecution
-    from app.models.tool_invocation import ToolInvocation
     from app.database import SessionLocal
-    from .context import GraphContext
 
     chunks_data = state.get("chunks", [])
-    rules = state.get("active_rules", {})
-    chunk_rules_map = state.get("chunk_rules") or {}
+    retrieved = state.get("retrieved_examples") or {}
     submission_id = state.get("submission_id")
     user_id = state.get("user_id")
 
-    active_categories = [cat for cat, r_list in rules.items() if r_list]
-    new_violations = []
+    new_violations: List[Dict] = []
 
-    def _rules_for(category: str, chunk_id: Optional[str]) -> List[Dict]:
-        """Prefer RAG per-chunk rules; fall back to the flat per-category list."""
-        if chunk_id and chunk_id in chunk_rules_map:
-            per_cat = chunk_rules_map[chunk_id].get(category)
-            if per_cat:
-                return per_cat
-        return rules.get(category, [])
+    CORRECTIVE_SUFFIX = (
+        "\n\nYour previous output had invalid fields. Ensure severity is one of "
+        "critical/moderate/informational, category is non-empty, description is "
+        "at least 10 characters, and confidence is between 0 and 1."
+    )
 
-    async def process_task(category: str, chunk_data: Dict) -> List[Dict]:
-        chunk_text = chunk_data.get("text", "")
-        chunk_index = chunk_data.get("chunk_index")
+    async def grade_chunk(chunk_data: Dict) -> List[Dict]:
         chunk_id = chunk_data.get("id")
-        task_rules = _rules_for(category, chunk_id)
+        chunk_index = chunk_data.get("chunk_index")
+        chunk_text = chunk_data.get("text", "")
+        precedents = retrieved.get(str(chunk_id), [])
+        if not precedents:
+            return []  # Decision 5: no precedents → no violations for this chunk.
 
-        task_violations = []
         task_db = SessionLocal()
-
+        kept: List[Dict] = []
         try:
             context_service = ContextEngineeringService(task_db)
-            agent = AgentFactory.create_agent(category, context_service)
-
-            # Record execution
             execution = AgentExecution(
-                agent_type=category,
+                agent_type="precedent",
                 session_id=uuid.UUID(submission_id) if submission_id else None,
                 user_id=uuid.UUID(user_id) if user_id else None,
                 status="running",
                 input_data={
                     "chunk_index": chunk_index,
                     "text_preview": chunk_text[:100],
-                    "rules_count": len(task_rules),
-                }
+                    "precedents_count": len(precedents),
+                },
             )
             task_db.add(execution)
             task_db.commit()
 
-            try:
-                start_time = datetime.datetime.now()
-                analysis_result = await agent.analyze(
-                    content=chunk_text,
-                    rules=task_rules,
+            prompt = context_service.create_precedent_prompts(chunk_text, precedents)
+            system_prompt = (
+                "You are a senior Bajaj Allianz compliance reviewer imitating past "
+                "reviewer decisions. Return ONLY valid JSON matching the schema."
+            )
+
+            async def _call(p: str) -> ComplianceAnalysisResult:
+                return await llm_service.generate_structured_response(
+                    prompt=p,
+                    output_model=ComplianceAnalysisResult,
+                    system_prompt=system_prompt,
                     execution_id=str(execution.id),
-                    db=task_db
-                )
-                end_time = datetime.datetime.now()
-
-                execution.status = "completed"
-                execution.output_data = analysis_result.model_dump(mode='json')
-                execution.completed_at = end_time
-                execution.execution_time_ms = str(int((end_time - start_time).total_seconds() * 1000))
-
-                tool_invocations = task_db.query(ToolInvocation).filter(
-                    ToolInvocation.execution_id == execution.id
-                ).all()
-                execution.total_tokens_used = str(sum(inv.tokens_used for inv in tool_invocations))
-                task_db.commit()
-
-                primary_violations = []
-                for v in analysis_result.violations:
-                    v_dict = v.model_dump()
-                    v_dict["chunk_id"] = str(chunk_id)
-                    v_dict["chunk_index"] = chunk_index
-
-                    loc = f"chunk:{chunk_id}"
-                    meta = chunk_data.get("metadata", {})
-                    if meta.get("page_number"):
-                        loc += f":page:{meta['page_number']}"
-                    v_dict["location"] = loc
-
-                    primary_violations.append(v_dict)
-
-                # P1.4 — Critic LLM pass. Independently reviews each
-                # violation against the cited rule + the chunk text. Drops
-                # hallucinated rule_ids and downgrades borderline findings.
-                from app.services.agents.compliance.critic import critique_violations
-                task_violations.extend(
-                    await critique_violations(chunk_text, task_rules, primary_violations)
+                    db=task_db,
+                    tool_name="precedent_analysis",
+                    temperature=0.0,
                 )
 
-            except Exception as e:
-                logger.error(f"Task failed ({category}, chunk {chunk_index}): {e}")
-                execution.status = "failed"
-                execution.output_data = {"error": str(e)}
-                task_db.commit()
+            result = await _call(prompt)
+            raw = [v.model_dump() for v in result.violations]
+            all_ok = all(validate_agent_output(v)[0] for v in raw)
+            if not all_ok:
+                result = await _call(prompt + CORRECTIVE_SUFFIX)
+                raw = [v.model_dump() for v in result.violations]
 
+            for v in raw:
+                ok, errs = validate_agent_output(v)
+                if not ok:
+                    _log_grade_error(chunk_id, v, errs)
+                    continue
+                v["chunk_id"] = str(chunk_id)
+                v["chunk_index"] = chunk_index
+                loc = f"chunk:{chunk_id}"
+                meta = chunk_data.get("metadata", {})
+                if meta.get("page_number"):
+                    loc += f":page:{meta['page_number']}"
+                v["location"] = loc
+                kept.append(v)
+
+            execution.status = "completed"
+            execution.output_data = {"violations": kept}
+            task_db.commit()
         except Exception as e:
-            logger.error(f"DB Error in task: {e}")
+            logger.error(f"Precedent grading failed (chunk {chunk_index}): {e}")
         finally:
             task_db.close()
+        return kept
 
-        return task_violations
-
-    # Create and run all tasks in parallel
-    tasks = [
-        process_task(cat, chunk)
-        for chunk in chunks_data
-        for cat in active_categories
-    ]
-
+    tasks = [grade_chunk(c) for c in chunks_data]
     if tasks:
-        logger.info(f"Running {len(tasks)} analysis tasks in parallel...")
+        logger.info(f"Running {len(tasks)} per-chunk precedent grading tasks...")
         results = await asyncio.gather(*tasks)
         for res in results:
             new_violations.extend(res)
 
     return {
         "violations": new_violations,
-        "messages": [AIMessage(content=f"Analysis: Found {len(new_violations)} violations.")]
+        "messages": [AIMessage(content=f"Analysis: Found {len(new_violations)} violations (precedent path).")]
     }
+
+
+def _log_grade_error(chunk_id, violation: Dict, errors: List[str]) -> None:
+    import os
+    import json as _json
+    os.makedirs("logs", exist_ok=True)
+    with open(os.path.join("logs", "grade_errors.log"), "a", encoding="utf-8") as f:
+        f.write(_json.dumps({"chunk_id": str(chunk_id), "errors": errors, "violation": violation}) + "\n")
 
 
 @traceable(run_type="chain", name="graph.scoring_node")

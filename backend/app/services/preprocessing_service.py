@@ -357,6 +357,54 @@ Constraints:
 
         return prompt
 
+    def create_precedent_prompts(self, content: str, precedents: List[Dict]) -> str:
+        """Build a few-shot precedent-imitation prompt.
+
+        The examples are PAST reviewer decisions (ground truth). The model
+        imitates their tone/severity/phrasing on the NEW document section.
+        Output still requires `current_text` (verbatim from the new section) so
+        frontend highlighting keeps working. Severity/category use the new
+        precedent vocabulary.
+        """
+        examples_text = ""
+        for i, p in enumerate(precedents, 1):
+            examples_text += (
+                f"\n--- EXAMPLE {i} ---\n"
+                f"Reviewer: {p.get('reviewer_name') or 'Unknown'}\n"
+                f"Original text: {p.get('chunk_text') or ''}\n"
+                f"Compliance comment: {p.get('comment_text') or ''}\n"
+                f"Violation type: {p.get('violation_category') or 'other'}\n"
+                f"Severity: {p.get('severity') or 'informational'}\n"
+            )
+            if p.get("final_text_chunk"):
+                examples_text += f"Approved rewrite: {p['final_text_chunk']}\n"
+
+        prompt = f"""You are a senior Bajaj Allianz Life Insurance compliance reviewer.
+Below are REAL past review decisions made by senior reviewers. They are the
+ground truth for how this team flags compliance issues. Imitate their tone,
+severity calibration and phrasing. Do NOT introduce violation categories or
+terminology that do not appear in the examples.
+
+PAST REVIEWER DECISIONS (ground truth):
+{examples_text}
+
+NEW DOCUMENT SECTION (review this against the patterns above):
+{content}
+
+For each compliance issue you find in the NEW DOCUMENT SECTION, output a violation with:
+- current_text — the EXACT problematic phrase copied verbatim from the NEW DOCUMENT SECTION above (no paraphrase)
+- suggested_fix — a compliant rewrite, informed by the "Approved rewrite" patterns when present
+- category — one of: terminology issue, legal language, missing reference, disclaimer issue, other
+- severity — one of: critical, moderate, informational
+- description — one sentence describing the issue, in the reviewers' style
+- confidence — your 0.0-1.0 confidence that a senior reviewer would flag this
+
+Rules:
+- Only flag issues that the example reviewers would plausibly flag. If nothing matches, return an empty violations list.
+- Do not invent rule IDs; leave rule_id null.
+- Output ONLY valid JSON matching the required schema."""
+        return prompt
+
 
 # Alias for backward compatibility
 PreprocessingService = ContextEngineeringService

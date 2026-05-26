@@ -124,7 +124,8 @@ class LLMService:
         context: Dict[str, Any] = None,
         execution_id: str = None,
         db: Session = None,
-        tool_name: str = "llm_structured"
+        tool_name: str = "llm_structured",
+        temperature: float = 0.2,
     ) -> T:
         """Generate a structured response validated against a Pydantic model."""
         schema_instruction = (
@@ -145,7 +146,7 @@ class LLMService:
                 response_wrapper = await self.client.chat.completions.with_raw_response.create(
                     model=self.model,
                     messages=current_messages,
-                    temperature=0.2,
+                    temperature=temperature,
                     response_format={"type": "json_object"}
                 )
 
