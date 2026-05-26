@@ -27,3 +27,10 @@ htmlcov/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Precedent corpus — large reviewer-decision dataset, kept out of the repo
+# (it is an embedded git repo; tracking it would record a broken gitlink).
+/dataset/
+
+# Build artifacts
+*.tsbuildinfo
