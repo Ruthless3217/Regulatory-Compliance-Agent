@@ -251,6 +251,9 @@ async def analysis_node(state: ComplianceState) -> Dict:
         "at least 10 characters, and confidence is between 0 and 1."
     )
 
+    # Bound concurrent per-chunk LLM grading to avoid connection-pool/rate-limit exhaustion.
+    _grade_semaphore = asyncio.Semaphore(8)
+
     async def grade_chunk(chunk_data: Dict) -> List[Dict]:
         chunk_id = chunk_data.get("id")
         chunk_index = chunk_data.get("chunk_index")
@@ -259,70 +262,81 @@ async def analysis_node(state: ComplianceState) -> Dict:
         if not precedents:
             return []  # Decision 5: no precedents → no violations for this chunk.
 
-        task_db = SessionLocal()
-        kept: List[Dict] = []
-        try:
-            context_service = ContextEngineeringService(task_db)
-            execution = AgentExecution(
-                agent_type="precedent",
-                session_id=uuid.UUID(submission_id) if submission_id else None,
-                user_id=uuid.UUID(user_id) if user_id else None,
-                status="running",
-                input_data={
-                    "chunk_index": chunk_index,
-                    "text_preview": chunk_text[:100],
-                    "precedents_count": len(precedents),
-                },
-            )
-            task_db.add(execution)
-            task_db.commit()
+        async with _grade_semaphore:
+            task_db = None
+            execution = None
+            kept: List[Dict] = []
+            try:
+                task_db = SessionLocal()
+                context_service = ContextEngineeringService(task_db)
+                execution = AgentExecution(
+                    agent_type="precedent",
+                    session_id=uuid.UUID(submission_id) if submission_id else None,
+                    user_id=uuid.UUID(user_id) if user_id else None,
+                    status="running",
+                    input_data={
+                        "chunk_index": chunk_index,
+                        "text_preview": chunk_text[:100],
+                        "precedents_count": len(precedents),
+                    },
+                )
+                task_db.add(execution)
+                task_db.commit()
 
-            prompt = context_service.create_precedent_prompts(chunk_text, precedents)
-            system_prompt = (
-                "You are a senior Bajaj Allianz compliance reviewer imitating past "
-                "reviewer decisions. Return ONLY valid JSON matching the schema."
-            )
-
-            async def _call(p: str) -> ComplianceAnalysisResult:
-                return await llm_service.generate_structured_response(
-                    prompt=p,
-                    output_model=ComplianceAnalysisResult,
-                    system_prompt=system_prompt,
-                    execution_id=str(execution.id),
-                    db=task_db,
-                    tool_name="precedent_analysis",
-                    temperature=0.0,
+                prompt = context_service.create_precedent_prompts(chunk_text, precedents)
+                system_prompt = (
+                    "You are a senior Bajaj Allianz compliance reviewer imitating past "
+                    "reviewer decisions. Return ONLY valid JSON matching the schema."
                 )
 
-            result = await _call(prompt)
-            raw = [v.model_dump() for v in result.violations]
-            all_ok = all(validate_agent_output(v)[0] for v in raw)
-            if not all_ok:
-                result = await _call(prompt + CORRECTIVE_SUFFIX)
+                async def _call(p: str) -> ComplianceAnalysisResult:
+                    return await llm_service.generate_structured_response(
+                        prompt=p,
+                        output_model=ComplianceAnalysisResult,
+                        system_prompt=system_prompt,
+                        execution_id=str(execution.id),
+                        db=task_db,
+                        tool_name="precedent_analysis",
+                        temperature=0.0,
+                    )
+
+                result = await _call(prompt)
                 raw = [v.model_dump() for v in result.violations]
+                all_ok = all(validate_agent_output(v)[0] for v in raw)
+                if not all_ok:
+                    result = await _call(prompt + CORRECTIVE_SUFFIX)
+                    raw = [v.model_dump() for v in result.violations]
 
-            for v in raw:
-                ok, errs = validate_agent_output(v)
-                if not ok:
-                    _log_grade_error(chunk_id, v, errs)
-                    continue
-                v["chunk_id"] = str(chunk_id)
-                v["chunk_index"] = chunk_index
-                loc = f"chunk:{chunk_id}"
-                meta = chunk_data.get("metadata", {})
-                if meta.get("page_number"):
-                    loc += f":page:{meta['page_number']}"
-                v["location"] = loc
-                kept.append(v)
+                for v in raw:
+                    ok, errs = validate_agent_output(v)
+                    if not ok:
+                        _log_grade_error(chunk_id, v, errs)
+                        continue
+                    v["chunk_id"] = str(chunk_id)
+                    v["chunk_index"] = chunk_index
+                    loc = f"chunk:{chunk_id}"
+                    meta = chunk_data.get("metadata", {})
+                    if meta.get("page_number"):
+                        loc += f":page:{meta['page_number']}"
+                    v["location"] = loc
+                    kept.append(v)
 
-            execution.status = "completed"
-            execution.output_data = {"violations": kept}
-            task_db.commit()
-        except Exception as e:
-            logger.error(f"Precedent grading failed (chunk {chunk_index}): {e}")
-        finally:
-            task_db.close()
-        return kept
+                execution.status = "completed"
+                execution.output_data = {"violations": kept}
+                task_db.commit()
+            except Exception as e:
+                logger.error(f"Precedent grading failed (chunk {chunk_index}): {e}")
+                if task_db is not None and execution is not None:
+                    try:
+                        execution.status = "failed"
+                        execution.output_data = {"error": str(e)}
+                        task_db.commit()
+                    except Exception:
+                        pass
+            finally:
+                if task_db is not None:
+                    task_db.close()
+            return kept
 
     tasks = [grade_chunk(c) for c in chunks_data]
     if tasks:
