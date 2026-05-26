@@ -8,10 +8,11 @@ import logging
 import os
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.services.knowledge_base_ingestion import get_kb_ingestion_service
+from app.services.vector_projection import compute_projection
 
 logger = logging.getLogger(__name__)
 
@@ -57,3 +58,15 @@ async def knowledge_base_stats():
     except Exception as e:
         logger.error(f"Stats failed: {e}")
         raise HTTPException(status_code=500, detail=f"Stats failed: {e}")
+
+
+@router.get("/projection")
+async def knowledge_base_projection(
+    method: str = Query("umap", pattern="^(umap|pca)$"),
+    refresh: bool = False,
+):
+    try:
+        return compute_projection(method=method, refresh=refresh)
+    except Exception as e:
+        logger.error(f"Projection failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Projection failed: {e}")
