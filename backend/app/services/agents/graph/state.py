@@ -22,6 +22,11 @@ class ComplianceState(TypedDict):
     # Shape: { chunk_id: { category: [rule_dict, ...] } }
     chunk_rules: Dict[str, Dict[str, List[Dict[str, Any]]]]
 
+    # Precedent path: per-chunk retrieved reviewer-decision examples.
+    # Set by dispatch_node; analysis_node grades each chunk against these.
+    # Shape: { chunk_id: [precedent_dict, ...] }
+    retrieved_examples: Dict[str, List[Dict[str, Any]]]
+
     # Analysis Results - Using operator.add to append violations from parallel agents
     violations: Annotated[List[Dict[str, Any]], operator.add]
 
