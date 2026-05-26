@@ -49,6 +49,10 @@ async def upsert_examples(rows: Iterable[Dict[str, Any]]) -> int:
     try:
         texts = [build_embed_text(r.get("chunk_text", ""), r.get("comment_text", "")) for r in rows]
         vectors = await embedder.embed(texts)
+        if len(vectors) != len(rows):
+            raise RAGIndexingFailed(
+                f"embedder returned {len(vectors)} vectors for {len(rows)} rows"
+            )
         docs = [_row_to_doc(r, v) for r, v in zip(rows, vectors)]
         await store.upsert("rag_compliance_examples", docs)
         logger.info(f"Indexed {len(docs)} precedents into rag_compliance_examples")
