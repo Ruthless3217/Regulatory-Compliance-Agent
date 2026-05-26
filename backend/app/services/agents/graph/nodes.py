@@ -181,16 +181,42 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         if chunk_rules else {}
     )
 
+    # --- Precedent path (primary analysis driver) ---
+    retrieved_examples: Dict[str, List[Dict]] = {}
+    try:
+        from app.services.rag.retrievers.precedent_retriever import get_precedent_retriever
+        precedent_retriever = get_precedent_retriever()
+        retrieved_examples = await precedent_retriever.retrieve_per_chunk(
+            chunks=chunks, top_k=settings.pgvector_top_k
+        )
+    except Exception as e:
+        logger.warning(f"Precedent retrieval failed (analysis will find no violations): {e}")
+        retrieved_examples = {str(c.get("id")): [] for c in chunks}
+
+    total_precedents = sum(len(v) for v in retrieved_examples.values())
+    if total_precedents == 0:
+        md["degraded"] = "knowledge_base_empty"
+        logger.warning(
+            "Knowledge base returned ZERO precedents across all chunks — "
+            "analysis will produce no violations. Ingest the precedent corpus "
+            "(scripts.ingest_knowledge_base) to enable grading."
+        )
+    md["precedents_per_chunk"] = {cid: len(v) for cid, v in retrieved_examples.items()}
+
+    if "agent_precedent" not in active_agents:
+        active_agents.append("agent_precedent")
+
     return {
         "active_rules": rules_serializable,
         "chunk_rules": chunk_rules,
+        "retrieved_examples": retrieved_examples,
         "active_agents": active_agents,
         "metadata": md,
         "messages": [AIMessage(
             content=(
-                f"Brain: Dispatched {len(active_agents)} agents. "
-                f"Active rules: {active_rule_count}. "
-                f"RAG: {'degraded' if rag_degraded else f'{len(chunk_rules)} chunks targeted'}."
+                f"Brain: Dispatched precedent analysis over {len(chunks)} chunks "
+                f"({total_precedents} precedents retrieved). "
+                f"Legacy rules loaded: {active_rule_count}."
             )
         )]
     }
