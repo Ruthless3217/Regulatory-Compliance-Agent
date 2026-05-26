@@ -13,6 +13,7 @@ Anchors are truncated (~80 chars + ellipsis); alignment uses fuzzy prefix match.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -103,9 +104,9 @@ def classify_category(comment: str) -> str:
 
 def classify_severity(reviewer_name: str) -> str:
     r = reviewer_name or ""
-    if re.search(r"Legal|Compliance", r):
+    if re.search(r"Legal|Compliance", r, re.IGNORECASE):
         return "critical"
-    if re.search(r"Marketing", r):
+    if re.search(r"Marketing", r, re.IGNORECASE):
         return "moderate"
     return "informational"
 
@@ -220,6 +221,10 @@ class KnowledgeBaseIngestionService:
         finally:
             db.close()
 
+    async def _existing_ids_async(self, ids: List[str]) -> set:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._existing_ids, ids)
+
     async def ingest_folder(
         self, folder: str, limit: Optional[int] = None
     ) -> Dict[str, Any]:
@@ -240,7 +245,7 @@ class KnowledgeBaseIngestionService:
         async def flush(rows: List[Dict[str, Any]]) -> Tuple[int, int]:
             if not rows:
                 return 0, 0
-            existing = self._existing_ids([r["id"] for r in rows])
+            existing = await self._existing_ids_async([r["id"] for r in rows])
             fresh = [r for r in rows if r["id"] not in existing]
             n = await upsert_examples(fresh)
             return n, len(rows) - len(fresh)
@@ -248,19 +253,20 @@ class KnowledgeBaseIngestionService:
         for path in files:
             try:
                 parsed = self.parse_file(path)
-                processed += 1
-                unmatched_total += parsed["unmatched"]
-                did = parsed["document_id"]
-                doc_ids[did] = doc_ids.get(did, 0) + 1
-                batch.extend(parsed["rows"])
-                if len(batch) >= settings.kb_batch_size:
-                    n, dup = await flush(batch)
-                    inserted += n
-                    skipped += dup
-                    batch = []
             except Exception as e:
                 failed += 1
-                logger.warning(f"Ingest failed for {os.path.basename(path)}: {e}")
+                logger.warning(f"Ingest parse failed for {os.path.basename(path)}: {e}")
+                continue
+            processed += 1
+            unmatched_total += parsed["unmatched"]
+            did = parsed["document_id"]
+            doc_ids[did] = doc_ids.get(did, 0) + 1
+            batch.extend(parsed["rows"])
+            if len(batch) >= settings.kb_batch_size:
+                n, dup = await flush(batch)
+                inserted += n
+                skipped += dup
+                batch = []
 
         n, dup = await flush(batch)
         inserted += n
