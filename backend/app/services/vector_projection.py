@@ -38,10 +38,16 @@ def _cache_key(method: str, n_examples: int, n_rules: int, n_source_docs: int, c
     return f"{method}:{n_examples}:{n_rules}:{n_source_docs}:{cap}"
 
 
-def project_2d(vectors: List[List[float]], method: str = "umap") -> List[List[float]]:
-    """Project N D-dim vectors to N 2-D points. PCA fallback if UMAP missing or n<4."""
+def project_2d_with_method(
+    vectors: List[List[float]], method: str = "umap"
+) -> tuple:
+    """Project N D-dim vectors to N 2-D points, returning (points, actual_method).
+
+    Returns the method string that was *actually* used — "umap" only when UMAP
+    ran successfully, "pca" in every fallback/empty case.
+    """
     if not vectors:
-        return []
+        return [], "pca"
     import numpy as np
 
     arr = np.array(vectors, dtype="float32")
@@ -51,7 +57,7 @@ def project_2d(vectors: List[List[float]], method: str = "umap") -> List[List[fl
         try:
             import umap  # type: ignore
             reducer = umap.UMAP(n_components=2, random_state=42, n_neighbors=min(15, n - 1))
-            return reducer.fit_transform(arr).tolist()
+            return reducer.fit_transform(arr).tolist(), "umap"
         except Exception as e:
             logger.warning(f"UMAP unavailable/failed ({e}); falling back to PCA")
     # PCA fallback (sklearn).
@@ -60,8 +66,18 @@ def project_2d(vectors: List[List[float]], method: str = "umap") -> List[List[fl
     comps = 2 if n >= 2 else 1
     coords = PCA(n_components=comps).fit_transform(arr)
     if comps == 1:
-        return [[float(c[0]), 0.0] for c in coords]
-    return coords.tolist()
+        return [[float(c[0]), 0.0] for c in coords], "pca"
+    return coords.tolist(), "pca"
+
+
+def project_2d(vectors: List[List[float]], method: str = "umap") -> List[List[float]]:
+    """Project N D-dim vectors to N 2-D points. PCA fallback if UMAP missing or n<4.
+
+    Existing callers that only need the coordinates should use this function.
+    Use :func:`project_2d_with_method` when the *actual* method used is needed.
+    """
+    points, _ = project_2d_with_method(vectors, method=method)
+    return points
 
 
 def _count(db, table: str) -> int:
@@ -72,16 +88,19 @@ def compute_projection(method: str = "umap", refresh: bool = False) -> Dict[str,
     cap = settings.viz_points_per_index
     db = SessionLocal()
     try:
-        counts = {tbl: _count(db, tbl) for tbl, _, _ in _SOURCES}
-        key = _cache_key(
-            method,
-            counts.get("rag_compliance_examples", 0),
-            counts.get("rag_rules", 0),
-            counts.get("rag_source_docs", 0),
-            cap,
-        )
-        if not refresh and key in _CACHE:
-            return _CACHE[key]
+        # ------------------------------------------------------------------ #
+        # Collect vectors FIRST so the cache key reflects the number of rows  #
+        # that actually have usable (non-empty) embeddings, not raw row counts.#
+        # Raw row counts are misleading: if 50 rows exist but all have NULL / #
+        # empty embeddings the projection is empty; after re-embedding the row #
+        # count stays 50 but the result should be recomputed.  Keying on      #
+        # collected-vector counts avoids serving a stale cache in that case.  #
+        # (Note: the embedding column is declared NOT NULL in the migration,   #
+        # so pgvector never stores a SQL NULL there; however an empty-string / #
+        # "[]" value parsed by _parse_pgvector_literal still yields vec=[],    #
+        # which the loop below skips — so the scenario IS reachable via        #
+        # partially-populated rows written before the embedder runs.)          #
+        # ------------------------------------------------------------------ #
 
         ids: List[str] = []
         index_of: List[str] = []
@@ -89,6 +108,8 @@ def compute_projection(method: str = "umap", refresh: bool = False) -> Dict[str,
         snippets: List[str] = []
         extras: List[Dict[str, Any]] = []
         vectors: List[List[float]] = []
+        # per-table collected-vector counts (for the result "counts" dict and cache key)
+        collected: Dict[str, int] = {tbl: 0 for tbl, _, _ in _SOURCES}
 
         for table, snippet_col, extra_cols in _SOURCES:
             cols = ", ".join(["id", "embedding::text"] + [snippet_col] + extra_cols)
@@ -106,8 +127,22 @@ def compute_projection(method: str = "umap", refresh: bool = False) -> Dict[str,
                 snippets.append((r[2] or "")[:160])
                 extras.append({c: r[3 + i] for i, c in enumerate(extra_cols)})
                 labels.append(extras[-1].get("violation_category") or extras[-1].get("category") or extras[-1].get("regulator"))
+                collected[table] += 1
 
-        coords = project_2d(vectors, method=method)
+        # Build cache key from collected-vector counts (not raw row counts).
+        key = _cache_key(
+            method,
+            collected.get("rag_compliance_examples", 0),
+            collected.get("rag_rules", 0),
+            collected.get("rag_source_docs", 0),
+            cap,
+        )
+        if not refresh and key in _CACHE:
+            return _CACHE[key]
+
+        # project_2d_with_method returns the method ACTUALLY used (umap or pca),
+        # including any silent fallback inside project_2d_with_method.
+        coords, used_method = project_2d_with_method(vectors, method=method)
         points = []
         for i, (x, y) in enumerate(coords):
             ex = extras[i]
@@ -127,9 +162,9 @@ def compute_projection(method: str = "umap", refresh: bool = False) -> Dict[str,
 
         from datetime import datetime
         result = {
-            "method": "umap" if (method == "umap" and len(vectors) >= 4) else "pca",
+            "method": used_method,  # reflects what was ACTUALLY run, not what was requested
             "computed_at": datetime.utcnow().isoformat(),
-            "counts": counts,
+            "counts": collected,   # counts of rows with usable embeddings
             "points": points,
         }
         _CACHE[key] = result
