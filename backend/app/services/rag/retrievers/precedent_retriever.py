@@ -54,6 +54,15 @@ class PrecedentRetriever:
             logger.warning(f"precedent retrieval embed failed: {e}")
             return {str(c.get("id")): [] for c in chunks}
 
+        if len(vectors) != len(chunks):
+            logger.error(
+                "precedent retrieval: embedder returned %d vectors for %d chunks; "
+                "returning empty results",
+                len(vectors),
+                len(chunks),
+            )
+            return {str(c.get("id")): [] for c in chunks}
+
         out: Dict[str, List[Dict[str, Any]]] = {}
         for chunk, qvec in zip(chunks, vectors):
             cid = str(chunk.get("id"))
@@ -72,7 +81,12 @@ class PrecedentRetriever:
                 # (Done in Python, not via store filters, because the store's filter
                 # semantics are equality-inclusion — they can't express "not equal".)
                 if exclude_document_id:
-                    precedents = [p for p in precedents if str(p.get("document_id")) != str(exclude_document_id)]
+                    precedents = [
+                        p
+                        for p in precedents
+                        if p.get("document_id") is None
+                        or str(p.get("document_id")) != str(exclude_document_id)
+                    ]
                 out[cid] = precedents
             except RAGDegraded as e:
                 logger.warning(f"precedent retrieval degraded for chunk {cid}: {e}")
