@@ -9,6 +9,7 @@ asymmetric models still match well enough for v1.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import List
 
@@ -18,6 +19,16 @@ from app.services.rag.errors import RAGEmbedFailed
 logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 96
+_RATE_LIMIT_MAX_RETRIES = 6
+_RATE_LIMIT_BACKOFF_SECONDS = (30, 60, 90, 120, 150, 180)
+
+
+def _is_rate_limit(err: Exception) -> bool:
+    name = type(err).__name__.lower()
+    if "toomanyrequests" in name or "ratelimit" in name:
+        return True
+    msg = str(err).lower()
+    return "status_code: 429" in msg or "rate limit" in msg
 
 
 class CohereEmbedder:
@@ -41,6 +52,31 @@ class CohereEmbedder:
         else:
             self._client = cohere.AsyncClientV2(api_key=key or "placeholder")
 
+    async def _embed_batch(self, batch: List[str]) -> List[List[float]]:
+        attempt = 0
+        while True:
+            try:
+                resp = await self._client.embed(
+                    model=self.model,
+                    texts=batch,
+                    input_type="search_document",
+                    embedding_types=["float"],
+                )
+                return list(resp.embeddings.float_)
+            except Exception as e:
+                if _is_rate_limit(e) and attempt < _RATE_LIMIT_MAX_RETRIES:
+                    delay = _RATE_LIMIT_BACKOFF_SECONDS[
+                        min(attempt, len(_RATE_LIMIT_BACKOFF_SECONDS) - 1)
+                    ]
+                    logger.warning(
+                        f"Cohere 429 (rate limit) on batch of {len(batch)}; "
+                        f"sleeping {delay}s before retry {attempt + 1}/{_RATE_LIMIT_MAX_RETRIES}"
+                    )
+                    await asyncio.sleep(delay)
+                    attempt += 1
+                    continue
+                raise
+
     async def embed(self, texts: List[str]) -> List[List[float]]:
         if not texts:
             return []
@@ -48,13 +84,7 @@ class CohereEmbedder:
         try:
             for start in range(0, len(texts), _BATCH_SIZE):
                 batch = texts[start : start + _BATCH_SIZE]
-                resp = await self._client.embed(
-                    model=self.model,
-                    texts=batch,
-                    input_type="search_document",
-                    embedding_types=["float"],
-                )
-                vectors.extend(resp.embeddings.float_)
+                vectors.extend(await self._embed_batch(batch))
             return vectors
         except Exception as e:
             logger.error(f"Cohere embedding failed: {e}")

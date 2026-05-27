@@ -1,434 +1,5 @@
 [
   {
-    "timestamp": "2026-05-25T06:15:49.020742",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "brand",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nAadhaar Card \n\nPassport / Voter ID \n\nAddress Proof (any one of them)\n\nAadhaar Card \n\nUtility Bills \n\nPassport \n\nIncome Proof (any one of them)\n\nSalary slips \n\nBank statements \n\nIncome Tax Returns \n\nAge Proof (any one of them)\n\nBirth certificate \n\n10th/12th mark sheet \n\nPassport \n\n\ufe0fMedical Reports (if required)\n\nBased on age and sum assured \n\n3rd FOLD \n\nFrequently Asked Questions - \n\nWhat makes Bajaj L",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"location\": \"DOCUMENT CONTENT\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP\",\n      \"suggested_fix\": \"Use 'Bajaj Allianz Life Smart Secure ROP' at first mention.\",\n      \"auto_fixable\": false,\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n      \"chunk_index\": 0\n    },\n    {\n      \"ca"
-  },
-  {
-    "timestamp": "2026-05-25T06:15:49.124132",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "irdai",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\n\nFOLD 1 - \n\nIntro Content - \n\nWhat is Bajaj Life Smart Secure ROP?\n\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\n\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The document does not include a statutory disclaimer that returns are not guaranteed for market-linked returns.\",\n      \"rule_id\": \"493fdea3-2575-4ef3-b50d-fc9bba6f7d44\",\n      \"location\": \"Bajaj Life Smart Secure ROP provides Life Cover alongside Market-linked Returns across multiple fund options suited to your life goals.\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP provides Life Cove"
-  },
-  {
-    "timestamp": "2026-05-25T06:15:49.429999",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "irdai",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n)8 \n\nIn case of death due to accident, Accidental Death Benefit Sum Assured shall be paid.\n\nAccidental Total Permanent Disability (ATPD)9 \n\nIn case of accidental total permanent disability, the Accidental Total Permanent Disability Benefit Sum Assured shall be paid.\n\nTerminal Illness with Term Booster13\n\nIf the Life Assured is diagnosed with a Terminal Illness during the Policy Term, the Terminal Illn",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"Maturity, surrender, and death benefit terms must be defined clearly.\",\n      \"rule_id\": \"a25c6d61-4628-47ff-a4fe-78f8d177a53e\",\n      \"location\": \"Section: Scenario A and Scenario B\",\n      \"current_text\": \"Fund Value: You receive your total fund value, which is inclusive of Return of Premium (ROP). In case of your unfortunate demise during the policy term: Your nominee immediately receives th"
-  },
-  {
-    "timestamp": "2026-05-25T06:15:49.538418",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\n\nFOLD 1 - \n\nIntro Content - \n\nWhat is Bajaj Life Smart Secure ROP?\n\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\n\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"Missing standard risk disclosures for market-linked products (ULIPs).\",\n      \"rule_id\": \"7986a5ab-cb76-4377-b6aa-05f40949779e\",\n      \"location\": \"FOLD 1 - Intro Content\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP provides Life Cover alongside Market-linked Returns across multiple fund options suited to your life goals.\",\n      \"suggested_fix\": \"Add risk disclosure statement, e.g.,"
-  },
-  {
-    "timestamp": "2026-05-25T06:15:49.618953",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n) is only the name of the unit linked insurance contract and does not in any way indicate the quality of the contract, its future prospects or returns. Please know the associated risks and the applicable charges, from your insurance agent or the Intermediary or policy document issued by the insurance company. The various funds offered under this contract are the names of the funds and do not in any wa",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"The document does not explicitly mention the GST applicability and rate details.\",\n      \"rule_id\": \"66d94039-fc4c-4e9a-b5ed-3b01be385f6c\",\n      \"location\": \"entire document\",\n      \"current_text\": \"No specific text mentioning GST\",\n      \"suggested_fix\": \"Add a statement mentioning the GST rate, e.g., '18% GST applicable'\",\n      \"auto_fixable\": false,\n      \"chunk_index\": null\n    },\n    "
-  },
-  {
-    "timestamp": "2026-05-25T06:15:49.764007",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "sebi",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n)8 \n\nIn case of death due to accident, Accidental Death Benefit Sum Assured shall be paid.\n\nAccidental Total Permanent Disability (ATPD)9 \n\nIn case of accidental total permanent disability, the Accidental Total Permanent Disability Benefit Sum Assured shall be paid.\n\nTerminal Illness with Term Booster13\n\nIf the Life Assured is diagnosed with a Terminal Illness during the Policy Term, the Terminal Illn",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Missing SEBI standard disclaimer for mutual-fund-style return illustrations\",\n      \"rule_id\": \"de27c080-ad33-4946-9575-57d8be553279\",\n      \"location\": \"The document does not contain the disclaimer in the sections discussing market-linked returns and benefits.\",\n      \"current_text\": \"Mutual fund investments are subject to market risks; read all scheme-related documents carefully. is not presen"
-  },
-  {
-    "timestamp": "2026-05-25T06:15:49.844793",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nAadhaar Card \n\nPassport / Voter ID \n\nAddress Proof (any one of them)\n\nAadhaar Card \n\nUtility Bills \n\nPassport \n\nIncome Proof (any one of them)\n\nSalary slips \n\nBank statements \n\nIncome Tax Returns \n\nAge Proof (any one of them)\n\nBirth certificate \n\n10th/12th mark sheet \n\nPassport \n\n\ufe0fMedical Reports (if required)\n\nBased on age and sum assured \n\n3rd FOLD \n\nFrequently Asked Questions - \n\nWhat makes Bajaj L",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"The document does not clearly specify the GST rate and applicability details.\",\n      \"rule_id\": \"66d94039-fc4c-4e9a-b5ed-3b01be385f6c\",\n      \"location\": \"Is there a GST benefit on Bajaj Life Smart Secure ROP? Yes. As per Government of India Notification No. 16/2025, GST is not applicable on individual life insurance policies effective 22 September 2025.\",\n      \"current_text\": \"As per Gove"
-  },
-  {
-    "timestamp": "2026-05-25T06:15:49.927810",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "brand",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n) is only the name of the unit linked insurance contract and does not in any way indicate the quality of the contract, its future prospects or returns. Please know the associated risks and the applicable charges, from your insurance agent or the Intermediary or policy document issued by the insurance company. The various funds offered under this contract are the names of the funds and do not in any wa",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"location\": \"DOCUMENT CONTENT\",\n      \"current_text\": \"Bajaj Life Secure Plus - Shield with ROP Variant\",\n      \"suggested_fix\": \"Use 'Bajaj Allianz Life Insurance' or 'Bajaj Allianz Life' at first mention.\",\n      \"auto_fixable\": false,\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n      \""
-  },
-  {
-    "timestamp": "2026-05-25T06:15:49.996295",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "sebi",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\n\nFOLD 1 - \n\nIntro Content - \n\nWhat is Bajaj Life Smart Secure ROP?\n\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\n\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"high\",\n      \"description\": \"The document does not clearly define maturity, surrender, and death benefit terms.\",\n      \"rule_id\": \"e2b2e307-d1c5-4350-a67c-87a319515d8e\",\n      \"location\": \"FOLD 1 - Intro Content\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP provides Life Cover alongside Market-linked Returns across multiple fund options suited to your life goals.\",\n      \"suggested_fix\": \"Clearly define maturity, surren"
-  },
-  {
-    "timestamp": "2026-05-25T06:15:50.146988",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "sebi",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\najaj Life Smart Secure ROP good for young investors in their 20s or 30s?\n\nYes. Younger individuals often benefit from starting early because they get a longer investment horizon for wealth accumulation while also locking in life cover at a younger age. Long-term investing can also help manage market volatility more effectively.\n\nHow does Bajaj Life Smart Secure ROP help during market volatility?\n\nThe ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Missing SEBI's standard disclaimer for mutual-fund-style return illustrations\",\n      \"rule_id\": \"de27c080-ad33-4946-9575-57d8be553279\",\n      \"location\": \"Are market-linked insurance plans becoming popular for retirement planning?\",\n      \"current_text\": \"Market-linked insurance plans are increasingly used for retirement planning because they offer disciplined investing, life cover, and the pot"
-  },
-  {
-    "timestamp": "2026-05-25T06:15:50.492706",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n)8 \n\nIn case of death due to accident, Accidental Death Benefit Sum Assured shall be paid.\n\nAccidental Total Permanent Disability (ATPD)9 \n\nIn case of accidental total permanent disability, the Accidental Total Permanent Disability Benefit Sum Assured shall be paid.\n\nTerminal Illness with Term Booster13\n\nIf the Life Assured is diagnosed with a Terminal Illness during the Policy Term, the Terminal Illn",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"The document does not clearly distinguish between guaranteed and non-guaranteed benefits/bonuses.\",\n      \"location\": \"The document mentions 'Guaranteed11 Wealth Booster12' and 'Loyalty Additions14' but does not clearly explain which benefits are guaranteed and which are not.\",\n      \"current_text\": \"The Premium Allocation Charges deducted from the premiums throughout the Policy Term are acc"
-  },
-  {
-    "timestamp": "2026-05-25T06:15:58.758315",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "brand",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n) will be added into the funds. Benefit Enhancer will not be offered in case the policy is terminated, surrendered, discontinued or paid up and Top-Up premiums paid.\n\n6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply. You are requested to consult your tax consultant and obtain independent advice for eligibility before claiming any bene",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n      \"location\": \"DOCUMENT CONTENT\",\n      \"current_text\": \"No brand name mentioned\",\n      \"suggested_fix\": \"Add 'Bajaj Allianz Life Insurance' as the brand name at the beginning of the document.\",\n      \"auto_fixable\": false,\n      \"chunk_index\": n"
-  },
-  {
-    "timestamp": "2026-05-25T06:16:05.715812",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "irdai",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n) will be added into the funds. Benefit Enhancer will not be offered in case the policy is terminated, surrendered, discontinued or paid up and Top-Up premiums paid.\n\n6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply. You are requested to consult your tax consultant and obtain independent advice for eligibility before claiming any bene",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"high\",\n      \"description\": \"The document does not clearly state the policy term, premium payment term, and lock-in period for the ULIP.\",\n      \"location\": \"Section 6-14\",\n      \"current_text\": \"Policy Term and Premium Payment Term not explicitly mentioned.\",\n      \"suggested_fix\": \"Clearly mention the policy term, premium payment term, and lock-in period.\",\n      \"auto_fixable\": false,\n      \"rule_id\": \"89e13ed1-52ef-4d90-8b"
-  },
-  {
-    "timestamp": "2026-05-25T06:16:10.937751",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n) will be added into the funds. Benefit Enhancer will not be offered in case the policy is terminated, surrendered, discontinued or paid up and Top-Up premiums paid.\n\n6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply. You are requested to consult your tax consultant and obtain independent advice for eligibility before claiming any bene",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"The document does not clearly distinguish between guaranteed and non-guaranteed benefits/bonuses.\",\n      \"rule_id\": \"67370b6d-bffa-4139-9aef-cbb1ebba4956\",\n      \"location\": \"sections 7, 8, 9\",\n      \"current_text\": \"Death Benefit shall not be less than Guaranteed Benefit i.e. 105% of the Total Premiums Paid including Top-Up premiums, if any, received up to the date of death.\",\n      \"sugge"
-  },
-  {
-    "timestamp": "2026-05-25T06:16:18.847684",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\najaj Life Smart Secure ROP good for young investors in their 20s or 30s?\n\nYes. Younger individuals often benefit from starting early because they get a longer investment horizon for wealth accumulation while also locking in life cover at a younger age. Long-term investing can also help manage market volatility more effectively.\n\nHow does Bajaj Life Smart Secure ROP help during market volatility?\n\nThe ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"The document does not include standard risk disclosures for market-linked products (ULIPs).\",\n      \"rule_id\": \"7986a5ab-cb76-4377-b6aa-05f40949779e\",\n      \"location\": \"Throughout the document\",\n      \"current_text\": \"The document mentions ULIPs but does not provide standard risk disclosures.\",\n      \"suggested_fix\": \"Add a statement highlighting the investment risks associated with ULIPs, "
-  },
-  {
-    "timestamp": "2026-05-25T06:20:15.348487",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "brand",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nAadhaar Card \n\nPassport / Voter ID \n\nAddress Proof (any one of them)\n\nAadhaar Card \n\nUtility Bills \n\nPassport \n\nIncome Proof (any one of them)\n\nSalary slips \n\nBank statements \n\nIncome Tax Returns \n\nAge Proof (any one of them)\n\nBirth certificate \n\n10th/12th mark sheet \n\nPassport \n\n\ufe0fMedical Reports (if required)\n\nBased on age and sum assured \n\n3rd FOLD \n\nFrequently Asked Questions - \n\nWhat makes Bajaj L",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"location\": \"DOCUMENT CONTENT\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP\",\n      \"suggested_fix\": \"Use 'Bajaj Allianz Life Smart Secure ROP' at first mention.\",\n      \"auto_fixable\": false,\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n      \"chunk_index\": 0\n    },\n    {\n      \"ca"
-  },
-  {
-    "timestamp": "2026-05-25T06:20:15.475144",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "brand",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n)8 \n\nIn case of death due to accident, Accidental Death Benefit Sum Assured shall be paid.\n\nAccidental Total Permanent Disability (ATPD)9 \n\nIn case of accidental total permanent disability, the Accidental Total Permanent Disability Benefit Sum Assured shall be paid.\n\nTerminal Illness with Term Booster13\n\nIf the Life Assured is diagnosed with a Terminal Illness during the Policy Term, the Terminal Illn",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name must appear as 'Bajaj Allianz Life Insurance' in full at first mention; 'Bajaj Allianz Life' is acceptable thereafter. Never 'BALIC' in customer-facing copy.\",\n      \"location\": \"The document content\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP\",\n      \"suggested_fix\": \"Bajaj Allianz Life Smart Secure ROP\",\n      \"auto_fixable\": true,\n      \"chunk_index\": 0,\n      \"rule_id\": "
-  },
-  {
-    "timestamp": "2026-05-25T06:20:15.939956",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "irdai",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n)8 \n\nIn case of death due to accident, Accidental Death Benefit Sum Assured shall be paid.\n\nAccidental Total Permanent Disability (ATPD)9 \n\nIn case of accidental total permanent disability, the Accidental Total Permanent Disability Benefit Sum Assured shall be paid.\n\nTerminal Illness with Term Booster13\n\nIf the Life Assured is diagnosed with a Terminal Illness during the Policy Term, the Terminal Illn",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"Maturity, surrender, and death benefit terms must be defined clearly.\",\n      \"rule_id\": \"a25c6d61-4628-47ff-a4fe-78f8d177a53e\",\n      \"location\": \"Section: Scenario A and Scenario B\",\n      \"current_text\": \"Fund Value: You receive your total fund value, which is inclusive of Return of Premium (ROP). In case of your unfortunate demise during the policy term: Your nominee immediately receives th"
-  },
-  {
-    "timestamp": "2026-05-25T06:20:16.160698",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "sebi",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n) is only the name of the unit linked insurance contract and does not in any way indicate the quality of the contract, its future prospects or returns. Please know the associated risks and the applicable charges, from your insurance agent or the Intermediary or policy document issued by the insurance company. The various funds offered under this contract are the names of the funds and do not in any wa",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"high\",\n      \"description\": \"The document does not clearly define maturity, surrender, and death benefit terms.\",\n      \"rule_id\": \"e2b2e307-d1c5-4350-a67c-87a319515d8e\",\n      \"location\": \"The document content\",\n      \"current_text\": \"Maturity Benefit will be the Fund Value at Maturity plus total premiums paid towards Accidental Death Benefit, Accidental Total Permanent Disability and Terminal Illness with Term Booster\",\n     "
-  },
-  {
-    "timestamp": "2026-05-25T06:20:16.258967",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "irdai",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\n\nFOLD 1 - \n\nIntro Content - \n\nWhat is Bajaj Life Smart Secure ROP?\n\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\n\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"All return projections in life-insurance advertisements must include the statutory disclaimer that returns are not guaranteed.\",\n      \"rule_id\": \"493fdea3-2575-4ef3-b50d-fc9bba6f7d44\",\n      \"location\": \"FOLD 1 - Intro Content\",\n      \"current_text\": \"Market-linked Growth all in one plan.\",\n      \"suggested_fix\": \"Add statutory disclaimer that returns are not guaranteed.\",\n      \"auto_fixable\""
-  },
-  {
-    "timestamp": "2026-05-25T06:20:16.361712",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n)8 \n\nIn case of death due to accident, Accidental Death Benefit Sum Assured shall be paid.\n\nAccidental Total Permanent Disability (ATPD)9 \n\nIn case of accidental total permanent disability, the Accidental Total Permanent Disability Benefit Sum Assured shall be paid.\n\nTerminal Illness with Term Booster13\n\nIf the Life Assured is diagnosed with a Terminal Illness during the Policy Term, the Terminal Illn",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"The document does not clearly distinguish between guaranteed and non-guaranteed benefits/bonuses.\",\n      \"location\": \"The document mentions 'Guaranteed11 Wealth Booster12' and 'Loyalty Additions14' but does not clearly explain which benefits are guaranteed and which are non-guaranteed.\",\n      \"current_text\": \"The Premium Allocation Charges deducted from the premiums throughout the Policy T"
-  },
-  {
-    "timestamp": "2026-05-25T06:20:16.495311",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "sebi",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\n\nFOLD 1 - \n\nIntro Content - \n\nWhat is Bajaj Life Smart Secure ROP?\n\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\n\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"high\",\n      \"description\": \"The document does not clearly define maturity, surrender, and death benefit terms.\",\n      \"rule_id\": \"e2b2e307-d1c5-4350-a67c-87a319515d8e\",\n      \"location\": \"FOLD 1 - Intro Content\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP provides Life Cover alongside Market-linked Returns across multiple fund options suited to your life goals.\",\n      \"suggested_fix\": \"Clearly define maturity, surren"
-  },
-  {
-    "timestamp": "2026-05-25T06:20:16.583908",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "irdai",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nAadhaar Card \n\nPassport / Voter ID \n\nAddress Proof (any one of them)\n\nAadhaar Card \n\nUtility Bills \n\nPassport \n\nIncome Proof (any one of them)\n\nSalary slips \n\nBank statements \n\nIncome Tax Returns \n\nAge Proof (any one of them)\n\nBirth certificate \n\n10th/12th mark sheet \n\nPassport \n\n\ufe0fMedical Reports (if required)\n\nBased on age and sum assured \n\n3rd FOLD \n\nFrequently Asked Questions - \n\nWhat makes Bajaj L",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"The document does not prominently display the risk-factor statement for ULIPs: 'Investments in the units of the funds are subject to market risks.'\",\n      \"rule_id\": \"3a3a213e-d384-42c2-9c38-0fbaa971b325\",\n      \"location\": \"How is Bajaj Life Smart Secure ROP different from a regular ULIP?\",\n      \"current_text\": \"Most ULIPs primarily focus on basic life cover. Bajaj Life Smart Secure ROP is a"
-  },
-  {
-    "timestamp": "2026-05-25T06:20:16.693452",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\n\nFOLD 1 - \n\nIntro Content - \n\nWhat is Bajaj Life Smart Secure ROP?\n\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\n\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"Missing standard risk disclosures for market-linked products (ULIPs).\",\n      \"rule_id\": \"7986a5ab-cb76-4377-b6aa-05f40949779e\",\n      \"location\": \"FOLD 1 - Intro Content\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP provides Life Cover alongside Market-linked Returns across multiple fund options suited to your life goals.\",\n      \"suggested_fix\": \"Add risk disclosure statement, e.g.,"
-  },
-  {
-    "timestamp": "2026-05-25T06:20:22.183094",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n) will be added into the funds. Benefit Enhancer will not be offered in case the policy is terminated, surrendered, discontinued or paid up and Top-Up premiums paid.\n\n6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply. You are requested to consult your tax consultant and obtain independent advice for eligibility before claiming any bene",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"Distinguish between guaranteed and non-guaranteed benefits/bonuses in product descriptions\",\n      \"rule_id\": \"67370b6d-bffa-4139-9aef-cbb1ebba4956\",\n      \"location\": \"Section 7\",\n      \"current_text\": \"Death Benefit shall not be less than Guaranteed Benefit i.e. 105% of the Total Premiums Paid including Top-Up premiums, if any, received up to the date of death.\",\n      \"suggested_fix\": \"Cl"
-  },
-  {
-    "timestamp": "2026-05-25T06:20:24.572013",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "sebi",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n) will be added into the funds. Benefit Enhancer will not be offered in case the policy is terminated, surrendered, discontinued or paid up and Top-Up premiums paid.\n\n6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply. You are requested to consult your tax consultant and obtain independent advice for eligibility before claiming any bene",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"high\",\n      \"description\": \"The document does not explicitly distinguish between guaranteed and non-guaranteed benefits/bonuses.\",\n      \"rule_id\": \"582671ac-677d-4a39-8192-9d9543b0c311\",\n      \"location\": \"sections 7, 8, 9\",\n      \"current_text\": \"Death Benefit shall not be less than Guaranteed Benefit i.e. 105% of the Total Premiums Paid including Top-Up premiums, if any, received up to the date of death.\",\n      \"suggested_"
-  },
-  {
-    "timestamp": "2026-05-25T06:20:29.642452",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "sebi",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n)8 \n\nIn case of death due to accident, Accidental Death Benefit Sum Assured shall be paid.\n\nAccidental Total Permanent Disability (ATPD)9 \n\nIn case of accidental total permanent disability, the Accidental Total Permanent Disability Benefit Sum Assured shall be paid.\n\nTerminal Illness with Term Booster13\n\nIf the Life Assured is diagnosed with a Terminal Illness during the Policy Term, the Terminal Illn",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Missing SEBI's standard disclaimer for mutual-fund-style return illustrations\",\n      \"rule_id\": \"de27c080-ad33-4946-9575-57d8be553279\",\n      \"location\": \"Section on Wealth Compounding and Loyalty Benefits\",\n      \"current_text\": \"Wealth Compounding: Your fund gets to perform in the market to help create a potential corpus for your future financial goals.\",\n      \"suggested_fix\": \"Mutual fund i"
-  },
-  {
-    "timestamp": "2026-05-25T06:20:32.675228",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "sebi",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nAadhaar Card \n\nPassport / Voter ID \n\nAddress Proof (any one of them)\n\nAadhaar Card \n\nUtility Bills \n\nPassport \n\nIncome Proof (any one of them)\n\nSalary slips \n\nBank statements \n\nIncome Tax Returns \n\nAge Proof (any one of them)\n\nBirth certificate \n\n10th/12th mark sheet \n\nPassport \n\n\ufe0fMedical Reports (if required)\n\nBased on age and sum assured \n\n3rd FOLD \n\nFrequently Asked Questions - \n\nWhat makes Bajaj L",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"The document does not include standard risk disclosures for market-linked products (ULIPs).\",\n      \"rule_id\": \"7668c044-bef2-4d7d-81fe-1cf9762f80df\",\n      \"location\": \"Throughout the document\",\n      \"current_text\": \"The document lacks risk disclosure statements.\",\n      \"suggested_fix\": \"Add standard risk disclosures for market-linked products, e.g., 'Investments in ULIPs are subject to marke"
-  },
-  {
-    "timestamp": "2026-05-25T06:20:39.374062",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "irdai",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n) will be added into the funds. Benefit Enhancer will not be offered in case the policy is terminated, surrendered, discontinued or paid up and Top-Up premiums paid.\n\n6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply. You are requested to consult your tax consultant and obtain independent advice for eligibility before claiming any bene",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"high\",\n      \"description\": \"The document does not explicitly list inclusions and exclusions for riders such as Critical Illness, Accidental Death, and Waiver of Premium.\",\n      \"rule_id\": \"007c63be-f3f9-4dd3-ba56-71e7280512db\",\n      \"location\": \"Section 7 - Death Benefit and Section 9 - Total Permanent Disability\",\n      \"current_text\": \"Terminal Illness and Term Booster are accelerated covers. For more details, please read"
-  },
-  {
-    "timestamp": "2026-05-25T06:20:47.964071",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "brand",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n) will be added into the funds. Benefit Enhancer will not be offered in case the policy is terminated, surrendered, discontinued or paid up and Top-Up premiums paid.\n\n6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply. You are requested to consult your tax consultant and obtain independent advice for eligibility before claiming any bene",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name must appear as 'Bajaj Allianz Life Insurance' in full at first mention; 'Bajaj Allianz Life' is acceptable thereafter. Never 'BALIC' in customer-facing copy.\",\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n      \"location\": \"DOCUMENT CONTENT\",\n      \"current_text\": \"No brand name mentioned\",\n      \"suggested_fix\": \"Add 'Bajaj Allianz Life Insurance' at the beginning of the"
-  },
-  {
-    "timestamp": "2026-05-25T06:25:01.533439",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "irdai",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nAccidental Death Benefit (ADB)8 \n\nIn case of death due to accident, Accidental Death Benefit Sum Assured shall be paid.\n\nAccidental Total Permanent Disability (ATPD)9 \n\nIn case of accidental total permanent disability, the Accidental Total Permanent Disability Benefit Sum Assured shall be paid.\n\nTerminal Illness with Term Booster13\n\nIf the Life Assured is diagnosed with a Terminal Illness during the P",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"Missing statutory disclaimer for return projections\",\n      \"rule_id\": \"493fdea3-2575-4ef3-b50d-fc9bba6f7d44\",\n      \"location\": \"Step 3 \u2013 Receive your Policy Benefits, Scenario A: If survives the policy term\",\n      \"current_text\": \"You receive your total fund value, which is inclusive of Return of Premium (ROP)\",\n      \"suggested_fix\": \"Add statutory disclaimer: 'The returns are not guarantee"
-  },
-  {
-    "timestamp": "2026-05-25T06:25:01.621984",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "brand",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\n\nFOLD 1 - \n\nIntro Content - \n\nWhat is Bajaj Life Smart Secure ROP?\n\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\n\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"location\": \"FOLD 1 - Intro Content\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP\",\n      \"suggested_fix\": \"Change to 'Bajaj Allianz Life Smart Secure ROP'\",\n      \"auto_fixable\": true,\n      \"chunk_index\": 0,\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\"\n    },\n    {\n      \"category\""
-  },
-  {
-    "timestamp": "2026-05-25T06:25:01.944946",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist brand regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "brand",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nAccidental Death Benefit (ADB)8 \n\nIn case of death due to accident, Accidental Death Benefit Sum Assured shall be paid.\n\nAccidental Total Permanent Disability (ATPD)9 \n\nIn case of accidental total permanent disability, the Accidental Total Permanent Disability Benefit Sum Assured shall be paid.\n\nTerminal Illness with Term Booster13\n\nIf the Life Assured is diagnosed with a Terminal Illness during the P",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"brand\",\n      \"severity\": \"high\",\n      \"description\": \"The brand name does not appear as 'Bajaj Allianz Life Insurance' in full at first mention.\",\n      \"location\": \"The document content\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP\",\n      \"suggested_fix\": \"Use 'Bajaj Allianz Life Smart Secure ROP' at first mention.\",\n      \"auto_fixable\": false,\n      \"rule_id\": \"4e2e2b7c-93b5-44bf-97ab-c55a2c5b45a3\",\n      \"chunk_index\": 0\n    },\n    {\n     "
-  },
-  {
-    "timestamp": "2026-05-25T06:25:02.163683",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\n the average of the daily Regular Premium Fund Value during the previous 3 years (including the current year) will be added into the funds. Benefit Enhancer will not be offered in case the policy is terminated, surrendered, discontinued or paid up and Top-Up premiums paid.\n\n6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply. You are req",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"Distinguish between guaranteed and non-guaranteed benefits/bonuses in product descriptions\",\n      \"rule_id\": \"67370b6d-bffa-4139-9aef-cbb1ebba4956\",\n      \"location\": \"Section 7\",\n      \"current_text\": \"Death Benefit shall not be less than Guaranteed Benefit i.e. 105% of the Total Premiums Paid including Top-Up premiums, if any, received up to the date of death.\",\n      \"suggested_fix\": \"Cl"
-  },
-  {
-    "timestamp": "2026-05-25T06:25:02.429367",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist irdai regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "irdai",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\n\nFOLD 1 - \n\nIntro Content - \n\nWhat is Bajaj Life Smart Secure ROP?\n\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\n\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"irdai\",\n      \"severity\": \"critical\",\n      \"description\": \"Missing statutory disclaimer for return projections\",\n      \"rule_id\": \"493fdea3-2575-4ef3-b50d-fc9bba6f7d44\",\n      \"location\": \"FOLD 1 - Intro Content\",\n      \"current_text\": \"Market-linked Growth all in one plan.\",\n      \"suggested_fix\": \"Add statutory disclaimer: 'Returns are not guaranteed'\",\n      \"auto_fixable\": false,\n      \"chunk_index\": 0\n    },\n    {\n      \"category\": \"irdai\",\n      "
-  },
-  {
-    "timestamp": "2026-05-25T06:25:02.681344",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "sebi",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\n\nFOLD 1 - \n\nIntro Content - \n\nWhat is Bajaj Life Smart Secure ROP?\n\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\n\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"high\",\n      \"description\": \"The document does not clearly define maturity, surrender, and death benefit terms.\",\n      \"rule_id\": \"e2b2e307-d1c5-4350-a67c-87a319515d8e\",\n      \"location\": \"FOLD 1 - Intro Content\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP provides Life Cover alongside Market-linked Returns across multiple fund options suited to your life goals.\",\n      \"suggested_fix\": \"Clearly define maturity, surren"
-  },
-  {
-    "timestamp": "2026-05-25T06:25:02.771122",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist sebi regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "sebi",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nany one of them)\n\nPAN Card \n\nAadhaar Card \n\nPassport / Voter ID \n\nAddress Proof (any one of them)\n\nAadhaar Card \n\nUtility Bills \n\nPassport \n\nIncome Proof (any one of them)\n\nSalary slips \n\nBank statements \n\nIncome Tax Returns \n\nAge Proof (any one of them)\n\nBirth certificate \n\n10th/12th mark sheet \n\nPassport \n\n\ufe0fMedical Reports (if required)\n\nBased on age and sum assured \n\n3rd FOLD \n\nFrequently Asked Que",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"sebi\",\n      \"severity\": \"critical\",\n      \"description\": \"Missing SEBI's standard disclaimer for mutual-fund-style return illustrations\",\n      \"rule_id\": \"de27c080-ad33-4946-9575-57d8be553279\",\n      \"location\": \"Section on investment fund options\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP offers a wide range of funds to suit different risk appetites: equity-oriented funds, higher growth potential; hybrid funds for balanced exposure; and deb"
-  },
-  {
-    "timestamp": "2026-05-25T06:25:03.102670",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nGEO Content for Bajaj Life Smart Secure ROP\n\nFOLD 1 - \n\nIntro Content - \n\nWhat is Bajaj Life Smart Secure ROP?\n\nBajaj Life Smart Secure is a comprehensive life insurance plan that combines Life Cover, Enhanced Protection and Market-linked Growth all in one plan.\n\nYou may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, ",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"Missing standard risk disclosures for market-linked products (ULIPs).\",\n      \"rule_id\": \"7986a5ab-cb76-4377-b6aa-05f40949779e\",\n      \"location\": \"FOLD 1 - Intro Content\",\n      \"current_text\": \"Bajaj Life Smart Secure ROP provides Life Cover alongside Market-linked Returns across multiple fund options suited to your life goals.\",\n      \"suggested_fix\": \"Add risk disclosure statement, e.g.,"
-  },
-  {
-    "timestamp": "2026-05-25T06:25:03.961632",
-    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
-    "context": {
-      "agent_category": "regulatory",
-      "rules_count": 8
-    },
-    "prompt": "Analyze the following document content for regulatory compliance violations.\n\nDOCUMENT CONTENT:\nAccidental Death Benefit (ADB)8 \n\nIn case of death due to accident, Accidental Death Benefit Sum Assured shall be paid.\n\nAccidental Total Permanent Disability (ATPD)9 \n\nIn case of accidental total permanent disability, the Accidental Total Permanent Disability Benefit Sum Assured shall be paid.\n\nTerminal Illness with Term Booster13\n\nIf the Life Assured is diagnosed with a Terminal Illness during the P",
-    "response": "{\n\"violations\": [\n    {\n      \"category\": \"regulatory\",\n      \"severity\": \"medium\",\n      \"description\": \"The document does not clearly distinguish between guaranteed and non-guaranteed benefits/bonuses.\",\n      \"rule_id\": \"67370b6d-bffa-4139-9aef-cbb1ebba4956\",\n      \"location\": \"Section 1. Guaranteed Wealth Booster\",\n      \"current_text\": \"The Premium Allocation Charges deducted from the premiums throughout the Policy Term are accumulated at a guaranteed rate of 7% per year (compounded annuall"
-  },
-  {
     "timestamp": "2026-05-25T06:25:06.480228",
     "model": "meta-llama/llama-4-scout-17b-16e-instruct",
     "system_prompt": "You are a specialist regulatory regulatory compliance agent. Analyze the provided content against the rules strictly. Return ONLY valid JSON matching the required schema.",
@@ -1047,5 +618,317 @@
     "context": null,
     "prompt": "You are an independent compliance critic. Another LLM just produced\nthe violation list below. Your job is to verify each one against the actual\ndocument text and the cited rule. Be skeptical: stylistic preferences and\nvague claims are NOT compliance violations.\n\nFor each violation, decide:\n- keep=true  if the violation is a real, defensible breach of the cited rule\n            with evidence verbatim in the document text\n- keep=false if the rule_id doesn't match the listed rules, the cited text\n ",
     "response": "{\n\"critiques\": [\n    {\n      \"index\": 0,\n      \"keep\": false,\n      \"confidence\": 0.0,\n      \"reason\": \"The document text does not mention Top-up Premium Fund Value or Top-up Premium Sum Assured, thus the rule is not applicable.\"\n    },\n    {\n      \"index\": 1,\n      \"keep\": false,\n      \"confidence\": 0.0,\n      \"reason\": \"The document text does not provide Total Premiums Paid including Top-Up premiums, thus the rule is not verifiable.\"\n    },\n    {\n      \"index\": 2,\n      \"keep\": false,\n      \"c"
+  },
+  {
+    "timestamp": "2026-05-26T12:50:53.666791",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"'guaranteed 18 percent returns every year for life' is a prohibited guarantee for market-linked products like ULIPs.\",\n      \"current_text\": \"guaranteed 18 percent returns every year for life\",\n      \"suggested_fix\": \"Disclose market risk and avoid guaranteed returns claim.\",\n      \"confidence\": 0.95\n    },\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n "
+  },
+  {
+    "timestamp": "2026-05-26T13:23:26.352277",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The phrase 'guaranteed' is used in relation to returns, which is prohibited for market-linked products.\",\n      \"current_text\": \"Loyalty Benefits includes Guaranteed Wealth Booster\",\n      \"suggested_fix\": \"Loyalty Benefits includes Wealth Booster\",\n      \"confidence\": 0.9\n    },\n    {\n      \"category\": \"disclaimer issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The illu"
+  },
+  {
+    "timestamp": "2026-05-26T13:23:26.485438",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The plan is described as providing 'Market-linked Growth' and 'Market-linked Returns' without disclosing the associated market risks.\",\n      \"current_text\": \"Market-linked Growth\",\n      \"suggested_fix\": \"Market-linked returns, subject to market fluctuations\",\n      \"confidence\": 0.9\n    },\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"descriptio"
+  },
+  {
+    "timestamp": "2026-05-26T13:23:26.695622",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The term 'guaranteed' is used in conjunction with market-linked returns, which may be misleading.\",\n      \"current_text\": \"guaranteed11\",\n      \"suggested_fix\": \"clearly disclose that returns are not guaranteed\",\n      \"confidence\": 0.9,\n      \"regulator_quote\": null,\n      \"auto_fixable\": false,\n      \"chunk_index\": null,\n      \"location\": null,\n      \"rule_id\": null,\n      \"id\": n"
+  },
+  {
+    "timestamp": "2026-05-26T13:23:26.838212",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The claim of 'longer investment horizon for wealth accumulation while also locking in life cover at a younger age' could be misleading as it implies a guaranteed accumulation of wealth, which is not applicable for market-linked products.\",\n      \"current_text\": \"Younger individuals often benefit from starting early because they get a longer investment horizon for wealth accumulation"
+  },
+  {
+    "timestamp": "2026-05-26T13:23:26.992699",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The plan description uses 'market-linked returns' without disclosing associated risks.\",\n      \"current_text\": \"comprehensive Life Cover with Market Linked Returns\",\n      \"suggested_fix\": \"comprehensive Life Cover with investment growth subject to market conditions\",\n      \"confidence\": 0.9\n    },\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"moderate\",\n      \"des"
+  },
+  {
+    "timestamp": "2026-05-26T13:23:27.094191",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Priya Sharma/Compliance\nOriginal text: Our term plan offers tax-free maturity benefits ",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"legal language\",\n      \"severity\": \"critical\",\n      \"description\": \"The term 'guaranteed' is used without proper qualification in the context of Guaranteed Benefit, which may be misleading.\",\n      \"current_text\": \"Guaranteed Benefit i.e. 105% of the Total Premiums Paid\",\n      \"suggested_fix\": \"The Guaranteed Benefit, which is 105% of the Total Premiums Paid, is subject to the terms and conditions of the policy.\",\n      \"confidence\": 0.9,\n      \"regul"
+  },
+  {
+    "timestamp": "2026-05-26T13:24:46.846763",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The term 'guaranteed' is used in a context that could be misleading for market-linked products.\",\n      \"current_text\": \"guaranteed11\",\n      \"suggested_fix\": \"The Premium Allocation Charges deducted from the premiums throughout the Policy Term are accumulated at a rate of 7% per year (compounded annually) and added back to the fund value at the end of the 15th Policy Year.\",\n      "
+  },
+  {
+    "timestamp": "2026-05-26T13:24:46.983481",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The phrase 'Guaranteed Wealth Booster' is a prohibited claim as it implies a guarantee on returns.\",\n      \"current_text\": \"Loyalty Benefits includes Guaranteed Wealth Booster, Return of Mortality charges, Loyalty additions and Benefit enhancer\",\n      \"suggested_fix\": \"Loyalty Benefits includes Wealth Booster, Return of Mortality charges, Loyalty additions and Benefit enhancer\",\n  "
+  },
+  {
+    "timestamp": "2026-05-26T13:24:47.134284",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The phrase 'market-linked returns' could be misleading as it implies a guarantee of returns, whereas ULIPs are subject to market risk.\",\n      \"current_text\": \"comprehensive Life Cover with Market Linked Returns\",\n      \"suggested_fix\": \"comprehensive Life Cover with investment growth subject to market risk\",\n      \"confidence\": 0.9\n    },\n    {\n      \"category\": \"terminology issue\""
+  },
+  {
+    "timestamp": "2026-05-26T13:24:47.262283",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Priya Sharma/Compliance\nOriginal text: Our term plan offers tax-free maturity benefits ",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"legal language\",\n      \"severity\": \"critical\",\n      \"description\": \"The term 'Guaranteed Benefit' needs clarification as it is dependent on various factors, refer to sales brochure for details.\",\n      \"current_text\": \"Guaranteed benefits are dependent on policy term, premium payment term availed along with other variable factors.\",\n      \"suggested_fix\": \"The Guaranteed Benefit is calculated based on the policy term, premium payment term, and other va"
+  },
+  {
+    "timestamp": "2026-05-26T13:24:47.384270",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The phrase 'manage market volatility more effectively' could be seen as implying a guaranteed or risk-free outcome, which is not suitable for market-linked products.\",\n      \"current_text\": \"Long-term investing can also help manage market volatility more effectively.\",\n      \"suggested_fix\": \"Long-term investing can help investors ride out market fluctuations.\",\n      \"confidence\": "
+  },
+  {
+    "timestamp": "2026-05-26T13:24:47.549565",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The plan is described as providing 'Market-linked Growth' and 'Market-linked Returns' without disclosing associated risks.\",\n      \"current_text\": \"Market-linked Growth\",\n      \"suggested_fix\": \"Market-linked returns, subject to market fluctuations\",\n      \"confidence\": 0.9\n    },\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The cl"
+  },
+  {
+    "timestamp": "2026-05-27T05:58:35.944104",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"disclaimer issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The statement 'the premium is allocated to debt funds to minimise your risk' requires clarification on how risk minimisation is achieved and what specific debt funds are used.\",\n      \"current_text\": \"As your age increases the premium is allocated to debt funds to minimise your risk.\",\n      \"suggested_fix\": \"As your age increases, the premium is allocated to debt funds to manage ris"
+  },
+  {
+    "timestamp": "2026-05-27T05:58:36.128983",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Rohit Mehra/Compliance\nOriginal text: Introducing Bajaj Allianz Smart ULIP 2025. Get gu",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"terminology issue\",\n      \"severity\": \"moderate\",\n      \"description\": \"The term 'risk you are able to take' may be considered ambiguous and requires clarification.\",\n      \"current_text\": \"manage your investment as per the risk you are able to take\",\n      \"suggested_fix\": \"manage your investment based on your risk tolerance\",\n      \"confidence\": 0.8\n    },\n    {\n      \"category\": \"disclaimer issue\",\n      \"severity\": \"critical\",\n      \"description\": \""
+  },
+  {
+    "timestamp": "2026-05-27T07:38:45.195047",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The text mentions tax deduction under Section 123 and tax-exempt under Section 11(read with Schedule II), but lacks a reference or specific details about these sections.\",\n      \"current_text\": \"Premiums you pay may be eligible for tax deduction under Section 123, and the maturity and death benefits may be tax-exempt under Section 11(read with Schedule II), subject to prevailing tax"
+  },
+  {
+    "timestamp": "2026-05-27T07:38:46.637761",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The notification number and date for the GST exemption are not provided.\",\n      \"current_text\": \"As per Government of India Notification No. 16/2025, GST is not applicable on individual life insurance policies effective 22 September 2025.\",\n      \"suggested_fix\": \"As per Government of India Notification No. 16/2025 dated 22 September 2025, GST is not applicable on individual life i"
+  },
+  {
+    "timestamp": "2026-05-27T07:38:47.068121",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: Disclaimer:\nThe vi",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"disclaimer issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The disclaimer is not present in the required format.\",\n      \"current_text\": \"Linked Non-Participating Individual Life Savings Insurance Plan (UIN:116L215V01) is only the name of the unit linked insurance contract and does not in any way indicate the quality of the contract, its future prospects or returns.\",\n      \"suggested_fix\": \"The views expressed in this article is not to be c"
+  },
+  {
+    "timestamp": "2026-05-27T07:38:47.103770",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The text mentions tax deduction under Section 123 and tax-exempt under Section 11, but lacks a reference to the relevant tax laws or regulations.\",\n      \"current_text\": \"Premiums you pay may be eligible for tax deduction under Section 123, and the maturity and death benefits may be tax-exempt under Section 11(read with Schedule II), subject to prevailing tax laws.\",\n      \"suggeste"
+  },
+  {
+    "timestamp": "2026-05-27T07:38:47.136648",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The statement regarding tax exemption on maturity proceeds lacks a specific reference to the Income Tax Act.\",\n      \"current_text\": \"Maturity proceeds may qualify for tax exemption, subject to conditions specified under the Income Tax Act.\",\n      \"suggested_fix\": \"Maturity proceeds may qualify for tax exemption, subject to conditions specified under Section [insert relevant sectio"
+  },
+  {
+    "timestamp": "2026-05-27T07:38:47.176585",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The document does not provide a reference for the Government of India Notification No. 16/2025.\",\n      \"current_text\": \"As per Government of India Notification No. 16/2025, GST is not applicable on individual life insurance policies effective 22 September 2025.\",\n      \"suggested_fix\": \"As per Government of India Notification No. 16/2025 (available at [link]), GST is not applicable"
+  },
+  {
+    "timestamp": "2026-05-27T07:38:47.231864",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The document does not provide a reference for the \u20b93 Crore life insurance cover without a physical medical test.\",\n      \"current_text\": \"Eligible customers can secure up to \u20b93 Crore without a physical medical test, just by going through a Video Medical Examination Report^.\",\n      \"suggested_fix\": \"Eligible customers can secure up to \u20b93 Crore without a physical medical test, just b"
+  },
+  {
+    "timestamp": "2026-05-27T07:38:47.272860",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: Besides helping yo",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The text mentions Section 11 and Schedule II without providing a source link or reference.\",\n      \"current_text\": \"6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply.\",\n      \"suggested_fix\": \"6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act (as per [source link"
+  },
+  {
+    "timestamp": "2026-05-27T07:38:47.308460",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: Besides helping yo",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The text mentions Section 11 and Section 123 of the Income Tax Act but does not provide a reference or link to the relevant source.\",\n      \"current_text\": \"6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply.\",\n      \"suggested_fix\": \"6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 o"
+  },
+  {
+    "timestamp": "2026-05-27T07:38:47.411538",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The text states that maturity proceeds 'may qualify for tax exemption, subject to conditions specified under the Income Tax Act' but does not provide a specific reference to the relevant section or act.\",\n      \"current_text\": \"Maturity proceeds may qualify for tax exemption, subject to conditions specified under the Income Tax Act.\",\n      \"suggested_fix\": \"Maturity proceeds may qu"
+  },
+  {
+    "timestamp": "2026-05-27T07:38:47.452993",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: Disclaimer:\nThe vi",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"disclaimer issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The document does not contain a generic disclaimer as required.\",\n      \"current_text\": \"Linked Non-Participating Individual Life Savings Insurance Plan (UIN:116L215V01) is only the name of the unit linked insurance contract and does not in any way indicate the quality of the contract, its future prospects or returns.\",\n      \"suggested_fix\": \"Disclaimer: The views expressed in this "
+  },
+  {
+    "timestamp": "2026-05-27T07:38:47.494785",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The document is missing a reference for the claim process and documents requirements.\",\n      \"current_text\": \"Check out our Claim Section to learn more about claim process and documents requirements.\",\n      \"suggested_fix\": \"Check out our Claim Section (as per regulatory guidelines) to learn more about claim process and documents requirements.\",\n      \"confidence\": 0.9\n    },\n    "
+  },
+  {
+    "timestamp": "2026-05-27T07:40:11.055170",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The document mentions Government of India Notification No. 16/2025 for GST exemption but does not provide a reference or link to the notification.\",\n      \"current_text\": \"As per Government of India Notification No. 16/2025, GST is not applicable on individual life insurance policies effective 22 September 2025.\",\n      \"suggested_fix\": \"As per Government of India Notification No. 1"
+  },
+  {
+    "timestamp": "2026-05-27T07:40:11.097034",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The document does not provide a reference for the \u20b93 Crore life insurance cover without a physical medical test.\",\n      \"current_text\": \"Eligible customers can secure up to \u20b93 Crore without a physical medical test, just by going through a Video Medical Examination Report^.\",\n      \"suggested_fix\": \"Eligible customers can secure up to \u20b93 Crore without a physical medical test, just b"
+  },
+  {
+    "timestamp": "2026-05-27T07:40:11.135187",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The statement regarding tax exemption on maturity proceeds lacks a specific reference to the Income Tax Act.\",\n      \"current_text\": \"Maturity proceeds may qualify for tax exemption, subject to conditions specified under the Income Tax Act.\",\n      \"suggested_fix\": \"Maturity proceeds may qualify for tax exemption, subject to conditions specified under Section [insert relevant sectio"
+  },
+  {
+    "timestamp": "2026-05-27T07:40:11.171704",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: Besides helping yo",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The text mentions Section 11 and Section 123 of the Income Tax Act without providing a reference or source link.\",\n      \"current_text\": \"6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply.\",\n      \"suggested_fix\": \"6Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Ac"
+  },
+  {
+    "timestamp": "2026-05-27T07:40:11.212212",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The statement 'As per Government of India Notification No. 16/2025, GST is not applicable on individual life insurance policies effective 22 September 2025.' requires a reference or specific details for verification.\",\n      \"current_text\": \"As per Government of India Notification No. 16/2025, GST is not applicable on individual life insurance policies effective 22 September 2025.\","
+  },
+  {
+    "timestamp": "2026-05-27T07:40:11.247462",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The document does not provide a reference for the \u20b93 Crore life insurance cover without a physical medical test.\",\n      \"current_text\": \"Eligible customers can secure up to \u20b93 Crore without a physical medical test, just by going through a Video Medical Examination Report^.\",\n      \"suggested_fix\": \"Eligible customers can secure up to \u20b93 Crore without a physical medical test, just b"
+  },
+  {
+    "timestamp": "2026-05-27T07:40:11.281777",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: Disclaimer:\nThe vi",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"disclaimer issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The document does not contain a generic disclaimer as required.\",\n      \"current_text\": \"Linked Non-Participating Individual Life Savings Insurance Plan (UIN:116L215V01) is only the name of the unit linked insurance contract and does not in any way indicate the quality of the contract, its future prospects or returns.\",\n      \"suggested_fix\": \"The views expressed in this article is n"
+  },
+  {
+    "timestamp": "2026-05-27T07:40:11.314117",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The statement regarding tax exemption on maturity proceeds lacks a specific reference to the Income Tax Act.\",\n      \"current_text\": \"Maturity proceeds may qualify for tax exemption, subject to conditions specified under the Income Tax Act.\",\n      \"suggested_fix\": \"Maturity proceeds may qualify for tax exemption, subject to conditions specified under Section [insert relevant sectio"
+  },
+  {
+    "timestamp": "2026-05-27T07:40:11.350777",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The text mentions 'Section 123' and 'Section 11(read with Schedule II)' without providing a reference or specifying the relevant Act or regulation.\",\n      \"current_text\": \"Premiums you pay may be eligible for tax deduction under Section 123, and the maturity and death benefits may be tax-exempt under Section 11(read with Schedule II), subject to prevailing tax laws.\",\n      \"sugges"
+  },
+  {
+    "timestamp": "2026-05-27T07:40:13.501498",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: Disclaimer:\nThe vi",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"disclaimer issue\",\n      \"severity\": \"critical\",\n      \"description\": \"The disclaimer provided is generic and does not specifically address the risks associated with the linked non-participating individual life savings insurance plan.\",\n      \"current_text\": \"Linked Non-Participating Individual Life Savings Insurance Plan (UIN:116L215V01) is only the name of the unit linked insurance contract and does not in any way indicate the quality of the contract,"
+  },
+  {
+    "timestamp": "2026-05-27T07:40:13.543122",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: Besides helping yo",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"missing reference\",\n      \"severity\": \"critical\",\n      \"description\": \"The Section 11 reference is incomplete and requires a specific source link.\",\n      \"current_text\": \"Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act shall apply.\",\n      \"suggested_fix\": \"Tax benefits as per prevailing Section 11 (read with Schedule II) and Section 123 of the Income Tax Act, 1961 shall apply. Please refer to th"
+  },
+  {
+    "timestamp": "2026-05-27T07:40:13.778252",
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "system_prompt": "You are a senior Bajaj Allianz compliance reviewer imitating past reviewer decisions. Return ONLY valid JSON matching the schema.",
+    "context": null,
+    "prompt": "You are a senior Bajaj Allianz Life Insurance compliance reviewer.\nBelow are REAL past review decisions made by senior reviewers. They are the\nground truth for how this team flags compliance issues. Imitate their tone,\nseverity calibration and phrasing. Do NOT introduce violation categories or\nterminology that do not appear in the examples.\n\nPAST REVIEWER DECISIONS (ground truth):\n\n--- EXAMPLE 1 ---\nReviewer: Anwesha Padhi01/Pune HO/Legal Compliance and FPU/Life\nOriginal text: FAQs\nAre preventiv",
+    "response": "{\n\"violations\": [\n    {\n      \"category\": \"legal language\",\n      \"severity\": \"critical\",\n      \"description\": \"The text uses 'subject to underwriting conditions' without specifying the exact conditions or providing a reference.\",\n      \"current_text\": \"You may be eligible to get a life cover of up to \u20b93 Crore^ without undergoing a physical medical examination, simplified for easy issuance, subject to underwriting conditions.\",\n      \"suggested_fix\": \"You may be eligible to get a life cover of u"
   }
 ]
