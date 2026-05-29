@@ -16,6 +16,26 @@ from app.services.rag.ports import SearchHit
 logger = logging.getLogger(__name__)
 
 
+# Pure-response reviewer comments carry no compliance signal — they're the
+# reviewer accepting/closing a thread, not flagging an issue. Mirror of the
+# 0007 corpus-purge denylist; this runtime guard repeats the filter so a bad
+# future ingest can't reintroduce thin rows into analysis.
+_RESPONSE_TOKENS = frozenset({
+    "done", "ok", "okay", "yes", "no",
+    "noted", "agreed", "agree", "fine", "accepted", "approved", "confirmed",
+    "added", "edited", "deleted", "revised", "rephrased", "checked", "check",
+})
+
+
+def _is_thin(precedent: Dict[str, Any]) -> bool:
+    """True when a precedent's comment carries no actionable signal — either a
+    pure-response token (done/ok/added/…) or shorter than 3 chars after
+    stripping trailing punctuation. Substantive short flags ('source?',
+    'rephrase.') are preserved."""
+    c = (precedent.get("comment_text") or "").strip().lower().rstrip(".!?")
+    return c in _RESPONSE_TOKENS or len(c) < 3
+
+
 def _hit_to_precedent(hit: SearchHit) -> Dict[str, Any]:
     f = hit.fields or {}
     return {
@@ -29,6 +49,7 @@ def _hit_to_precedent(hit: SearchHit) -> Dict[str, Any]:
         "violation_category": f.get("violation_category"),
         "severity": f.get("severity"),
         "document_id": f.get("document_id"),
+        "source_file": f.get("source_file"),
     }
 
 
@@ -77,6 +98,10 @@ class PrecedentRetriever:
                     filters=None,
                 )
                 precedents = [_hit_to_precedent(h) for h in hits]
+                # Runtime safety net (mirrors the 0007 corpus purge): drop
+                # pure-response precedents the store may still surface. Idempotent
+                # with the migration; protects against bad future ingests.
+                precedents = [p for p in precedents if not _is_thin(p)]
                 # Leakage guard for the eval harness: drop same-document precedents.
                 # (Done in Python, not via store filters, because the store's filter
                 # semantics are equality-inclusion — they can't express "not equal".)

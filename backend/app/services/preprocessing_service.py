@@ -358,51 +358,150 @@ Constraints:
         return prompt
 
     def create_precedent_prompts(self, content: str, precedents: List[Dict]) -> str:
-        """Build a few-shot precedent-imitation prompt.
+        """Build a reviewer-voice precedent prompt (2026-05-28 design).
 
-        The examples are PAST reviewer decisions (ground truth). The model
-        imitates their tone/severity/phrasing on the NEW document section.
-        Output still requires `current_text` (verbatim from the new section) so
-        frontend highlighting keeps working. Severity/category use the new
-        precedent vocabulary.
+        The LLM writes commentary as a Bajaj compliance reviewer would write it
+        about THIS document — naming the offending phrase, prescribing specific
+        compliant text or naming a specific artifact, never as meta-commentary
+        on the precedent ("similar to a precedent that…"). Severity, category,
+        anchor, comment-verbatim and final-text are still carried over from the
+        retrieved precedent by the application; the LLM supplies the on-document
+        reviewer_comment, action_type and (when relevant) evidence_needed.
+
+        When NO precedents are retrieved, the prompt switches to a novel-only
+        mode: the model reviews the section itself and emits only novel_findings
+        (each requiring a regulatory_basis and confidence ≥ 0.75). This closes
+        the coverage gap where uncovered chunks previously produced nothing.
+
+        This prompt is product-agnostic — the voice examples below teach STYLE;
+        retrieval supplies the substance for whatever product is under review.
+        Reviewer names are intentionally NOT included.
         """
-        examples_text = ""
-        for i, p in enumerate(precedents, 1):
-            examples_text += (
-                f"\n--- EXAMPLE {i} ---\n"
-                f"Reviewer: {p.get('reviewer_name') or 'Unknown'}\n"
-                f"Original text: {p.get('chunk_text') or ''}\n"
-                f"Compliance comment: {p.get('comment_text') or ''}\n"
-                f"Violation type: {p.get('violation_category') or 'other'}\n"
-                f"Severity: {p.get('severity') or 'informational'}\n"
+        if precedents:
+            blocks = []
+            for i, p in enumerate(precedents):
+                block = (
+                    f"\n--- PRECEDENT {i} ---\n"
+                    f"Historical chunk: {p.get('chunk_text') or ''}\n"
+                    f"Reviewer-flagged phrase (anchor): {p.get('anchor_text') or ''}\n"
+                    f"Reviewer comment: {p.get('comment_text') or ''}\n"
+                    f"Violation type: {p.get('violation_category') or 'other'}\n"
+                    f"Severity: {p.get('severity') or 'informational'}\n"
+                )
+                if p.get("final_text_chunk"):
+                    block += f"Approved rewrite (for reference): {p['final_text_chunk']}\n"
+                blocks.append(block)
+            precedents_block = "".join(blocks)
+            mode_instruction = (
+                "(A) Decide which historical PRECEDENTS apply to this chunk. For each\n"
+                "    one, write `reviewer_comment` AS THE REVIEWER would write it about\n"
+                "    THIS chunk — name the offending phrase, state what's missing or\n"
+                "    wrong, and if the past reviewer prescribed specific compliant text\n"
+                "    or named a specific artifact, INCLUDE THOSE SPECIFICS. Emit one\n"
+                "    `citations` entry per applicable precedent.\n\n"
+                "(B) Separately, decide if any issue is clearly present in this chunk\n"
+                "    that NO listed precedent covers. Emit those under `novel_findings`.\n"
             )
-            if p.get("final_text_chunk"):
-                examples_text += f"Approved rewrite: {p['final_text_chunk']}\n"
+        else:
+            precedents_block = (
+                "(none retrieved for this section)\n"
+            )
+            mode_instruction = (
+                "No historical precedents were retrieved for this section. Do NOT emit\n"
+                "any `citations`. Review the section yourself and emit ONLY\n"
+                "`novel_findings` for issues clearly present in the chunk.\n"
+            )
 
-        prompt = f"""You are a senior Bajaj Allianz Life Insurance compliance reviewer.
-Below are REAL past review decisions made by senior reviewers. They are the
-ground truth for how this team flags compliance issues. Imitate their tone,
-severity calibration and phrasing. Do NOT introduce violation categories or
-terminology that do not appear in the examples.
+        prompt = f"""You are a senior Bajaj Allianz Life compliance reviewer (Legal/Compliance/FPU).
+Your past colleagues' comments on similar copy are below — they show the
+substance you should be checking for AND the voice you should write in.
 
-PAST REVIEWER DECISIONS (ground truth):
-{examples_text}
+For the NEW DOCUMENT SECTION:
 
-NEW DOCUMENT SECTION (review this against the patterns above):
+{mode_instruction}
+Novel findings REQUIRE a `regulatory_basis` and confidence ≥ 0.75. Do not
+invent findings.
+
+DO NOT write meta-bridges like "this chunk is similar to a precedent that…"
+or "the precedent flagged X". Write as if YOU are the reviewer reading this
+document for the first time. The reader does not see the precedents.
+
+PRECEDENTS:
+{precedents_block}
+NEW DOCUMENT SECTION:
 {content}
 
-For each compliance issue you find in the NEW DOCUMENT SECTION, output a violation with:
-- current_text — the EXACT problematic phrase copied verbatim from the NEW DOCUMENT SECTION above (no paraphrase)
-- suggested_fix — a compliant rewrite, informed by the "Approved rewrite" patterns when present
-- category — one of: terminology issue, legal language, missing reference, disclaimer issue, other
-- severity — one of: critical, moderate, informational
-- description — one sentence describing the issue, in the reviewers' style
-- confidence — your 0.0-1.0 confidence that a senior reviewer would flag this
+ACTION TYPES (pick one per finding):
+  rewrite         — use standardized terminology or insert prescribed text
+  share-evidence  — produce an approval or source artifact (UW / Tax / PO / BI)
+  add-disclaimer  — insert a missing regulatory disclaimer
+  verify-source   — clarify provenance, match against authoritative document
+  remove          — strip out non-compliant claim
 
-Rules:
-- Only flag issues that the example reviewers would plausibly flag. If nothing matches, return an empty violations list.
-- Do not invent rule IDs; leave rule_id null.
-- Output ONLY valid JSON matching the required schema."""
+VOICE EXAMPLES (these are the gold standard — match this style):
+
+EXAMPLE 1 (rewrite — prescribes specific text):
+  Precedent comment: "Include clear information Switching between fund under
+    Investor Selectable Portfolio Strategy or investment portfolio strategies
+    is free of the Miscellaneous Charge.. portfolio strategies can be switched
+    only during policy anniversary"
+  New chunk says: "...allows you to switch between different investment funds
+    based on your financial goals and market outlook..."
+  reviewer_comment: "Include clear information: switching between funds under
+    Investor Selectable Portfolio Strategy is free of the Miscellaneous
+    Charge; portfolio strategies can be switched only on policy anniversary."
+  action_type: "rewrite"
+  evidence_needed: null
+
+EXAMPLE 2 (share-evidence):
+  Precedent comment: "Has UW approved this? Pls share approval on tool"
+  New chunk says: "...comprehensive life coverage up to ₹3 Crore..."
+  reviewer_comment: "Has UW approved the ₹3 Crore SA? Pls share approval on tool."
+  action_type: "share-evidence"
+  evidence_needed: "UW approval"
+
+EXAMPLE 3 (add-disclaimer):
+  Precedent comment: "Lockin- period Ulip disclaimer missing"
+  New chunk says: "...invest in our Equity Growth Fund for long-term wealth..."
+  reviewer_comment: "ULIP lock-in period disclaimer missing for this Equity
+    Growth Fund mention."
+  action_type: "add-disclaimer"
+  evidence_needed: "ULIP lock-in disclaimer"
+
+EXAMPLE 4 (verify-source):
+  Precedent comment: "Pl match it with latest fact sheet"
+  New chunk says: "3.47 Crore Lives Covered | 99.33% Claim Settlement Ratio"
+  reviewer_comment: "Match these stats with the latest fact sheet before
+    publication."
+  action_type: "verify-source"
+  evidence_needed: "latest fact sheet"
+
+EXAMPLE 5 (novel — no precedent retrieved, expanded reasoning):
+  No precedent in the list covers GST claims.
+  New chunk says: "GST is not applicable on individual life insurance premium
+    as per Government Notification 16/2025."
+  reviewer_comment: "Tax claim cites Notification 16/2025 — but this is an
+    external regulatory notification, not a Bajaj product feature. Share Tax
+    team approval substantiating both the notification number and the scope
+    (does it cover ULIP, term, endowment, or all individual life?) before
+    publication. If the scope is narrower than implied here, the claim must
+    be qualified."
+  action_type: "verify-source"
+  evidence_needed: "Tax team approval + scope confirmation"
+  regulatory_basis: "IRDAI Advertisement Regulations 2021 — tax claim substantiation requirement"
+  confidence: 0.85
+
+OUTPUT FIELDS
+  citations[]      — precedent_index, current_text (verbatim from the NEW
+                     section), reviewer_comment, action_type, evidence_needed,
+                     confidence.
+  novel_findings[] — current_text, reviewer_comment, action_type,
+                     evidence_needed, regulatory_basis, confidence (≥ 0.75).
+
+Return JSON matching the schema. A precedent only applies if the issue it
+flagged is genuinely present in the NEW DOCUMENT SECTION; do not cite
+precedents that don't apply just because they were retrieved. Output ONLY
+valid JSON."""
         return prompt
 
 

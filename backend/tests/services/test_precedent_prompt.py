@@ -20,7 +20,8 @@ def test_precedent_prompt_includes_examples_and_new_section():
     ]
     content = "Buy our guaranteed 1 crore plan today!"
     prompt = svc.create_precedent_prompts(content, precedents)
-    assert "Shailja Saklani" in prompt
+    # Reviewer names are intentionally NOT surfaced in the prompt (privacy).
+    assert "Shailja Saklani" not in prompt
     assert "Logic is incorrect" in prompt
     assert "legal language" in prompt
     assert "critical" in prompt

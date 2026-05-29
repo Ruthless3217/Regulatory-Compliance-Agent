@@ -150,6 +150,19 @@ def _serialize_violation(v: Violation) -> dict:
         "rule_id": str(v.rule_id) if v.rule_id else None,
         "confidence": v.confidence,
         "regulator_quote": v.regulator_quote,
+        # Reviewer-voice tags (2026-05-28): action_type, evidence_needed,
+        # grounding (precedent|novel), regulatory_basis. Live in JSONB; the UI
+        # renders them as the action/needed/source badge row.
+        "violation_metadata": v.violation_metadata,
+        # Precedent-citation provenance (Phase 1.5). All fields are nullable;
+        # populated only when the violation came from the precedent path.
+        "cited_precedent_id": str(v.cited_precedent_id) if v.cited_precedent_id else None,
+        "cited_document_id": v.cited_document_id,
+        "cited_source_file": v.cited_source_file,
+        "cited_anchor_text": v.cited_anchor_text,
+        "cited_comment_verbatim": v.cited_comment_verbatim,
+        "cited_final_text": v.cited_final_text,
+        "similarity_score": v.similarity_score,
     }
 
 

@@ -32,6 +32,18 @@ class Violation(Base):
     # via the rag_source_docs lookup. Required for audit-defensibility.
     regulator_quote = Column(Text, nullable=True)
 
+    # Phase 1.5 — precedent-citation columns. Populated when the violation came
+    # from the precedent path; let the UI show the historic ticket, the
+    # reviewer-marked anchor text, the reviewer's comment verbatim, and the
+    # approved final rewrite. Reviewer name is intentionally NOT persisted.
+    cited_precedent_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    cited_document_id = Column(Text, nullable=True, index=True)
+    cited_source_file = Column(Text, nullable=True)
+    cited_anchor_text = Column(Text, nullable=True)
+    cited_comment_verbatim = Column(Text, nullable=True)
+    cited_final_text = Column(Text, nullable=True)
+    similarity_score = Column(Float, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     rag_active_categories: List[str] = ["regulatory", "brand", "seo", "irdai", "sebi"]
 
     # Precedent compliance engine (Phase 1)
-    pgvector_top_k: int = 5                       # precedents retrieved per chunk
+    pgvector_top_k: int = 15                      # precedents retrieved per chunk (Phase 1.5: filter-and-cite needs broader recall; LLM filters out non-applicable ones)
     kb_chunk_size: int = 500
     kb_chunk_overlap: int = 50
     kb_batch_size: int = 100

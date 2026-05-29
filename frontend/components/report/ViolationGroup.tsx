@@ -6,6 +6,8 @@ import { SeverityBadge, Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { categoryLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { ActionTags } from "@/components/violation/ActionTags";
+import { PrecedentNote } from "@/components/violation/PrecedentNote";
 import type { Violation } from "@/lib/types";
 
 interface Props {
@@ -50,31 +52,43 @@ export function ViolationGroup({ severity, violations }: Props) {
               </div>
               <ul className="divide-y divide-border rounded-md border border-border bg-surface">
                 {vs.map((v) => (
-                  <li key={v.id} className="flex items-start justify-between gap-4 p-4">
-                    <div className="min-w-0">
-                      <p className="text-sm">{v.description}</p>
-                      {v.current_text && (
-                        <p className="mt-1 line-clamp-2 text-xs italic text-muted-foreground">
-                          “{v.current_text}”
-                        </p>
-                      )}
+                  <li key={v.id} className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <p className="text-sm">{v.description}</p>
+
+                        <ActionTags violation={v} />
+
+                        {/* The chunk this maps to: what it was related to. */}
+                        {v.current_text && (
+                          <div className="rounded-sm border border-border bg-background p-2 text-xs">
+                            <div className="micro-label mb-1">
+                              {typeof v.chunk_index === "number" ? `Chunk ${v.chunk_index} · ` : ""}flagged text
+                            </div>
+                            <p className="line-clamp-3 italic">“{v.current_text}”</p>
+                          </div>
+                        )}
+
+                        {/* The precedent's comment (or novel regulatory basis). */}
+                        <PrecedentNote violation={v} />
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!v.suggested_fix}
+                        onClick={async () => {
+                          if (!v.suggested_fix) return;
+                          try {
+                            await navigator.clipboard.writeText(v.suggested_fix);
+                            toast.success("Fix copied");
+                          } catch {
+                            toast.error("Clipboard write failed");
+                          }
+                        }}
+                      >
+                        Apply fix
+                      </Button>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!v.suggested_fix}
-                      onClick={async () => {
-                        if (!v.suggested_fix) return;
-                        try {
-                          await navigator.clipboard.writeText(v.suggested_fix);
-                          toast.success("Fix copied");
-                        } catch {
-                          toast.error("Clipboard write failed");
-                        }
-                      }}
-                    >
-                      Apply fix
-                    </Button>
                   </li>
                 ))}
               </ul>

@@ -24,6 +24,120 @@ from .state import ComplianceState
 
 logger = logging.getLogger(__name__)
 
+# Novel findings below this confidence are dropped before persistence — there
+# is no historical reviewer to back them, so the bar is higher than for
+# precedent-grounded citations (see 2026-05-28 reviewer-voice design).
+NOVEL_CONFIDENCE_FLOOR = 0.75
+
+# Severity is hard-coded for novel findings in v1 (open question in the design:
+# should it be LLM-emitted?). Category is generic since novel findings carry
+# their grounding in violation_metadata.regulatory_basis, not a precedent.
+_NOVEL_SEVERITY = "moderate"
+_NOVEL_CATEGORY = "regulatory"
+
+
+def _citation_to_violation(
+    c: Any, precedent: Dict[str, Any], *, chunk_id, chunk_index, location: str
+) -> Dict[str, Any]:
+    """Map one precedent citation to a violation dict. Severity/category/anchor/
+    comment-verbatim/final-text are carried over from the retrieved precedent;
+    the LLM supplies only the on-document reviewer_comment, action_type and
+    evidence_needed (which land in violation_metadata)."""
+    p = precedent
+    return {
+        "category": p.get("violation_category") or "other",
+        "severity": p.get("severity") or "informational",
+        "description": (c.reviewer_comment or "").strip(),
+        "current_text": (c.current_text or "").strip(),
+        "suggested_fix": p.get("final_text_chunk") or None,
+        "auto_fixable": False,
+        "confidence": float(c.confidence if c.confidence is not None else 0.85),
+        "rule_id": None,
+        "regulator_quote": None,
+        # Citation columns — provenance back to the precedent.
+        "cited_precedent_id": p.get("id"),
+        "cited_document_id": p.get("document_id"),
+        "cited_source_file": p.get("source_file"),
+        "cited_anchor_text": p.get("anchor_text"),
+        "cited_comment_verbatim": p.get("comment_text"),
+        "cited_final_text": p.get("final_text_chunk"),
+        "similarity_score": p.get("score"),
+        "chunk_id": str(chunk_id),
+        "chunk_index": chunk_index,
+        "location": location,
+        "violation_metadata": {
+            "grounding": "precedent",
+            "action_type": c.action_type,
+            "evidence_needed": c.evidence_needed,
+        },
+    }
+
+
+def _novel_finding_to_violation(
+    f: Any, *, chunk_id, chunk_index, location: str
+) -> Optional[Dict[str, Any]]:
+    """Map one novel finding to a violation dict, or None if it falls below the
+    confidence floor. Citation columns are NULL; grounding/regulatory_basis live
+    in violation_metadata."""
+    if float(f.confidence) < NOVEL_CONFIDENCE_FLOOR:
+        return None
+    return {
+        "category": _NOVEL_CATEGORY,
+        "severity": _NOVEL_SEVERITY,
+        "description": (f.reviewer_comment or "").strip(),
+        "current_text": (f.current_text or "").strip(),
+        "suggested_fix": None,
+        "auto_fixable": False,
+        "confidence": float(f.confidence),
+        "rule_id": None,
+        "regulator_quote": None,
+        "cited_precedent_id": None,
+        "cited_document_id": None,
+        "cited_source_file": None,
+        "cited_anchor_text": None,
+        "cited_comment_verbatim": None,
+        "cited_final_text": None,
+        "similarity_score": None,
+        "chunk_id": str(chunk_id),
+        "chunk_index": chunk_index,
+        "location": location,
+        "violation_metadata": {
+            "grounding": "novel",
+            "action_type": f.action_type,
+            "evidence_needed": f.evidence_needed,
+            "regulatory_basis": f.regulatory_basis,
+        },
+    }
+
+
+def map_findings_to_violations(
+    result: Any,
+    precedents: List[Dict[str, Any]],
+    *,
+    chunk_id,
+    chunk_index,
+    location: str,
+) -> List[Dict[str, Any]]:
+    """Flatten a PrecedentCitationsResult into violation dicts. Out-of-range
+    citation indices and sub-floor novel findings are dropped here."""
+    out: List[Dict[str, Any]] = []
+    for c in (result.citations or []):
+        idx = int(c.precedent_index)
+        if not (0 <= idx < len(precedents)):
+            continue
+        out.append(
+            _citation_to_violation(
+                c, precedents[idx], chunk_id=chunk_id, chunk_index=chunk_index, location=location
+            )
+        )
+    for f in (result.novel_findings or []):
+        v = _novel_finding_to_violation(
+            f, chunk_id=chunk_id, chunk_index=chunk_index, location=location
+        )
+        if v is not None:
+            out.append(v)
+    return out
+
 
 @traceable(run_type="chain", name="graph.preprocess_node")
 async def preprocess_node(state: ComplianceState) -> Dict:
@@ -250,7 +364,10 @@ async def analysis_node(state: ComplianceState) -> Dict:
     from app.services.preprocessing_service import ContextEngineeringService
     from app.services.llm_service import llm_service
     from app.services.agents.validators import validate_agent_output
-    from app.schemas.compliance_schemas import ComplianceAnalysisResult
+    from app.schemas.compliance_schemas import (
+        ComplianceAnalysisResult,
+        PrecedentCitationsResult,
+    )
     from app.models.agent_execution import AgentExecution
     from app.database import SessionLocal
 
@@ -262,9 +379,10 @@ async def analysis_node(state: ComplianceState) -> Dict:
     new_violations: List[Dict] = []
 
     CORRECTIVE_SUFFIX = (
-        "\n\nYour previous output had invalid fields. Ensure severity is one of "
-        "critical/moderate/informational, category is non-empty, description is "
-        "at least 10 characters, and confidence is between 0 and 1."
+        "\n\nYour previous output had invalid fields. precedent_index must be an "
+        "integer in [0, K-1] where K is the number of precedents, current_text "
+        "must be a non-empty substring of the NEW DOCUMENT SECTION, description "
+        "at least 5 characters, and confidence between 0 and 1."
     )
 
     # Bound concurrent per-chunk LLM grading to avoid connection-pool/rate-limit exhaustion.
@@ -275,8 +393,8 @@ async def analysis_node(state: ComplianceState) -> Dict:
         chunk_index = chunk_data.get("chunk_index")
         chunk_text = chunk_data.get("text", "")
         precedents = retrieved.get(str(chunk_id), [])
-        if not precedents:
-            return []  # Decision 5: no precedents → no violations for this chunk.
+        # No early-return on empty precedents: the prompt switches to novel-only
+        # mode so issues outside the corpus are still caught (2026-05-28 design).
 
         async with _grade_semaphore:
             task_db = None
@@ -301,45 +419,56 @@ async def analysis_node(state: ComplianceState) -> Dict:
 
                 prompt = context_service.create_precedent_prompts(chunk_text, precedents)
                 system_prompt = (
-                    "You are a senior Bajaj Allianz compliance reviewer imitating past "
-                    "reviewer decisions. Return ONLY valid JSON matching the schema."
+                    "You are a senior Bajaj Allianz compliance reviewer. Cite "
+                    "the historical precedents that apply to the new chunk. "
+                    "Return ONLY valid JSON matching the required schema."
                 )
 
-                async def _call(p: str) -> ComplianceAnalysisResult:
+                async def _call(p: str) -> PrecedentCitationsResult:
                     return await llm_service.generate_structured_response(
                         prompt=p,
-                        output_model=ComplianceAnalysisResult,
+                        output_model=PrecedentCitationsResult,
                         system_prompt=system_prompt,
                         execution_id=str(execution.id),
                         db=task_db,
-                        tool_name="precedent_analysis",
+                        tool_name="precedent_citation",
                         temperature=0.0,
                     )
 
                 result = await _call(prompt)
-                raw = [v.model_dump() for v in result.violations]
-                if not all(validate_agent_output(v)[0] for v in raw):
-                    # One corrective retry. Keep whichever pass yields more VALID
-                    # violations so a degenerate retry (fewer/empty) can't discard
-                    # valid first-pass findings.
-                    retry_raw = [v.model_dump() for v in (await _call(prompt + CORRECTIVE_SUFFIX)).violations]
-                    valid_first = sum(1 for v in raw if validate_agent_output(v)[0])
-                    valid_retry = sum(1 for v in retry_raw if validate_agent_output(v)[0])
-                    if valid_retry >= valid_first:
-                        raw = retry_raw
+                citations = list(result.citations or [])
+                novel = list(result.novel_findings or [])
 
-                for v in raw:
+                # One corrective retry if any citation has an out-of-range
+                # index. Keep whichever pass yields more in-range citations;
+                # carry that pass's novel findings too.
+                def _in_range(cs):
+                    return [c for c in cs if 0 <= int(c.precedent_index) < len(precedents)]
+
+                if citations and len(_in_range(citations)) < len(citations):
+                    retry = await _call(prompt + CORRECTIVE_SUFFIX)
+                    if len(_in_range(retry.citations or [])) >= len(_in_range(citations)):
+                        citations = list(retry.citations or [])
+                        novel = list(retry.novel_findings or [])
+                citations = _in_range(citations)
+
+                meta_loc = chunk_data.get("metadata", {})
+                loc = f"chunk:{chunk_id}"
+                if meta_loc.get("page_number"):
+                    loc += f":page:{meta_loc['page_number']}"
+
+                # Map citations (provenance carried over from the precedent) and
+                # novel findings (regulatory_basis carried in metadata, sub-floor
+                # findings dropped) into the shared violation shape.
+                filtered = PrecedentCitationsResult(citations=citations, novel_findings=novel)
+                for v in map_findings_to_violations(
+                    filtered, precedents,
+                    chunk_id=chunk_id, chunk_index=chunk_index, location=loc,
+                ):
                     ok, errs = validate_agent_output(v)
                     if not ok:
                         _log_grade_error(chunk_id, v, errs)
                         continue
-                    v["chunk_id"] = str(chunk_id)
-                    v["chunk_index"] = chunk_index
-                    loc = f"chunk:{chunk_id}"
-                    meta = chunk_data.get("metadata", {})
-                    if meta.get("page_number"):
-                        loc += f":page:{meta['page_number']}"
-                    v["location"] = loc
                     kept.append(v)
 
                 execution.status = "completed"

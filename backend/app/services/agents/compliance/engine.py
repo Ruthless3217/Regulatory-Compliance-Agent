@@ -215,6 +215,24 @@ class ComplianceEngine:
                     confidence = 0.85
                 confidence = max(0.0, min(1.0, confidence))
 
+                # Coerce optional citation fields. cited_precedent_id is a UUID
+                # in the rag_compliance_examples table; parse defensively so a
+                # bad value from a non-precedent path doesn't break persistence.
+                cited_precedent_id = None
+                raw_pid = v_data.get("cited_precedent_id")
+                if raw_pid:
+                    try:
+                        import uuid as _uuid
+                        cited_precedent_id = _uuid.UUID(str(raw_pid))
+                    except (ValueError, TypeError):
+                        cited_precedent_id = None
+
+                sim_score = v_data.get("similarity_score")
+                try:
+                    sim_score = float(sim_score) if sim_score is not None else None
+                except (TypeError, ValueError):
+                    sim_score = None
+
                 violation = Violation(
                     compliance_check_id=check.id,
                     category=cat,
@@ -228,6 +246,13 @@ class ComplianceEngine:
                     confidence=confidence,
                     regulator_quote=v_data.get("regulator_quote"),
                     violation_metadata=v_data.get("violation_metadata"),
+                    cited_precedent_id=cited_precedent_id,
+                    cited_document_id=v_data.get("cited_document_id"),
+                    cited_source_file=v_data.get("cited_source_file"),
+                    cited_anchor_text=v_data.get("cited_anchor_text"),
+                    cited_comment_verbatim=v_data.get("cited_comment_verbatim"),
+                    cited_final_text=v_data.get("cited_final_text"),
+                    similarity_score=sim_score,
                 )
 
                 # Try to resolve rule_id as UUID
@@ -281,7 +306,17 @@ class ComplianceEngine:
                     "location": v.location,
                     "current_text": v.current_text,
                     "suggested_fix": v.suggested_fix,
-                    "auto_fixable": v.auto_fixable
+                    "auto_fixable": v.auto_fixable,
+                    "confidence": v.confidence,
+                    "regulator_quote": v.regulator_quote,
+                    "violation_metadata": v.violation_metadata,
+                    "cited_precedent_id": str(v.cited_precedent_id) if v.cited_precedent_id else None,
+                    "cited_document_id": v.cited_document_id,
+                    "cited_source_file": v.cited_source_file,
+                    "cited_anchor_text": v.cited_anchor_text,
+                    "cited_comment_verbatim": v.cited_comment_verbatim,
+                    "cited_final_text": v.cited_final_text,
+                    "similarity_score": v.similarity_score,
                 }
                 for v in violations
             ]

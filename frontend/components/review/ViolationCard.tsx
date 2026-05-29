@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { SeverityBadge, Badge } from "@/components/ui/badge";
 import { categoryLabel, severityClass, truthyAutoFix } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { ActionTags } from "@/components/violation/ActionTags";
+import { PrecedentNote } from "@/components/violation/PrecedentNote";
 import type { Violation } from "@/lib/types";
 
 interface Props {
@@ -62,10 +64,17 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
             </Badge>
           )}
         </div>
-        <div className="font-mono text-xs text-muted-foreground">#{String(index + 1).padStart(2, "0")}</div>
+        <div className="font-mono text-xs text-muted-foreground">
+          {typeof violation.chunk_index === "number" && (
+            <span className="mr-2">chunk {violation.chunk_index}</span>
+          )}
+          #{String(index + 1).padStart(2, "0")}
+        </div>
       </div>
 
       <p className="text-sm leading-snug">{violation.description}</p>
+
+      <ActionTags violation={violation} className="mt-2 flex flex-wrap items-center gap-1.5" />
 
       {violation.current_text && (
         <div className="mt-3 rounded-sm border border-border bg-background p-2 text-xs">
@@ -86,6 +95,12 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
           <p className="line-clamp-3 italic">“{violation.regulator_quote}”</p>
         </div>
       )}
+
+      {/* Provenance: the precedent's reviewer comment, or the novel-finding
+          regulatory basis. The substance behind the flag. */}
+      <div className="mt-3 [&:empty]:hidden">
+        <PrecedentNote violation={violation} />
+      </div>
 
       {violation.suggested_fix && (
         <div className="mt-3 rounded-sm border border-success/40 bg-success/5 p-2">

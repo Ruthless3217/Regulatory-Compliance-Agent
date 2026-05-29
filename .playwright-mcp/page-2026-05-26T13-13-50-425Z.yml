@@ -1,0 +1,394 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - link "B Bajaj Compliance Marketing · Review" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e6]:
+          - generic [ref=e7]: B
+          - generic [ref=e8]:
+            - generic [ref=e9]: Bajaj Compliance
+            - generic [ref=e10]: Marketing · Review
+      - button "Search submissions… ⌘K" [disabled] [ref=e12]:
+        - img [ref=e13]
+        - generic [ref=e16]: Search submissions…
+        - generic [ref=e17]: ⌘K
+      - navigation [ref=e18]:
+        - generic [ref=e19]:
+          - generic [ref=e20]:
+            - generic [ref=e21]: "01"
+            - generic [ref=e22]: Workspace
+          - list [ref=e24]:
+            - listitem [ref=e25]:
+              - link "Submissions" [ref=e26] [cursor=pointer]:
+                - /url: /
+                - img [ref=e29]
+                - generic [ref=e32]: Submissions
+            - listitem [ref=e33]:
+              - link "New analysis" [ref=e34] [cursor=pointer]:
+                - /url: /new
+                - img [ref=e37]
+                - generic [ref=e40]: New analysis
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - generic [ref=e43]: "02"
+            - generic [ref=e44]: Library
+          - list [ref=e46]:
+            - listitem [ref=e47]:
+              - link "Rules" [ref=e48] [cursor=pointer]:
+                - /url: /rules
+                - img [ref=e51]
+                - generic [ref=e53]: Rules
+            - listitem [ref=e54]:
+              - link "Generate rules" [ref=e55] [cursor=pointer]:
+                - /url: /rules/generate
+                - img [ref=e58]
+                - generic [ref=e60]: Generate rules
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - generic [ref=e63]: "03"
+            - generic [ref=e64]: Insights
+          - list [ref=e66]:
+            - listitem [ref=e67]:
+              - link "Dashboard" [ref=e68] [cursor=pointer]:
+                - /url: /dashboard
+                - img [ref=e71]
+                - generic [ref=e74]: Dashboard
+            - listitem [ref=e75]:
+              - link "Knowledge base" [ref=e76] [cursor=pointer]:
+                - /url: /knowledge-base
+                - img [ref=e79]
+                - generic [ref=e89]: Knowledge base
+        - generic [ref=e90]:
+          - generic [ref=e91]:
+            - generic [ref=e92]: "04"
+            - generic [ref=e93]: Settings
+          - list [ref=e95]:
+            - listitem [ref=e96]:
+              - link "Project settings" [ref=e97] [cursor=pointer]:
+                - /url: /settings
+                - img [ref=e100]
+                - generic [ref=e103]: Project settings
+        - generic [ref=e104]:
+          - generic [ref=e105]: Rule coverage
+          - list [ref=e106]:
+            - listitem [ref=e107]:
+              - generic [ref=e108]: IRDAI
+              - generic [ref=e109]: "30"
+            - listitem [ref=e110]:
+              - generic [ref=e111]: Brand
+              - generic [ref=e112]: "20"
+            - listitem [ref=e113]:
+              - generic [ref=e114]: SEBI
+              - generic [ref=e115]: "15"
+      - generic [ref=e116]:
+        - generic [ref=e117]:
+          - generic [ref=e120]: api
+          - button "comfortable" [ref=e121] [cursor=pointer]:
+            - generic [ref=e122]: comfortable
+        - generic [ref=e123]:
+          - generic [ref=e124]: v1.0 · 2026
+          - generic [ref=e125]: Bajaj Allianz Life
+    - main [ref=e126]:
+      - generic [ref=e127]:
+        - generic [ref=e128]:
+          - generic [ref=e129]:
+            - generic [ref=e130]: Vector Memory · §04
+            - generic [ref=e131]: Tuesday, 26 May 2026
+          - generic [ref=e133]:
+            - heading "Knowledge Base" [level=1] [ref=e134]
+            - paragraph [ref=e135]: How past reviewer decisions, rules and source passages sit in embedding space. Precedents drive the few-shot compliance analysis.
+          - generic [ref=e136]:
+            - generic [ref=e137]:
+              - generic [ref=e138]: Precedents
+              - generic [ref=e139]: "24"
+            - generic [ref=e140]:
+              - generic [ref=e141]: Rules
+              - generic [ref=e142]: "165"
+            - generic [ref=e143]:
+              - generic [ref=e144]: Source docs
+              - generic [ref=e145]: "51"
+            - generic [ref=e146]:
+              - generic [ref=e147]: Projection
+              - generic [ref=e148]: umap
+        - generic [ref=e150]:
+          - generic [ref=e151]:
+            - generic [ref=e152]:
+              - heading "Vector memory space" [level=3] [ref=e153]
+              - paragraph [ref=e154]: 2-D projection of precedents, rules and source passages.
+            - generic [ref=e155]:
+              - button "All" [ref=e156] [cursor=pointer]
+              - button "moderate" [ref=e157] [cursor=pointer]
+              - button "critical" [ref=e158] [cursor=pointer]
+              - button "medium" [ref=e159] [cursor=pointer]
+              - button "high" [ref=e160] [cursor=pointer]
+              - button "low" [ref=e161] [cursor=pointer]
+          - generic [ref=e164]:
+            - img [ref=e165]:
+              - generic [ref=e170]:
+                - generic [ref=e172]: "-4"
+                - generic [ref=e174]: "0"
+                - generic [ref=e176]: "4"
+                - generic [ref=e178]: "8"
+                - generic [ref=e180]: "12"
+              - generic [ref=e182]:
+                - generic [ref=e184]: "0"
+                - generic [ref=e186]: "4"
+                - generic [ref=e188]: "8"
+                - generic [ref=e190]: "12"
+                - generic [ref=e192]: "16"
+              - generic [ref=e195]:
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+              - generic [ref=e198]:
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+              - generic [ref=e201]:
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+                - img
+            - list [ref=e203]:
+              - listitem [ref=e204]:
+                - img [ref=e205]
+                - text: Precedents
+              - listitem [ref=e207]:
+                - img [ref=e208]
+                - text: Rules
+              - listitem [ref=e210]:
+                - img [ref=e211]
+                - text: Source docs
+  - region "Notifications alt+T"
+  - alert [ref=e213]
+  - generic [ref=e214]: "16"

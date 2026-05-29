@@ -1,0 +1,17 @@
+{
+  "docs_evaluated": 9,
+  "train_files": 391,
+  "eval_files": 10,
+  "precision_presence": 0.2089,
+  "recall_presence": 0.66,
+  "missed_criticals": 32,
+  "anchor_recall": 0.3485,
+  "anchor_hits": 46,
+  "anchor_total": 132,
+  "distinct_precedents_cited": 290,
+  "mean_comment_cosine": 0.4069,
+  "generated_violations": 420,
+  "real_violations": 140,
+  "quota_exhausted": true,
+  "top_k": 10
+}

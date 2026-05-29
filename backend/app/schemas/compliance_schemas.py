@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -25,6 +25,39 @@ class ViolationSchema(BaseModel):
         description="Verbatim quote from the rule's regulator passage (≤200 chars). Leave null only if no source passage exists in the input."
     )
 
+    # Precedent-citation fields (Phase 1.5).  Populated when the violation was
+    # produced by the precedent path, where the analyzer matches a retrieved
+    # historical reviewer comment to the new chunk and quotes it verbatim.
+    # Reviewer-name fields are intentionally omitted from the citation surface.
+    cited_precedent_id: Optional[str] = Field(
+        None,
+        description="UUID of the rag_compliance_examples row this violation cites."
+    )
+    cited_document_id: Optional[str] = Field(
+        None,
+        description="Original ticket/document id of the cited precedent."
+    )
+    cited_source_file: Optional[str] = Field(
+        None,
+        description="Source filename of the cited precedent JSON, for provenance."
+    )
+    cited_anchor_text: Optional[str] = Field(
+        None,
+        description="The exact reviewer-highlighted phrase from the precedent."
+    )
+    cited_comment_verbatim: Optional[str] = Field(
+        None,
+        description="The reviewer's comment text from the precedent, copied verbatim."
+    )
+    cited_final_text: Optional[str] = Field(
+        None,
+        description="The approved rewrite chunk from the precedent's final document, if available."
+    )
+    similarity_score: Optional[float] = Field(
+        None,
+        description="Retrieval score (cosine + BM25 RRF) of the cited precedent for this chunk."
+    )
+
 
 class ComplianceAnalysisResult(BaseModel):
     violations: List[ViolationSchema] = Field(
@@ -38,4 +71,118 @@ class ComplianceAnalysisResult(BaseModel):
     key_issues: List[str] = Field(
         default_factory=list,
         description="List of key issues identified"
+    )
+
+
+# --- Reviewer-voice commentary + novel-finding coverage (2026-05-28) -----
+
+# Action buckets the reviewer picks per finding. Surfaced in the UI as a
+# colour-coded badge; lives in violation_metadata.action_type (no DB migration).
+ACTION_TYPES = Literal[
+    "rewrite",          # use standardized terminology or insert prescribed text
+    "share-evidence",   # produce an approval/source artifact (UW / Tax / PO / BI)
+    "add-disclaimer",   # insert a missing regulatory disclaimer
+    "verify-source",    # clarify provenance, match against authoritative document
+    "remove",           # strip out a non-compliant claim
+]
+
+
+class PrecedentCitation(BaseModel):
+    """The LLM cites a retrieved precedent. `reviewer_comment` is the LLM's
+    adaptation of the historical reviewer's substance + tone onto the NEW
+    chunk — written as the reviewer would write it, never as meta-commentary
+    on the precedent. Severity/category/anchor/final-text are still carried
+    over from the retrieved precedent by the application code."""
+
+    precedent_index: int = Field(
+        ...,
+        ge=0,
+        description="Zero-based index into the input precedents list of the precedent that applies.",
+    )
+    current_text: str = Field(
+        ...,
+        min_length=1,
+        description="EXACT phrase from the NEW chunk this precedent flags. Copy verbatim from the new chunk — no paraphrase. Used by the UI to highlight the offending span.",
+    )
+    reviewer_comment: str = Field(
+        ...,
+        min_length=10,
+        description=(
+            "1-2 sentences in reviewer voice (imperative/interrogative). "
+            "Names the offending phrase and includes the specifics the precedent "
+            "supplied: exact prescribed text, section names, charges, conditions. "
+            "Never meta — never 'similar to a precedent that…' or 'the precedent flagged…'."
+        ),
+    )
+    action_type: ACTION_TYPES = Field(
+        ...,
+        description="One of rewrite | share-evidence | add-disclaimer | verify-source | remove.",
+    )
+    evidence_needed: Optional[str] = Field(
+        None,
+        description=(
+            "Short noun phrase if an external artifact is named, e.g. 'UW approval', "
+            "'latest fact sheet', 'Tax team approval'. Null when action_type is "
+            "rewrite/remove without a named artifact."
+        ),
+    )
+    confidence: float = Field(
+        0.85,
+        ge=0.0,
+        le=1.0,
+        description="0.0–1.0 confidence that a senior reviewer would flag this in the new chunk as the cited precedent does.",
+    )
+
+
+class NovelFinding(BaseModel):
+    """Issue clearly present in the new chunk but NOT covered by any retrieved
+    precedent. Requires regulatory grounding and a higher confidence floor —
+    there is no historical reviewer to point at, so the comment carries the
+    rationale itself."""
+
+    current_text: str = Field(
+        ...,
+        min_length=1,
+        description="EXACT phrase from the NEW chunk this finding flags. Verbatim, no paraphrase.",
+    )
+    reviewer_comment: str = Field(
+        ...,
+        min_length=20,
+        description=(
+            "2-4 sentences: flag + reasoning + specific action. Longer than "
+            "precedent-grounded comments because there is no historical reviewer "
+            "to point at — this comment carries the rationale."
+        ),
+    )
+    action_type: ACTION_TYPES = Field(
+        ...,
+        description="One of rewrite | share-evidence | add-disclaimer | verify-source | remove.",
+    )
+    evidence_needed: Optional[str] = Field(None)
+    regulatory_basis: str = Field(
+        ...,
+        min_length=10,
+        description=(
+            "Specific rule/section the issue violates. Examples: "
+            "'IRDAI ULIP regulations — Miscellaneous Charge disclosure', "
+            "'Section 41 Insurance Act — no rebate/inducement claims', "
+            "'IRDAI Advertisement Regulations 2021 — past performance disclaimer'."
+        ),
+    )
+    confidence: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="0.0–1.0 confidence. Novel findings below the 0.75 floor are dropped before persistence.",
+    )
+
+
+class PrecedentCitationsResult(BaseModel):
+    citations: List[PrecedentCitation] = Field(
+        default_factory=list,
+        description="Citations of historic precedents that apply to this chunk. Emit one entry PER applicable precedent — multiple precedents can apply to the same chunk. Omit precedents that do not apply.",
+    )
+    novel_findings: List[NovelFinding] = Field(
+        default_factory=list,
+        description="Issues clearly present in this chunk that NO listed precedent covers. Each REQUIRES a regulatory_basis and confidence ≥ 0.75. Do not invent findings.",
     )

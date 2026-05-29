@@ -47,6 +47,27 @@ export interface Violation {
   // P1.3 — LLM-reported confidence + verbatim regulator citation
   confidence?: number | null;
   regulator_quote?: string | null;
+  // Reviewer-voice tags (2026-05-28). Carried in JSONB; render as a badge row.
+  violation_metadata?: ViolationMetadata | null;
+  // Precedent-citation provenance (Phase 1.5). Populated only on the precedent path.
+  cited_document_id?: string | null;
+  cited_anchor_text?: string | null;
+  cited_comment_verbatim?: string | null;
+}
+
+export type ActionType =
+  | "rewrite"
+  | "share-evidence"
+  | "add-disclaimer"
+  | "verify-source"
+  | "remove";
+
+export interface ViolationMetadata {
+  grounding?: "precedent" | "novel";
+  action_type?: ActionType | string;
+  evidence_needed?: string | null;
+  regulatory_basis?: string | null;
+  [k: string]: unknown;
 }
 
 export interface ComplianceResults {
