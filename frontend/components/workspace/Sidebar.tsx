@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { DensityToggle } from "./DensityToggle";
 import { ApiHealthDot } from "./ApiHealthDot";
+import { useCommandPalette } from "./CommandPaletteProvider";
 import { cn } from "@/lib/utils";
 
 type Item = { label: string; href: string; icon: React.ReactNode; kbd?: string };
@@ -53,18 +54,19 @@ function isActive(pathname: string, href: string) {
 
 export function Sidebar() {
   const pathname = usePathname() ?? "/";
+  const { setOpen } = useCommandPalette();
   return (
     <aside className="fixed inset-y-0 left-0 z-10 flex w-60 flex-col border-r border-border bg-background/95 backdrop-blur-sm">
       {/* Masthead */}
       <div className="border-b border-border px-4 pt-4 pb-3">
         <Link href="/" className="block leading-none">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-sm bg-primary text-primary-foreground font-serif text-sm">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground text-sm font-semibold">
               B
             </span>
             <div>
-              <div className="font-serif text-[16px] leading-none tracking-tight">
-                Bajaj <span className="italic">Compliance</span>
+              <div className="text-[15px] font-semibold leading-none tracking-tight">
+                Bajaj Compliance
               </div>
               <div className="mt-1 text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
                 Marketing · Review
@@ -78,9 +80,8 @@ export function Sidebar() {
       <div className="border-b border-border px-3 py-2">
         <button
           type="button"
-          className="flex w-full items-center gap-2 rounded-sm border border-border bg-background/80 px-2.5 py-1.5 text-left text-xs text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
-          title="Search (coming in v2)"
-          disabled
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-left text-xs text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
         >
           <Search className="h-3.5 w-3.5" />
           <span className="flex-1">Search submissions…</span>
@@ -90,12 +91,9 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-3">
-        {SECTIONS.map((s, sectionIdx) => (
+        {SECTIONS.map((s) => (
           <div key={s.title} className="mb-5">
             <div className="mb-1 flex items-center gap-2 px-2">
-              <span className="font-mono text-[9px] text-muted-foreground">
-                {String(sectionIdx + 1).padStart(2, "0")}
-              </span>
               <div className="micro-label">{s.title}</div>
               <div className="ml-1 h-px flex-1 bg-border" />
             </div>
@@ -155,7 +153,7 @@ export function Sidebar() {
         </div>
         <div className="mt-2 flex items-baseline justify-between text-[10px] text-muted-foreground">
           <span className="font-mono">v1.0 · 2026</span>
-          <span className="italic">Bajaj Allianz Life</span>
+          <span>Bajaj Allianz Life</span>
         </div>
       </div>
     </aside>

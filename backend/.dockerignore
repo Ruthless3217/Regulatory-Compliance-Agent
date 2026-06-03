@@ -1,0 +1,21 @@
+# Keep secrets, data, and local cruft OUT of the build context / image (audit H6).
+.env
+.env.*
+*.env
+uploads/
+backups/
+logs/
+dataset/
+corpus_out/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.coverage
+htmlcov/
+.venv/
+venv/
+.git/
+.idea/
+.vscode/
+*.sql
+*.sql.gz

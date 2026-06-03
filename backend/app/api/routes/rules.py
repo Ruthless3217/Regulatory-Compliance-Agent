@@ -4,11 +4,13 @@ Rules Management API Routes
 Handles CRUD for compliance rules and AI-based rule generation from documents.
 """
 import logging
+import os
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
+from app.api.rate_limit import llm_rate_limit
 from app.database import get_db
 from app.models.rule import Rule
 from app.services.rule_generator_service import rule_generator_service
@@ -19,6 +21,20 @@ from app.services.rag.indexers.rules_indexer import (
 from app.schemas.rule import RuleCreate, RuleResponse
 
 logger = logging.getLogger(__name__)
+
+# Document types we accept for rule generation. The stored filename is built
+# as {uuid}{safe_ext}, so a malicious file.filename (traversal, null bytes)
+# cannot influence the write path (audit H9).
+_ALLOWED_DOC_EXTS = {".pdf", ".docx", ".html", ".htm", ".md", ".txt"}
+# Max chars of extracted text handed to the LLM (cost-leak guard, audit H10).
+_MAX_DOC_CHARS = 200_000
+
+
+def safe_extension(filename: str) -> str:
+    """Return a safe, whitelisted file extension (with leading dot) derived
+    from `filename`, or '' if unknown/absent. Path components are stripped."""
+    ext = os.path.splitext(os.path.basename(filename or ""))[1].lower()
+    return ext if ext in _ALLOWED_DOC_EXTS else ""
 
 router = APIRouter(prefix="/rules", tags=["Rules Management"])
 
@@ -67,8 +83,8 @@ async def create_rule(
 async def list_rules(
     category: Optional[str] = None,
     is_active: Optional[bool] = True,
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=1000),
     db: Session = Depends(get_db)
 ):
     """List all compliance rules with optional filtering."""
@@ -169,7 +185,7 @@ async def delete_rule(rule_id: str, db: Session = Depends(get_db)):
     return {"message": "Rule deleted", "id": rule_id}
 
 
-@router.post("/generate-from-document")
+@router.post("/generate-from-document", dependencies=[Depends(llm_rate_limit)])
 async def generate_rules_from_document(
     title: str = Form(...),
     instructions: Optional[str] = Form(default=None),
@@ -181,17 +197,28 @@ async def generate_rules_from_document(
     Generate compliance rules from a document using AI.
     Accepts either file upload or raw text content.
     """
-    import os
     from app.config import settings
 
     # Get content
     document_content = content or ""
     if file and file.filename:
+        ext = safe_extension(file.filename)
+        if not ext:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file type. Allowed: pdf, docx, html, md, txt",
+            )
         os.makedirs(settings.upload_dir, exist_ok=True)
-        file_path = os.path.join(settings.upload_dir, f"{uuid.uuid4()}_{file.filename}")
+        # Safe write path: {uuid}{ext} — never embeds the client filename.
+        file_path = os.path.join(settings.upload_dir, f"{uuid.uuid4()}{ext}")
+        size = 0
         with open(file_path, "wb") as f:
-            file_bytes = await file.read()
-            f.write(file_bytes)
+            while chunk := await file.read(8192):
+                size += len(chunk)
+                if size > settings.max_upload_size:
+                    os.remove(file_path)
+                    raise HTTPException(status_code=413, detail="File too large")
+                f.write(chunk)
 
         # Extract text from file
         from app.services.preprocessing_service import ContextEngineeringService
@@ -199,23 +226,24 @@ async def generate_rules_from_document(
         temp_db = SessionLocal()
         try:
             service = ContextEngineeringService(temp_db)
-            fname = file.filename.lower()
-            if fname.endswith(".pdf"):
-                content_type = "pdf"
-            elif fname.endswith(".docx"):
-                content_type = "docx"
-            elif fname.endswith((".html", ".htm")):
-                content_type = "html"
-            elif fname.endswith(".md"):
-                content_type = "markdown"
-            else:
-                content_type = "text"
+            content_type = {
+                ".pdf": "pdf", ".docx": "docx", ".html": "html",
+                ".htm": "html", ".md": "markdown", ".txt": "text",
+            }[ext]
             document_content = await service._extract_from_file(file_path, content_type)
         finally:
             temp_db.close()
 
     if not document_content:
         raise HTTPException(status_code=400, detail="No content provided for rule generation")
+
+    # Bound the text handed to the LLM (cost-leak guard, audit H10).
+    if len(document_content) > _MAX_DOC_CHARS:
+        logger.warning(
+            "Rule-gen document truncated from %d to %d chars",
+            len(document_content), _MAX_DOC_CHARS,
+        )
+        document_content = document_content[:_MAX_DOC_CHARS]
 
     # v1 has no auth; created_by is nullable on the rules table. Passing None
     # avoids the FK to a non-existent system-user row.

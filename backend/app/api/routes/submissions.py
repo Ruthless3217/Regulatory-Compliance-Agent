@@ -6,7 +6,7 @@ Handles document upload and submission management.
 import os
 import logging
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -86,8 +86,8 @@ async def create_submission(
 
 @router.get("")
 async def list_submissions(
-    skip: int = 0,
-    limit: int = 20,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
     """List all submissions."""

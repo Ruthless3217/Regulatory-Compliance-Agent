@@ -4,12 +4,11 @@ import {
   Loader2,
   CheckCircle2,
   AlertOctagon,
-  Search,
   ArrowUpRight,
 } from "lucide-react";
 import { listSubmissions, getDashboardSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Masthead, MetaItem } from "@/components/workspace/Masthead";
+import { PageHeader, PageHeaderMeta } from "@/components/ui/page-header";
 import { StatusPill, statusTone } from "@/components/ui/status-pill";
 import { StatCard } from "@/components/ui/stat-card";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -63,24 +62,20 @@ export default async function SubmissionsPage() {
 
   return (
     <div className="mx-auto max-w-[1280px] px-8 py-8">
-      <Masthead
-        edition="Workspace · §01"
-        title={<>Submissions <span className="italic">Inbox</span></>}
-        subtitle="Every marketing artefact that has passed through the compliance review pipeline. Filter, dive in, re-run, or export."
-        action={
-          <>
-            <SearchPill />
-            <Button asChild size="hero">
-              <Link href="/new">New analysis →</Link>
-            </Button>
-          </>
+      <PageHeader
+        title="Submissions"
+        description="Every marketing artefact that has passed through the compliance review pipeline. Open one for inline highlights, re-run, or export."
+        actions={
+          <Button asChild size="hero">
+            <Link href="/new">New analysis →</Link>
+          </Button>
         }
         meta={
           <>
-            <MetaItem label="Total" value={items.length} />
-            <MetaItem label="Reviewed" value={reviewed.length} />
-            <MetaItem label="In progress" value={inProgress.length + waiting.length} />
-            <MetaItem label="Failed" value={failed.length} />
+            <PageHeaderMeta label="Total" value={items.length} />
+            <PageHeaderMeta label="Reviewed" value={reviewed.length} />
+            <PageHeaderMeta label="In progress" value={inProgress.length + waiting.length} />
+            <PageHeaderMeta label="Failed" value={failed.length} />
           </>
         }
       />
@@ -119,6 +114,7 @@ export default async function SubmissionsPage() {
               ? `${stats.auto_fixable_count}/${stats.total_violations} fixable`
               : "no violations yet"
           }
+          tone="primary"
           icon={<Sparkline values={[20, 22, 19, 24, 26, 28, 27, 30, 32, 31, 34, 36]} width={64} height={20} />}
         />
         <StatCard
@@ -145,7 +141,6 @@ export default async function SubmissionsPage() {
                     <SectionHeader
                       icon={t.icon}
                       title={t.title}
-                      index={`§ ${String(t.rows.length).padStart(2, "0")}`}
                       description={
                         t.tone === "success"
                           ? "Compliance pass completed. Open for inline highlights or to export the report."
@@ -169,26 +164,12 @@ export default async function SubmissionsPage() {
   );
 }
 
-function SearchPill() {
-  return (
-    <div className="relative hidden md:block">
-      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-      <input
-        type="text"
-        placeholder="Search submissions…"
-        className="h-9 w-[240px] rounded-md border border-border bg-background pl-8 pr-2.5 text-sm placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none"
-        disabled
-      />
-    </div>
-  );
-}
-
 function DenseTable({ items }: { items: Submission[] }) {
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-surface">
+    <div className="overflow-hidden rounded-lg border border-border bg-background shadow-card">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border bg-background text-left">
+          <tr className="border-b border-border bg-muted/30 text-left">
             <th className="px-4 py-2.5 micro-label w-[36px]">#</th>
             <th className="px-3 py-2.5 micro-label">Document</th>
             <th className="px-3 py-2.5 micro-label w-[70px] text-center">Score</th>
@@ -245,7 +226,7 @@ function ActivityRail({ items }: { items: Submission[] }) {
   const recent = items.slice(0, 8);
   return (
     <aside className="space-y-6">
-      <section className="rounded-md border border-border bg-surface">
+      <section className="rounded-lg border border-border bg-background shadow-card">
         <div className="border-b border-border px-4 py-2.5">
           <div className="micro-label">Recent activity</div>
         </div>
@@ -277,7 +258,7 @@ function ActivityRail({ items }: { items: Submission[] }) {
         )}
       </section>
 
-      <section className="rounded-md border border-border bg-surface">
+      <section className="rounded-lg border border-border bg-background shadow-card">
         <div className="border-b border-border px-4 py-2.5">
           <div className="micro-label">Pipeline status</div>
         </div>
@@ -301,7 +282,7 @@ function ActivityRail({ items }: { items: Submission[] }) {
         </ul>
       </section>
 
-      <section className="rounded-md border border-border bg-surface">
+      <section className="rounded-lg border border-border bg-background shadow-card">
         <div className="border-b border-border px-4 py-2.5">
           <div className="micro-label">Tips</div>
         </div>
@@ -323,18 +304,18 @@ function ActivityRail({ items }: { items: Submission[] }) {
 
 function ErrorPanel({ message }: { message: string }) {
   return (
-    <div className="rounded-md border border-border bg-surface p-6">
+    <div className="rounded-lg border border-border bg-background p-6 shadow-card">
       <div className="flex items-center gap-2 text-sev-critical">
         <AlertOctagon className="h-4 w-4" />
         <div className="micro-label">API unreachable</div>
       </div>
-      <h2 className="mt-3 font-serif text-xl">Couldn&rsquo;t load submissions.</h2>
+      <h2 className="mt-3 text-xl font-semibold">Couldn&rsquo;t load submissions.</h2>
       <p className="mt-2 max-w-xl text-sm text-muted-foreground">
         The compliance API at <span className="font-mono">{process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000"}</span> did not respond. The database may not be reachable.
       </p>
       <details className="mt-4 text-xs text-muted-foreground">
         <summary className="cursor-pointer">Show error</summary>
-        <pre className="mt-2 overflow-auto rounded-sm border border-border bg-background p-3 font-mono text-[11px]">{message}</pre>
+        <pre className="mt-2 overflow-auto rounded-sm border border-border bg-muted/40 p-3 font-mono text-[11px]">{message}</pre>
       </details>
       <div className="mt-5 flex items-center gap-3 border-t border-border pt-4">
         <Button asChild variant="outline" size="sm">
@@ -356,12 +337,12 @@ function EmptyWelcome() {
     { n: "04", title: "Export or chat", text: "Print-ready report or ask the AI assistant to rewrite passages in compliant language." },
   ];
   return (
-    <div className="rounded-md border border-border bg-surface p-10">
+    <div className="rounded-lg border border-border bg-background p-10 shadow-card">
       <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
           <div className="micro-label mb-3">Get started</div>
-          <h2 className="font-serif text-[32px] leading-[1.1] tracking-tight">
-            No submissions yet. <span className="italic text-muted-foreground">Run your first review.</span>
+          <h2 className="text-[28px] font-semibold leading-[1.15] tracking-tight">
+            No submissions yet. <span className="text-muted-foreground">Run your first review.</span>
           </h2>
           <p className="mt-4 max-w-md text-[14px] leading-relaxed text-muted-foreground">
             Paste a piece of marketing content and within seconds you&rsquo;ll see inline-highlighted
@@ -397,7 +378,7 @@ function EmptyWelcome() {
             <li key={s.n} className="flex gap-4">
               <span className="select-none font-mono text-[11px] leading-none text-primary pt-1">{s.n}</span>
               <div>
-                <div className="font-serif text-base">{s.title}</div>
+                <div className="text-base font-semibold">{s.title}</div>
                 <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">{s.text}</p>
               </div>
             </li>

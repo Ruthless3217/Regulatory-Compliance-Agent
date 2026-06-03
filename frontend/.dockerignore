@@ -1,0 +1,10 @@
+# Keep secrets and local artifacts out of the frontend image (audit H6).
+.env
+.env.*
+node_modules/
+.next/
+dist/
+.git/
+.idea/
+.vscode/
+npm-debug.log*

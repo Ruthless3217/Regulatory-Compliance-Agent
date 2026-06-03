@@ -27,7 +27,7 @@ class ViolationSchema(BaseModel):
 
     # Precedent-citation fields (Phase 1.5).  Populated when the violation was
     # produced by the precedent path, where the analyzer matches a retrieved
-    # historical reviewer comment to the new chunk and quotes it verbatim.
+    # historical reviewer comment to the new section and quotes it verbatim.
     # Reviewer-name fields are intentionally omitted from the citation surface.
     cited_precedent_id: Optional[str] = Field(
         None,
@@ -51,11 +51,11 @@ class ViolationSchema(BaseModel):
     )
     cited_final_text: Optional[str] = Field(
         None,
-        description="The approved rewrite chunk from the precedent's final document, if available."
+        description="The approved rewrite excerpt from the precedent's final document, if available."
     )
     similarity_score: Optional[float] = Field(
         None,
-        description="Retrieval score (cosine + BM25 RRF) of the cited precedent for this chunk."
+        description="Retrieval score (cosine + BM25 RRF) of the cited precedent for this section."
     )
 
 
@@ -90,7 +90,7 @@ ACTION_TYPES = Literal[
 class PrecedentCitation(BaseModel):
     """The LLM cites a retrieved precedent. `reviewer_comment` is the LLM's
     adaptation of the historical reviewer's substance + tone onto the NEW
-    chunk — written as the reviewer would write it, never as meta-commentary
+    section — written as the reviewer would write it, never as meta-commentary
     on the precedent. Severity/category/anchor/final-text are still carried
     over from the retrieved precedent by the application code."""
 
@@ -102,15 +102,18 @@ class PrecedentCitation(BaseModel):
     current_text: str = Field(
         ...,
         min_length=1,
-        description="EXACT phrase from the NEW chunk this precedent flags. Copy verbatim from the new chunk — no paraphrase. Used by the UI to highlight the offending span.",
+        description="EXACT phrase from the NEW section this precedent flags. Copy verbatim from the new section — no paraphrase. Used by the UI to highlight the offending span.",
     )
     reviewer_comment: str = Field(
         ...,
         min_length=10,
         description=(
             "1-2 sentences in reviewer voice (imperative/interrogative). "
-            "Names the offending phrase and includes the specifics the precedent "
-            "supplied: exact prescribed text, section names, charges, conditions. "
+            "Names the offending phrase, states WHY it is non-compliant (the rule "
+            "it breaks, the disclosure it omits, or the claim it leaves "
+            "unsubstantiated), and includes the specifics the precedent supplied: "
+            "exact prescribed text, section names, charges, conditions. Never just "
+            "observe that a topic 'appears' or is 'similar' — that is not a reason. "
             "Never meta — never 'similar to a precedent that…' or 'the precedent flagged…'."
         ),
     )
@@ -130,12 +133,12 @@ class PrecedentCitation(BaseModel):
         0.85,
         ge=0.0,
         le=1.0,
-        description="0.0–1.0 confidence that a senior reviewer would flag this in the new chunk as the cited precedent does.",
+        description="0.0–1.0 confidence that a senior reviewer would flag this in the new section as the cited precedent does.",
     )
 
 
 class NovelFinding(BaseModel):
-    """Issue clearly present in the new chunk but NOT covered by any retrieved
+    """Issue clearly present in the new section but NOT covered by any retrieved
     precedent. Requires regulatory grounding and a higher confidence floor —
     there is no historical reviewer to point at, so the comment carries the
     rationale itself."""
@@ -143,7 +146,7 @@ class NovelFinding(BaseModel):
     current_text: str = Field(
         ...,
         min_length=1,
-        description="EXACT phrase from the NEW chunk this finding flags. Verbatim, no paraphrase.",
+        description="EXACT phrase from the NEW section this finding flags. Verbatim, no paraphrase.",
     )
     reviewer_comment: str = Field(
         ...,
@@ -177,12 +180,55 @@ class NovelFinding(BaseModel):
     )
 
 
+class RuleFinding(BaseModel):
+    """Tier-2 (rule-grounded) finding: the section violates a retrieved
+    regulatory RULE even though no precedent flagged it. The rule supplies the
+    citation (rule_id + regulator passage); the LLM supplies the on-document
+    reviewer_comment. Stronger grounding than a novel finding, weaker than a
+    precedent (no human reviewer decided this exact case)."""
+
+    rule_index: int = Field(
+        ...,
+        ge=0,
+        description="Zero-based index into the input RULES list of the rule that applies.",
+    )
+    current_text: str = Field(
+        ...,
+        min_length=1,
+        description="EXACT phrase from the NEW section the rule flags. Verbatim, no paraphrase.",
+    )
+    reviewer_comment: str = Field(
+        ...,
+        min_length=10,
+        description=(
+            "1-2 sentences in reviewer voice naming the offending phrase and what "
+            "the rule requires (the disclosure to add, claim to remove, term to "
+            "standardize). Never meta — write as the reviewer, not about the rule."
+        ),
+    )
+    action_type: ACTION_TYPES = Field(
+        ...,
+        description="One of rewrite | share-evidence | add-disclaimer | verify-source | remove.",
+    )
+    evidence_needed: Optional[str] = Field(None)
+    confidence: float = Field(
+        0.85,
+        ge=0.0,
+        le=1.0,
+        description="0.0–1.0 confidence that this section actually violates the cited rule.",
+    )
+
+
 class PrecedentCitationsResult(BaseModel):
     citations: List[PrecedentCitation] = Field(
         default_factory=list,
-        description="Citations of historic precedents that apply to this chunk. Emit one entry PER applicable precedent — multiple precedents can apply to the same chunk. Omit precedents that do not apply.",
+        description="Citations of historic precedents that apply to this section. Emit one entry PER applicable precedent — multiple precedents can apply to the same section. Omit precedents that do not apply.",
+    )
+    rule_findings: List[RuleFinding] = Field(
+        default_factory=list,
+        description="Violations of a retrieved regulatory RULE not already covered by a precedent citation. Emit one entry PER applicable rule. Omit rules that do not apply.",
     )
     novel_findings: List[NovelFinding] = Field(
         default_factory=list,
-        description="Issues clearly present in this chunk that NO listed precedent covers. Each REQUIRES a regulatory_basis and confidence ≥ 0.75. Do not invent findings.",
+        description="Issues clearly present in this section that NO listed precedent OR rule covers. Each REQUIRES a regulatory_basis and confidence ≥ 0.75. Do not invent findings.",
     )

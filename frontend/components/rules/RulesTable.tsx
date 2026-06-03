@@ -93,10 +93,10 @@ export function RulesTable({ initialRules }: Props) {
         />
       </div>
 
-      <div className="overflow-hidden rounded-md border border-border bg-surface">
+      <div className="overflow-hidden rounded-lg border border-border bg-background shadow-card">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border bg-background text-left">
+            <tr className="border-b border-border bg-muted/30 text-left">
               <th className="px-4 py-3 micro-label w-[110px]">Category</th>
               <th className="px-4 py-3 micro-label w-[90px]">Severity</th>
               <th className="px-4 py-3 micro-label">Rule</th>

@@ -28,11 +28,11 @@ export function ActionTags({ violation, className }: { violation: Violation; cla
     <div className={className ?? "flex flex-wrap items-center gap-1.5"}>
       {actionType && <Badge tone={ACTION_TONE[actionType] ?? "default"}>Action: {actionType}</Badge>}
       {evidenceNeeded && <Badge tone="default">Needed: {evidenceNeeded}</Badge>}
-      {isNovel ? (
+      {isNovel && (
         <Badge tone="default">Source: novel{regulatoryBasis ? ` · ${regulatoryBasis}` : ""}</Badge>
-      ) : (
-        meta?.grounding === "precedent" && <Badge tone="default">Source: precedent</Badge>
       )}
+      {meta?.grounding === "rule" && <Badge tone="default">Source: rule</Badge>}
+      {meta?.grounding === "precedent" && <Badge tone="default">Source: precedent</Badge>}
     </div>
   );
 }

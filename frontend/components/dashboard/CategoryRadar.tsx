@@ -21,10 +21,10 @@ export function CategoryRadar({ rows }: Props) {
     return <Empty label="No violations to plot" />;
   }
   return (
-    <div className="rounded-md border border-border bg-surface p-6">
-      <h3 className="font-serif text-lg">Violations by category</h3>
+    <div className="rounded-lg border border-border bg-background p-6 shadow-card">
+      <h3 className="text-base font-semibold tracking-tight">Violations by category</h3>
       <p className="mt-1 text-xs text-muted-foreground">Count of detected violations per regulator</p>
-      <div className="mt-4 h-72">
+      <div className="mt-4 h-80">
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={data}>
             <PolarGrid stroke="hsl(var(--border))" />
@@ -52,7 +52,7 @@ export function CategoryRadar({ rows }: Props) {
 
 function Empty({ label }: { label: string }) {
   return (
-    <div className="flex h-80 items-center justify-center rounded-md border border-border bg-surface text-sm text-muted-foreground">
+    <div className="flex h-80 items-center justify-center rounded-lg border border-border bg-background text-sm text-muted-foreground shadow-card">
       {label}
     </div>
   );

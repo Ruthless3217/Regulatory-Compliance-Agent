@@ -72,7 +72,7 @@ export function SubmissionHeader({ submission, overallScore, grade: _grade }: Pr
                 <span className="text-[10px]">{submission.status.replace(/_/g, " ")}</span>
               </StatusPill>
             </div>
-            <div className="mt-0.5 truncate font-serif text-[18px] leading-tight">{submission.title}</div>
+            <div className="mt-0.5 truncate text-[16px] font-semibold leading-tight tracking-tight">{submission.title}</div>
           </div>
         </div>
 

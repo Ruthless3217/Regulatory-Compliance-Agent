@@ -36,7 +36,9 @@ class OpenAIEmbedder:
         # OpenAI defaults to https://api.openai.com/v1
         self._client = AsyncOpenAI(api_key=key or "placeholder")
 
-    async def embed(self, texts: List[str]) -> List[List[float]]:
+    async def embed(self, texts: List[str], input_type: str = "search_document") -> List[List[float]]:
+        # input_type is accepted for protocol parity with asymmetric models
+        # (Cohere); OpenAI embeddings are symmetric so it is ignored here.
         if not texts:
             return []
         vectors: List[List[float]] = []

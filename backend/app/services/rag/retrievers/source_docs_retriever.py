@@ -70,7 +70,7 @@ class SourceDocsRetriever:
         embedder = get_embedder()
         store = get_vector_store()
         try:
-            qvec = (await embedder.embed([query]))[0]
+            qvec = (await embedder.embed([query], input_type="search_query"))[0]
             hits = await store.hybrid_search(
                 index="rag_source_docs",
                 query_text=query,

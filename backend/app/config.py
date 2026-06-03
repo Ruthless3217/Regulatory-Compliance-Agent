@@ -23,10 +23,32 @@ class Settings(BaseSettings):
         return f"postgresql://{self.db_user}:{self.db_pass}@{self.db_host}:{self.db_port}/{self.db_name}"
 
     # LLM (Gemini via OpenAI-compatible API)
+    # LLM_API_KEY may hold a single key OR a comma-separated list. Multiple keys
+    # enable failover: when one Groq key hits its TPM/TPD ceiling the LLMService
+    # rotates to the next (each Groq key carries an independent token budget).
     llm_api_key: str = ""
     llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     llm_model: str = "gemini-2.0-flash"
     llm_insecure_tls: bool = False  # set True to bypass TLS verify (e.g. behind Cisco SSL inspection)
+    llm_max_tokens: int = 4096      # hard cap on generated tokens per call (cost-leak guard)
+
+    @property
+    def llm_api_keys(self) -> List[str]:
+        """LLM_API_KEY parsed into an ordered, de-duplicated list of keys.
+
+        A bare key (no comma) yields a one-element list, preserving prior
+        single-key behaviour. Duplicates collapse because the same key is the
+        same upstream account/budget — rotating between identical keys buys
+        nothing and would corrupt per-key rate-limit accounting.
+        """
+        seen = set()
+        keys: List[str] = []
+        for raw in (self.llm_api_key or "").split(","):
+            k = raw.strip()
+            if k and k not in seen:
+                seen.add(k)
+                keys.append(k)
+        return keys
 
     # Redis (LangGraph Persistence)
     redis_url: str = "redis://localhost:6379"
@@ -42,10 +64,15 @@ class Settings(BaseSettings):
     # Application
     environment: str = "development"
     log_level: str = "INFO"
+    # Per-IP per-minute cap on paid LLM endpoints (cost-explosion guard, H8).
+    http_rate_limit_per_min: int = 30
 
     # File Upload
     max_upload_size: int = 52428800  # 50MB
     upload_dir: str = "./uploads"
+    # Root that knowledge-base ingest is confined to. Any folder_path outside
+    # this tree is rejected (prevents arbitrary server-side file read — audit C8).
+    kb_ingest_root: str = "./uploads"
 
     # Firebase
     firebase_service_account_path: str = ""
@@ -66,6 +93,11 @@ class Settings(BaseSettings):
     rag_top_k_chat: int = 5
     rag_top_k_similar: int = 3
     rag_score_threshold: float = 0.0              # 0.0 = no floor; RRF scores are unbounded-low
+    # Minimum cosine similarity on the VECTOR leg before fusion. Unlike RRF
+    # (unbounded), cosine is in [-1,1], so this is a meaningful relevance floor.
+    # Candidates below it are dropped, so an unrelated chunk can legitimately
+    # retrieve zero precedents → knowledge_base_empty → fail closed (audit C6).
+    rag_min_cosine: float = 0.25
     rag_recall_pool: int = 30
     rag_rrf_k: int = 60
     rag_active_categories: List[str] = ["regulatory", "brand", "seo", "irdai", "sebi"]
@@ -97,6 +129,26 @@ class Settings(BaseSettings):
     # Cohere (alternative embeddings — 1024-dim)
     cohere_api_key: str = ""
     cohere_embedding_model: str = "embed-english-v3.0"
+    # Per-text embedding cache (Priority 4d) — avoids re-embedding repeated chunks.
+    embed_cache_size: int = 2048
+
+    # Groq two-model strategy + token rate limiting (Priority 4).
+    # classify = cheap/fast first pass, citation = stronger generation.
+    groq_classify_model: str = "llama-3.1-8b-instant"
+    groq_citation_model: str = "llama-3.3-70b-versatile"
+    # Token ceilings per model (Groq free-tier defaults; override via env).
+    groq_classify_tpm: int = 6000
+    groq_classify_tpd: int = 500000
+    groq_citation_tpm: int = 12000
+    groq_citation_tpd: int = 100000
+    # Queue a submission once daily usage crosses this fraction of the TPD cap.
+    groq_daily_cap_fraction: float = 0.9
+    # Max chunks graded concurrently. Each grading call is a large (precedents +
+    # rules) prompt (~6-10k tokens); firing many at once bursts past Groq's
+    # per-minute token limit (30k TPM free tier) → 429 → chunk fails → run fails
+    # closed at "waiting_for_review". Keep this low (1-2) on the free tier so
+    # calls fit under TPM; raise it on a paid/Dev tier. Override via env.
+    grade_concurrency: int = 2
 
     # Pinecone (alternative v1 vector store)
     pinecone_api_key: str = ""

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Masthead, MetaItem } from "@/components/workspace/Masthead";
+import { PageHeader, PageHeaderMeta } from "@/components/ui/page-header";
 import { createSubmission, analyzeSubmission } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -111,23 +111,18 @@ export default function NewAnalysisPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-10 py-10">
-      <Masthead
-        edition="Workflow · §02"
-        title={
-          <>
-            New <span className="italic">Analysis</span>
-          </>
-        }
-        subtitle="Paste marketing content, choose the rule scope, and the compliance pipeline returns highlighted violations and a 0–100 score in under a minute for typical copy."
+    <div className="mx-auto max-w-6xl px-8 py-8">
+      <PageHeader
+        title="New analysis"
+        description="Paste marketing content, choose the rule scope, and the compliance pipeline returns highlighted violations and a 0–100 score in under a minute for typical copy."
         meta={
           <>
-            <MetaItem label="Pipeline" value="LangGraph · 5 nodes" />
-            <MetaItem label="Limit" value={`${MAX_CHARS.toLocaleString()} chars`} />
-            <MetaItem label="Auth" value="Internal / VPN" />
+            <PageHeaderMeta label="Pipeline" value="LangGraph · 5 nodes" />
+            <PageHeaderMeta label="Limit" value={`${MAX_CHARS.toLocaleString()} chars`} />
+            <PageHeaderMeta label="Auth" value="Internal / VPN" />
           </>
         }
-        action={
+        actions={
           <Button variant="outline" size="hero" onClick={loadSample}>
             Load sample copy
           </Button>

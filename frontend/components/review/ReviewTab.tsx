@@ -62,7 +62,7 @@ export function ReviewTab() {
     <div className="grid h-full grid-cols-[1fr_400px] overflow-hidden rounded-md border border-border">
       <div className="flex h-full min-h-0 flex-col">
         {isAnalyzing && (
-          <div className="border-b border-border bg-surface px-4 py-2 text-xs">
+          <div className="border-b border-border bg-background px-4 py-2 text-xs">
             <div className="flex items-center justify-between">
               <span className="micro-label">{stage ?? "starting"}…</span>
               <span className="font-mono text-muted-foreground">{Math.round(progress * 100)}%</span>

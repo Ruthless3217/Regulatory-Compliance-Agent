@@ -40,8 +40,11 @@ const config: Config = {
         md: "6px",
         lg: "8px",
       },
+      boxShadow: {
+        card: "var(--shadow-card)",
+      },
       fontFamily: {
-        serif: ["var(--font-serif)", "Georgia", "serif"],
+        serif: ["var(--font-sans)", "system-ui", "sans-serif"],
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },

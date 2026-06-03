@@ -102,6 +102,18 @@ class ScoringService:
         return {k: v / total for k, v in weights.items()}
 
     @staticmethod
+    def _confidence_weight(violation: Dict) -> float:
+        """Confidence in [0,1] used to scale a violation's penalty. Missing /
+        invalid confidence → 1.0 (full penalty): for a compliance tool we must
+        never silently under-penalize a violation (audit H16)."""
+        conf = violation.get("confidence")
+        try:
+            conf = float(conf) if conf is not None else 1.0
+        except (TypeError, ValueError):
+            conf = 1.0
+        return max(0.0, min(1.0, conf))
+
+    @staticmethod
     def _enrich_violations_with_points(
         violations: List[Dict],
         db: Optional[Session] = None
@@ -109,7 +121,8 @@ class ScoringService:
         if not db:
             for violation in violations:
                 severity = violation.get("severity", "low")
-                violation["points_deduction"] = ScoringService.SEVERITY_WEIGHTS.get(severity, 5)
+                base = ScoringService.SEVERITY_WEIGHTS.get(severity, 5)
+                violation["points_deduction"] = base * ScoringService._confidence_weight(violation)
             return violations
 
         try:
@@ -137,6 +150,8 @@ class ScoringService:
                 severity = violation.get("severity", "low")
                 points_deduction = ScoringService.SEVERITY_WEIGHTS.get(severity, 5)
 
+            # Scale by the model's confidence in the finding (audit H16).
+            points_deduction *= ScoringService._confidence_weight(violation)
             violation["points_deduction"] = points_deduction
             enriched.append(violation)
 

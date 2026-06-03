@@ -51,6 +51,11 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p uploads logs
 
+# Drop root (audit H7): run as an unprivileged user, owning the writable dirs.
+RUN useradd --system --create-home --uid 10001 appuser \
+ && chown -R appuser:appuser /app /opt/tiktoken-cache
+USER appuser
+
 # Expose port
 EXPOSE 8000
 

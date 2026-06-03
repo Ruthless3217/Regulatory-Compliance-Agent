@@ -6,9 +6,12 @@
 import type {
   ComplianceResults,
   DashboardSummary,
+  KnowledgeBaseSearchResponse,
   ProjectionResponse,
   Rule,
   Submission,
+  TimeseriesResponse,
+  TopRulesResponse,
 } from "./types";
 
 // Server-side fetches run inside the container and need the docker DNS name.
@@ -147,6 +150,14 @@ export async function getViolationsByCategory() {
 export async function getViolationsBySeverity() {
   return jsonFetch(`${base()}/dashboard/violations-by-severity`);
 }
+export async function getDashboardTimeseries(
+  bucket: "day" | "week" = "day"
+): Promise<TimeseriesResponse> {
+  return jsonFetch(`${base()}/dashboard/timeseries?bucket=${bucket}`);
+}
+export async function getTopRules(limit: number = 10): Promise<TopRulesResponse> {
+  return jsonFetch(`${base()}/dashboard/top-rules?limit=${limit}`);
+}
 
 /* ---------- health ---------- */
 export async function health(): Promise<{ status: string; llm_available: boolean }> {
@@ -158,4 +169,11 @@ export async function getKnowledgeBaseProjection(
   method: "umap" | "pca" = "umap"
 ): Promise<ProjectionResponse> {
   return jsonFetch(`${base()}/knowledge-base/projection?method=${method}`);
+}
+export async function searchKnowledgeBase(
+  q: string,
+  k: number = 8
+): Promise<KnowledgeBaseSearchResponse> {
+  const qs = new URLSearchParams({ q, k: String(k) });
+  return jsonFetch(`${base()}/knowledge-base/search?${qs.toString()}`);
 }

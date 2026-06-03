@@ -3,7 +3,7 @@ Dashboard & Analytics Routes
 
 Summary views and quick stats for the compliance dashboard.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -88,6 +88,125 @@ async def get_dashboard_summary(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/timeseries")
+async def get_dashboard_timeseries(
+    bucket: str = Query("day", pattern="^(day|week)$"),
+    db: Session = Depends(get_db),
+):
+    """Time-series of submissions, average score, and violations bucketed by
+    day or week. Aggregated on the fly via Postgres date_trunc; no new tables.
+    Returns up to the most recent 90 periods, sorted ascending by period."""
+    # Submissions per period.
+    sub_period = func.date_trunc(bucket, Submission.submitted_at).label("period")
+    sub_rows = (
+        db.query(sub_period, func.count(Submission.id).label("submission_count"))
+        .group_by(sub_period)
+        .all()
+    )
+
+    # Checks per period → avg score + count.
+    chk_period = func.date_trunc(bucket, ComplianceCheck.checked_at).label("period")
+    chk_rows = (
+        db.query(
+            chk_period,
+            func.avg(ComplianceCheck.overall_score).label("avg_score"),
+            func.count(ComplianceCheck.id).label("check_count"),
+        )
+        .group_by(chk_period)
+        .all()
+    )
+
+    # Violations per period.
+    vio_period = func.date_trunc(bucket, Violation.created_at).label("period")
+    vio_rows = (
+        db.query(vio_period, func.count(Violation.id).label("violation_count"))
+        .group_by(vio_period)
+        .all()
+    )
+
+    # Merge the three aggregations keyed by the truncated period.
+    points: dict = {}
+
+    def _key(period):
+        return period.isoformat() if period is not None else None
+
+    for r in sub_rows:
+        k = _key(r.period)
+        if k is None:
+            continue
+        points.setdefault(
+            k, {"period": k, "submission_count": 0, "avg_score": None, "violation_count": 0}
+        )
+        points[k]["submission_count"] = int(r.submission_count or 0)
+
+    for r in chk_rows:
+        k = _key(r.period)
+        if k is None:
+            continue
+        points.setdefault(
+            k, {"period": k, "submission_count": 0, "avg_score": None, "violation_count": 0}
+        )
+        points[k]["avg_score"] = (
+            round(float(r.avg_score), 2) if r.avg_score is not None else None
+        )
+
+    for r in vio_rows:
+        k = _key(r.period)
+        if k is None:
+            continue
+        points.setdefault(
+            k, {"period": k, "submission_count": 0, "avg_score": None, "violation_count": 0}
+        )
+        points[k]["violation_count"] = int(r.violation_count or 0)
+
+    ordered = sorted(points.values(), key=lambda p: p["period"])
+    # Keep the most recent 90 periods.
+    ordered = ordered[-90:]
+
+    return {"bucket": bucket, "points": ordered}
+
+
+@router.get("/top-rules")
+async def get_top_rules(
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """Most-frequently-violated rules, joined to Rule metadata."""
+    rows = (
+        db.query(
+            Violation.rule_id.label("rule_id"),
+            func.count(Violation.id).label("count"),
+            Rule.category.label("category"),
+            Rule.severity.label("severity"),
+            Rule.rule_text.label("rule_text"),
+        )
+        .join(Rule, Rule.id == Violation.rule_id)
+        .filter(Violation.rule_id.isnot(None))
+        .group_by(Violation.rule_id, Rule.category, Rule.severity, Rule.rule_text)
+        .order_by(func.count(Violation.id).desc())
+        .limit(limit)
+        .all()
+    )
+
+    def _truncate(text, n=140):
+        if text is None:
+            return None
+        return text if len(text) <= n else text[: n - 1].rstrip() + "…"
+
+    return {
+        "top_rules": [
+            {
+                "rule_id": str(r.rule_id),
+                "category": r.category,
+                "severity": r.severity,
+                "rule_text": _truncate(r.rule_text),
+                "count": int(r.count),
+            }
+            for r in rows
+        ]
+    }
+
+
 @router.get("/violations-by-category")
 async def get_violations_by_category(db: Session = Depends(get_db)):
     """Get violation counts grouped by category."""
@@ -118,3 +237,97 @@ async def get_violations_by_severity(db: Session = Depends(get_db)):
             for r in result
         ]
     }
+
+
+@router.get("/timeseries")
+async def get_dashboard_timeseries(
+    bucket: str = Query("day", pattern="^(day|week)$"),
+    db: Session = Depends(get_db),
+):
+    """Time-bucketed submission / score / violation counts, aggregated on the fly.
+
+    No snapshot table — buckets existing rows by their own timestamps via
+    Postgres date_trunc. Returns the most recent 90 periods, ascending.
+    """
+    sub_trunc = func.date_trunc(bucket, Submission.submitted_at)
+    chk_trunc = func.date_trunc(bucket, ComplianceCheck.checked_at)
+    vio_trunc = func.date_trunc(bucket, Violation.created_at)
+
+    sub_rows = (
+        db.query(sub_trunc.label("period"), func.count(Submission.id).label("submission_count"))
+        .group_by(sub_trunc)
+        .all()
+    )
+    chk_rows = (
+        db.query(
+            chk_trunc.label("period"),
+            func.avg(ComplianceCheck.overall_score).label("avg_score"),
+            func.count(ComplianceCheck.id).label("check_count"),
+        )
+        .group_by(chk_trunc)
+        .all()
+    )
+    vio_rows = (
+        db.query(vio_trunc.label("period"), func.count(Violation.id).label("violation_count"))
+        .group_by(vio_trunc)
+        .all()
+    )
+
+    periods: dict[str, dict] = {}
+
+    def slot(key: str) -> dict:
+        return periods.setdefault(
+            key, {"submission_count": 0, "avg_score": None, "violation_count": 0}
+        )
+
+    for r in sub_rows:
+        if r.period is not None:
+            slot(r.period.isoformat())["submission_count"] = int(r.submission_count)
+    for r in chk_rows:
+        if r.period is not None:
+            slot(r.period.isoformat())["avg_score"] = (
+                round(float(r.avg_score), 2) if r.avg_score is not None else None
+            )
+    for r in vio_rows:
+        if r.period is not None:
+            slot(r.period.isoformat())["violation_count"] = int(r.violation_count)
+
+    points = [{"period": k, **v} for k, v in periods.items()]
+    points.sort(key=lambda x: x["period"])
+    return {"bucket": bucket, "points": points[-90:]}
+
+
+@router.get("/top-rules")
+async def get_top_rules(
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """Most-frequently-violated rules, joined to rule metadata (single query)."""
+    rows = (
+        db.query(
+            Violation.rule_id.label("rule_id"),
+            func.count(Violation.id).label("count"),
+            Rule.category.label("category"),
+            Rule.severity.label("severity"),
+            Rule.rule_text.label("rule_text"),
+        )
+        .join(Rule, Rule.id == Violation.rule_id)
+        .group_by(Violation.rule_id, Rule.category, Rule.severity, Rule.rule_text)
+        .order_by(func.count(Violation.id).desc())
+        .limit(limit)
+        .all()
+    )
+
+    top_rules = []
+    for r in rows:
+        text = r.rule_text or ""
+        top_rules.append(
+            {
+                "rule_id": str(r.rule_id),
+                "category": r.category or "unknown",
+                "severity": r.severity or "unknown",
+                "rule_text": text[:140] + ("…" if len(text) > 140 else ""),
+                "count": int(r.count),
+            }
+        )
+    return {"top_rules": top_rules}

@@ -46,7 +46,7 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
       data-pulse={selected ? "true" : "false"}
       onClick={onSelect}
       className={cn(
-        "group relative border border-border border-l-2 bg-surface p-4 cursor-pointer transition-colors",
+        "group relative border border-border border-l-2 bg-background p-4 cursor-pointer transition-colors",
         "hover:bg-muted/40",
         sevClass,
         selected && "bg-primary-50",

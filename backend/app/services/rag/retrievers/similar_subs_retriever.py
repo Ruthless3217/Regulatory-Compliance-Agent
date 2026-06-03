@@ -48,7 +48,7 @@ class SimilarSubmissionsRetriever:
         embedder = get_embedder()
         store = get_vector_store()
         try:
-            qvec = (await embedder.embed([joined]))[0]
+            qvec = (await embedder.embed([joined], input_type="search_query"))[0]
             # Pull a wider net than K * chunks_per_submission so we can
             # de-duplicate by submission_id without losing diversity.
             hits = await store.vector_search(

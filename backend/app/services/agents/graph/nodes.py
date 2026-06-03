@@ -35,6 +35,18 @@ NOVEL_CONFIDENCE_FLOOR = 0.75
 _NOVEL_SEVERITY = "moderate"
 _NOVEL_CATEGORY = "regulatory"
 
+# Rules carry critical/high/medium/low; the precedent-path validator only
+# accepts critical/moderate/informational. Map conservatively (high→moderate so
+# rule findings don't inflate the critical count that drives fail-closed/scoring).
+_RULE_SEVERITY_MAP = {
+    "critical": "critical",
+    "high": "moderate",
+    "medium": "moderate",
+    "low": "informational",
+    "moderate": "moderate",
+    "informational": "informational",
+}
+
 
 def _citation_to_violation(
     c: Any, precedent: Dict[str, Any], *, chunk_id, chunk_index, location: str
@@ -110,6 +122,88 @@ def _novel_finding_to_violation(
     }
 
 
+def _rule_finding_to_violation(
+    f: Any, rule: Dict[str, Any], *, chunk_id, chunk_index, location: str
+) -> Dict[str, Any]:
+    """Map one rule-grounded finding to a violation dict. The rule supplies the
+    citation: rule_id + regulator_quote (verbatim passage). Citation columns
+    stay NULL (no precedent); grounding='rule' lives in violation_metadata."""
+    raw_sev = str(rule.get("severity") or "").strip().lower()
+    severity = _RULE_SEVERITY_MAP.get(raw_sev, "moderate")
+    return {
+        "category": rule.get("category") or _NOVEL_CATEGORY,
+        "severity": severity,
+        "description": (f.reviewer_comment or "").strip(),
+        "current_text": (f.current_text or "").strip(),
+        "suggested_fix": None,
+        "auto_fixable": False,
+        "confidence": float(f.confidence if f.confidence is not None else 0.85),
+        # Rule provenance — resolved to a UUID + verbatim passage downstream.
+        "rule_id": rule.get("id"),
+        "regulator_quote": rule.get("source_quote") or rule.get("regulator_quote"),
+        "cited_precedent_id": None,
+        "cited_document_id": None,
+        "cited_source_file": None,
+        "cited_anchor_text": None,
+        "cited_comment_verbatim": None,
+        "cited_final_text": None,
+        "similarity_score": None,
+        "chunk_id": str(chunk_id),
+        "chunk_index": chunk_index,
+        "location": location,
+        "violation_metadata": {
+            "grounding": "rule",
+            "action_type": f.action_type,
+            "evidence_needed": f.evidence_needed,
+        },
+    }
+
+
+def _normalize_ws(s: str) -> str:
+    """Lowercase + collapse all whitespace runs to single spaces."""
+    return " ".join((s or "").lower().split())
+
+
+def verify_evidence_grounding(
+    violations: List[Dict[str, Any]], chunk_text: str
+) -> List[Dict[str, Any]]:
+    """Critic pass for the precedent path: drop any violation whose cited
+    ``current_text`` is not actually present (verbatim, modulo case/whitespace)
+    in the chunk being analyzed. This catches the primary LLM fabricating
+    evidence — the shape validator does not check substring presence. A
+    violation with empty ``current_text`` (e.g. a structural/novel finding)
+    is kept. See architect-audit C7.
+    """
+    norm_chunk = _normalize_ws(chunk_text)
+    kept: List[Dict[str, Any]] = []
+    for v in violations:
+        current = (v.get("current_text") or "").strip()
+        if current and _normalize_ws(current) not in norm_chunk:
+            logger.info(
+                "Critic: dropped violation with fabricated current_text "
+                f"(not in chunk): {current[:80]!r}"
+            )
+            continue
+        kept.append(v)
+    return kept
+
+
+def aggregate_grading(results: List[Dict[str, Any]]) -> tuple:
+    """Aggregate per-chunk grading results into (all_violations, failed_count).
+
+    Each result is ``{"violations": [...], "failed": bool}``. A failed chunk
+    contributes to the failure count so the engine can refuse to certify a
+    document whose analysis did not fully run (fail closed — audit C1).
+    """
+    violations: List[Dict[str, Any]] = []
+    failed = 0
+    for r in results:
+        if r.get("failed"):
+            failed += 1
+        violations.extend(r.get("violations") or [])
+    return violations, failed
+
+
 def map_findings_to_violations(
     result: Any,
     precedents: List[Dict[str, Any]],
@@ -117,9 +211,12 @@ def map_findings_to_violations(
     chunk_id,
     chunk_index,
     location: str,
+    rules: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
-    """Flatten a PrecedentCitationsResult into violation dicts. Out-of-range
-    citation indices and sub-floor novel findings are dropped here."""
+    """Flatten a PrecedentCitationsResult into violation dicts across all three
+    grounding tiers: precedent citations, rule-grounded findings, and novel
+    findings. Out-of-range indices and sub-floor novel findings are dropped."""
+    rules = rules or []
     out: List[Dict[str, Any]] = []
     for c in (result.citations or []):
         idx = int(c.precedent_index)
@@ -128,6 +225,15 @@ def map_findings_to_violations(
         out.append(
             _citation_to_violation(
                 c, precedents[idx], chunk_id=chunk_id, chunk_index=chunk_index, location=location
+            )
+        )
+    for f in (getattr(result, "rule_findings", None) or []):
+        idx = int(f.rule_index)
+        if not (0 <= idx < len(rules)):
+            continue
+        out.append(
+            _rule_finding_to_violation(
+                f, rules[idx], chunk_id=chunk_id, chunk_index=chunk_index, location=location
             )
         )
     for f in (result.novel_findings or []):
@@ -373,8 +479,22 @@ async def analysis_node(state: ComplianceState) -> Dict:
 
     chunks_data = state.get("chunks", [])
     retrieved = state.get("retrieved_examples") or {}
+    # Per-chunk rules retrieved in dispatch_node — Tier-2 grounding (Fix A).
+    # Shape: {chunk_id: {category: [rule_dict, ...]}}.
+    chunk_rules = state.get("chunk_rules") or {}
     submission_id = state.get("submission_id")
     user_id = state.get("user_id")
+
+    # Cap rules per chunk fed to the LLM (token control); rules already carry a
+    # regulator_quote from dispatch_node enrichment.
+    _MAX_RULES_PER_CHUNK = 8
+
+    def _rules_for_chunk(chunk_id) -> List[Dict]:
+        by_cat = chunk_rules.get(str(chunk_id)) or {}
+        flat: List[Dict] = []
+        for rule_list in by_cat.values():
+            flat.extend(rule_list or [])
+        return flat[:_MAX_RULES_PER_CHUNK]
 
     new_violations: List[Dict] = []
 
@@ -385,21 +505,30 @@ async def analysis_node(state: ComplianceState) -> Dict:
         "at least 5 characters, and confidence between 0 and 1."
     )
 
-    # Bound concurrent per-chunk LLM grading to avoid connection-pool/rate-limit exhaustion.
-    _grade_semaphore = asyncio.Semaphore(8)
+    # Bound concurrent per-chunk LLM grading to avoid connection-pool/rate-limit
+    # exhaustion. On Groq's free tier each grading prompt is ~6-10k tokens, so
+    # firing many at once bursts past the 30k tokens/min ceiling → 429 → the
+    # chunk fails → the run fails closed. settings.grade_concurrency (default 2)
+    # keeps the in-flight token volume under the per-minute limit; raise it on a
+    # paid tier. See config.py.
+    from app.config import settings as _settings
+    _grade_semaphore = asyncio.Semaphore(max(1, _settings.grade_concurrency))
 
-    async def grade_chunk(chunk_data: Dict) -> List[Dict]:
+    async def grade_chunk(chunk_data: Dict) -> Dict:
         chunk_id = chunk_data.get("id")
         chunk_index = chunk_data.get("chunk_index")
         chunk_text = chunk_data.get("text", "")
         precedents = retrieved.get(str(chunk_id), [])
-        # No early-return on empty precedents: the prompt switches to novel-only
-        # mode so issues outside the corpus are still caught (2026-05-28 design).
+        rules = _rules_for_chunk(chunk_id)
+        # No early-return on empty precedents: the prompt still emits rule-grounded
+        # (Tier-2) and novel (Tier-3) findings so issues outside the precedent
+        # corpus are still caught (2026-05-28 reviewer-voice design + Fix A).
 
         async with _grade_semaphore:
             task_db = None
             execution = None
             kept: List[Dict] = []
+            failed = False
             try:
                 task_db = SessionLocal()
                 context_service = ContextEngineeringService(task_db)
@@ -412,15 +541,27 @@ async def analysis_node(state: ComplianceState) -> Dict:
                         "chunk_index": chunk_index,
                         "text_preview": chunk_text[:100],
                         "precedents_count": len(precedents),
+                        "rules_count": len(rules),
                     },
                 )
                 task_db.add(execution)
+                # Flush to assign the PK, capture it as a plain string, THEN
+                # commit. Reading execution.id only *after* commit would hit an
+                # expired attribute (expire_on_commit defaults to True), firing a
+                # refresh SELECT that opens a transaction and pins a pool
+                # connection for the entire slow LLM call below. With Semaphore(8)
+                # that pinned up to 8 connections across the network round-trip
+                # and exhausted the 15-slot pool (QueuePool timeout → chunk fails
+                # → run stalls at "waiting for review"). Capturing the id here
+                # keeps the session connection-free during the await.
+                task_db.flush()
+                exec_id = str(execution.id)
                 task_db.commit()
 
-                prompt = context_service.create_precedent_prompts(chunk_text, precedents)
+                prompt = context_service.create_precedent_prompts(chunk_text, precedents, rules=rules)
                 system_prompt = (
                     "You are a senior Bajaj Allianz compliance reviewer. Cite "
-                    "the historical precedents that apply to the new chunk. "
+                    "the historical precedents that apply to the new section. "
                     "Return ONLY valid JSON matching the required schema."
                 )
 
@@ -429,7 +570,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                         prompt=p,
                         output_model=PrecedentCitationsResult,
                         system_prompt=system_prompt,
-                        execution_id=str(execution.id),
+                        execution_id=exec_id,
                         db=task_db,
                         tool_name="precedent_citation",
                         temperature=0.0,
@@ -437,11 +578,12 @@ async def analysis_node(state: ComplianceState) -> Dict:
 
                 result = await _call(prompt)
                 citations = list(result.citations or [])
+                rule_findings = list(getattr(result, "rule_findings", None) or [])
                 novel = list(result.novel_findings or [])
 
                 # One corrective retry if any citation has an out-of-range
                 # index. Keep whichever pass yields more in-range citations;
-                # carry that pass's novel findings too.
+                # carry that pass's rule + novel findings too.
                 def _in_range(cs):
                     return [c for c in cs if 0 <= int(c.precedent_index) < len(precedents)]
 
@@ -449,6 +591,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                     retry = await _call(prompt + CORRECTIVE_SUFFIX)
                     if len(_in_range(retry.citations or [])) >= len(_in_range(citations)):
                         citations = list(retry.citations or [])
+                        rule_findings = list(getattr(retry, "rule_findings", None) or [])
                         novel = list(retry.novel_findings or [])
                 citations = _in_range(citations)
 
@@ -457,12 +600,14 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 if meta_loc.get("page_number"):
                     loc += f":page:{meta_loc['page_number']}"
 
-                # Map citations (provenance carried over from the precedent) and
-                # novel findings (regulatory_basis carried in metadata, sub-floor
-                # findings dropped) into the shared violation shape.
-                filtered = PrecedentCitationsResult(citations=citations, novel_findings=novel)
+                # Map all three tiers — precedent citations, rule-grounded
+                # findings (rule_id + regulator_quote carried from the rule), and
+                # novel findings — into the shared violation shape.
+                filtered = PrecedentCitationsResult(
+                    citations=citations, rule_findings=rule_findings, novel_findings=novel
+                )
                 for v in map_findings_to_violations(
-                    filtered, precedents,
+                    filtered, precedents, rules=rules,
                     chunk_id=chunk_id, chunk_index=chunk_index, location=loc,
                 ):
                     ok, errs = validate_agent_output(v)
@@ -471,10 +616,18 @@ async def analysis_node(state: ComplianceState) -> Dict:
                         continue
                     kept.append(v)
 
+                # Critic: drop violations whose cited evidence isn't in the
+                # chunk (fabricated current_text). See architect-audit C7.
+                kept = verify_evidence_grounding(kept, chunk_text)
+
                 execution.status = "completed"
                 execution.output_data = {"violations": kept}
                 task_db.commit()
             except Exception as e:
+                # A chunk that fails to grade means the analysis did NOT fully
+                # run. Mark it failed so the engine can fail closed rather than
+                # silently certifying the document on partial results (audit C1).
+                failed = True
                 logger.error(f"Precedent grading failed (chunk {chunk_index}): {e}")
                 if task_db is not None and execution is not None:
                     try:
@@ -486,18 +639,31 @@ async def analysis_node(state: ComplianceState) -> Dict:
             finally:
                 if task_db is not None:
                     task_db.close()
-            return kept
+            return {"violations": kept, "failed": failed}
 
     tasks = [grade_chunk(c) for c in chunks_data]
+    failed_chunks = 0
     if tasks:
         logger.info(f"Running {len(tasks)} per-chunk precedent grading tasks...")
         results = await asyncio.gather(*tasks)
-        for res in results:
-            new_violations.extend(res)
+        new_violations, failed_chunks = aggregate_grading(results)
+
+    # Propagate analysis completeness into metadata so the engine's
+    # fail-closed guard can refuse to grade a partially-analyzed document.
+    md = dict(state.get("metadata") or {})
+    md["analysis_failed_chunks"] = failed_chunks
+    if failed_chunks and not md.get("degraded"):
+        md["degraded"] = "analysis_incomplete"
 
     return {
         "violations": new_violations,
-        "messages": [AIMessage(content=f"Analysis: Found {len(new_violations)} violations (precedent path).")]
+        "metadata": md,
+        "messages": [AIMessage(
+            content=(
+                f"Analysis: Found {len(new_violations)} violations "
+                f"(precedent path); {failed_chunks} chunk(s) failed to grade."
+            )
+        )]
     }
 
 

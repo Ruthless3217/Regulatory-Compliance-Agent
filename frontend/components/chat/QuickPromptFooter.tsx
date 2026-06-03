@@ -11,7 +11,7 @@ interface Props {
 
 export function QuickPromptFooter({ hasSelection, onQuote, onRewrite, onExplain, disabled }: Props) {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-border bg-surface px-4 py-2 text-xs">
+    <div className="flex flex-wrap items-center gap-2 border-t border-border bg-background px-4 py-2 text-xs">
       <span className="micro-label mr-1">Quick prompts</span>
       <Button size="sm" variant="ghost" onClick={onQuote} disabled={disabled || !hasSelection}>
         Quote violation

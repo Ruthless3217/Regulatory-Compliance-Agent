@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Source_Serif_4, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -8,14 +8,6 @@ const sans = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
-});
-
-const serif = Source_Serif_4({
-  subsets: ["latin"],
-  variable: "--font-serif",
-  display: "swap",
-  weight: ["400", "600"],
-  style: ["normal", "italic"],
 });
 
 const mono = JetBrains_Mono({
@@ -36,9 +28,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang="en"
       data-density={density}
-      className={`${sans.variable} ${serif.variable} ${mono.variable}`}
+      className={`${sans.variable} ${mono.variable}`}
     >
-      <body className="min-h-screen bg-background text-foreground">
+      <body className="min-h-screen bg-surface text-foreground">
         {children}
         <Toaster position="top-right" toastOptions={{ className: "border border-border bg-background" }} />
       </body>

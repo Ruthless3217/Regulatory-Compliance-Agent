@@ -16,7 +16,7 @@ export function MessageBubble({ role, content, streaming }: Props) {
       <div
         className={cn(
           "max-w-[80%] rounded-md border px-4 py-3 text-sm leading-relaxed",
-          isUser ? "border-primary bg-primary-50 whitespace-pre-wrap" : "border-border bg-surface"
+          isUser ? "border-primary bg-primary-50 whitespace-pre-wrap" : "border-border bg-background"
         )}
       >
         {!content && streaming ? (

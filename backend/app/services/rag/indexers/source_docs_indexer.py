@@ -112,7 +112,8 @@ async def link_rules_to_passage(
     # pgvector fast path
     db: Session = SessionLocal()
     try:
-        arr_lit = "{" + ",".join(str(r) for r in rule_ids) + "}"
+        from app.services.rag.stores.pgvector_store import _uuid_array_literal
+        arr_lit = _uuid_array_literal(rule_ids)
         db.execute(
             text(
                 """

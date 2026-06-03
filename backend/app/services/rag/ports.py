@@ -42,8 +42,13 @@ class Embedder(Protocol):
     model: str
     dim: int
 
-    async def embed(self, texts: List[str]) -> List[List[float]]:
-        """Return one vector per input text. Order preserved."""
+    async def embed(self, texts: List[str], input_type: str = "search_document") -> List[List[float]]:
+        """Return one vector per input text. Order preserved.
+
+        ``input_type`` is 'search_document' for indexed content and
+        'search_query' for retrieval queries. Asymmetric models (Cohere v3)
+        embed the two differently; symmetric models (OpenAI/Azure) ignore it.
+        """
         ...
 
 

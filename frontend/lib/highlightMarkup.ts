@@ -18,19 +18,59 @@ export interface HighlightSpan {
   violationId: string;
 }
 
+/**
+ * Build a whitespace/case-normalized view of `text` plus a map from each
+ * normalized character back to its original offset. Normalization mirrors the
+ * backend's evidence-grounding check (`_normalize_ws`: lowercase + collapse
+ * every whitespace run to a single space). The backend only keeps a violation
+ * whose `current_text` survives that same normalization against the document,
+ * so matching here with identical tolerance guarantees every kept violation
+ * highlights — even when the LLM's quote differs from the document by case,
+ * newlines, or extra spaces.
+ */
+function normalizeWithMap(text: string): { norm: string; map: number[] } {
+  const normChars: string[] = [];
+  const map: number[] = [];
+  let prevWasSpace = true; // skip leading whitespace
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (/\s/.test(ch)) {
+      if (!prevWasSpace) {
+        normChars.push(" ");
+        map.push(i);
+        prevWasSpace = true;
+      }
+    } else {
+      normChars.push(ch.toLowerCase());
+      map.push(i);
+      prevWasSpace = false;
+    }
+  }
+  return { norm: normChars.join(""), map };
+}
+
+function normalizeNeedle(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export function findSpans(text: string, violations: Violation[]): HighlightSpan[] {
   const spans: HighlightSpan[] = [];
+  const { norm, map } = normalizeWithMap(text);
   for (const v of violations) {
     if (!v.current_text) continue;
-    const needle = v.current_text.trim();
+    const needle = normalizeNeedle(v.current_text);
     if (!needle) continue;
     let from = 0;
-    while (from < text.length) {
-      const idx = text.indexOf(needle, from);
+    while (from <= norm.length - needle.length) {
+      const idx = norm.indexOf(needle, from);
       if (idx === -1) break;
+      // Map normalized match bounds back to original document offsets so the
+      // <mark> wraps the real text (original casing/whitespace preserved).
+      const start = map[idx];
+      const end = map[idx + needle.length - 1] + 1;
       spans.push({
-        start: idx,
-        end: idx + needle.length,
+        start,
+        end,
         severity: v.severity,
         violationId: v.id,
       });

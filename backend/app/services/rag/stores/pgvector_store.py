@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import SessionLocal
 from app.services.rag.errors import RAGDegraded, RAGIndexingFailed
 from app.services.rag.ports import IndexName, SearchHit, VectorDoc
@@ -63,6 +64,18 @@ _RETURN_COLUMNS: Dict[IndexName, List[str]] = {
 def _vec_literal(vec: List[float]) -> str:
     """Format a float list as a pgvector literal: '[0.1,0.2,...]'."""
     return "[" + ",".join(f"{x:.7f}" for x in vec) + "]"
+
+
+def _uuid_array_literal(ids) -> str:
+    """Build a Postgres UUID[] literal '{u1,u2}' from `ids`, validating each
+    element as a real UUID first. Even though the literal is passed as a bound
+    parameter, its CONTENTS are concatenated — a malformed/injected id could
+    otherwise corrupt the array literal. Raises ValueError on any bad id.
+    See architect-audit H17."""
+    import uuid as _uuid
+
+    validated = [str(_uuid.UUID(str(x))) for x in ids]
+    return "{" + ",".join(validated) + "}"
 
 
 def _build_filter_clause(
@@ -198,8 +211,8 @@ def _upsert_params(index: IndexName, doc: VectorDoc) -> Dict[str, Any]:
         }
     if index == "rag_source_docs":
         derived = f.get("derived_rule_ids") or []
-        # Postgres UUID[] literal: '{uuid1,uuid2}'
-        derived_lit = "{" + ",".join(str(x) for x in derived) + "}"
+        # Postgres UUID[] literal: '{uuid1,uuid2}' (each element validated)
+        derived_lit = _uuid_array_literal(derived)
         return {
             **base,
             "document_id": f["document_id"],
@@ -233,10 +246,14 @@ def _upsert_params(index: IndexName, doc: VectorDoc) -> Dict[str, Any]:
 # ------------------------------------------------------------- search ---
 
 def _vector_leg_sql(index: IndexName, filter_clause: str) -> str:
+    # Cosine floor (:min_cosine) drops semantically-unrelated candidates before
+    # fusion so retrieval doesn't always return K rows for an irrelevant query
+    # (hallucinated grounding — audit C6). Floor is on cosine [-1,1], not RRF.
     return f"""
         SELECT id, 1 - (embedding <=> CAST(:qvec AS VECTOR)) AS score
         FROM {index}
         WHERE TRUE {filter_clause}
+          AND 1 - (embedding <=> CAST(:qvec AS VECTOR)) >= :min_cosine
         ORDER BY embedding <=> CAST(:qvec AS VECTOR)
         LIMIT :recall
     """
@@ -303,7 +320,7 @@ class PgVectorStore:
             try:
                 db.execute(
                     text(f"DELETE FROM {index} WHERE id = ANY(CAST(:ids AS UUID[]))"),
-                    {"ids": "{" + ",".join(ids) + "}"},
+                    {"ids": _uuid_array_literal(ids)},
                 )
                 db.commit()
             except Exception as e:
@@ -333,6 +350,7 @@ class PgVectorStore:
                     "qvec": _vec_literal(query_vector),
                     "qtext": query_text or "",
                     "recall": recall_pool,
+                    "min_cosine": settings.rag_min_cosine,
                 }
                 fclause = _build_filter_clause(index, filters, params)
 
@@ -355,7 +373,7 @@ class PgVectorStore:
                 ids = [doc_id for doc_id, _ in fused]
                 rows = db.execute(
                     text(_fetch_sql(index)),
-                    {"ids": "{" + ",".join(ids) + "}"},
+                    {"ids": _uuid_array_literal(ids)},
                 ).all()
                 cols = _RETURN_COLUMNS[index]
                 by_id = {str(r[0]): {c: r[i] for i, c in enumerate(cols)} for r in rows}

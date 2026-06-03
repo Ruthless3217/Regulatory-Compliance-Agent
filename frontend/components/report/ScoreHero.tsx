@@ -24,7 +24,7 @@ export function ScoreHero({ score, grade, scores }: Props) {
     : [];
 
   return (
-    <section className="border-b border-border bg-surface px-8 py-10">
+    <section className="border-b border-border bg-background px-8 py-10">
       <div className="flex flex-wrap items-end gap-8">
         <div>
           <div className="micro-label mb-2">Overall</div>

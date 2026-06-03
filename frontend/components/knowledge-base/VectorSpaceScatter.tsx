@@ -40,17 +40,17 @@ export function VectorSpaceScatter({ points }: Props) {
 
   if (points.length === 0) {
     return (
-      <div className="flex h-96 items-center justify-center rounded-md border border-border bg-surface text-sm text-muted-foreground">
+      <div className="flex h-96 items-center justify-center rounded-lg border border-border bg-background text-sm text-muted-foreground shadow-card">
         No vectors to plot. Ingest the knowledge base first.
       </div>
     );
   }
 
   return (
-    <div className="rounded-md border border-border bg-surface p-6">
+    <div className="rounded-lg border border-border bg-background p-6 shadow-card">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-serif text-lg">Vector memory space</h3>
+          <h3 className="text-base font-semibold tracking-tight">Vector memory space</h3>
           <p className="mt-1 text-xs text-muted-foreground">
             2-D projection of precedents, rules and source passages.
           </p>

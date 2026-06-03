@@ -129,7 +129,7 @@ export function ChatColumn({ submissionId, selectedViolationId, registerQuickPro
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-3 p-4">
           {history.length === 0 ? (
-            <div className="rounded-md border border-border bg-surface p-8 text-center text-sm text-muted-foreground">
+            <div className="rounded-md border border-border bg-background p-8 text-center text-sm text-muted-foreground">
               Ask anything about this submission — violations, rule context, compliant rewrites.
             </div>
           ) : (

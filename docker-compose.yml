@@ -36,14 +36,21 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: compliance-backend
+    restart: unless-stopped
+    # Resource limits so a malformed/large upload can't OOM the host (audit H7).
+    mem_limit: 2g
+    cpus: 2.0
     ports:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://compliance_user:compliance_pass@postgres:5432/compliance_db
       REDIS_URL: redis://redis:6379
       LLM_API_KEY: ${LLM_API_KEY}
-      LLM_BASE_URL: https://generativelanguage.googleapis.com/v1beta/openai/
-      LLM_MODEL: gemini-2.0-flash
+      # Pass provider config through from .env so the container matches local
+      # dev (Groq). Defaults keep Groq if the vars are unset; override in .env
+      # to switch providers. LLM_API_KEY may be a comma-list for key failover.
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.groq.com/openai/v1}
+      LLM_MODEL: ${LLM_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
       LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
       LANGCHAIN_PROJECT: regulatory-compliance-agent

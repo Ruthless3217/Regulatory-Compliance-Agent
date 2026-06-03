@@ -20,7 +20,7 @@ export function SectionHeader({ icon, title, description, action, index, classNa
         <div className="flex items-center gap-2">
           {index && <span className="font-mono text-[10px] text-muted-foreground">{index}</span>}
           {icon && <span className="text-muted-foreground">{icon}</span>}
-          <h2 className="font-serif text-[20px] leading-none tracking-tight">{title}</h2>
+          <h2 className="text-[18px] font-semibold leading-none tracking-tight">{title}</h2>
         </div>
         {description && (
           <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">{description}</p>

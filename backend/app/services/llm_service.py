@@ -9,6 +9,10 @@ from datetime import datetime
 from pydantic import BaseModel, ValidationError
 from ..config import settings
 from openai import AsyncOpenAI
+try:  # openai>=1.0 ships RateLimitError; guard so import never hard-fails
+    from openai import RateLimitError
+except Exception:  # pragma: no cover
+    RateLimitError = None  # type: ignore
 import httpx
 
 # LangSmith tracing — no-op decorator if the SDK isn't installed.
@@ -25,11 +29,48 @@ T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
 
+class LLMUnavailableError(RuntimeError):
+    """Raised when the LLM cannot produce a usable result (transport failure,
+    or schema-invalid output after all retries).
+
+    For a compliance system this MUST propagate rather than be swallowed: a
+    fabricated empty result would be scored as a clean (100/A) document, i.e.
+    the pipeline would fail OPEN. Callers must fail closed on this error.
+    See docs/architect-audit-2026-05-30.md (C1, H4).
+    """
+
+
+class _RateLimitFailover(RuntimeError):
+    """Internal signal: the current API key was rate-limited (HTTP 429).
+
+    Raised out of a single-key attempt so the multi-key driver can rotate to
+    the next key instead of failing closed. Never surfaced to callers — it is
+    either swallowed (more keys to try) or converted to LLMUnavailableError
+    (all keys exhausted). ``__cause__`` holds the original provider error.
+    """
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    """True if ``exc`` is a provider rate-limit / 429 (Groq TPM or TPD).
+
+    Matches the typed openai.RateLimitError, an HTTP 429 on any wrapped
+    response, or telltale text — robust across SDK versions and the way Groq
+    phrases its quota errors."""
+    if RateLimitError is not None and isinstance(exc, RateLimitError):
+        return True
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status == 429:
+        return True
+    msg = str(exc).lower()
+    return "rate_limit" in msg or "rate limit" in msg or "429" in msg
+
+
 class LLMService:
     """Service for integrating with Cloud LLMs (Gemini/OpenAI) via OpenAI-compatible API."""
 
     def __init__(self):
-        self.api_key = settings.llm_api_key
         self.base_url = settings.llm_base_url
         self.model = settings.llm_model
 
@@ -37,17 +78,38 @@ class LLMService:
         self.log_file = os.path.join("logs", "log.json")
         os.makedirs("logs", exist_ok=True)
 
-        if not self.api_key:
-            logger.warning("LLM_API_KEY is not set. LLM service will fail.")
+        if settings.llm_insecure_tls:
+            logger.warning("LLM_INSECURE_TLS=true — disabling TLS verification for LLM calls")
 
+        # One client per configured key. Multiple keys = TPM failover: the
+        # request drivers below rotate to the next key when one is 429'd or
+        # over its daily budget. key_id (last 8 chars of the key) ties each
+        # key to its own per-key rate limiter without logging the secret.
+        self.api_keys = settings.llm_api_keys
+        if not self.api_keys:
+            logger.warning("LLM_API_KEY is not set. LLM service will fail.")
+            self._client_pool = [("none", self._build_client("placeholder"))]
+        else:
+            self._client_pool = [
+                (k[-8:], self._build_client(k)) for k in self.api_keys
+            ]
+        if len(self._client_pool) > 1:
+            logger.info(f"LLM key failover enabled across {len(self._client_pool)} keys")
+
+        # Back-compat: callers (e.g. health_check) that reference .client / .api_key
+        # get the first key in the pool.
+        self.api_key = self.api_keys[0] if self.api_keys else ""
+        self.client = self._client_pool[0][1]
+
+    def _build_client(self, api_key: str) -> AsyncOpenAI:
+        """Construct one AsyncOpenAI client bound to ``api_key``."""
         client_kwargs: Dict[str, Any] = {
-            "api_key": self.api_key or "placeholder",
+            "api_key": api_key or "placeholder",
             "base_url": self.base_url,
         }
         if settings.llm_insecure_tls:
-            logger.warning("LLM_INSECURE_TLS=true — disabling TLS verification for LLM calls")
             client_kwargs["http_client"] = httpx.AsyncClient(verify=False)
-        self.client = AsyncOpenAI(**client_kwargs)
+        return AsyncOpenAI(**client_kwargs)
 
     async def health_check(self) -> bool:
         """Check if LLM service is available."""
@@ -69,18 +131,27 @@ class LLMService:
     ) -> str:
         """Generate response from LLM."""
         messages = self._build_chat_messages(prompt, system_prompt, context)
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=kwargs.get("temperature", 0.7),
-            )
-            response_text = response.choices[0].message.content.strip()
-            await self._log_to_json(prompt, response_text, system_prompt, context)
-            return response_text
-        except Exception as e:
-            logger.error(f"LLM generation failed: {str(e)}")
-            return self._get_fallback_response(prompt, context)
+        last_exc: Optional[Exception] = None
+        for key_id, client in self._client_pool:
+            try:
+                response = await client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=kwargs.get("temperature", 0.7),
+                    max_tokens=kwargs.get("max_tokens", settings.llm_max_tokens),
+                )
+                response_text = response.choices[0].message.content.strip()
+                await self._log_to_json(prompt, response_text, system_prompt, context)
+                return response_text
+            except Exception as e:
+                if _is_rate_limit_error(e) and len(self._client_pool) > 1:
+                    logger.warning(f"[failover] key …{key_id} rate-limited; trying next key")
+                    last_exc = e
+                    continue
+                logger.error(f"LLM generation failed: {str(e)}")
+                return self._get_fallback_response(prompt, context)
+        logger.error(f"LLM generation failed — all keys rate-limited: {last_exc}")
+        return self._get_fallback_response(prompt, context)
 
     @traceable(run_type="llm", name="LLM.stream_response")
     async def stream_response(
@@ -98,22 +169,40 @@ class LLMService:
             messages.extend(history)
         messages.append({"role": "user", "content": prompt})
 
-        try:
-            stream = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-                stream=True,
-            )
-            async for chunk in stream:
-                if not chunk.choices:
+        # Failover can only happen BEFORE the first token: once we have yielded
+        # text we can't restart on another key without duplicating output.
+        last_exc: Optional[Exception] = None
+        for key_id, client in self._client_pool:
+            try:
+                stream = await client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=settings.llm_max_tokens,
+                    stream=True,
+                )
+            except Exception as e:
+                if _is_rate_limit_error(e) and len(self._client_pool) > 1:
+                    logger.warning(f"[failover] stream key …{key_id} rate-limited; trying next key")
+                    last_exc = e
                     continue
-                delta = chunk.choices[0].delta
-                if delta and delta.content:
-                    yield delta.content
-        except Exception as e:
-            logger.error(f"LLM streaming failed: {e}")
-            yield f"\n\n[Error: streaming failed — {str(e)}]"
+                logger.error(f"LLM streaming failed: {e}")
+                yield f"\n\n[Error: streaming failed — {str(e)}]"
+                return
+            try:
+                async for chunk in stream:
+                    if not chunk.choices:
+                        continue
+                    delta = chunk.choices[0].delta
+                    if delta and delta.content:
+                        yield delta.content
+                return
+            except Exception as e:
+                logger.error(f"LLM streaming failed mid-stream: {e}")
+                yield f"\n\n[Error: streaming failed — {str(e)}]"
+                return
+        logger.error(f"LLM streaming failed — all keys rate-limited: {last_exc}")
+        yield "\n\n[Error: streaming failed — all API keys are rate-limited]"
 
     @traceable(run_type="llm", name="LLM.generate_structured_response")
     async def generate_structured_response(
@@ -127,26 +216,121 @@ class LLMService:
         tool_name: str = "llm_structured",
         temperature: float = 0.2,
     ) -> T:
-        """Generate a structured response validated against a Pydantic model."""
+        """Generate a structured response validated against a Pydantic model.
+
+        Drives the request across all configured API keys: when a key is over
+        its daily budget (proactive) or returns HTTP 429 (reactive) we rotate
+        to the next key. Only when every key is exhausted do we fail closed.
+        """
         schema_instruction = (
             f"\nYou must output JSON that adheres to this schema:\n"
             f"{output_model.model_json_schema()}\n"
             f"Return ONLY the JSON object, no other text."
         )
         full_system_prompt = (system_prompt or "") + schema_instruction
+        base_messages = self._build_chat_messages(prompt, full_system_prompt, context)
 
-        messages = self._build_chat_messages(prompt, full_system_prompt, context)
+        # Groq enforces TPM/TPD ceilings PER KEY. Reserve budget before each call
+        # so we rotate (or queue) rather than burn a 429-doomed run. Only applies
+        # to Groq — other providers (Gemini) must not inherit Groq's limits.
+        # See architect-audit C7.
+        is_groq = "groq" in (self.base_url or "").lower()
+        get_rate_limiter = None
+        DailyLimitApproaching = ()  # so `except DailyLimitApproaching` is a no-op when not Groq
+        if is_groq:
+            from app.services.groq_rate_limiter import (
+                get_rate_limiter,
+                DailyLimitApproaching,
+            )
+
+        last_exc: Optional[Exception] = None
+        daily_blocked = 0
+        pool = self._client_pool
+        for key_id, client in pool:
+            # Fresh message copy per key — a failed key's JSON-correction turns
+            # must not leak into the next key's conversation.
+            current_messages = list(base_messages)
+
+            limiter = None
+            token_estimate = 0
+            if get_rate_limiter is not None:
+                limiter = get_rate_limiter(self.model, key_id)
+                token_estimate = self._estimate_tokens(current_messages)
+                try:
+                    await limiter.acquire(token_estimate)
+                except DailyLimitApproaching as e:
+                    logger.warning(
+                        f"[failover] key …{key_id} at daily cap; trying next key ({e})"
+                    )
+                    last_exc = e
+                    daily_blocked += 1
+                    continue
+
+            try:
+                return await self._structured_attempts(
+                    client=client,
+                    limiter=limiter,
+                    token_estimate=token_estimate,
+                    output_model=output_model,
+                    current_messages=current_messages,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    context=context,
+                    execution_id=execution_id,
+                    db=db,
+                    tool_name=tool_name,
+                    temperature=temperature,
+                )
+            except _RateLimitFailover as e:
+                logger.warning(f"[failover] key …{key_id} hit 429 (TPM/TPD); trying next key")
+                last_exc = e.__cause__ or e
+                continue
+
+        # Every key is exhausted — fail closed (callers must not treat this as a
+        # clean document; see LLMUnavailableError).
+        if pool and daily_blocked == len(pool):
+            # All keys over their daily budget → re-raise DailyLimitApproaching so
+            # the caller queues the submission (status=pending_token_budget) for
+            # the daily reset rather than failing it permanently.
+            raise last_exc
+        raise LLMUnavailableError(
+            f"All {len(pool)} LLM key(s) exhausted; last error: {last_exc}"
+        ) from last_exc
+
+    async def _structured_attempts(
+        self,
+        *,
+        client,
+        limiter,
+        token_estimate: int,
+        output_model: Type[T],
+        current_messages: list,
+        prompt: str,
+        system_prompt: Optional[str],
+        context: Optional[Dict[str, Any]],
+        execution_id: Optional[str],
+        db: Optional[Session],
+        tool_name: str,
+        temperature: float,
+    ) -> T:
+        """Run the schema-validation retry loop against a single key's client.
+
+        Raises :class:`_RateLimitFailover` on an HTTP 429 so the driver can
+        rotate to the next key; raises :class:`LLMUnavailableError` (fail
+        closed) on schema-invalid JSON after retries or any other
+        non-retryable transport error.
+        """
         start_time = time.time()
         max_retries = 3
-        current_messages = messages
         response_text = ""
 
         for attempt in range(max_retries):
             try:
-                response_wrapper = await self.client.chat.completions.with_raw_response.create(
+                response_wrapper = await client.chat.completions.with_raw_response.create(
                     model=self.model,
                     messages=current_messages,
                     temperature=temperature,
+                    max_tokens=settings.llm_max_tokens,
                     response_format={"type": "json_object"}
                 )
 
@@ -179,6 +363,10 @@ class LLMService:
                 result = output_model.model_validate_json(response_text)
                 end_time = time.time()
 
+                # Correct the reserved estimate against Groq's reported usage.
+                if limiter is not None:
+                    limiter.reconcile(token_estimate, token_usage or token_estimate)
+
                 if execution_id and db:
                     await self._record_tool_invocation(
                         db=db,
@@ -193,17 +381,47 @@ class LLMService:
 
                 return result
 
-            except (ValidationError, json.JSONDecodeError, Exception) as e:
-                logger.warning(f"Structured generation attempt {attempt + 1} failed: {e}")
+            except (ValidationError, json.JSONDecodeError) as e:
+                # Schema-invalid output is the only retryable case: re-prompt the
+                # model with the error and try again.
+                logger.warning(
+                    f"Structured generation attempt {attempt + 1} produced "
+                    f"invalid JSON: {e}"
+                )
                 if attempt == max_retries - 1:
-                    # Return empty/fallback result
-                    logger.error("All retries exhausted, returning fallback")
-                    return self._get_fallback_structured_response(output_model)
+                    # FAIL CLOSED: do not fabricate an empty ('clean') result.
+                    logger.error(
+                        "All retries exhausted; raising LLMUnavailableError "
+                        "(failing closed) instead of returning a fake result."
+                    )
+                    raise LLMUnavailableError(
+                        f"LLM did not return schema-valid JSON for "
+                        f"{output_model.__name__} after {max_retries} attempts"
+                    ) from e
 
                 error_feedback = f"\n\nPrevious response was invalid. Error: {str(e)}. Please CORRECT the JSON output."
                 current_messages.append({"role": "assistant", "content": response_text})
                 current_messages.append({"role": "user", "content": error_feedback})
                 await asyncio.sleep(1)
+            except LLMUnavailableError:
+                raise
+            except Exception as e:
+                # A 429 means THIS key is rate-limited — signal the driver to
+                # rotate to the next key rather than failing closed.
+                if _is_rate_limit_error(e):
+                    raise _RateLimitFailover(str(e)) from e
+                # Other transport / auth / quota errors are NOT retryable as
+                # "bad JSON". Fail closed immediately.
+                logger.error(f"Structured generation failed (non-retryable): {e}")
+                raise LLMUnavailableError(f"LLM call failed: {e}") from e
+
+    @staticmethod
+    def _estimate_tokens(messages: list) -> int:
+        """Rough token estimate for rate-limiting: ~4 chars/token for the
+        prompt plus the configured output ceiling. Reconciled against actual
+        usage after the call."""
+        chars = sum(len(str(m.get("content", ""))) for m in messages)
+        return chars // 4 + settings.llm_max_tokens
 
     def _build_chat_messages(
         self,
@@ -225,18 +443,6 @@ class LLMService:
     def _get_fallback_response(self, prompt: str, context: Dict = None) -> str:
         """Return a fallback response when LLM fails."""
         return "Unable to generate response at this time. Please check LLM configuration."
-
-    def _get_fallback_structured_response(self, output_model: Type[T]) -> T:
-        """Return a minimal valid structured response."""
-        try:
-            # Try to construct with empty violations
-            return output_model(
-                violations=[],
-                overall_assessment="Analysis failed - LLM service unavailable",
-                key_issues=["LLM service is unavailable"]
-            )
-        except Exception:
-            return output_model.model_construct()
 
     async def _record_tool_invocation(
         self,

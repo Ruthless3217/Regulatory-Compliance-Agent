@@ -1,10 +1,53 @@
 "use client";
 import * as React from "react";
 import { toast } from "sonner";
+import { Cpu, Gauge, Database, Plug, Info, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { DensityToggle } from "@/components/workspace/DensityToggle";
+import { PageHeader } from "@/components/ui/page-header";
 import { health } from "@/lib/api";
+
+function Section({
+  icon,
+  title,
+  description,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-lg border border-border bg-background shadow-card">
+      <div className="flex items-start gap-3 border-b border-border px-5 py-4">
+        <span className="mt-0.5 text-muted-foreground">{icon}</span>
+        <div>
+          <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+          {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+        </div>
+      </div>
+      <div className="px-5 py-4">{children}</div>
+    </section>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <div className="text-right">{children}</div>
+    </div>
+  );
+}
+
+const GRADE_BANDS = [
+  { grade: "A", range: "85–100", tone: "text-success" },
+  { grade: "B", range: "70–84", tone: "text-primary" },
+  { grade: "C", range: "55–69", tone: "text-sev-medium" },
+  { grade: "D", range: "40–54", tone: "text-sev-high" },
+  { grade: "F", range: "0–39", tone: "text-sev-critical" },
+];
 
 export default function SettingsPage() {
   const [pinging, setPinging] = React.useState(false);
@@ -24,77 +67,65 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-10 py-10">
-      <header className="masthead mb-10">
-        <div className="flex items-baseline justify-between gap-4 py-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          <span className="font-mono">Settings · §05</span>
-          <span className="font-mono">v1.0 · build {buildSha}</span>
-        </div>
-        <div className="py-6">
-          <h1 className="font-serif text-[44px] leading-[1.05] tracking-[-0.015em]">
-            Project <span className="italic">Settings</span>
-          </h1>
-          <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-muted-foreground">
-            Adjust visual preferences and inspect the API connection. Most behaviour is governed by the team admin.
-          </p>
-        </div>
-      </header>
+    <div className="mx-auto max-w-4xl px-8 py-8">
+      <PageHeader
+        title="Project settings"
+        description="Visual preferences, pipeline configuration, and backend connection. Most behaviour is governed by the team admin."
+      />
 
-      <Card className="mt-2">
-        <CardHeader>
-          <CardTitle>Appearance</CardTitle>
-          <CardDescription>
-            Adjust list and card density to fit your screen. Comfortable for review work, compact for power-use.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <span className="text-sm">Density</span>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Section icon={<Palette className="h-4 w-4" />} title="Appearance" description="Tune list and card density to fit your screen.">
+          <Row label="Density">
             <DensityToggle />
-          </div>
-        </CardContent>
-      </Card>
+          </Row>
+        </Section>
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>API</CardTitle>
-          <CardDescription>Compliance backend connection details.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <dl className="space-y-3 text-sm">
-            <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Base URL</dt>
-              <dd className="font-mono text-xs">{apiBase}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Health check</dt>
-              <dd>
-                <Button variant="outline" size="sm" disabled={pinging} onClick={ping}>
-                  {pinging ? "Pinging…" : "Ping API"}
-                </Button>
-              </dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
+        <Section icon={<Cpu className="h-4 w-4" />} title="Pipeline & model" description="The compliance engine configuration.">
+          <Row label="Workflow">
+            <span className="font-mono text-xs">LangGraph · 5-node</span>
+          </Row>
+          <Row label="Model">
+            <span className="font-mono text-xs">llama-3.3-70b</span>
+          </Row>
+          <Row label="RAG backend">
+            <span className="font-mono text-xs">pgvector</span>
+          </Row>
+        </Section>
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>About</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="space-y-3 text-sm">
-            <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Version</dt>
-              <dd className="font-mono text-xs">1.0.0</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Build</dt>
-              <dd className="font-mono text-xs">{buildSha}</dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
+        <Section icon={<Database className="h-4 w-4" />} title="Rule corpus" description="Active rules the pipeline evaluates against.">
+          <Row label="IRDAI"><span className="font-mono text-xs">~30</span></Row>
+          <Row label="Brand"><span className="font-mono text-xs">~20</span></Row>
+          <Row label="SEBI"><span className="font-mono text-xs">~15</span></Row>
+        </Section>
+
+        <Section icon={<Gauge className="h-4 w-4" />} title="Scoring" description="Letter-grade bands applied to the 0–100 compliance score.">
+          <ul className="space-y-1.5">
+            {GRADE_BANDS.map((b) => (
+              <li key={b.grade} className="flex items-center justify-between text-sm">
+                <span className={`font-semibold ${b.tone}`}>{b.grade}</span>
+                <span className="font-mono text-xs text-muted-foreground">{b.range}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+
+        <Section icon={<Plug className="h-4 w-4" />} title="API connection" description="Compliance backend connection details.">
+          <Row label="Base URL">
+            <span className="font-mono text-xs">{apiBase}</span>
+          </Row>
+          <Row label="Health check">
+            <Button variant="outline" size="sm" disabled={pinging} onClick={ping}>
+              {pinging ? "Pinging…" : "Ping API"}
+            </Button>
+          </Row>
+        </Section>
+
+        <Section icon={<Info className="h-4 w-4" />} title="About">
+          <Row label="Version"><span className="font-mono text-xs">1.0.0</span></Row>
+          <Row label="Build"><span className="font-mono text-xs">{buildSha}</span></Row>
+          <Row label="Owner"><span className="text-xs">Bajaj Allianz Life · Marketing</span></Row>
+        </Section>
+      </div>
     </div>
   );
 }

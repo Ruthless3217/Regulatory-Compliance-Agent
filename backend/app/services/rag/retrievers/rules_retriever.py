@@ -65,7 +65,7 @@ class RulesRetriever:
         # 1. One embed call for all chunks at once.
         try:
             chunk_texts = [c.get("text", "") for c in chunks]
-            chunk_vectors = await embedder.embed(chunk_texts)
+            chunk_vectors = await embedder.embed(chunk_texts, input_type="search_query")
         except RAGEmbedFailed as e:
             logger.warning(f"Embedder unavailable in rules retriever: {e}")
             raise RAGDegraded(str(e)) from e

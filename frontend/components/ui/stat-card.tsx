@@ -25,9 +25,9 @@ export function StatCard({ label, value, delta, spark, icon, sub, tone = "defaul
         ? "border-success/30 bg-success/5"
         : tone === "danger"
           ? "border-sev-critical/30 bg-sev-critical/5"
-          : "border-border bg-surface";
+          : "border-border bg-background shadow-card";
   return (
-    <div className={cn("flex items-start justify-between gap-3 rounded-md border p-4 hover:bg-muted/30 transition-colors", toneClass, className)}>
+    <div className={cn("flex items-start justify-between gap-3 rounded-lg border p-4 transition-shadow hover:shadow-md", toneClass, className)}>
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           {icon && <span className="text-muted-foreground">{icon}</span>}

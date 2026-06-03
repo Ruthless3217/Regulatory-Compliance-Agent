@@ -33,6 +33,37 @@ class ComplianceEngine:
     Orchestrates the LangGraph workflow and persists results.
     """
 
+    # Degraded reasons that block a passing grade but are not hard failures —
+    # the document could not be substantively evaluated, so it needs review
+    # rather than being marked "failed".
+    _NEEDS_REVIEW_REASONS = {"knowledge_base_empty", "analysis_incomplete", "rag_degraded"}
+
+    @staticmethod
+    def evaluate_persistability(final_state: Dict[str, Any]) -> tuple:
+        """Decide whether a graph run may be persisted as a real (gradeable)
+        compliance result.
+
+        Returns (can_persist, block_reason). A run is NOT persistable when it
+        produced no analyzable content, the graph failed, the dispatch/analysis
+        nodes flagged degradation, or any chunk failed to grade. This is the
+        load-bearing fail-closed guard: an unevaluated document must never be
+        recorded as 100/A/passed. See docs/architect-audit-2026-05-30.md (C1).
+        """
+        chunks = final_state.get("chunks") or []
+        status = final_state.get("status")
+        md = final_state.get("metadata") or {}
+
+        if not chunks:
+            return False, "no_content"
+        if status == "failed":
+            return False, "failed"
+        degraded = md.get("degraded")
+        if degraded:
+            return False, degraded
+        if md.get("analysis_failed_chunks"):
+            return False, "analysis_incomplete"
+        return True, None
+
     @staticmethod
     @traceable(run_type="chain", name="ComplianceEngine.analyze_submission")
     async def analyze_submission(submission_id: str, db: Session) -> Optional[ComplianceCheck]:
@@ -44,7 +75,9 @@ class ComplianceEngine:
             db: Database session
             
         Returns:
-            ComplianceCheck object if completed, None if HITL pause
+            ComplianceCheck if the run was gradeable and persisted; None if the
+            run was not persistable (status set to 'needs_review' for degraded
+            runs or 'failed' for hard failures — see evaluate_persistability).
         """
         submission = None
         try:
@@ -91,41 +124,26 @@ class ComplianceEngine:
             try:
                 logger.info(f"Starting LangGraph analysis for submission {submission_id}")
 
+                # No HITL interrupt — the graph runs straight through to END, so
+                # this returns the fully analyzed final state in one call.
                 final_state = await orchestrator.run_workflow(initial_state, config=config)
-
-                # If the graph paused at the HITL refinement_node, auto-resume
-                # with no feedback so analysis finishes in a single call. The
-                # refinement_node is a no-op without user_feedback; the explicit
-                # /compliance/resume endpoint remains for HITL flows that DO
-                # have feedback to apply.
-                snapshot = await orchestrator.get_state(config)
-                if snapshot.next:
-                    logger.info(
-                        f"LangGraph paused at {snapshot.next} for submission "
-                        f"{submission_id}; auto-resuming (no feedback)."
-                    )
-                    final_state = await orchestrator.resume_workflow(config)
-                    snapshot = await orchestrator.get_state(config)
-                    if snapshot.next:
-                        # Still paused — true HITL hold; surface to caller.
-                        submission.status = "waiting_for_review"
-                        db.commit()
-                        return None
 
                 logger.info("LangGraph execution COMPLETED.")
 
-                # Guard: if preprocessing failed (no chunks) or the graph
-                # marked status=failed, do NOT persist a fake 100/A. That
-                # silent-success on a broken pipeline was masking real
-                # errors (e.g. tiktoken DNS block on corporate VPN).
-                chunk_count = len(final_state.get("chunks") or [])
-                graph_status = final_state.get("status")
-                if chunk_count == 0 or graph_status == "failed":
+                # FAIL CLOSED: never persist a passing grade for a run that
+                # could not be substantively evaluated (no chunks, graph
+                # failure, degraded retrieval, or any chunk that failed to
+                # grade). A degraded document needs human review; a hard
+                # failure is marked failed. See architect-audit C1.
+                can_persist, block_reason = ComplianceEngine.evaluate_persistability(final_state)
+                if not can_persist:
+                    needs_review = block_reason in ComplianceEngine._NEEDS_REVIEW_REASONS
+                    submission.status = "needs_review" if needs_review else "failed"
                     logger.error(
-                        f"Refusing to persist results: chunks={chunk_count}, "
-                        f"graph_status={graph_status}. Marking submission failed."
+                        f"Refusing to persist gradeable result for submission "
+                        f"{submission_id}: reason={block_reason}. "
+                        f"Marking submission '{submission.status}' (NOT graded)."
                     )
-                    submission.status = "failed"
                     db.commit()
                     return None
 

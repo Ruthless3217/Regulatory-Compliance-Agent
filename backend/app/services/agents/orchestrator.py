@@ -64,11 +64,10 @@ class ComplianceOrchestrator:
             logger.warning(f"Checkpointer setup failed: {e}")
             self.checkpointer = None
 
-        # Compile with interrupt_before for HITL
-        return workflow.compile(
-            checkpointer=self.checkpointer,
-            interrupt_before=["refinement_node"]
-        )
+        # No HITL interrupt: the graph runs straight through to END so analysis
+        # always completes and persists in a single call (refinement_node is a
+        # no-op passthrough).
+        return workflow.compile(checkpointer=self.checkpointer)
 
     async def _ensure_checkpointer_setup(self):
         """Initialize Redis checkpointer if available, fallback to memory."""

@@ -48,7 +48,7 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="space-y-3 p-4">
           {filtered.length === 0 ? (
-            <div className="rounded-md border border-border bg-surface p-8 text-center text-sm text-muted-foreground">
+            <div className="rounded-md border border-border bg-background p-8 text-center text-sm text-muted-foreground">
               No violations in this filter.
             </div>
           ) : (

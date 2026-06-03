@@ -70,7 +70,7 @@ class PrecedentRetriever:
 
         texts = [c.get("text", "") for c in chunks]
         try:
-            vectors = await embedder.embed(texts)
+            vectors = await embedder.embed(texts, input_type="search_query")
         except (RAGEmbedFailed, RAGDegraded) as e:
             logger.warning(f"precedent retrieval embed failed: {e}")
             return {str(c.get("id")): [] for c in chunks}

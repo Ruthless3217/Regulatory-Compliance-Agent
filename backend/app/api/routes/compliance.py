@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional, Set
 
+from app.api.rate_limit import llm_rate_limit
 from app.database import get_db, SessionLocal
 from app.models.submission import Submission
 from app.models.compliance_check import ComplianceCheck
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/compliance", tags=["Compliance Analysis"])
 
 
-@router.post("/analyze/{submission_id}")
+@router.post("/analyze/{submission_id}", dependencies=[Depends(llm_rate_limit)])
 async def analyze_submission(
     submission_id: str,
     background_tasks: BackgroundTasks,
@@ -69,7 +70,7 @@ async def _run_analysis(submission_id: str):
         db.close()
 
 
-@router.post("/analyze/{submission_id}/sync")
+@router.post("/analyze/{submission_id}/sync", dependencies=[Depends(llm_rate_limit)])
 async def analyze_submission_sync(
     submission_id: str,
     db: Session = Depends(get_db)
@@ -86,11 +87,16 @@ async def analyze_submission_sync(
         compliance_check = await ComplianceEngine.analyze_submission(submission_id, db)
 
         if compliance_check is None:
-            # HITL pause
+            # Not persistable: the run was degraded (-> 'needs_review') or hit a
+            # hard failure (-> 'failed'). Surface the real status the engine set.
+            db.refresh(submission)
             return {
-                "status": "waiting_for_review",
+                "status": submission.status,
                 "submission_id": submission_id,
-                "message": "Analysis paused for human review"
+                "message": (
+                    "Analysis could not be graded (document could not be "
+                    "substantively evaluated). See server logs for the reason."
+                ),
             }
 
         return {
@@ -102,8 +108,9 @@ async def analyze_submission_sync(
             "compliance_status": compliance_check.status
         }
     except Exception as e:
+        # Log the detail server-side; don't leak internals to the client (audit).
         logger.error(f"Sync analysis failed for {submission_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Analysis failed; see server logs.")
 
 
 def _sse(event: str, data) -> bytes:
@@ -266,6 +273,13 @@ async def _analyze_and_stream(submission_id: str):
                 if sub.status == "failed":
                     yield _sse("error", {"message": "Analysis failed"})
                     return
+                if sub.status == "needs_review":
+                    # Degraded run (e.g. retrieval/grading incomplete): nothing
+                    # gradeable was persisted. Terminate instead of polling forever.
+                    yield _sse("error", {
+                        "message": "Analysis could not be completed — document needs review."
+                    })
+                    return
                 if analyze_task.done() and analyze_task.exception() is not None:
                     yield _sse("error", {"message": f"Analyzer error: {analyze_task.exception()}"})
                     return
@@ -279,7 +293,7 @@ async def _analyze_and_stream(submission_id: str):
             pass
 
 
-@router.post("/analyze/{submission_id}/stream")
+@router.post("/analyze/{submission_id}/stream", dependencies=[Depends(llm_rate_limit)])
 async def analyze_submission_stream(submission_id: str):
     """SSE-stream analysis progress: stage / chunk / score / done / error."""
     return StreamingResponse(
@@ -338,59 +352,3 @@ async def get_compliance_check(
     if not summary:
         raise HTTPException(status_code=404, detail="Compliance check not found")
     return summary
-
-
-@router.post("/resume/{submission_id}")
-async def resume_compliance_review(
-    submission_id: str,
-    feedback: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """
-    Resume a HITL-paused compliance workflow with optional feedback.
-    """
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
-
-    if submission.status != "waiting_for_review":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Submission is not waiting for review. Current status: {submission.status}"
-        )
-
-    try:
-        from app.services.agents.orchestrator import orchestrator
-        from app.services.agents.graph.context import GraphContext
-
-        token = GraphContext.set_db_session(db)
-        config = {"configurable": {"thread_id": str(submission_id)}}
-
-        final_state = await orchestrator.resume_workflow(config, feedback=feedback)
-
-        if final_state is None:
-            return {"status": "still_paused", "message": "Workflow paused again for further review"}
-
-        snapshot = await orchestrator.get_state(config)
-        if snapshot.next:
-            return {"status": "still_paused", "message": "Workflow paused again"}
-
-        # Persist results
-        check = ComplianceEngine.persist_results(
-            submission_id=str(submission_id),
-            violations=final_state.get("violations", []),
-            scores=final_state.get("scores", {}),
-            db=db
-        )
-        submission.status = "analyzed"
-        db.commit()
-
-        return {
-            "status": "completed",
-            "check_id": str(check.id),
-            "overall_score": check.overall_score,
-            "grade": check.grade
-        }
-    except Exception as e:
-        logger.error(f"Resume failed for {submission_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Resume failed: {str(e)}")

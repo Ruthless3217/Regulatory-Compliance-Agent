@@ -14,6 +14,12 @@ analysis spend. For financial-grade output this is the right tradeoff.
 Output contract: the critic returns the SAME list of violations, possibly
 with reduced confidence (or dropped entirely if the critic strongly
 disagrees). Downstream persistence is unchanged.
+
+NOTE (architect-audit C7): this rule-based LLM critic is for a rule_id-driven
+analysis path. The current PRECEDENT path emits rule_id=None, so it instead
+uses the deterministic ``verify_evidence_grounding`` check in graph/nodes.py
+(drops violations whose cited current_text isn't in the chunk). This module
+remains the critic for the rules path and is exercised there.
 """
 from __future__ import annotations
 

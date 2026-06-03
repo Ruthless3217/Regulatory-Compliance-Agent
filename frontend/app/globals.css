@@ -32,6 +32,7 @@
     --info: 218 100% 29%;
 
     --radius: 6px;
+    --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.04);
   }
 
   * {
@@ -44,18 +45,11 @@
   }
 
   body {
-    background:
-      radial-gradient(circle at 1px 1px, hsl(var(--border) / 0.55) 1px, transparent 0) 0 0/22px 22px,
-      hsl(var(--background));
+    background: hsl(var(--surface));
     color: hsl(var(--foreground));
     font-family: var(--font-sans), system-ui, sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
-  }
-
-  h1, h2, h3 {
-    font-family: var(--font-serif), Georgia, serif;
-    letter-spacing: -0.012em;
   }
 
   ::selection {
@@ -71,32 +65,8 @@
 }
 
 @layer components {
-  /* Masthead — newspaper-style top rule + bottom rule */
-  .masthead {
-    border-top: 2px solid hsl(var(--foreground));
-    border-bottom: 1px solid hsl(var(--border));
-  }
-  .masthead-rule {
-    height: 4px;
-    background:
-      linear-gradient(to right, hsl(var(--foreground)) 0 60%, transparent 60% 100%),
-      hsl(var(--border));
-    background-size: 100% 1px, 100% 100%;
-    background-repeat: no-repeat;
-    background-position: 0 0, 0 0;
-  }
-
-  /* Hairline that emulates a folio rule */
-  .folio-rule {
-    background:
-      linear-gradient(to right, hsl(var(--border)), hsl(var(--border)));
-    height: 1px;
-  }
-}
-
-@layer components {
   .micro-label {
-    @apply text-[10px] uppercase tracking-micro text-muted-foreground font-semibold;
+    @apply text-[10px] uppercase tracking-[0.03em] text-muted-foreground font-medium;
   }
 
   mark[data-severity] {

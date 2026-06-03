@@ -63,7 +63,7 @@ export type ActionType =
   | "remove";
 
 export interface ViolationMetadata {
-  grounding?: "precedent" | "novel";
+  grounding?: "precedent" | "rule" | "novel";
   action_type?: ActionType | string;
   evidence_needed?: string | null;
   regulatory_basis?: string | null;
@@ -108,6 +108,54 @@ export interface SSEAnalyzeScore {
   overall_score: number;
   grade: string;
   scores: Record<string, number>;
+}
+
+export interface TimeseriesPoint {
+  period: string;
+  submission_count: number;
+  avg_score: number | null;
+  violation_count: number;
+}
+
+export interface TimeseriesResponse {
+  bucket: "day" | "week" | string;
+  points: TimeseriesPoint[];
+}
+
+export interface TopRule {
+  rule_id: string;
+  category: Category | string;
+  severity: Severity | string;
+  rule_text: string | null;
+  count: number;
+}
+
+export interface TopRulesResponse {
+  top_rules: TopRule[];
+}
+
+export interface PrecedentHitFields {
+  reviewer_name?: string | null;
+  comment_text?: string | null;
+  chunk_text?: string | null;
+  anchor_text?: string | null;
+  final_text_chunk?: string | null;
+  violation_category?: string | null;
+  severity?: string | null;
+  document_id?: string | null;
+  source_file?: string | null;
+  [k: string]: unknown;
+}
+
+export interface PrecedentHit {
+  id: string;
+  score: number;
+  fields: PrecedentHitFields;
+}
+
+export interface KnowledgeBaseSearchResponse {
+  query: string;
+  results: PrecedentHit[];
 }
 
 export interface ProjectionPoint {

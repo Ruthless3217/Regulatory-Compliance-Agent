@@ -38,7 +38,9 @@ class AzureOpenAIEmbedder:
             azure_endpoint=settings.azure_openai_endpoint or "https://placeholder.openai.azure.com",
         )
 
-    async def embed(self, texts: List[str]) -> List[List[float]]:
+    async def embed(self, texts: List[str], input_type: str = "search_document") -> List[List[float]]:
+        # input_type ignored (Azure OpenAI embeddings are symmetric); accepted
+        # for protocol parity with the asymmetric Cohere embedder.
         if not texts:
             return []
         vectors: List[List[float]] = []

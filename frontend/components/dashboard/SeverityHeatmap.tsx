@@ -17,8 +17,8 @@ export function SeverityHeatmap({ rows }: Props) {
   const get = (s: string) => rows.find((r) => r.severity.toLowerCase() === s)?.count ?? 0;
 
   return (
-    <div className="rounded-md border border-border bg-surface p-6">
-      <h3 className="font-serif text-lg">Severity distribution</h3>
+    <div className="rounded-lg border border-border bg-background p-6 shadow-card">
+      <h3 className="text-base font-semibold tracking-tight">Severity distribution</h3>
       <p className="mt-1 text-xs text-muted-foreground">Violation counts by severity</p>
       <div className="mt-4 space-y-3">
         {ORDER.map((s) => {

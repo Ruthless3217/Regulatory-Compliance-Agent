@@ -60,7 +60,7 @@ class ChatRetriever:
         store = get_vector_store()
 
         try:
-            qvec = (await embedder.embed([query]))[0]
+            qvec = (await embedder.embed([query], input_type="search_query"))[0]
         except RAGEmbedFailed as e:
             logger.warning(f"Embed failed in chat retriever, returning empty context: {e}")
             return ChatContext(degraded=True)

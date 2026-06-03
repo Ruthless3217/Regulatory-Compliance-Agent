@@ -50,7 +50,7 @@ export function ViolationGroup({ severity, violations }: Props) {
                 <Badge>{categoryLabel(cat)}</Badge>
                 <span className="font-mono text-xs text-muted-foreground">{vs.length}</span>
               </div>
-              <ul className="divide-y divide-border rounded-md border border-border bg-surface">
+              <ul className="divide-y divide-border rounded-md border border-border bg-background">
                 {vs.map((v) => (
                   <li key={v.id} className="p-4">
                     <div className="flex items-start justify-between gap-4">
