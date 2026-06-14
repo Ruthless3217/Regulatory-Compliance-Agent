@@ -8,14 +8,18 @@ Endpoints:
 - GET  /compliance/results/{submission_id}        - Get analysis results
 - GET  /compliance/check/{check_id}               - Get specific check details
 - POST /compliance/resume/{submission_id}         - Resume HITL workflow
+- POST /compliance/violations/{violation_id}/feedback - Reviewer verdict (adaptive weights)
+- POST /compliance/check/{check_id}/reviewer-score    - Held-out reviewer score (eval only)
 """
 import asyncio
 import json
 import logging
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from typing import Optional, Set
+from typing import Literal, Optional, Set
 
 from app.api.rate_limit import llm_rate_limit
 from app.database import get_db, SessionLocal
@@ -170,6 +174,10 @@ def _serialize_violation(v: Violation) -> dict:
         "cited_comment_verbatim": v.cited_comment_verbatim,
         "cited_final_text": v.cited_final_text,
         "similarity_score": v.similarity_score,
+        # Sub-confidence-floor / structural findings: persisted but kept out of
+        # the score and surfaced in a separate "Needs review" lane in the UI.
+        "suppressed": bool(v.suppressed),
+        "suppressed_reason": v.suppressed_reason,
     }
 
 
@@ -352,3 +360,77 @@ async def get_compliance_check(
     if not summary:
         raise HTTPException(status_code=404, detail="Compliance check not found")
     return summary
+
+
+# --------------------------------------------------------------------------
+# Adaptive rule weights (HITL feedback)
+# --------------------------------------------------------------------------
+
+class ViolationFeedbackRequest(BaseModel):
+    """Reviewer verdict on one finding — the learning signal."""
+    verdict: Literal["accept", "reject"]
+    severity_override: Optional[
+        Literal["critical", "high", "medium", "low", "moderate", "informational"]
+    ] = None
+    comment: Optional[str] = None
+
+
+class ReviewerScoreRequest(BaseModel):
+    """Reviewer's own document score — held-out evaluation, never trained on."""
+    score: float = Field(..., ge=0.0, le=100.0)
+
+
+@router.post("/violations/{violation_id}/feedback")
+async def submit_violation_feedback(
+    violation_id: str,
+    payload: ViolationFeedbackRequest,
+    db: Session = Depends(get_db),
+):
+    """Record a reviewer's accept/reject on a finding and update the fired
+    rule's learned reliability (Beta-Binomial pseudo-counts, damped by the
+    prior). Re-submitting flips the stored verdict without double-counting.
+    """
+    from app.services.rule_feedback_service import RuleFeedbackService
+
+    try:
+        return RuleFeedbackService.apply_feedback(
+            db,
+            violation_id,
+            payload.verdict,
+            severity_override=payload.severity_override,
+            comment=payload.comment,
+        )
+    except ValueError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/check/{check_id}/reviewer-score")
+async def submit_reviewer_score(
+    check_id: str,
+    payload: ReviewerScoreRequest,
+    db: Session = Depends(get_db),
+):
+    """Log the reviewer's document-level score next to the system's.
+
+    Evaluation-only by design: this value never feeds scoring or weight
+    updates (training on the evaluation metric would Goodhart it). The
+    |system − reviewer| gap over time is the convergence curve that shows
+    whether the adaptive weights actually improve the system.
+    """
+    check = db.query(ComplianceCheck).filter(ComplianceCheck.id == check_id).first()
+    if not check:
+        raise HTTPException(status_code=404, detail="Compliance check not found")
+
+    check.reviewer_score = payload.score
+    check.reviewer_scored_at = datetime.utcnow()
+    db.commit()
+
+    system_score = check.overall_score
+    return {
+        "check_id": str(check.id),
+        "reviewer_score": payload.score,
+        "system_score": system_score,
+        "gap": abs(system_score - payload.score) if system_score is not None else None,
+    }

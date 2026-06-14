@@ -17,12 +17,19 @@ import httpx
 
 # LangSmith tracing — no-op decorator if the SDK isn't installed.
 try:
-    from langsmith import traceable
+    try:
+        from langsmith import traceable, get_current_run_tree
+    except ImportError:
+        from langsmith import traceable
+        from langsmith.run_helpers import get_current_run_tree
 except Exception:  # pragma: no cover
     def traceable(*_a, **_kw):  # type: ignore
         def _decorate(fn):
             return fn
         return _decorate if not (_a and callable(_a[0])) else _a[0]
+
+    def get_current_run_tree():
+        return None
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -131,9 +138,17 @@ class LLMService:
     ) -> str:
         """Generate response from LLM."""
         messages = self._build_chat_messages(prompt, system_prompt, context)
+        self._enforce_context_budget(messages)
+        from app.services.llm_budget import get_global_budget
+        global_budget = get_global_budget()
+        estimate = self._estimate_tokens(messages)
         last_exc: Optional[Exception] = None
         for key_id, client in self._client_pool:
+            limiter = self._groq_limiter_for(key_id)
             try:
+                if limiter is not None:
+                    await limiter.acquire(estimate)
+                await global_budget.reserve(estimate)
                 response = await client.chat.completions.create(
                     model=self.model,
                     messages=messages,
@@ -141,6 +156,23 @@ class LLMService:
                     max_tokens=kwargs.get("max_tokens", settings.llm_max_tokens),
                 )
                 response_text = response.choices[0].message.content.strip()
+
+                # Extract token usage and update LangSmith run tree
+                usage = getattr(response, "usage", None)
+                input_tokens = 0
+                output_tokens = 0
+                total_tokens = 0
+                if usage:
+                    input_tokens = getattr(usage, "prompt_tokens", 0)
+                    output_tokens = getattr(usage, "completion_tokens", 0)
+                    total_tokens = getattr(usage, "total_tokens", 0)
+
+                self._update_langsmith_usage(input_tokens, output_tokens, total_tokens)
+
+                actual = total_tokens or estimate
+                if limiter is not None:
+                    limiter.reconcile(estimate, actual)
+                await global_budget.reconcile(estimate, actual)
                 await self._log_to_json(prompt, response_text, system_prompt, context)
                 return response_text
             except Exception as e:
@@ -148,10 +180,14 @@ class LLMService:
                     logger.warning(f"[failover] key …{key_id} rate-limited; trying next key")
                     last_exc = e
                     continue
+                # FAIL CLOSED: do not return a canned string that a caller would
+                # treat as a valid (benign) answer. Mirrors the structured path.
                 logger.error(f"LLM generation failed: {str(e)}")
-                return self._get_fallback_response(prompt, context)
+                raise LLMUnavailableError(f"LLM call failed: {e}") from e
         logger.error(f"LLM generation failed — all keys rate-limited: {last_exc}")
-        return self._get_fallback_response(prompt, context)
+        raise LLMUnavailableError(
+            f"All {len(self._client_pool)} LLM key(s) rate-limited; last error: {last_exc}"
+        ) from last_exc
 
     @traceable(run_type="llm", name="LLM.stream_response")
     async def stream_response(
@@ -169,17 +205,27 @@ class LLMService:
             messages.extend(history)
         messages.append({"role": "user", "content": prompt})
 
+        self._enforce_context_budget(messages)
+        from app.services.llm_budget import get_global_budget
+        global_budget = get_global_budget()
+        estimate = self._estimate_tokens(messages)
+
         # Failover can only happen BEFORE the first token: once we have yielded
         # text we can't restart on another key without duplicating output.
         last_exc: Optional[Exception] = None
         for key_id, client in self._client_pool:
+            limiter = self._groq_limiter_for(key_id)
             try:
+                if limiter is not None:
+                    await limiter.acquire(estimate)
+                await global_budget.reserve(estimate)
                 stream = await client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     temperature=temperature,
                     max_tokens=settings.llm_max_tokens,
                     stream=True,
+                    stream_options={"include_usage": True}
                 )
             except Exception as e:
                 if _is_rate_limit_error(e) and len(self._client_pool) > 1:
@@ -190,12 +236,24 @@ class LLMService:
                 yield f"\n\n[Error: streaming failed — {str(e)}]"
                 return
             try:
+                input_tokens = 0
+                output_tokens = 0
+                total_tokens = 0
                 async for chunk in stream:
+                    usage = getattr(chunk, "usage", None)
+                    if usage:
+                        input_tokens = getattr(usage, "prompt_tokens", 0)
+                        output_tokens = getattr(usage, "completion_tokens", 0)
+                        total_tokens = getattr(usage, "total_tokens", 0)
+
                     if not chunk.choices:
                         continue
                     delta = chunk.choices[0].delta
                     if delta and delta.content:
                         yield delta.content
+
+                if total_tokens > 0:
+                    self._update_langsmith_usage(input_tokens, output_tokens, total_tokens)
                 return
             except Exception as e:
                 logger.error(f"LLM streaming failed mid-stream: {e}")
@@ -229,6 +287,9 @@ class LLMService:
         )
         full_system_prompt = (system_prompt or "") + schema_instruction
         base_messages = self._build_chat_messages(prompt, full_system_prompt, context)
+        self._enforce_context_budget(base_messages)
+        from app.services.llm_budget import get_global_budget
+        global_budget = get_global_budget()
 
         # Groq enforces TPM/TPD ceilings PER KEY. Reserve budget before each call
         # so we rotate (or queue) rather than burn a 429-doomed run. Only applies
@@ -265,6 +326,16 @@ class LLMService:
                     last_exc = e
                     daily_blocked += 1
                     continue
+            else:
+                token_estimate = self._estimate_tokens(current_messages)
+
+            # Global wallet ceiling — independent of per-key Groq quota. Applies
+            # to every key, so exhaustion fails closed rather than rotating.
+            from app.services.llm_budget import LLMBudgetExceeded
+            try:
+                await global_budget.reserve(token_estimate)
+            except LLMBudgetExceeded as e:
+                raise LLMUnavailableError(str(e)) from e
 
             try:
                 return await self._structured_attempts(
@@ -339,14 +410,26 @@ class LLMService:
 
                 # Extract token usage
                 token_usage = 0
+                input_tokens = 0
+                output_tokens = 0
                 try:
                     raw_data = json.loads(response_wrapper.http_response.text)
                     if "usageMetadata" in raw_data:
                         token_usage = raw_data["usageMetadata"].get("totalTokenCount", 0)
+                        input_tokens = raw_data["usageMetadata"].get("promptTokenCount", 0)
+                        output_tokens = raw_data["usageMetadata"].get("candidatesTokenCount", 0)
                     elif hasattr(response, 'usage') and response.usage:
                         token_usage = response.usage.total_tokens
+                        input_tokens = response.usage.prompt_tokens
+                        output_tokens = response.usage.completion_tokens
                 except Exception:
                     token_usage = 0
+
+                self._update_langsmith_usage(
+                    input_tokens,
+                    output_tokens,
+                    token_usage or (input_tokens + output_tokens)
+                )
 
                 await self._log_to_json(prompt, response_text, system_prompt, context)
 
@@ -364,8 +447,11 @@ class LLMService:
                 end_time = time.time()
 
                 # Correct the reserved estimate against Groq's reported usage.
+                actual = token_usage or token_estimate
                 if limiter is not None:
-                    limiter.reconcile(token_estimate, token_usage or token_estimate)
+                    limiter.reconcile(token_estimate, actual)
+                from app.services.llm_budget import get_global_budget
+                await get_global_budget().reconcile(token_estimate, actual)
 
                 if execution_id and db:
                     await self._record_tool_invocation(
@@ -417,11 +503,49 @@ class LLMService:
 
     @staticmethod
     def _estimate_tokens(messages: list) -> int:
-        """Rough token estimate for rate-limiting: ~4 chars/token for the
-        prompt plus the configured output ceiling. Reconciled against actual
-        usage after the call."""
-        chars = sum(len(str(m.get("content", ""))) for m in messages)
-        return chars // 4 + settings.llm_max_tokens
+        """Rough token estimate for rate-limiting: prompt tokens (tiktoken when
+        available, else ~4 chars/token) plus the configured output ceiling.
+        Reconciled against actual usage after the call."""
+        return LLMService._count_prompt_tokens(messages) + settings.llm_max_tokens
+
+    @staticmethod
+    def _count_prompt_tokens(messages: list) -> int:
+        """Count prompt tokens accurately with tiktoken (cl100k_base) when it's
+        installed; fall back to a 4-chars/token heuristic otherwise."""
+        text = "\n".join(str(m.get("content", "")) for m in messages)
+        try:
+            import tiktoken
+            enc = tiktoken.get_encoding("cl100k_base")
+            return len(enc.encode(text))
+        except Exception:
+            return len(text) // 4
+
+    @staticmethod
+    def _enforce_context_budget(messages: list) -> None:
+        """Fail CLOSED if the assembled prompt + reserved output would overflow
+        the model's context window. Without this the provider silently truncates
+        the TAIL of the prompt — which is exactly where the document section and
+        the authoritative anti-injection REMINDER sit. A too-large prompt becomes
+        an explicit LLMUnavailableError (→ needs_review) instead of a silently
+        degraded grade. See architect-audit (no token budgeting)."""
+        prompt_tokens = LLMService._count_prompt_tokens(messages)
+        safety = 512
+        ceiling = settings.llm_context_window - settings.llm_max_tokens - safety
+        if prompt_tokens > ceiling:
+            raise LLMUnavailableError(
+                f"Prompt ({prompt_tokens} tokens) + reserved output "
+                f"({settings.llm_max_tokens}) exceeds the model context window "
+                f"({settings.llm_context_window}). Refusing to send a prompt that "
+                f"would be silently truncated."
+            )
+
+    def _groq_limiter_for(self, key_id: str):
+        """Return the per-key Groq limiter for the active model, or None when the
+        provider isn't Groq (other providers must not inherit Groq's ceilings)."""
+        if "groq" not in (self.base_url or "").lower():
+            return None
+        from app.services.groq_rate_limiter import get_rate_limiter
+        return get_rate_limiter(self.model, key_id)
 
     def _build_chat_messages(
         self,
@@ -476,13 +600,16 @@ class LLMService:
     async def _log_to_json(self, prompt: str, response: str, system_prompt: str = None, context: Dict = None):
         """Log LLM interaction to log.json."""
         try:
+            from app.services.pii import mask_pii, mask_obj
             log_entry = {
                 "timestamp": datetime.now().isoformat(),
                 "model": self.model,
-                "system_prompt": system_prompt,
-                "context": context,
-                "prompt": prompt[:500],
-                "response": response[:500]
+                # Mask PII before it lands on disk — the log must not become a
+                # plaintext store of emails/phones/PAN/Aadhaar from submissions.
+                "system_prompt": mask_pii(system_prompt),
+                "context": mask_obj(context),
+                "prompt": mask_pii(prompt[:500]),
+                "response": mask_pii(response[:500]),
             }
             logs = []
             if os.path.exists(self.log_file):
@@ -498,6 +625,33 @@ class LLMService:
                 json.dump(logs, f, indent=2)
         except Exception as e:
             logger.debug(f"Failed to log to JSON: {e}")
+
+    def _update_langsmith_usage(self, input_tokens: int, output_tokens: int, total_tokens: int):
+        """Update token usage metadata for the active LangSmith run."""
+        try:
+            run = get_current_run_tree()
+            if run:
+                provider = "openai"
+                base_url_lower = (self.base_url or "").lower()
+                model_lower = (self.model or "").lower()
+                if "groq" in base_url_lower:
+                    provider = "groq"
+                elif "google" in base_url_lower or "gemini" in model_lower:
+                    provider = "google_genai"
+                elif "cohere" in base_url_lower or "cohere" in model_lower:
+                    provider = "cohere"
+                
+                run.add_metadata({
+                    "ls_provider": provider,
+                    "ls_model_name": self.model
+                })
+                run.set(usage_metadata={
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": total_tokens
+                })
+        except Exception as e:
+            logger.warning(f"Failed to set usage_metadata on LangSmith run: {e}")
 
 
 # Singleton instance

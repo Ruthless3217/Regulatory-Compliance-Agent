@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     llm_model: str = "gemini-2.0-flash"
     llm_insecure_tls: bool = False  # set True to bypass TLS verify (e.g. behind Cisco SSL inspection)
     llm_max_tokens: int = 4096      # hard cap on generated tokens per call (cost-leak guard)
+    # Hard daily token ceiling across ALL keys/models/endpoints (wallet guard,
+    # independent of per-key Groq TPM/TPD). 0 = disabled. When exceeded, every
+    # LLM entrypoint fails closed until UTC midnight.
+    llm_global_daily_token_budget: int = 0
+    # Context window of the deployed model — used for the pre-call token budget
+    # check so the assembled prompt can't silently overflow and truncate the tail.
+    llm_context_window: int = 128_000
+    critic_enabled: bool = True
 
     @property
     def llm_api_keys(self) -> List[str]:
@@ -82,7 +90,7 @@ class Settings(BaseSettings):
     langchain_tracing_v2: str = "false"
     langchain_endpoint: str = "https://api.smith.langchain.com"
     langchain_api_key: str = ""
-    langchain_project: str = "regulatory-compliance-agent"
+    langchain_project: str = "Regulatory Compliance Agent"
 
     # RAG — pluggable backend
     rag_embedding_provider: str = "openai"        # openai | azure_openai | cohere
@@ -98,6 +106,11 @@ class Settings(BaseSettings):
     # Candidates below it are dropped, so an unrelated chunk can legitimately
     # retrieve zero precedents → knowledge_base_empty → fail closed (audit C6).
     rag_min_cosine: float = 0.25
+    # Minimum BM25 ts_rank_cd on the KEYWORD leg before fusion. Without it, a row
+    # sharing a single common token ("policy", "premium") surfaces into RRF with
+    # no relevance guarantee and can be cited (manufactured findings). cosine
+    # gates the vector leg; this gates the keyword leg. Tune against the eval set.
+    rag_min_ts_rank: float = 0.02
     rag_recall_pool: int = 30
     rag_rrf_k: int = 60
     rag_active_categories: List[str] = ["regulatory", "brand", "seo", "irdai", "sebi"]
@@ -149,6 +162,12 @@ class Settings(BaseSettings):
     # closed at "waiting_for_review". Keep this low (1-2) on the free tier so
     # calls fit under TPM; raise it on a paid/Dev tier. Override via env.
     grade_concurrency: int = 2
+
+    # Completeness sweep (recall fix 2026-06-08): run a second per-chunk "what did
+    # you miss?" grading pass and merge the additional findings. A single
+    # structured pass systematically under-enumerates on dense copy. This DOUBLES
+    # LLM calls per chunk — disable on a tight Groq free-tier quota. Override via env.
+    completeness_sweep_enabled: bool = True
 
     # Pinecone (alternative v1 vector store)
     pinecone_api_key: str = ""

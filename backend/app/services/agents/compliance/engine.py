@@ -36,7 +36,12 @@ class ComplianceEngine:
     # Degraded reasons that block a passing grade but are not hard failures —
     # the document could not be substantively evaluated, so it needs review
     # rather than being marked "failed".
-    _NEEDS_REVIEW_REASONS = {"knowledge_base_empty", "analysis_incomplete", "rag_degraded"}
+    _NEEDS_REVIEW_REASONS = {
+        "knowledge_base_empty",
+        "analysis_incomplete",
+        "rag_degraded",
+        "rules_unavailable",
+    }
 
     @staticmethod
     def evaluate_persistability(final_state: Dict[str, Any]) -> tuple:
@@ -81,12 +86,29 @@ class ComplianceEngine:
         """
         submission = None
         try:
-            # 1. Load submission
-            submission = db.query(Submission).filter(Submission.id == submission_id).first()
+            # 1. Load submission under a row lock so two concurrent triggers
+            #    can't both start an analysis (TOCTOU on status → duplicate
+            #    checks + doubled LLM spend). The second waiter blocks here,
+            #    then sees status="analyzing" and bails.
+            submission = (
+                db.query(Submission)
+                .filter(Submission.id == submission_id)
+                .with_for_update()
+                .first()
+            )
             if not submission:
                 raise ValueError(f"Submission {submission_id} not found")
 
-            # 2. Update status
+            if submission.status == "analyzing":
+                logger.warning(
+                    f"Submission {submission_id} is already being analyzed; "
+                    f"skipping duplicate trigger (idempotency guard)."
+                )
+                db.commit()  # release the row lock
+                return None
+
+            # 2. Claim the submission. Commit releases the lock so readers see
+            #    'analyzing' immediately.
             submission.status = "analyzing"
             db.commit()
 
@@ -147,16 +169,17 @@ class ComplianceEngine:
                     db.commit()
                     return None
 
-                # 6. Persist results
+                # 6. Persist results. The submission status flip to 'analyzed'
+                #    happens INSIDE persist_results, in the SAME transaction as
+                #    the check + violations, so a crash can't leave a fully
+                #    graded check attached to a submission still reading
+                #    'analyzing' (torn audit record).
                 compliance_check = ComplianceEngine.persist_results(
                     submission_id=str(submission_id),
                     violations=final_state.get("violations", []),
                     scores=final_state.get("scores", {}),
                     db=db
                 )
-
-                submission.status = "analyzed"
-                db.commit()
 
                 # 7. Flip RAG chunk status to 'analyzed' so they become eligible
                 # for cross-submission similarity search. Non-fatal on failure.
@@ -175,9 +198,11 @@ class ComplianceEngine:
                 return compliance_check
 
             finally:
-                # Reset context variable
-                from contextvars import copy_context
-                pass
+                # Reset the request-scoped DB session ContextVar so it does not
+                # leak a (now closing) session into whatever task reuses this
+                # context next. Previously this block was dead (`pass`), so the
+                # token was never reset.
+                GraphContext.reset(token)
 
         except Exception as e:
             traceback.print_exc()
@@ -217,6 +242,7 @@ class ComplianceEngine:
 
             # Persist violations
             ALLOWED_SEV = {"critical", "high", "medium", "low", "moderate", "informational"}
+            _rule_version_cache: Dict[str, Optional[int]] = {}
             for v_data in violations:
                 # Normalize severity + category casing at the boundary so the
                 # LLM's "CRITICAL" / "Critical" / "critical" all stop forking
@@ -271,18 +297,44 @@ class ComplianceEngine:
                     cited_comment_verbatim=v_data.get("cited_comment_verbatim"),
                     cited_final_text=v_data.get("cited_final_text"),
                     similarity_score=sim_score,
+                    # Citation locators (rule path) — exact clause/page/version.
+                    cited_section=v_data.get("cited_section"),
+                    cited_page=v_data.get("cited_page"),
+                    cited_regulation_version=v_data.get("cited_regulation_version"),
+                    # Sub-floor / uncertain findings persisted but kept out of the
+                    # score and routed to human review.
+                    suppressed=bool(v_data.get("suppressed", False)),
+                    suppressed_reason=v_data.get("suppressed_reason"),
                 )
 
-                # Try to resolve rule_id as UUID
+                # Try to resolve rule_id as UUID + snapshot the rule's version so
+                # a later rule edit/deactivation can't rewrite this decision.
                 rule_id = v_data.get("rule_id")
                 if rule_id:
                     try:
                         import uuid
-                        violation.rule_id = uuid.UUID(str(rule_id))
+                        rid = uuid.UUID(str(rule_id))
+                        violation.rule_id = rid
+                        key = str(rid)
+                        if key not in _rule_version_cache:
+                            from app.models.rule import Rule
+                            _rule_version_cache[key] = (
+                                db.query(Rule.version).filter(Rule.id == rid).scalar()
+                            )
+                        violation.rule_version = _rule_version_cache[key]
                     except (ValueError, TypeError):
                         pass
 
                 db.add(violation)
+
+            # Flip submission status in the SAME transaction as the check +
+            # violations so the three commit atomically (no torn record).
+            submission = (
+                db.query(Submission).filter(Submission.id == submission_id).first()
+            )
+            if submission is not None:
+                submission.status = "analyzed"
+                db.add(submission)
 
             db.commit()
             db.refresh(check)
@@ -335,6 +387,8 @@ class ComplianceEngine:
                     "cited_comment_verbatim": v.cited_comment_verbatim,
                     "cited_final_text": v.cited_final_text,
                     "similarity_score": v.similarity_score,
+                    "suppressed": bool(v.suppressed),
+                    "suppressed_reason": v.suppressed_reason,
                 }
                 for v in violations
             ]

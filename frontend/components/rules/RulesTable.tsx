@@ -5,7 +5,7 @@ import { Pencil, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge, Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { categoryLabel } from "@/lib/format";
+import { categoryLabel, normalizeSeverity } from "@/lib/format";
 import { updateRule } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { Rule } from "@/lib/types";
@@ -32,7 +32,7 @@ export function RulesTable({ initialRules }: Props) {
 
   const filtered = rules.filter((r) => {
     if (cat !== "all" && r.category.toLowerCase() !== cat) return false;
-    if (sev !== "all" && r.severity.toLowerCase() !== sev) return false;
+    if (sev !== "all" && normalizeSeverity(r.severity) !== sev) return false;
     if (act === "active" && !r.is_active) return false;
     if (act === "inactive" && r.is_active) return false;
     return true;

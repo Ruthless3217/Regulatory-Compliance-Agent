@@ -37,6 +37,7 @@ _FILTER_WHITELIST: Dict[IndexName, set] = {
     "rag_compliance_examples": {
         "reviewer_name", "violation_category", "severity", "document_id",
     },
+    "rag_product_docs": {"product_document_id", "uin", "product_name", "block_type"},
 }
 
 # Per-index column lists for return shape.
@@ -57,6 +58,10 @@ _RETURN_COLUMNS: Dict[IndexName, List[str]] = {
         "id", "document_id", "title", "task", "section_label", "chunk_text",
         "anchor_text", "reviewer_name", "comment_text", "final_text_chunk",
         "violation_category", "severity", "source_file",
+    ],
+    "rag_product_docs": [
+        "id", "product_document_id", "uin", "product_name", "chunk_index",
+        "page_number", "section_path", "block_type", "text",
     ],
 }
 
@@ -111,9 +116,11 @@ def _build_filter_clause(
 _UPSERT_SQL: Dict[IndexName, str] = {
     "rag_rules": """
         INSERT INTO rag_rules (id, category, severity, is_active, rule_text,
-                               keywords, embed_text, embedding, source, updated_at)
+                               keywords, embed_text, embedding, source,
+                               embedding_model, embedding_dim, updated_at)
         VALUES (:id, :category, :severity, :is_active, :rule_text,
-                CAST(:keywords AS JSONB), :embed_text, CAST(:embedding AS VECTOR), :source, NOW())
+                CAST(:keywords AS JSONB), :embed_text, CAST(:embedding AS VECTOR), :source,
+                :embedding_model, :embedding_dim, NOW())
         ON CONFLICT (id) DO UPDATE SET
           category = EXCLUDED.category,
           severity = EXCLUDED.severity,
@@ -123,13 +130,17 @@ _UPSERT_SQL: Dict[IndexName, str] = {
           embed_text = EXCLUDED.embed_text,
           embedding = EXCLUDED.embedding,
           source = EXCLUDED.source,
+          embedding_model = EXCLUDED.embedding_model,
+          embedding_dim = EXCLUDED.embedding_dim,
           updated_at = NOW()
     """,
     "rag_chunks": """
         INSERT INTO rag_chunks (id, submission_id, chunk_index, page_number, text,
-                                embedding, submission_status, submission_summary, updated_at)
+                                embedding, submission_status, submission_summary,
+                                embedding_model, embedding_dim, updated_at)
         VALUES (:id, :submission_id, :chunk_index, :page_number, :text,
-                CAST(:embedding AS VECTOR), :submission_status, :submission_summary, NOW())
+                CAST(:embedding AS VECTOR), :submission_status, :submission_summary,
+                :embedding_model, :embedding_dim, NOW())
         ON CONFLICT (id) DO UPDATE SET
           submission_id = EXCLUDED.submission_id,
           chunk_index = EXCLUDED.chunk_index,
@@ -138,15 +149,18 @@ _UPSERT_SQL: Dict[IndexName, str] = {
           embedding = EXCLUDED.embedding,
           submission_status = EXCLUDED.submission_status,
           submission_summary = EXCLUDED.submission_summary,
+          embedding_model = EXCLUDED.embedding_model,
+          embedding_dim = EXCLUDED.embedding_dim,
           updated_at = NOW()
     """,
     "rag_source_docs": """
         INSERT INTO rag_source_docs (id, document_id, document_title, regulator,
                                      chunk_index, page_number, text, embedding,
-                                     derived_rule_ids, uploaded_at)
+                                     derived_rule_ids, embedding_model, embedding_dim,
+                                     uploaded_at)
         VALUES (:id, :document_id, :document_title, :regulator,
                 :chunk_index, :page_number, :text, CAST(:embedding AS VECTOR),
-                CAST(:derived_rule_ids AS UUID[]), NOW())
+                CAST(:derived_rule_ids AS UUID[]), :embedding_model, :embedding_dim, NOW())
         ON CONFLICT (id) DO UPDATE SET
           document_id = EXCLUDED.document_id,
           document_title = EXCLUDED.document_title,
@@ -155,17 +169,20 @@ _UPSERT_SQL: Dict[IndexName, str] = {
           page_number = EXCLUDED.page_number,
           text = EXCLUDED.text,
           embedding = EXCLUDED.embedding,
-          derived_rule_ids = EXCLUDED.derived_rule_ids
+          derived_rule_ids = EXCLUDED.derived_rule_ids,
+          embedding_model = EXCLUDED.embedding_model,
+          embedding_dim = EXCLUDED.embedding_dim
     """,
     "rag_compliance_examples": """
         INSERT INTO rag_compliance_examples (
             id, document_id, title, task, section_label, chunk_text, anchor_text,
             reviewer_name, comment_text, final_text_chunk, violation_category,
-            severity, source_file, embed_text, embedding)
+            severity, source_file, embed_text, embedding, embedding_model, embedding_dim)
         VALUES (
             :id, :document_id, :title, :task, :section_label, :chunk_text, :anchor_text,
             :reviewer_name, :comment_text, :final_text_chunk, :violation_category,
-            :severity, :source_file, :embed_text, CAST(:embedding AS VECTOR))
+            :severity, :source_file, :embed_text, CAST(:embedding AS VECTOR),
+            :embedding_model, :embedding_dim)
         ON CONFLICT (id) DO UPDATE SET
           document_id = EXCLUDED.document_id,
           title = EXCLUDED.title,
@@ -180,14 +197,58 @@ _UPSERT_SQL: Dict[IndexName, str] = {
           severity = EXCLUDED.severity,
           source_file = EXCLUDED.source_file,
           embed_text = EXCLUDED.embed_text,
-          embedding = EXCLUDED.embedding
+          embedding = EXCLUDED.embedding,
+          embedding_model = EXCLUDED.embedding_model,
+          embedding_dim = EXCLUDED.embedding_dim
+    """,
+    "rag_product_docs": """
+        INSERT INTO rag_product_docs (id, product_document_id, uin, product_name,
+                                      chunk_index, page_number, section_path,
+                                      block_type, text, embedding,
+                                      embedding_model, embedding_dim, updated_at)
+        VALUES (:id, :product_document_id, :uin, :product_name,
+                :chunk_index, :page_number, :section_path,
+                :block_type, :text, CAST(:embedding AS VECTOR),
+                :embedding_model, :embedding_dim, NOW())
+        ON CONFLICT (id) DO UPDATE SET
+          product_document_id = EXCLUDED.product_document_id,
+          uin = EXCLUDED.uin,
+          product_name = EXCLUDED.product_name,
+          chunk_index = EXCLUDED.chunk_index,
+          page_number = EXCLUDED.page_number,
+          section_path = EXCLUDED.section_path,
+          block_type = EXCLUDED.block_type,
+          text = EXCLUDED.text,
+          embedding = EXCLUDED.embedding,
+          embedding_model = EXCLUDED.embedding_model,
+          embedding_dim = EXCLUDED.embedding_dim,
+          updated_at = NOW()
     """,
 }
 
 
+def _active_embedder_identity() -> Tuple[Optional[str], Optional[int]]:
+    """(model, dim) of the currently-configured embedder, for stamping vectors.
+
+    Best-effort: if the embedder can't be constructed we stamp NULLs rather than
+    blocking the upsert (the query-time assert still protects retrieval)."""
+    try:
+        from app.services.rag.factory import get_embedder
+        emb = get_embedder()
+        return getattr(emb, "model", None), getattr(emb, "dim", None)
+    except Exception:  # pragma: no cover
+        return None, None
+
+
 def _upsert_params(index: IndexName, doc: VectorDoc) -> Dict[str, Any]:
     f = doc.fields
-    base = {"id": doc.id, "embedding": _vec_literal(doc.embedding)}
+    model, dim = _active_embedder_identity()
+    base = {
+        "id": doc.id,
+        "embedding": _vec_literal(doc.embedding),
+        "embedding_model": model,
+        "embedding_dim": dim,
+    }
     if index == "rag_rules":
         return {
             **base,
@@ -240,6 +301,18 @@ def _upsert_params(index: IndexName, doc: VectorDoc) -> Dict[str, Any]:
             "source_file": f.get("source_file", ""),
             "embed_text": f.get("embed_text", ""),
         }
+    if index == "rag_product_docs":
+        return {
+            **base,
+            "product_document_id": f["product_document_id"],
+            "uin": f.get("uin"),
+            "product_name": f.get("product_name", ""),
+            "chunk_index": int(f.get("chunk_index", 0)),
+            "page_number": f.get("page_number"),
+            "section_path": f.get("section_path"),
+            "block_type": f.get("block_type", "prose"),
+            "text": f.get("text", ""),
+        }
     raise ValueError(f"Unknown index: {index}")
 
 
@@ -260,10 +333,15 @@ def _vector_leg_sql(index: IndexName, filter_clause: str) -> str:
 
 
 def _keyword_leg_sql(index: IndexName, filter_clause: str) -> str:
+    # Relevance floor (:min_ts_rank) on BM25, mirroring the cosine floor on the
+    # vector leg. Drops rows that only match a single common token so an
+    # off-topic precedent/rule can't ride a lexical coincidence into RRF and be
+    # cited. See architect-audit (BM25 leg had no floor).
     return f"""
         SELECT id, ts_rank_cd(search_tsv, plainto_tsquery('english', :qtext)) AS score
         FROM {index}
         WHERE search_tsv @@ plainto_tsquery('english', :qtext) {filter_clause}
+          AND ts_rank_cd(search_tsv, plainto_tsquery('english', :qtext)) >= :min_ts_rank
         ORDER BY score DESC
         LIMIT :recall
     """
@@ -272,6 +350,49 @@ def _keyword_leg_sql(index: IndexName, filter_clause: str) -> str:
 def _fetch_sql(index: IndexName) -> str:
     cols = _RETURN_COLUMNS[index]
     return f"SELECT {', '.join(cols)} FROM {index} WHERE id = ANY(CAST(:ids AS UUID[]))"
+
+
+# Indexes whose stored embedding model has already been validated against the
+# active embedder this process — so the check is one query per index, not per call.
+_embedding_checked: set = set()
+
+
+def _assert_embedding_compat(db: Session, index: IndexName) -> None:
+    """Fail closed if rows in ``index`` were embedded with a DIFFERENT model than
+    the one now answering queries. Cosine similarity across embedding spaces is
+    meaningless but returns plausible scores → silent retrieval corruption.
+
+    Legacy rows with NULL embedding_model (pre-0009 corpora) are tolerated — we
+    can't know their model, so we can't assert; new upserts stamp it. Only a
+    CONCRETE mismatch raises. Runs once per index per process.
+    """
+    if index in _embedding_checked:
+        return
+    active_model, _ = _active_embedder_identity()
+    if not active_model:
+        _embedding_checked.add(index)
+        return
+    rows = db.execute(
+        text(
+            f"SELECT DISTINCT embedding_model FROM {index} "
+            f"WHERE embedding_model IS NOT NULL"
+        )
+    ).all()
+    stored = {str(r[0]) for r in rows}
+    mismatched = stored - {active_model}
+    if mismatched:
+        raise RAGDegraded(
+            f"Embedding-model mismatch on {index}: active embedder is "
+            f"'{active_model}' but rows were embedded with {sorted(mismatched)}. "
+            f"Re-index {index} under the active model or restore the prior "
+            f"RAG_EMBEDDING_PROVIDER/MODEL. Refusing to serve corrupt retrieval."
+        )
+    _embedding_checked.add(index)
+
+
+def reset_embedding_check_cache() -> None:
+    """Test/ops helper — clears the per-process validation cache."""
+    _embedding_checked.clear()
 
 
 # =========================================================== PgVectorStore
@@ -346,11 +467,15 @@ class PgVectorStore:
         def _do() -> List[SearchHit]:
             db = self._session()
             try:
+                # Fail closed if the corpus was embedded with a different model
+                # than the one now querying (silent retrieval corruption).
+                _assert_embedding_compat(db, index)
                 params: Dict[str, Any] = {
                     "qvec": _vec_literal(query_vector),
                     "qtext": query_text or "",
                     "recall": recall_pool,
                     "min_cosine": settings.rag_min_cosine,
+                    "min_ts_rank": settings.rag_min_ts_rank,
                 }
                 fclause = _build_filter_clause(index, filters, params)
 

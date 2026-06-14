@@ -21,3 +21,16 @@ class GraphContext:
     def get_db_session() -> Optional[Session]:
         """Get the current DB session from context."""
         return _db_session.get()
+
+    @staticmethod
+    def reset(token) -> None:
+        """Reset the ContextVar to its previous value using the token returned
+        by :meth:`set_db_session`. Must be called in a ``finally`` after a run so
+        a closing session is never left bound for the next task that reuses this
+        context."""
+        try:
+            _db_session.reset(token)
+        except (ValueError, LookupError):
+            # Token created in a different context (e.g. run spanned tasks) —
+            # nothing to reset here; safe to ignore.
+            pass

@@ -6,6 +6,7 @@ state.retrieved_examples for the precedent analysis path.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from app.config import settings
@@ -26,14 +27,69 @@ _RESPONSE_TOKENS = frozenset({
     "added", "edited", "deleted", "revised", "rephrased", "checked", "check",
 })
 
+# High-frequency reviewer chatter that carries no compliance signal *as a
+# precedent example* (KB/rules quality audit, 2026-06-02). Unlike the 0007
+# response tokens these are multi-word, so they're matched after normalization
+# (lowercase, collapsed whitespace, stripped surrounding punctuation/quotes).
+# Suppressed at retrieval only — the rows stay in the corpus for audit, and
+# `_RESPONSE_TOKENS` stays untouched so the 0007 sync guard holds.
+#
+# Buckets are kept explicit so the kill-list is reviewable. Deliberately NOT
+# included: anything disclaimer-related ('ulip disclaimer', 'ref sign and
+# disclaimer'), source-contradiction flags ('not there in source'), and terse
+# but real issues ('incorrect') — those are genuine signal.
+_NOISE_STATUS = {
+    "new content", "new content added", "newly added", "changed", "corrected",
+    "removed", "updated", "same comment as above",
+    "this is already approved hence not rephrasing",
+}
+_NOISE_EDITORIAL = {
+    "rephrase", "pls rephrase", "rephrase this", "pls rephrase this",
+    "what do we mean by this", "what does this mean", "what is this", "what",
+    "how", "pls elaborate", "pls elaborate how", "grammar check", "full form",
+}
+_NOISE_ROUTING = {
+    "tax team to vet", "tax team approval",
+    "pls take this ahead basis marketing pd approval",
+    "pls take this ahead basis tax team approval",
+}
+# Generic source-request cluster. The rule tier now grounds 'claims need
+# sources' with a real regulatory quote, so these contentless asks are
+# redundant as few-shot precedents.
+_NOISE_SOURCE_REQUEST = {
+    "source", "request source", "request source link", "pls add source",
+    "pls add source link", "pls give us source", "pls attach source link",
+    "attach source link", "pls help us locate", "pls help us locate in source link",
+    "pls help us locate this in the source link", "pls help us locate this in source link",
+    "pls help us locate in the source link", "pls align basis source link",
+    "made changes basis source link", "where have we taken this from",
+    "where is this in the source link",
+}
+_NOISE_PHRASES = frozenset(
+    _NOISE_STATUS | _NOISE_EDITORIAL | _NOISE_ROUTING | _NOISE_SOURCE_REQUEST
+)
+
+_WS_RE = re.compile(r"\s+")
+# Surrounding punctuation/quotes to strip before phrase comparison (incl. the
+# curly apostrophe ’ that appears in the real corpus).
+_STRIP_CHARS = " .,!?;:\"'’"
+
+
+def _normalize_comment(text: Optional[str]) -> str:
+    c = _WS_RE.sub(" ", (text or "").strip().lower())
+    return c.strip(_STRIP_CHARS)
+
 
 def _is_thin(precedent: Dict[str, Any]) -> bool:
-    """True when a precedent's comment carries no actionable signal — either a
-    pure-response token (done/ok/added/…) or shorter than 3 chars after
-    stripping trailing punctuation. Substantive short flags ('source?',
-    'rephrase.') are preserved."""
-    c = (precedent.get("comment_text") or "").strip().lower().rstrip(".!?")
-    return c in _RESPONSE_TOKENS or len(c) < 3
+    """True when a precedent's comment carries no actionable signal as a
+    few-shot example: a pure-response token (done/ok/added/…), shorter than 3
+    chars, or high-frequency reviewer chatter (status/editorial/routing/generic
+    source-request). Substantive short flags ('ulip disclaimer', 'not there in
+    source', 'incorrect') are preserved."""
+    raw = (precedent.get("comment_text") or "").strip().lower().rstrip(".!?")
+    if raw in _RESPONSE_TOKENS or len(raw) < 3:
+        return True
+    return _normalize_comment(precedent.get("comment_text")) in _NOISE_PHRASES
 
 
 def _hit_to_precedent(hit: SearchHit) -> Dict[str, Any]:

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Integer, Float
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Integer, Float, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -43,6 +43,25 @@ class Violation(Base):
     cited_comment_verbatim = Column(Text, nullable=True)
     cited_final_text = Column(Text, nullable=True)
     similarity_score = Column(Float, nullable=True)
+
+    # Citation locators for rule-grounded findings — the exact clause/section,
+    # page, and the regulation version active at decision time. Audit-defensible
+    # traceability ("violates Section 41, doc vX, p.Y").
+    cited_section = Column(Text, nullable=True)
+    cited_page = Column(Integer, nullable=True)
+    cited_regulation_version = Column(String(50), nullable=True)
+
+    # Snapshot of the rule's version at the moment this finding was made, so a
+    # later rule edit/deactivation can't rewrite history. rule_id may go NULL on
+    # rule delete; this integer survives as the version-of-record.
+    rule_version = Column(Integer, nullable=True)
+
+    # Sub-confidence-floor / uncertain findings are persisted (NOT dropped) with
+    # suppressed=true so they're auditable and routable to a human review lane.
+    # Suppressed findings do NOT affect the score. See architect-audit
+    # (silent false-negative suppression).
+    suppressed = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
+    suppressed_reason = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

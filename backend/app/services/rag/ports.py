@@ -11,7 +11,10 @@ from typing import Any, Dict, List, Literal, Optional, Protocol, runtime_checkab
 
 # ---------------------------------------------------------------- types ----
 
-IndexName = Literal["rag_rules", "rag_chunks", "rag_source_docs", "rag_compliance_examples"]
+IndexName = Literal[
+    "rag_rules", "rag_chunks", "rag_source_docs", "rag_compliance_examples",
+    "rag_product_docs",
+]
 
 
 @dataclass

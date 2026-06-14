@@ -15,6 +15,15 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
+class RulesUnavailableError(RuntimeError):
+    """Raised when active rules cannot be loaded due to a DB error.
+
+    Must propagate (fail closed): grading a document with zero rules because of
+    an infrastructure failure would under-flag it (≈ falsely clean). The graph
+    catches this and marks the run degraded → needs_review.
+    """
+
+
 class RuleExtractionResult(BaseModel):
     """Schema for LLM-extracted rules from documents."""
     rules: List[Dict[str, Any]] = Field(default_factory=list)
@@ -39,6 +48,13 @@ class RuleGeneratorService:
         """
         Retrieve all active rules, grouped by category.
         If project_id is provided, returns rules for that project + global rules.
+
+        FAIL CLOSED: a DB error here must NOT be swallowed into ``{}``. An empty
+        dict is indistinguishable from "zero rules configured", and the analysis
+        path would then grade a document with no rule grounding while looking
+        healthy (fail open). On any DB error we raise so the caller can mark the
+        run degraded → needs_review. A genuinely empty (but successful) query
+        still returns ``{}``.
         """
         try:
             query = db.query(Rule).filter(Rule.is_active == True)
@@ -49,21 +65,22 @@ class RuleGeneratorService:
                 )
 
             rules = query.all()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to load active rules (failing closed): {e}")
+            raise RulesUnavailableError(
+                "Active-rule load failed; refusing to grade without rule grounding"
+            ) from e
 
-            # Group by category
-            grouped: Dict[str, List[Rule]] = {}
-            for rule in rules:
-                category = rule.category
-                if category not in grouped:
-                    grouped[category] = []
-                grouped[category].append(rule)
+        # Group by category
+        grouped: Dict[str, List[Rule]] = {}
+        for rule in rules:
+            category = rule.category
+            if category not in grouped:
+                grouped[category] = []
+            grouped[category].append(rule)
 
-            logger.info(f"Loaded {len(rules)} active rules across {len(grouped)} categories")
-            return grouped
-
-        except Exception as e:
-            logger.error(f"Failed to load active rules: {e}")
-            return {}
+        logger.info(f"Loaded {len(rules)} active rules across {len(grouped)} categories")
+        return grouped
 
     def get_rules_by_category(
         self,

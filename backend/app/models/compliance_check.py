@@ -19,6 +19,14 @@ class ComplianceCheck(Base):
     # Score breakdown by category
     scores = Column(JSONB, nullable=True)
 
+    # --- Held-out evaluation (adaptive rule weights) ---
+    # The human reviewer's own document-level score. NEVER an input to scoring
+    # or to weight updates — training on the evaluation metric would Goodhart
+    # it. Its only use is the convergence curve |overall_score − reviewer_score|
+    # that proves (or disproves) the system improves over time.
+    reviewer_score = Column(Float, nullable=True)
+    reviewer_scored_at = Column(DateTime(timezone=True), nullable=True)
+
     # Relationships
     submission = relationship("Submission", back_populates="compliance_checks")
     violations = relationship("Violation", back_populates="compliance_check", cascade="all, delete-orphan")

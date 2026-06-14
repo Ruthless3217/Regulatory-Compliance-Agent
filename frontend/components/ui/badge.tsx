@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
+import { normalizeSeverity } from "@/lib/format";
 
 const badgeVariants = cva(
   "inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-micro border",
@@ -29,8 +30,6 @@ export function Badge({ className, tone, ...props }: BadgeProps) {
 }
 
 export function SeverityBadge({ severity, className }: { severity: string; className?: string }) {
-  const tone = (["critical", "high", "medium", "low"].includes(severity.toLowerCase())
-    ? (severity.toLowerCase() as "critical" | "high" | "medium" | "low")
-    : "default") as Exclude<BadgeProps["tone"], null | undefined>;
-  return <Badge tone={tone} className={className}>{severity}</Badge>;
+  const tone = normalizeSeverity(severity);
+  return <Badge tone={tone} className={className}>{tone}</Badge>;
 }

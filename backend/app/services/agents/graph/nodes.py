@@ -87,12 +87,23 @@ def _citation_to_violation(
 
 def _novel_finding_to_violation(
     f: Any, *, chunk_id, chunk_index, location: str
-) -> Optional[Dict[str, Any]]:
-    """Map one novel finding to a violation dict, or None if it falls below the
-    confidence floor. Citation columns are NULL; grounding/regulatory_basis live
-    in violation_metadata."""
-    if float(f.confidence) < NOVEL_CONFIDENCE_FLOOR:
-        return None
+) -> Dict[str, Any]:
+    """Map one novel finding to a violation dict.
+
+    A novel finding below NOVEL_CONFIDENCE_FLOOR is NOT dropped silently (that
+    would be an undetectable false negative — exactly the dangerous case in a
+    recall-critical compliance tool). It is persisted with ``suppressed=True``
+    and a reason, kept out of the score, and surfaced to a human review lane.
+    Citation columns are NULL; grounding/regulatory_basis live in metadata.
+    """
+    conf = float(f.confidence)
+    suppressed = conf < NOVEL_CONFIDENCE_FLOOR
+    if suppressed:
+        logger.info(
+            "Novel finding below confidence floor (%.2f < %.2f) — persisting as "
+            "SUPPRESSED for human review, not scored: %r",
+            conf, NOVEL_CONFIDENCE_FLOOR, (f.reviewer_comment or "")[:120],
+        )
     return {
         "category": _NOVEL_CATEGORY,
         "severity": _NOVEL_SEVERITY,
@@ -100,7 +111,7 @@ def _novel_finding_to_violation(
         "current_text": (f.current_text or "").strip(),
         "suggested_fix": None,
         "auto_fixable": False,
-        "confidence": float(f.confidence),
+        "confidence": conf,
         "rule_id": None,
         "regulator_quote": None,
         "cited_precedent_id": None,
@@ -110,6 +121,11 @@ def _novel_finding_to_violation(
         "cited_comment_verbatim": None,
         "cited_final_text": None,
         "similarity_score": None,
+        "suppressed": suppressed,
+        "suppressed_reason": (
+            f"novel finding confidence {conf:.2f} below floor {NOVEL_CONFIDENCE_FLOOR}"
+            if suppressed else None
+        ),
         "chunk_id": str(chunk_id),
         "chunk_index": chunk_index,
         "location": location,
@@ -164,6 +180,49 @@ def _normalize_ws(s: str) -> str:
     return " ".join((s or "").lower().split())
 
 
+def merge_findings(
+    citations: List[Any],
+    rule_findings: List[Any],
+    novel_findings: List[Any],
+    add_citations: List[Any],
+    add_rule_findings: List[Any],
+    add_novel_findings: List[Any],
+) -> tuple:
+    """Merge completeness-sweep findings into the first-pass findings, dropping
+    exact duplicates so a phrase the sweep re-reports isn't double-counted.
+
+    Dedup keys err toward KEEPING findings (recall-critical): citations/rules key
+    on (index, normalized current_text); novel findings additionally key on the
+    reviewer_comment, so the same phrase flagged for two distinct reasons is
+    preserved. Returns the merged (citations, rule_findings, novel_findings).
+    """
+    seen_c = {(int(c.precedent_index), _normalize_ws(c.current_text)) for c in citations}
+    for c in add_citations:
+        key = (int(c.precedent_index), _normalize_ws(c.current_text))
+        if key not in seen_c:
+            seen_c.add(key)
+            citations.append(c)
+
+    seen_r = {(int(f.rule_index), _normalize_ws(f.current_text)) for f in rule_findings}
+    for f in add_rule_findings:
+        key = (int(f.rule_index), _normalize_ws(f.current_text))
+        if key not in seen_r:
+            seen_r.add(key)
+            rule_findings.append(f)
+
+    def _novel_key(f):
+        return (_normalize_ws(f.current_text), _normalize_ws(f.reviewer_comment)[:80])
+
+    seen_n = {_novel_key(f) for f in novel_findings}
+    for f in add_novel_findings:
+        key = _novel_key(f)
+        if key not in seen_n:
+            seen_n.add(key)
+            novel_findings.append(f)
+
+    return citations, rule_findings, novel_findings
+
+
 def verify_evidence_grounding(
     violations: List[Dict[str, Any]], chunk_text: str
 ) -> List[Dict[str, Any]]:
@@ -186,6 +245,72 @@ def verify_evidence_grounding(
             continue
         kept.append(v)
     return kept
+
+
+# Severity rank (higher = keep) and tier precedence for cross-tier dedupe. A
+# human-decided precedent outranks a rule match, which outranks novel judgment.
+_SEVERITY_RANK = {
+    "critical": 5, "high": 4, "moderate": 3, "medium": 3, "low": 2, "informational": 1,
+}
+_TIER_RANK = {"precedent": 3, "rule": 2, "novel": 1}
+
+
+def _violation_rank(v: Dict[str, Any]) -> tuple:
+    sev = _SEVERITY_RANK.get(str(v.get("severity", "")).strip().lower(), 0)
+    tier = _TIER_RANK.get(((v.get("violation_metadata") or {}).get("grounding") or ""), 0)
+    return (sev, tier)
+
+
+def dedupe_chunk_violations(violations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Collapse violations that quote the SAME phrase within one chunk (the
+    three tiers routinely flag the same span — precedent + rule + novel),
+    keeping the strongest by severity then tier precedence. Findings with empty
+    current_text (structural) are never collapsed. First-occurrence order is
+    preserved. See recall fix 2026-06-08 (live run surfaced ~23/60 cross-tier dups)."""
+    out: List[Dict[str, Any]] = []
+    index_of: Dict[str, int] = {}
+    for v in violations:
+        key = _normalize_ws(v.get("current_text") or "")
+        if not key:
+            out.append(v)
+            continue
+        if key not in index_of:
+            index_of[key] = len(out)
+            out.append(v)
+        elif _violation_rank(v) > _violation_rank(out[index_of[key]]):
+            out[index_of[key]] = v
+    return out
+
+
+def mark_structural_findings(
+    violations: List[Dict[str, Any]], chunk_text: str = ""
+) -> List[Dict[str, Any]]:
+    """Route heading / brand-line false-positives to the suppressed review lane
+    rather than dropping them. Section-aware chunking isolates short title lines
+    (e.g. "Bajaj Allianz Life", "Why Smart Wealth Edge?"), which the LLM then
+    over-flags.
+
+    A finding is suppressed ONLY when its current_text is an ENTIRE heading-like
+    LINE of the chunk — never a short fragment of a body sentence. This is the
+    load-bearing safety property: a real-but-short claim ("Enjoy guaranteed
+    tax-free returns…", "UIN: pending") sits inside a longer line, so it is NOT
+    a standalone heading and stays scored. Already-suppressed findings keep
+    their original reason."""
+    from app.services.preprocessing_service import ContextEngineeringService
+
+    heading_lines = {
+        _normalize_ws(ln)
+        for ln in (chunk_text or "").split("\n")
+        if ContextEngineeringService._is_heading_line(ln)
+    }
+    for v in violations:
+        if v.get("suppressed"):
+            continue
+        ct = _normalize_ws(v.get("current_text") or "")
+        if ct and ct in heading_lines:
+            v["suppressed"] = True
+            v["suppressed_reason"] = "structural heading / brand line (not a claim)"
+    return violations
 
 
 def aggregate_grading(results: List[Dict[str, Any]]) -> tuple:
@@ -237,11 +362,13 @@ def map_findings_to_violations(
             )
         )
     for f in (result.novel_findings or []):
-        v = _novel_finding_to_violation(
-            f, chunk_id=chunk_id, chunk_index=chunk_index, location=location
+        # Always appended — sub-floor findings are persisted as suppressed (for
+        # the human review lane), never silently dropped.
+        out.append(
+            _novel_finding_to_violation(
+                f, chunk_id=chunk_id, chunk_index=chunk_index, location=location
+            )
         )
-        if v is not None:
-            out.append(v)
     return out
 
 
@@ -319,13 +446,24 @@ async def dispatch_node(state: ComplianceState) -> Dict:
     logger.info("Node: Dispatch (Brain) running...")
 
     from app.config import settings
-    from app.services.rule_generator_service import rule_generator_service
+    from app.services.rule_generator_service import (
+        rule_generator_service,
+        RulesUnavailableError,
+    )
     from .context import GraphContext
 
     db = GraphContext.get_db_session()
 
     # 1. Always load full active rules (fallback target + populates active_agents).
-    rules_orm = rule_generator_service.get_active_rules(db)
+    #    FAIL CLOSED: if the rule store is unreachable we must not grade with zero
+    #    rules — mark the run degraded so it routes to needs_review, not "clean".
+    try:
+        rules_orm = rule_generator_service.get_active_rules(db)
+    except RulesUnavailableError as e:
+        logger.error(f"dispatch_node: active-rule load failed; degrading run: {e}")
+        md = dict(state.get("metadata") or {})
+        md["degraded"] = "rules_unavailable"
+        return {"metadata": md, "status": "needs_review"}
     rules_serializable: Dict[str, List[Dict]] = {}
     active_agents: List[str] = []
     for cat, r_list in rules_orm.items():
@@ -595,6 +733,35 @@ async def analysis_node(state: ComplianceState) -> Dict:
                         novel = list(retry.novel_findings or [])
                 citations = _in_range(citations)
 
+                # Completeness sweep: a single structured pass under-enumerates on
+                # dense copy, so run one more pass that's told what was already
+                # flagged and asked for ONLY additional violations, then merge +
+                # dedupe. Non-fatal: a failed sweep keeps the first-pass findings.
+                if _settings.completeness_sweep_enabled:
+                    try:
+                        already = [
+                            c.current_text for c in citations
+                        ] + [
+                            f.current_text for f in rule_findings
+                        ] + [
+                            f.current_text for f in novel
+                        ]
+                        sweep_prompt = context_service.create_completeness_sweep_prompt(
+                            chunk_text, precedents, rules=rules, already_found=already
+                        )
+                        sweep = await _call(sweep_prompt)
+                        citations, rule_findings, novel = merge_findings(
+                            citations, rule_findings, novel,
+                            _in_range(list(sweep.citations or [])),
+                            list(getattr(sweep, "rule_findings", None) or []),
+                            list(sweep.novel_findings or []),
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Completeness sweep failed (chunk {chunk_index}); "
+                            f"keeping first-pass findings: {e}"
+                        )
+
                 meta_loc = chunk_data.get("metadata", {})
                 loc = f"chunk:{chunk_id}"
                 if meta_loc.get("page_number"):
@@ -618,7 +785,15 @@ async def analysis_node(state: ComplianceState) -> Dict:
 
                 # Critic: drop violations whose cited evidence isn't in the
                 # chunk (fabricated current_text). See architect-audit C7.
-                kept = verify_evidence_grounding(kept, chunk_text)
+                if _settings.critic_enabled:
+                    kept = verify_evidence_grounding(kept, chunk_text)
+
+                # Precision (recall fix 2026-06-08): collapse cross-tier
+                # duplicates (same phrase flagged by precedent + rule + novel),
+                # then route heading / brand-line false-positives to the
+                # suppressed review lane (kept out of the score, not dropped).
+                kept = dedupe_chunk_violations(kept)
+                kept = mark_structural_findings(kept, chunk_text)
 
                 execution.status = "completed"
                 execution.output_data = {"violations": kept}

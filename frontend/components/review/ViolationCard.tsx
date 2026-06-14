@@ -3,10 +3,11 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge, Badge } from "@/components/ui/badge";
-import { categoryLabel, severityClass, truthyAutoFix } from "@/lib/format";
+import { categoryLabel, severityClass, truthyAutoFix, normalizeSeverity } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ActionTags } from "@/components/violation/ActionTags";
 import { PrecedentNote } from "@/components/violation/PrecedentNote";
+import { submitViolationFeedback } from "@/lib/api";
 import type { Violation } from "@/lib/types";
 
 interface Props {
@@ -24,6 +25,31 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
 ) {
   const sevClass = severityClass(violation.severity).split(" ")[0]; // border-l-*
   const autoFix = truthyAutoFix(violation.auto_fixable);
+
+  // Reviewer verdict (adaptive rule weights). Re-clicking flips the verdict;
+  // the backend reverts the previous pseudo-count so nothing double-counts.
+  const [verdict, setVerdict] = React.useState<"accept" | "reject" | null>(null);
+  const [verdictBusy, setVerdictBusy] = React.useState(false);
+
+  const sendVerdict = async (v: "accept" | "reject") => {
+    if (verdictBusy || verdict === v) return;
+    setVerdictBusy(true);
+    try {
+      const res = await submitViolationFeedback(violation.id, { verdict: v });
+      setVerdict(v);
+      if (res.weight_updated && res.reliability != null) {
+        toast.success(
+          `Verdict recorded — rule reliability now ${Math.round(res.reliability * 100)}%`
+        );
+      } else {
+        toast.success("Verdict recorded");
+      }
+    } catch {
+      toast.error("Could not record verdict");
+    } finally {
+      setVerdictBusy(false);
+    }
+  };
 
   const applyFix = async () => {
     if (!violation.suggested_fix) {
@@ -63,6 +89,11 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
               {Math.round(violation.confidence * 100)}%
             </Badge>
           )}
+          {violation.suppressed && (
+            <Badge tone="medium" title={violation.suppressed_reason ?? undefined}>
+              needs review
+            </Badge>
+          )}
         </div>
         <div className="font-mono text-xs text-muted-foreground">
           {typeof violation.chunk_index === "number" && (
@@ -81,7 +112,7 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
           <div className="micro-label mb-1">Evidence</div>
           <p className="line-clamp-3">
             “
-            <mark data-severity={violation.severity.toLowerCase()}>
+            <mark data-severity={normalizeSeverity(violation.severity)}>
               {violation.current_text}
             </mark>
             ”
@@ -109,7 +140,29 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-end gap-2">
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5" title="Your verdict tunes this rule's weight">
+          <span className="micro-label text-muted-foreground">Verdict</span>
+          <Button
+            variant={verdict === "accept" ? "default" : "ghost"}
+            size="sm"
+            disabled={verdictBusy}
+            aria-pressed={verdict === "accept"}
+            onClick={(e) => { e.stopPropagation(); sendVerdict("accept"); }}
+          >
+            Correct
+          </Button>
+          <Button
+            variant={verdict === "reject" ? "default" : "ghost"}
+            size="sm"
+            disabled={verdictBusy}
+            aria-pressed={verdict === "reject"}
+            onClick={(e) => { e.stopPropagation(); sendVerdict("reject"); }}
+          >
+            Not a violation
+          </Button>
+        </div>
+        <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDismiss(); }}>
           Dismiss
         </Button>
@@ -121,6 +174,7 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
         >
           Apply fix
         </Button>
+        </div>
       </div>
     </div>
   );

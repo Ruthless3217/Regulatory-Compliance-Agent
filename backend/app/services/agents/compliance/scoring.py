@@ -24,6 +24,14 @@ class ScoringService:
         "informational": 2,   # added — new precedent vocab
     }
 
+    # A critical finding at or above this confidence forces a failing verdict and
+    # caps the grade at C, regardless of how few/many other findings exist. Below
+    # it, a critical is uncertain → "flagged" (human review) rather than auto-fail.
+    CRITICAL_CONFIDENCE_THRESHOLD = 0.50
+    # Score ceiling applied when a high-confidence critical is present: keeps the
+    # grade at C or below (grade C spans 70–79; 70 guarantees ≤ C).
+    CRITICAL_SCORE_CAP = 70.0
+
     @staticmethod
     @traceable(run_type="tool", name="Scoring.calculate_scores")
     def calculate_scores(
@@ -33,73 +41,66 @@ class ScoringService:
         categories: Optional[List[str]] = None
     ) -> Dict[str, float]:
         """
-        Calculate compliance scores based on violations.
-        Supports dynamic weights from project config or auto-discovers categories.
+        Absolute-deduction compliance score.
+
+        overall = 100 − Σ (severity_weight(v) × confidence(v)), clamped to [0,100],
+        plus a hard cap: any critical finding at/above CRITICAL_CONFIDENCE_THRESHOLD
+        caps the grade at C and fails the verdict.
+
+        This is MONOTONIC in severity: adding a finding (or raising a finding's
+        severity/confidence) can only lower the score. The previous model weighted
+        each *discovered category* equally (1/N), so spreading violations across
+        more categories diluted every category's impact — a document with one
+        critical could out-score a document with five mixed findings. Category
+        count must not change the grade; only severity × confidence does.
+
+        `categories`/`project_config` are accepted for back-compat but no longer
+        re-weight the overall score (which is now category-count-independent).
+        Per-category sub-scores are still returned for the UI, computed the same
+        absolute way within each category.
         """
-        enriched_violations = ScoringService._enrich_violations_with_points(violations, db)
-        weights = ScoringService._resolve_weights(enriched_violations, project_config, categories)
+        # Suppressed (sub-confidence-floor / uncertain) findings are persisted for
+        # human review but MUST NOT move the score — they're not certain enough to
+        # penalize. They still appear in the review lane.
+        scored_violations = [v for v in violations if not v.get("suppressed")]
 
-        category_scores = {}
-        for category in weights.keys():
-            category_scores[category] = ScoringService._calculate_category_score(
-                enriched_violations, category
-            )
+        enriched_violations = ScoringService._enrich_violations_with_points(scored_violations, db)
 
-        if not weights:
-            overall_score = 100.0
-        else:
-            overall_score = sum(
-                category_scores.get(cat, 100.0) * weight
-                for cat, weight in weights.items()
-            )
+        # Overall = absolute deductions from 100, independent of category count.
+        total_deduction = sum(v.get("points_deduction", 0) for v in enriched_violations)
+        overall_score = max(0.0, min(100.0, 100.0 - total_deduction))
+
+        # Hard critical cap (confidence-aware): a credible critical can never grade
+        # better than C, even if it's the only finding.
+        high_conf_critical = any(
+            v.get("severity") == "critical"
+            and ScoringService._confidence_weight(v) >= ScoringService.CRITICAL_CONFIDENCE_THRESHOLD
+            for v in enriched_violations
+        )
+        if high_conf_critical:
+            overall_score = min(overall_score, ScoringService.CRITICAL_SCORE_CAP)
+
+        # Per-category sub-scores (display only) — same absolute model per category.
+        discovered_categories = set()
+        for v in enriched_violations:
+            for c in str(v.get("category", "general")).split("|"):
+                discovered_categories.add(c.strip())
+        category_scores = {
+            cat: ScoringService._calculate_category_score(enriched_violations, cat)
+            for cat in discovered_categories
+        }
 
         grade = ScoringService._get_grade(overall_score)
         status = ScoringService._get_status(enriched_violations, overall_score)
 
         result = {
-            "overall": max(0.0, min(100.0, round(overall_score, 2))),
+            "overall": round(overall_score, 2),
             "grade": grade,
-            "status": status
+            "status": status,
         }
-
         for cat, score in category_scores.items():
             result[cat] = round(score, 2)
-
         return result
-
-    @staticmethod
-    def _resolve_weights(
-        violations: List[Dict],
-        project_config: Optional[Dict],
-        categories: Optional[List[str]] = None
-    ) -> Dict[str, float]:
-        if project_config and project_config.get("weights"):
-            return ScoringService._normalize_weights(project_config["weights"])
-
-        discovered_categories = set()
-        for v in violations:
-            cat = v.get("category", "general")
-            for c in cat.split("|"):
-                discovered_categories.add(c.strip())
-
-        if discovered_categories:
-            equal_weight = 1.0 / len(discovered_categories)
-            return {cat: equal_weight for cat in discovered_categories}
-
-        if categories:
-            equal_weight = 1.0 / len(categories)
-            return {cat: equal_weight for cat in categories}
-
-        return {}
-
-    @staticmethod
-    def _normalize_weights(weights: Dict[str, float]) -> Dict[str, float]:
-        if not weights:
-            return {}
-        total = sum(weights.values())
-        if total == 0:
-            return {k: 1.0 / len(weights) for k in weights}
-        return {k: v / total for k, v in weights.items()}
 
     @staticmethod
     def _confidence_weight(violation: Dict) -> float:
@@ -132,10 +133,13 @@ class ScoringService:
 
         import uuid
 
+        from app.services.agents.compliance.reliability import theta
+
         enriched = []
         for violation in violations:
             rule_id = violation.get("rule_id")
             points_deduction = None
+            rule = None
 
             if rule_id:
                 try:
@@ -149,6 +153,17 @@ class ScoringService:
             if points_deduction is None:
                 severity = violation.get("severity", "low")
                 points_deduction = ScoringService.SEVERITY_WEIGHTS.get(severity, 5)
+
+            # Adaptive rule weights: scale by the rule's learned reliability
+            # θ = α/(α+β) (reviewer accept/reject history, Beta-Binomial).
+            # NULL counts → θ=1.0 (exactly the pre-feedback behavior); floored
+            # at RELIABILITY_FLOOR so feedback discounts a rule, never erases
+            # it. The critical fail-cap below is intentionally NOT θ-scaled.
+            if rule is not None:
+                points_deduction *= theta(
+                    getattr(rule, "reliability_alpha", None),
+                    getattr(rule, "reliability_beta", None),
+                )
 
             # Scale by the model's confidence in the finding (audit H16).
             points_deduction *= ScoringService._confidence_weight(violation)
@@ -188,13 +203,20 @@ class ScoringService:
 
     @staticmethod
     def _get_status(violations: List[Dict], overall_score: float) -> str:
-        has_critical = any(v.get("severity") == "critical" for v in violations)
-        if has_critical or overall_score < 60:
+        # Confidence-aware critical handling: a credible (high-confidence)
+        # critical fails the verdict; a low-confidence critical is uncertain and
+        # routes to "flagged" (human review) rather than auto-failing compliant
+        # content on a shaky finding.
+        criticals = [v for v in violations if v.get("severity") == "critical"]
+        high_conf_critical = any(
+            ScoringService._confidence_weight(v) >= ScoringService.CRITICAL_CONFIDENCE_THRESHOLD
+            for v in criticals
+        )
+        if high_conf_critical or overall_score < 60:
             return "failed"
-        elif overall_score < 80:
+        if criticals or overall_score < 80:
             return "flagged"
-        else:
-            return "passed"
+        return "passed"
 
 
 scoring_service = ScoringService()

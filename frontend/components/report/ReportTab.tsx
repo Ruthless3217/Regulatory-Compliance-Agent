@@ -5,6 +5,7 @@ import { KPIStrip } from "./KPIStrip";
 import { ViolationGroup } from "./ViolationGroup";
 import { ExportPdfButton } from "./ExportPdfButton";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
+import { normalizeSeverity } from "@/lib/format";
 
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
 
@@ -13,10 +14,7 @@ export function ReportTab() {
 
   const groups = React.useMemo(() => {
     const m: Record<string, typeof violations> = { critical: [], high: [], medium: [], low: [] };
-    for (const v of violations) {
-      const s = v.severity.toLowerCase();
-      (m[s] ?? m.low).push(v);
-    }
+    for (const v of violations) m[normalizeSeverity(v.severity)].push(v);
     return m;
   }, [violations]);
 

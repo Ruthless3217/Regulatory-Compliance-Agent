@@ -8,6 +8,8 @@ from .agent_execution import AgentExecution
 from .agent_trace import AgentTrace
 from .tool_invocation import ToolInvocation
 from .compliance_state import ComplianceState
+from .rule_feedback import RuleFeedback
+from .product_document import ProductDocument, ProductTable
 
 __all__ = [
     "User",
@@ -20,4 +22,7 @@ __all__ = [
     "AgentTrace",
     "ToolInvocation",
     "ComplianceState",
+    "RuleFeedback",
+    "ProductDocument",
+    "ProductTable",
 ]

@@ -91,6 +91,43 @@ export async function resumeCheck(id: string, feedback?: string) {
   return jsonFetch(`${base()}/compliance/resume/${id}${qs}`, { method: "POST" });
 }
 
+/* ---------- adaptive rule weights (HITL feedback) ---------- */
+export async function submitViolationFeedback(
+  violationId: string,
+  body: {
+    verdict: "accept" | "reject";
+    severity_override?: string;
+    comment?: string;
+  }
+): Promise<{
+  violation_id: string;
+  rule_id: string | null;
+  verdict: string;
+  weight_updated: boolean;
+  reliability: number | null;
+}> {
+  return jsonFetch(`${base()}/compliance/violations/${violationId}/feedback`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+// Held-out evaluation only: logs the reviewer's own document score next to
+// the system's. Never affects scoring or rule weights.
+export async function submitReviewerScore(
+  checkId: string,
+  score: number
+): Promise<{
+  check_id: string;
+  reviewer_score: number;
+  system_score: number | null;
+  gap: number | null;
+}> {
+  return jsonFetch(`${base()}/compliance/check/${checkId}/reviewer-score`, {
+    method: "POST",
+    body: JSON.stringify({ score }),
+  });
+}
+
 /* ---------- rules ---------- */
 export async function listRules(params?: {
   category?: string;

@@ -37,8 +37,49 @@ export function gradeBand(score?: number | null): "success" | "info" | "warning"
   return "danger";
 }
 
+/**
+ * Canonical severity bucketing.
+ *
+ * The backend emits severities in two overlapping vocabularies: the legacy
+ * 4-tier scale (critical/high/medium/low) and the precedent scale
+ * (critical/moderate/informational). The UI only ever buckets, filters, sorts
+ * and colors by the 4-tier scale, so every severity consumer MUST route the raw
+ * value through here first. Without it, "moderate"/"informational" violations
+ * fall through every bucket — counted in "All" but invisible under Medium/Low.
+ *
+ * Mapping: moderate → medium, informational/info → low. Unknown values default
+ * to medium so an unrecognized severity stays visible rather than being silently
+ * downgraded and hidden.
+ */
+export function normalizeSeverity(severity?: Severity | string | null): Severity {
+  switch ((severity ?? "").toString().toLowerCase().trim()) {
+    case "critical":
+      return "critical";
+    case "high":
+      return "high";
+    case "medium":
+    case "moderate":
+      return "medium";
+    case "low":
+    case "informational":
+    case "info":
+      return "low";
+    default:
+      return "medium";
+  }
+}
+
+/** Re-aggregate backend `{severity, count}` rows into the 4 canonical buckets. */
+export function bucketSeverityRows(
+  rows: { severity: string; count: number }[]
+): Record<Severity, number> {
+  const out: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const r of rows) out[normalizeSeverity(r.severity)] += r.count ?? 0;
+  return out;
+}
+
 export function severityColor(severity: string): string {
-  switch (severity.toLowerCase()) {
+  switch (normalizeSeverity(severity)) {
     case "critical":
       return "hsl(var(--sev-critical))";
     case "high":
@@ -51,7 +92,7 @@ export function severityColor(severity: string): string {
 }
 
 export function severityClass(severity: string): string {
-  switch (severity.toLowerCase()) {
+  switch (normalizeSeverity(severity)) {
     case "critical":
       return "border-l-sev-critical text-sev-critical";
     case "high":
@@ -79,9 +120,14 @@ export function truthyAutoFix(v: string | boolean | undefined): boolean {
 }
 
 export function severityOrder(s: Severity | string): number {
-  const k = s.toLowerCase();
-  if (k === "critical") return 0;
-  if (k === "high") return 1;
-  if (k === "medium") return 2;
-  return 3;
+  switch (normalizeSeverity(s)) {
+    case "critical":
+      return 0;
+    case "high":
+      return 1;
+    case "medium":
+      return 2;
+    default:
+      return 3;
+  }
 }

@@ -53,6 +53,10 @@ export interface Violation {
   cited_document_id?: string | null;
   cited_anchor_text?: string | null;
   cited_comment_verbatim?: string | null;
+  // Sub-confidence-floor / structural findings: kept out of the score and shown
+  // in a separate "Needs review" lane (recall fix 2026-06-08).
+  suppressed?: boolean | null;
+  suppressed_reason?: string | null;
 }
 
 export type ActionType =

@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { severityColor } from "@/lib/format";
+import { severityColor, bucketSeverityRows } from "@/lib/format";
 
 interface RowIn {
   severity: string;
@@ -15,10 +15,8 @@ interface Props {
 const ORDER = ["critical", "high", "medium", "low"] as const;
 
 export function SeverityDonut({ rows }: Props) {
-  const data = ORDER.map((s) => ({
-    name: s,
-    value: rows.find((r) => r.severity.toLowerCase() === s)?.count ?? 0,
-  })).filter((d) => d.value > 0);
+  const counts = bucketSeverityRows(rows);
+  const data = ORDER.map((s) => ({ name: s, value: counts[s] })).filter((d) => d.value > 0);
   const total = data.reduce((a, d) => a + d.value, 0);
 
   return (

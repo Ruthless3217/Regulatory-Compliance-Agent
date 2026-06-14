@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { bucketSeverityRows } from "@/lib/format";
 
 interface RowIn {
   severity: string;
@@ -13,8 +14,9 @@ interface Props {
 const ORDER = ["critical", "high", "medium", "low"] as const;
 
 export function SeverityHeatmap({ rows }: Props) {
-  const max = Math.max(1, ...rows.map((r) => r.count));
-  const get = (s: string) => rows.find((r) => r.severity.toLowerCase() === s)?.count ?? 0;
+  const counts = bucketSeverityRows(rows);
+  const max = Math.max(1, ...ORDER.map((s) => counts[s]));
+  const get = (s: (typeof ORDER)[number]) => counts[s];
 
   return (
     <div className="rounded-lg border border-border bg-background p-6 shadow-card">

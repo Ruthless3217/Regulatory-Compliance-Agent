@@ -8,6 +8,7 @@ import os
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 from typing import Optional, List
 
 from app.api.rate_limit import llm_rate_limit
@@ -142,31 +143,78 @@ async def update_rule(
     rule_text: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Update a rule (activate/deactivate, update severity or text)."""
+    """Update a rule.
+
+    A CONTENT change (severity or rule_text) does NOT mutate the existing row —
+    it creates a NEW version (version+1), supersedes and deactivates the old one,
+    and links old.superseded_by → new.id. Past violations that snapshotted the
+    old rule_version therefore stay traceable to the exact text in force at
+    decision time (architect-audit: rules must be versioned, not mutated).
+
+    A pure activate/deactivate (is_active only) is lifecycle, not a content
+    rewrite, so it stays in place.
+    """
     rule = db.query(Rule).filter(Rule.id == rule_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
 
-    if is_active is not None:
-        rule.is_active = is_active
-    if severity is not None:
-        rule.severity = severity
-    if rule_text is not None:
-        rule.rule_text = rule_text
+    is_content_change = (
+        (severity is not None and severity != rule.severity)
+        or (rule_text is not None and rule_text != rule.rule_text)
+    )
 
+    if not is_content_change:
+        # Lifecycle-only (activate/deactivate) — mutate in place.
+        if is_active is not None:
+            rule.is_active = is_active
+        db.commit()
+        db.refresh(rule)
+        await _safe_rag_upsert(rule.id, db)
+        return {
+            "id": str(rule.id), "category": rule.category, "rule_text": rule.rule_text,
+            "severity": rule.severity, "is_active": rule.is_active, "version": rule.version,
+        }
+
+    # Content change → create a new version row.
+    new_rule = Rule(
+        category=rule.category,
+        rule_text=rule_text if rule_text is not None else rule.rule_text,
+        severity=severity if severity is not None else rule.severity,
+        keywords=rule.keywords,
+        pattern=rule.pattern,
+        is_active=is_active if is_active is not None else True,
+        rule_metadata=rule.rule_metadata,
+        points_deduction=rule.points_deduction,
+        created_by=rule.created_by,
+        is_auto_generated=rule.is_auto_generated,
+        generated_from_industry=rule.generated_from_industry,
+        generation_source=rule.generation_source,
+        confidence_score=rule.confidence_score,
+        version=(rule.version or 1) + 1,
+        effective_date=func.now(),
+        product_line=rule.product_line,
+        jurisdiction=rule.jurisdiction,
+    )
+    db.add(new_rule)
+    db.flush()  # get new_rule.id
+
+    # Supersede + retire the old version.
+    rule.is_active = False
+    rule.superseded_by = new_rule.id
     db.commit()
-    db.refresh(rule)
+    db.refresh(new_rule)
 
-    # Keep RAG in sync. If the rule was deactivated, the embedding stays
-    # (filtered out at query time) — same row, just is_active=false.
-    await _safe_rag_upsert(rule.id, db)
+    # New version goes into RAG; old row stays (is_active=false → filtered out).
+    await _safe_rag_upsert(new_rule.id, db)
 
     return {
-        "id": str(rule.id),
-        "category": rule.category,
-        "rule_text": rule.rule_text,
-        "severity": rule.severity,
-        "is_active": rule.is_active
+        "id": str(new_rule.id),
+        "category": new_rule.category,
+        "rule_text": new_rule.rule_text,
+        "severity": new_rule.severity,
+        "is_active": new_rule.is_active,
+        "version": new_rule.version,
+        "superseded_rule_id": str(rule.id),
     }
 
 

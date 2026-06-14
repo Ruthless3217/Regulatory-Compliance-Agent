@@ -8,8 +8,7 @@
  * This function is pure; safe to call from server or client.
  */
 import type { Severity, Violation } from "./types";
-
-const SEV_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+import { normalizeSeverity, severityOrder } from "./format";
 
 export interface HighlightSpan {
   start: number;
@@ -84,8 +83,8 @@ export function findSpans(text: string, violations: Violation[]): HighlightSpan[
 export function resolveOverlaps(spans: HighlightSpan[]): HighlightSpan[] {
   const sorted = [...spans].sort((a, b) => {
     if (a.start !== b.start) return a.start - b.start;
-    const sa = SEV_ORDER[a.severity.toLowerCase()] ?? 9;
-    const sb = SEV_ORDER[b.severity.toLowerCase()] ?? 9;
+    const sa = severityOrder(a.severity);
+    const sb = severityOrder(b.severity);
     if (sa !== sb) return sa - sb;
     return b.end - b.start - (a.end - a.start);
   });
@@ -96,8 +95,8 @@ export function resolveOverlaps(spans: HighlightSpan[]): HighlightSpan[] {
       accepted.push(s);
       continue;
     }
-    const cur = SEV_ORDER[s.severity.toLowerCase()] ?? 9;
-    const prev = SEV_ORDER[last.severity.toLowerCase()] ?? 9;
+    const cur = severityOrder(s.severity);
+    const prev = severityOrder(last.severity);
     if (cur < prev || (cur === prev && s.end - s.start > last.end - last.start)) {
       accepted.pop();
       accepted.push(s);
@@ -124,7 +123,7 @@ export function applyHighlights(text: string, violations: Violation[]): string {
     if (span.start > cursor) out.push(escapeHtml(text.slice(cursor, span.start)));
     const inner = escapeHtml(text.slice(span.start, span.end));
     out.push(
-      `<mark data-violation-id="${span.violationId}" data-severity="${escapeHtml(span.severity.toLowerCase())}">${inner}</mark>`
+      `<mark data-violation-id="${span.violationId}" data-severity="${normalizeSeverity(span.severity)}">${inner}</mark>`
     );
     cursor = span.end;
   }

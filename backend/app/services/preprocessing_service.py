@@ -4,6 +4,7 @@ Token-based chunking for compliance analysis.
 """
 import logging
 import os
+import re
 import uuid
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
@@ -13,6 +14,18 @@ logger = logging.getLogger(__name__)
 # Token limits
 MAX_TOKENS_PER_CHUNK = 1000
 CHUNK_OVERLAP_TOKENS = 100
+
+# Section-aware chunking (recall fix 2026-06-08): adjacent sections smaller than
+# this are merged so extracted table cells / one-word fragments don't each become
+# a single-cell chunk. Kept small so genuine sections (heading + a sentence or
+# two, typically 30-60 tokens) still grade on their own — the whole point is more
+# LLM passes per document → higher violation recall on short, dense copy.
+MIN_SECTION_TOKENS = 30
+
+# Markdown ATX heading, e.g. "## Charges". Group 1 is the title text.
+_MD_HEADING_RE = re.compile(r"^#{1,6}\s+(.*?)\s*#*$")
+# Bullet / numbered list item — never a heading.
+_LIST_ITEM_RE = re.compile(r"^([-*•·]|\d+[.)])\s+")
 
 
 class ContextEngineeringService:
@@ -118,6 +131,143 @@ class ContextEngineeringService:
         return len(chunk_objects)
 
     def _chunk_text(self, content: str, content_type: str = "text") -> List[Dict]:
+        """Chunk a document for per-chunk grading.
+
+        Section-aware FIRST: if the document has detectable headings (markdown
+        ``##`` from docx extraction, or short title-like lines in plain text),
+        split at section boundaries so each section is graded by its own LLM
+        pass — short, dense copy used to collapse into one 1000-token chunk and
+        one pass, which systematically under-reported violations.
+
+        When no headings are detected, falls back to the original token-window
+        chunker (unchanged behaviour).
+        """
+        sections = self._detect_sections(content)
+        if sections is not None:
+            chunks = self._chunk_by_sections(sections, content_type)
+            if chunks:
+                return chunks
+        return self._chunk_by_tokens(content, content_type)
+
+    # --- section detection ----------------------------------------------------
+
+    def _count_tokens(self, text: str) -> int:
+        """Token count via tiktoken; char/4 estimate when tiktoken is
+        unavailable (offline / blocked BPE download) so merge+split still work."""
+        try:
+            import tiktoken
+            enc = tiktoken.get_encoding("cl100k_base")
+            return len(enc.encode(text))
+        except Exception:
+            return max(1, len(text) // 4)
+
+    @staticmethod
+    def _clean_heading(line: str) -> str:
+        s = line.strip()
+        m = _MD_HEADING_RE.match(s)
+        return m.group(1).strip() if m else s
+
+    @staticmethod
+    def _is_heading_line(line: str) -> bool:
+        """True for a markdown heading or a short, title-like fragment.
+
+        The heuristic is deliberately permissive: a few false positives (e.g. a
+        table cell) are coalesced by the MIN_SECTION_TOKENS merge, whereas a
+        false negative would silently fuse two sections and cost recall.
+        """
+        s = line.strip()
+        if not s:
+            return False
+        if _MD_HEADING_RE.match(s) and s.startswith("#"):
+            return True
+        if len(s) > 64 or len(s.split()) > 8:
+            return False
+        if _LIST_ITEM_RE.match(s):
+            return False
+        if not s[0].isalpha() or not s[0].isupper():
+            return False
+        if s[-1] in ".,;:":
+            return False
+        return True
+
+    def _detect_sections(self, content: str) -> Optional[List[Dict]]:
+        """Split content into ``{title, text}`` sections at heading lines.
+
+        Returns ``None`` when no headings are found (caller falls back to the
+        token chunker). The cleaned heading text leads each section's body so
+        the reviewer/LLM sees the section title in context; section text stays a
+        contiguous slice of the source so evidence-grounding (current_text must
+        be a substring of the chunk) still holds.
+        """
+        if not content:
+            return None
+        lines = content.split("\n")
+        heading_idx = [i for i, ln in enumerate(lines) if self._is_heading_line(ln)]
+        if not heading_idx:
+            return None
+
+        sections: List[Dict] = []
+        preamble = "\n".join(lines[: heading_idx[0]]).strip()
+        if preamble:
+            sections.append({"title": None, "text": preamble})
+
+        for j, hi in enumerate(heading_idx):
+            end = heading_idx[j + 1] if j + 1 < len(heading_idx) else len(lines)
+            title = self._clean_heading(lines[hi])
+            block = "\n".join([title] + lines[hi + 1 : end]).strip()
+            if block:
+                sections.append({"title": title, "text": block})
+        return sections or None
+
+    def _chunk_by_sections(self, sections: List[Dict], content_type: str) -> List[Dict]:
+        """Pack sections into chunks: merge tiny adjacent sections up to
+        MIN_SECTION_TOKENS, and split any single section that exceeds
+        MAX_TOKENS_PER_CHUNK back down with the token windower."""
+        chunks: List[Dict] = []
+        buf_text: List[str] = []
+        buf_title: Optional[str] = None
+        buf_tokens = 0
+
+        def flush() -> None:
+            nonlocal buf_text, buf_title, buf_tokens
+            text = "\n".join(buf_text).strip()
+            if text:
+                chunks.append({
+                    "text": text,
+                    "token_count": buf_tokens,
+                    "metadata": {
+                        "chunk_index": len(chunks),
+                        "section_title": buf_title,
+                        "content_type": content_type,
+                    },
+                })
+            buf_text, buf_title, buf_tokens = [], None, 0
+
+        for sec in sections:
+            tcount = self._count_tokens(sec["text"])
+            if tcount > MAX_TOKENS_PER_CHUNK:
+                flush()
+                for sub in self._chunk_by_tokens(sec["text"], content_type):
+                    chunks.append({
+                        "text": sub["text"],
+                        "token_count": sub.get("token_count"),
+                        "metadata": {
+                            "chunk_index": len(chunks),
+                            "section_title": sec["title"],
+                            "content_type": content_type,
+                        },
+                    })
+                continue
+            if not buf_text:
+                buf_title = sec["title"]
+            buf_text.append(sec["text"])
+            buf_tokens += tcount
+            if buf_tokens >= MIN_SECTION_TOKENS:
+                flush()
+        flush()
+        return chunks
+
+    def _chunk_by_tokens(self, content: str, content_type: str = "text") -> List[Dict]:
         """
         Chunk text into token-limited segments.
         Falls back to paragraph chunking if tiktoken is unavailable OR if its
@@ -286,7 +436,20 @@ class ContextEngineeringService:
         try:
             from docx import Document
             doc = Document(file_path)
-            return "\n\n".join(para.text for para in doc.paragraphs if para.text.strip())
+            parts: List[str] = []
+            for para in doc.paragraphs:
+                text = para.text.strip()
+                if not text:
+                    continue
+                # Preserve Word heading structure as markdown so section-aware
+                # chunking can split on it. (Unstyled docs are still handled by
+                # the heading heuristic in _detect_sections.)
+                style = (getattr(para.style, "name", "") or "")
+                if style.startswith("Heading") or style == "Title":
+                    parts.append(f"## {text}")
+                else:
+                    parts.append(text)
+            return "\n\n".join(parts)
         except Exception as e:
             logger.error(f"DOCX extraction failed: {e}")
             return ""
@@ -394,19 +557,27 @@ Constraints:
         has_p = bool(precedents)
         has_r = bool(rules)
 
+        # Deterministic per-field caps so a single long precedent can't dominate
+        # the prompt and push the document section + anti-injection REMINDER past
+        # the model's context window (silent tail truncation). Rules already cap
+        # their quote at 240 chars; precedents were previously uncapped.
+        def _cap(s, n):
+            s = (s or "").strip()
+            return s if len(s) <= n else s[: n - 1].rstrip() + "…"
+
         if has_p:
             blocks = []
             for i, p in enumerate(precedents):
                 block = (
                     f"\n--- PRECEDENT {i} ---\n"
-                    f"Past copy reviewed: {p.get('chunk_text') or ''}\n"
-                    f"Reviewer-flagged phrase (anchor): {p.get('anchor_text') or ''}\n"
-                    f"Reviewer comment: {p.get('comment_text') or ''}\n"
+                    f"Past copy reviewed: {_cap(p.get('chunk_text'), 500)}\n"
+                    f"Reviewer-flagged phrase (anchor): {_cap(p.get('anchor_text'), 200)}\n"
+                    f"Reviewer comment: {_cap(p.get('comment_text'), 400)}\n"
                     f"Violation type: {p.get('violation_category') or 'other'}\n"
                     f"Severity: {p.get('severity') or 'informational'}\n"
                 )
                 if p.get("final_text_chunk"):
-                    block += f"Approved rewrite (for reference): {p['final_text_chunk']}\n"
+                    block += f"Approved rewrite (for reference): {_cap(p['final_text_chunk'], 400)}\n"
                 blocks.append(block)
             precedents_block = "".join(blocks)
         else:
@@ -588,6 +759,34 @@ flagged is genuinely present in the NEW DOCUMENT SECTION; do not cite
 precedents that don't apply just because they were retrieved. Output ONLY
 valid JSON."""
         return prompt
+
+    def create_completeness_sweep_prompt(
+        self,
+        content: str,
+        precedents: List[Dict],
+        rules: Optional[List[Dict]] = None,
+        already_found: Optional[List[str]] = None,
+    ) -> str:
+        """Second-pass prompt: same three-tier grading task, but the model is
+        told which phrases were ALREADY flagged on the first pass and asked to
+        return ONLY additional violations. A single structured pass reliably
+        under-enumerates; this sweep recovers the missed findings (which
+        merge_findings then dedupes back in). See recall fix 2026-06-08."""
+        base = self.create_precedent_prompts(content, precedents, rules=rules)
+        found = [a.strip() for a in (already_found or []) if a and a.strip()]
+        listing = "\n".join(f'  - "{a}"' for a in found) if found else "  (none)"
+        suffix = (
+            "\n\nSECOND PASS — COMPLETENESS SWEEP.\n"
+            "These phrases were ALREADY flagged in this section on the first pass:\n"
+            f"{listing}\n"
+            "Now find ONLY ADDITIONAL violations NOT already in that list. Re-read "
+            "the section for anything missed — unsubstantiated or comparative "
+            "claims, missing mandatory disclaimers, misleading figures or "
+            "projections, suitability/eligibility issues, tax claims, and "
+            "non-standard terminology. Do NOT repeat an already-flagged phrase. If "
+            "nothing else is wrong, return empty lists."
+        )
+        return base + suffix
 
 
 # Alias for backward compatibility

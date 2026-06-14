@@ -25,6 +25,12 @@ class Submission(Base):
     # Values: pending, approved, rejected
     approval_status = Column(String(50), default="pending", nullable=False)
 
+    # Product / jurisdiction the content is for — used to scope rule + precedent
+    # retrieval so a ULIP submission isn't graded against term-plan-only rules
+    # (architect-audit: multi-jurisdiction/product conflation).
+    product_line = Column(String(100), nullable=True, index=True)
+    jurisdiction = Column(String(100), nullable=True, index=True)
+
     # Relationships
     compliance_checks = relationship("ComplianceCheck", back_populates="submission", cascade="all, delete-orphan")
     submitter = relationship("User", back_populates="submissions", foreign_keys=[submitted_by])
