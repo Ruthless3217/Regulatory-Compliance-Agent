@@ -1,0 +1,72 @@
+# ──────────────────────────────────────────────────────────────────────────
+# docker-compose.shared.yml
+#
+# Platform deployment: run this agent against the SHARED stack
+# (shared-postgres / shared-redis / shared-nginx) on the Bajaj AI Platform VM.
+# Contains ONLY this agent's own containers — postgres/redis/nginx/backups are
+# provided by /opt/shared and must already be running.
+#
+# Use this file on the VM:
+#     podman-compose -f docker-compose.shared.yml up -d --build
+#
+# For local all-in-one dev use the default docker-compose.yml instead.
+# ──────────────────────────────────────────────────────────────────────────
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: localhost/compliance-backend:latest
+    pull_policy: never
+    container_name: compliance-backend
+    restart: always
+    mem_limit: 2g
+    cpus: 2.0
+    # NOTE: no ports — shared-nginx routes /compliance/api/ to this container.
+    # All LLM / embedding / langsmith config comes from .env (see
+    # .env.shared.example). Only the shared-network wiring is forced below so it
+    # can't be accidentally overridden.
+    env_file: .env
+    environment:
+      # Connect to the shared stack by container name. Uses the dedicated
+      # least-privilege role created by /opt/shared/init-db.sh. These OVERRIDE
+      # whatever DATABASE_URL/REDIS_URL are in .env (which target localhost).
+      DATABASE_URL: postgresql://compliance_user:${COMPLIANCE_DB_PASSWORD:-compliance_pass}@shared-postgres:5432/compliance_db
+      REDIS_URL: redis://shared-redis:6379
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
+      - ./docs:/app/docs:ro
+      - ./dataset:/app/dataset:ro
+    networks:
+      - shared-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Relative API base → browser calls /compliance/api, nginx routes it to
+        # compliance-backend. Baked in at build time (NEXT_PUBLIC_*).
+        NEXT_PUBLIC_API_BASE: /compliance/api
+        # SSR fetches run inside the container and hit the backend by name.
+        INTERNAL_API_BASE: http://compliance-backend:8000
+        # Served under the /compliance sub-path behind nginx.
+        NEXT_PUBLIC_BASE_PATH: /compliance
+        NEXT_PUBLIC_BUILD_SHA: ${BUILD_SHA:-platform}
+    image: localhost/compliance-frontend:latest
+    pull_policy: never
+    container_name: compliance-frontend
+    restart: always
+    # NOTE: no ports — shared-nginx routes /compliance/ to this container:3000.
+    environment:
+      NEXT_PUBLIC_API_BASE: /compliance/api
+      INTERNAL_API_BASE: http://compliance-backend:8000
+    networks:
+      - shared-network
+
+# Joins the existing network created by /opt/shared/docker-compose.yml.
+# Do NOT define it here.
+networks:
+  shared-network:
+    external: true
