@@ -32,6 +32,34 @@ class Settings(BaseSettings):
     llm_insecure_tls: bool = False  # set True to bypass TLS verify (e.g. behind Cisco SSL inspection)
     llm_max_tokens: int = 4096      # hard cap on generated tokens per call (cost-leak guard)
 
+    # Provider selection. "" keeps the OpenAI-compatible path (Gemini/Groq/local
+    # vLLM via base_url). Set LLM_PROVIDER=azure to route the analysis LLM through
+    # AsyncAzureOpenAI — deployment-scoped path + ?api-version= + api-key header,
+    # which native Azure OpenAI requires (a plain client 404s on /models and
+    # /chat/completions at the resource root).
+    llm_provider: str = ""                          # "" | azure | openai
+    llm_azure_api_version: str = "2024-02-01"       # LLM_AZURE_API_VERSION (Azure only)
+
+    # Reasoning models (gpt-5.x / o-series) shape requests differently: they
+    # reject max_tokens (need max_completion_tokens), reject any custom
+    # temperature, and accept a reasoning_effort knob. Defaults preserve the
+    # classic chat-completions behaviour for Gemini/Groq.
+    llm_use_max_completion_tokens: bool = False     # LLM_USE_MAX_COMPLETION_TOKENS
+    llm_supports_temperature: bool = True           # LLM_SUPPORTS_TEMPERATURE
+    llm_reasoning_effort: str = ""                  # LLM_REASONING_EFFORT: "" | minimal | low | medium | high
+
+    @property
+    def llm_is_azure(self) -> bool:
+        """True when the analysis LLM should use the Azure OpenAI client.
+
+        Triggered explicitly by LLM_PROVIDER=azure, or inferred from an Azure
+        resource hostname in LLM_BASE_URL so a misconfigured provider field
+        can't silently fall back to the wrong (404-ing) client.
+        """
+        if (self.llm_provider or "").strip().lower() == "azure":
+            return True
+        return ".openai.azure.com" in (self.llm_base_url or "").lower()
+
     @property
     def llm_api_keys(self) -> List[str]:
         """LLM_API_KEY parsed into an ordered, de-duplicated list of keys.

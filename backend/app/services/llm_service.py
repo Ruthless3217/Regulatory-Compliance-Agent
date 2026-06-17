@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from pydantic import BaseModel, ValidationError
 from ..config import settings
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, AsyncAzureOpenAI
 try:  # openai>=1.0 ships RateLimitError; guard so import never hard-fails
     from openai import RateLimitError
 except Exception:  # pragma: no cover
@@ -101,23 +101,67 @@ class LLMService:
         self.api_key = self.api_keys[0] if self.api_keys else ""
         self.client = self._client_pool[0][1]
 
-    def _build_client(self, api_key: str) -> AsyncOpenAI:
-        """Construct one AsyncOpenAI client bound to ``api_key``."""
-        client_kwargs: Dict[str, Any] = {
-            "api_key": api_key or "placeholder",
-            "base_url": self.base_url,
-        }
+    def _build_client(self, api_key: str):
+        """Construct one client bound to ``api_key``.
+
+        Azure OpenAI is NOT OpenAI-compatible at the resource root: it needs the
+        deployment-scoped path, an ``?api-version=`` query, and an ``api-key``
+        header — all handled by AsyncAzureOpenAI. Everything else (Gemini's
+        OpenAI-compatible endpoint, Groq, local vLLM) uses AsyncOpenAI + base_url.
+        """
+        client_kwargs: Dict[str, Any] = {"api_key": api_key or "placeholder"}
         if settings.llm_insecure_tls:
+            # Behind Cisco SSL inspection the verified handshake fails (httpx
+            # SSLError); bypass verify so the external HTTPS call works.
             client_kwargs["http_client"] = httpx.AsyncClient(verify=False)
+
+        if settings.llm_is_azure:
+            return AsyncAzureOpenAI(
+                azure_endpoint=self.base_url,
+                api_version=settings.llm_azure_api_version,
+                **client_kwargs,
+            )
+        client_kwargs["base_url"] = self.base_url
         return AsyncOpenAI(**client_kwargs)
 
+    def _chat_kwargs(self, *, temperature: float, max_tokens: int) -> Dict[str, Any]:
+        """Per-call chat-completion params shaped for the active provider.
+
+        Reasoning models (gpt-5.x on Azure) require ``max_completion_tokens``,
+        reject a custom ``temperature`` (400 on anything but the default), and
+        accept ``reasoning_effort``. Gemini/Groq keep the classic
+        ``max_tokens`` + ``temperature``. Controlled by the LLM_* flags so the
+        same code path serves every provider.
+        """
+        kwargs: Dict[str, Any] = {}
+        if settings.llm_use_max_completion_tokens:
+            kwargs["max_completion_tokens"] = max_tokens
+        else:
+            kwargs["max_tokens"] = max_tokens
+        if settings.llm_supports_temperature:
+            kwargs["temperature"] = temperature
+        if settings.llm_reasoning_effort:
+            kwargs["reasoning_effort"] = settings.llm_reasoning_effort
+        return kwargs
+
     async def health_check(self) -> bool:
-        """Check if LLM service is available."""
+        """Check if LLM service is available.
+
+        Azure OpenAI does not expose ``/models`` on the resource root, so
+        ``models.list()`` 404s there even when chat calls succeed. Treat that as
+        available rather than failing the probe (and warning about a non-issue).
+        """
         try:
             await self.client.models.list()
             logger.info(f"✅ LLM service available with model '{self.model}'")
             return True
         except Exception as e:
+            if settings.llm_is_azure:
+                logger.info(
+                    f"Azure endpoint has no models.list; assuming deployment "
+                    f"'{self.model}' is available (chat calls verified at runtime)"
+                )
+                return True
             logger.warning(f"LLM health check failed: {str(e)}")
             return False
 
@@ -137,8 +181,10 @@ class LLMService:
                 response = await client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperature=kwargs.get("temperature", 0.7),
-                    max_tokens=kwargs.get("max_tokens", settings.llm_max_tokens),
+                    **self._chat_kwargs(
+                        temperature=kwargs.get("temperature", 0.7),
+                        max_tokens=kwargs.get("max_tokens", settings.llm_max_tokens),
+                    ),
                 )
                 response_text = response.choices[0].message.content.strip()
                 await self._log_to_json(prompt, response_text, system_prompt, context)
@@ -177,9 +223,11 @@ class LLMService:
                 stream = await client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperature=temperature,
-                    max_tokens=settings.llm_max_tokens,
                     stream=True,
+                    **self._chat_kwargs(
+                        temperature=temperature,
+                        max_tokens=settings.llm_max_tokens,
+                    ),
                 )
             except Exception as e:
                 if _is_rate_limit_error(e) and len(self._client_pool) > 1:
@@ -329,9 +377,11 @@ class LLMService:
                 response_wrapper = await client.chat.completions.with_raw_response.create(
                     model=self.model,
                     messages=current_messages,
-                    temperature=temperature,
-                    max_tokens=settings.llm_max_tokens,
-                    response_format={"type": "json_object"}
+                    response_format={"type": "json_object"},
+                    **self._chat_kwargs(
+                        temperature=temperature,
+                        max_tokens=settings.llm_max_tokens,
+                    ),
                 )
 
                 response = response_wrapper.parse()
