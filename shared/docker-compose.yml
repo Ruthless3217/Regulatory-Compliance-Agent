@@ -1,0 +1,86 @@
+# /opt/shared/docker-compose.yml
+# =============================================================================
+# Shared infrastructure for ALL apps on this VM (RHEL9 / rootful Podman 5.8.2).
+#
+# Start this FIRST, before any app:
+#     cd /opt/shared && sudo podman-compose up -d
+# or use the orchestrator:
+#     sudo /opt/shared/start-all.sh
+#
+# Compose-spec file: NO `version:` field. Every image is a full registry path
+# and pull_policy:never (images are pre-pulled offline). Tested against
+# podman-compose 1.6.0.
+# =============================================================================
+
+services:
+  # --- Shared Postgres (with pgvector) -------------------------------------
+  # One Postgres for the whole VM. Each app owns its OWN database (created once
+  # at migration time) — see README "Adding a new app".
+  shared-postgres:
+    image: docker.io/pgvector/pgvector:pg15
+    container_name: shared-postgres
+    pull_policy: never
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # NOTE: deliberately NO POSTGRES_DB. This server is shared, so only the
+      # default `postgres` db is auto-created. Per-app databases are created
+      # manually, e.g. for the compliance app:
+      #   CREATE DATABASE compliance;
+      #   \c compliance
+      #   CREATE EXTENSION IF NOT EXISTS vector;
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - shared-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Shared Redis ---------------------------------------------------------
+  shared-redis:
+    image: docker.io/library/redis:7-alpine
+    container_name: shared-redis
+    pull_policy: never
+    restart: always
+    networks:
+      - shared-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # --- Shared Nginx reverse proxy ------------------------------------------
+  # The ONLY container that publishes a host port. Routes external traffic to
+  # each app's frontend/backend by container name on shared-network.
+  #
+  # nginx proxies to app containers (compliance-backend, compliance-frontend)
+  # that live in OTHER compose projects and start AFTER this one. If they are
+  # not up yet, nginx exits with "host not found in upstream". `restart: always`
+  # plus the explicit `podman restart shared-nginx` at the end of start-all.sh
+  # make it converge once the apps are running.
+  shared-nginx:
+    image: docker.io/library/nginx:alpine
+    container_name: shared-nginx
+    pull_policy: never
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      # Mounted into conf.d so it is included inside the stock http{} block.
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - shared-network
+
+networks:
+  shared-network:
+    name: shared-network
+    driver: bridge
+
+volumes:
+  pgdata:
+    name: pgdata

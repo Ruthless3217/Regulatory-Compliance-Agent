@@ -135,6 +135,17 @@ class PrecedentCitation(BaseModel):
         le=1.0,
         description="0.0–1.0 confidence that a senior reviewer would flag this in the new section as the cited precedent does.",
     )
+    satisfied_elsewhere: bool = Field(
+        False,
+        description=(
+            "Set TRUE only for a MISSING-disclaimer / MISSING-footnote / "
+            "MISSING-reference finding whose required element ALREADY appears "
+            "elsewhere in the DOCUMENT CONTEXT. NEVER set it for a substantive "
+            "issue (a claim, guarantee, superlative, misleading or solicitation "
+            "phrase) — context cannot cure those. Flagged findings are kept for "
+            "audit, not dropped; critical findings are never suppressed."
+        ),
+    )
 
 
 class NovelFinding(BaseModel):
@@ -178,6 +189,15 @@ class NovelFinding(BaseModel):
         le=1.0,
         description="0.0–1.0 confidence. Novel findings below the 0.75 floor are dropped before persistence.",
     )
+    satisfied_elsewhere: bool = Field(
+        False,
+        description=(
+            "Set TRUE only for a MISSING-disclaimer / MISSING-footnote / "
+            "MISSING-reference finding whose required element ALREADY appears "
+            "elsewhere in the DOCUMENT CONTEXT. NEVER set it for a substantive "
+            "issue — context cannot cure a bad claim. Kept for audit, not dropped."
+        ),
+    )
 
 
 class RuleFinding(BaseModel):
@@ -216,6 +236,15 @@ class RuleFinding(BaseModel):
         ge=0.0,
         le=1.0,
         description="0.0–1.0 confidence that this section actually violates the cited rule.",
+    )
+    satisfied_elsewhere: bool = Field(
+        False,
+        description=(
+            "Set TRUE only for a MISSING-disclaimer / MISSING-footnote / "
+            "MISSING-reference finding whose required element ALREADY appears "
+            "elsewhere in the DOCUMENT CONTEXT. NEVER set it for a substantive "
+            "issue — context cannot cure a bad claim. Kept for audit, not dropped."
+        ),
     )
 
 

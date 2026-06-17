@@ -50,9 +50,18 @@ export interface Violation {
   // Reviewer-voice tags (2026-05-28). Carried in JSONB; render as a badge row.
   violation_metadata?: ViolationMetadata | null;
   // Precedent-citation provenance (Phase 1.5). Populated only on the precedent path.
+  cited_precedent_id?: string | null;
   cited_document_id?: string | null;
+  cited_source_file?: string | null;
   cited_anchor_text?: string | null;
   cited_comment_verbatim?: string | null;
+  // The approved rewrite a past reviewer applied to the matching precedent — the
+  // single best answer to "how was this fixed before". Serialized by the API but
+  // previously dropped at this boundary (full-pipeline audit 2026-06-16).
+  cited_final_text?: string | null;
+  // Precedent match strength (cosine) — lets the user gauge how close the cited
+  // past case really is.
+  similarity_score?: number | null;
   // Sub-confidence-floor / structural findings: kept out of the score and shown
   // in a separate "Needs review" lane (recall fix 2026-06-08).
   suppressed?: boolean | null;

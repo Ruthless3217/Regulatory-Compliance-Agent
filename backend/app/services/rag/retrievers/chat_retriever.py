@@ -36,6 +36,9 @@ class ChatContext:
     relevant_rules: List[Dict[str, Any]] = field(default_factory=list)
     relevant_chunks: List[Dict[str, Any]] = field(default_factory=list)
     source_passages: List[Dict[str, Any]] = field(default_factory=list)
+    # Approved-brochure passages (rag_product_docs) — authoritative for product
+    # facts, mandatory descriptors, and disclaimer wording for THIS product.
+    product_passages: List[Dict[str, Any]] = field(default_factory=list)
     linked_violations: List[Dict[str, Any]] = field(default_factory=list)
     degraded: bool = False
 
@@ -54,6 +57,7 @@ class ChatRetriever:
         top_k_rules: Optional[int] = None,
         top_k_chunks: int = 3,
         top_k_source_passages: int = 2,
+        top_k_product_docs: int = 3,
     ) -> ChatContext:
         K_rules = top_k_rules or settings.rag_top_k_chat
         embedder = get_embedder()
@@ -106,10 +110,26 @@ class ChatRetriever:
             except RAGDegraded:
                 return []
 
-        rules_hits, chunks_hits, passages_hits = await asyncio.gather(
-            get_rules(), get_chunks(), get_passages()
+        async def get_product_docs():
+            try:
+                return await store.hybrid_search(
+                    index="rag_product_docs",
+                    query_text=query,
+                    query_vector=qvec,
+                    top_k=top_k_product_docs,
+                    recall_pool=settings.rag_recall_pool,
+                    rrf_k=settings.rag_rrf_k,
+                )
+            except RAGDegraded:
+                return []
+
+        rules_hits, chunks_hits, passages_hits, product_hits = await asyncio.gather(
+            get_rules(), get_chunks(), get_passages(), get_product_docs()
         )
 
+        # `degraded` reflects loss of COMPLIANCE grounding (rules/chunks/source
+        # passages). Product-doc passages enrich product-fact/wording answers
+        # but are not a compliance signal, so they don't clear the degraded flag.
         degraded = not (rules_hits or chunks_hits or passages_hits)
 
         # Link violations whose rule_id is in the retrieved rules.
@@ -136,6 +156,7 @@ class ChatRetriever:
             relevant_rules=[_hit_to_dict(h) for h in rules_hits],
             relevant_chunks=[_hit_to_dict(h) for h in chunks_hits],
             source_passages=[_hit_to_dict(h) for h in passages_hits],
+            product_passages=[_hit_to_dict(h) for h in product_hits],
             linked_violations=linked_violations,
             degraded=degraded,
         )

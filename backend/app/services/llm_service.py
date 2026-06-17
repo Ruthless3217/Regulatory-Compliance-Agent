@@ -9,6 +9,10 @@ from datetime import datetime
 from pydantic import BaseModel, ValidationError
 from ..config import settings
 from openai import AsyncOpenAI
+try:  # AsyncAzureOpenAI ships with openai>=1.0; guard so import never hard-fails
+    from openai import AsyncAzureOpenAI
+except Exception:  # pragma: no cover
+    AsyncAzureOpenAI = None  # type: ignore
 try:  # openai>=1.0 ships RateLimitError; guard so import never hard-fails
     from openai import RateLimitError
 except Exception:  # pragma: no cover
@@ -74,49 +78,149 @@ def _is_rate_limit_error(exc: Exception) -> bool:
     return "rate_limit" in msg or "rate limit" in msg or "429" in msg
 
 
-class LLMService:
-    """Service for integrating with Cloud LLMs (Gemini/OpenAI) via OpenAI-compatible API."""
+def _resolve_profile(profile: str) -> Dict[str, Any]:
+    """Resolve a provider config profile from ``settings``.
 
-    def __init__(self):
-        self.base_url = settings.llm_base_url
-        self.model = settings.llm_model
+    ``"main"`` drives analysis/grading off the LLM_* vars. ``"chat"`` drives the
+    streaming chat assistant off the CHAT_LLM_* vars, each field falling back to
+    the main profile when left empty — so chat can run on a different provider
+    (e.g. Groq) than analysis (e.g. Azure) without duplicating config.
+    """
+    if profile == "chat":
+        provider = (settings.chat_llm_provider or settings.llm_provider or "openai").lower()
+        base_url = settings.chat_llm_base_url or settings.llm_base_url
+        model = settings.chat_llm_model or settings.llm_model
+        api_keys = settings.chat_llm_api_keys
+        max_tokens = settings.chat_llm_max_tokens or settings.llm_max_tokens
+        insecure_tls = settings.chat_llm_insecure_tls
+        use_max_completion = settings.chat_llm_use_max_completion_tokens
+        supports_temperature = settings.chat_llm_supports_temperature
+        azure_api_version = settings.chat_llm_azure_api_version or settings.llm_azure_api_version
+        reasoning_effort = settings.chat_llm_reasoning_effort
+    else:  # "main"
+        provider = (settings.llm_provider or "openai").lower()
+        base_url = settings.llm_base_url
+        model = settings.llm_model
+        api_keys = settings.llm_api_keys
+        max_tokens = settings.llm_max_tokens
+        insecure_tls = settings.llm_insecure_tls
+        use_max_completion = settings.llm_use_max_completion_tokens
+        supports_temperature = settings.llm_supports_temperature
+        azure_api_version = settings.llm_azure_api_version
+        reasoning_effort = settings.llm_reasoning_effort
+
+    return {
+        "provider": provider,
+        "base_url": base_url,
+        "model": model,
+        "api_keys": api_keys,
+        "max_tokens": max_tokens,
+        "insecure_tls": insecure_tls,
+        "token_limit_param": "max_completion_tokens" if use_max_completion else "max_tokens",
+        "supports_temperature": supports_temperature,
+        "azure_api_version": azure_api_version,
+        "reasoning_effort": (reasoning_effort or "").strip(),
+    }
+
+
+class LLMService:
+    """Service for integrating with Cloud LLMs via the OpenAI Chat Completions
+    surface — works against any OpenAI-compatible endpoint (Groq/Ollama/OpenAI)
+    or Azure OpenAI (via AsyncAzureOpenAI). One instance per provider profile."""
+
+    def __init__(self, profile: str = "main"):
+        cfg = _resolve_profile(profile)
+        self.profile = profile
+        self.provider = cfg["provider"]
+        self.base_url = cfg["base_url"]
+        self.model = cfg["model"]
+        self.max_tokens = cfg["max_tokens"]
+        self.insecure_tls = cfg["insecure_tls"]
+        self.token_limit_param = cfg["token_limit_param"]
+        self.supports_temperature = cfg["supports_temperature"]
+        self.azure_api_version = cfg["azure_api_version"]
+        self.reasoning_effort = cfg["reasoning_effort"]
 
         # Logging config
         self.log_file = os.path.join("logs", "log.json")
         os.makedirs("logs", exist_ok=True)
 
-        if settings.llm_insecure_tls:
-            logger.warning("LLM_INSECURE_TLS=true — disabling TLS verification for LLM calls")
+        if self.insecure_tls:
+            logger.warning(
+                "[%s] LLM_INSECURE_TLS=true — disabling TLS verification for LLM calls",
+                profile,
+            )
 
         # One client per configured key. Multiple keys = TPM failover: the
         # request drivers below rotate to the next key when one is 429'd or
         # over its daily budget. key_id (last 8 chars of the key) ties each
         # key to its own per-key rate limiter without logging the secret.
-        self.api_keys = settings.llm_api_keys
+        self.api_keys = cfg["api_keys"]
         if not self.api_keys:
-            logger.warning("LLM_API_KEY is not set. LLM service will fail.")
+            logger.warning("[%s] LLM API key is not set. LLM service will fail.", profile)
             self._client_pool = [("none", self._build_client("placeholder"))]
         else:
             self._client_pool = [
                 (k[-8:], self._build_client(k)) for k in self.api_keys
             ]
-        if len(self._client_pool) > 1:
-            logger.info(f"LLM key failover enabled across {len(self._client_pool)} keys")
+        logger.info(
+            "[%s] LLM provider=%s model=%s keys=%d token_param=%s",
+            profile, self.provider, self.model, len(self._client_pool),
+            self.token_limit_param,
+        )
 
         # Back-compat: callers (e.g. health_check) that reference .client / .api_key
         # get the first key in the pool.
         self.api_key = self.api_keys[0] if self.api_keys else ""
         self.client = self._client_pool[0][1]
 
-    def _build_client(self, api_key: str) -> AsyncOpenAI:
-        """Construct one AsyncOpenAI client bound to ``api_key``."""
+    def _build_client(self, api_key: str):
+        """Construct one provider client bound to ``api_key``.
+
+        Azure OpenAI is NOT wire-compatible with the plain OpenAI client (api-key
+        header, api-version query, deployment-based routing), so it gets the
+        dedicated AsyncAzureOpenAI client. For Azure, ``self.base_url`` is the
+        resource root and ``self.model`` is the deployment name.
+        """
+        http_client = httpx.AsyncClient(verify=False) if self.insecure_tls else None
+        if self.provider == "azure":
+            if AsyncAzureOpenAI is None:  # pragma: no cover
+                raise RuntimeError(
+                    "LLM_PROVIDER=azure but AsyncAzureOpenAI is unavailable; "
+                    "upgrade the openai package."
+                )
+            azure_kwargs: Dict[str, Any] = {
+                "api_key": api_key or "placeholder",
+                "azure_endpoint": self.base_url,
+                "api_version": self.azure_api_version,
+                "azure_deployment": self.model,
+            }
+            if http_client is not None:
+                azure_kwargs["http_client"] = http_client
+            return AsyncAzureOpenAI(**azure_kwargs)
+
         client_kwargs: Dict[str, Any] = {
             "api_key": api_key or "placeholder",
             "base_url": self.base_url,
         }
-        if settings.llm_insecure_tls:
-            client_kwargs["http_client"] = httpx.AsyncClient(verify=False)
+        if http_client is not None:
+            client_kwargs["http_client"] = http_client
         return AsyncOpenAI(**client_kwargs)
+
+    def _gen_params(self, temperature, max_tokens=None) -> Dict[str, Any]:
+        """Build the provider-variable generation params: the token-limit kwarg
+        under the right name (``max_tokens`` vs ``max_completion_tokens`` for
+        reasoning models) and ``temperature`` only when the model accepts it."""
+        params: Dict[str, Any] = {
+            self.token_limit_param: max_tokens if max_tokens is not None else self.max_tokens
+        }
+        if self.supports_temperature and temperature is not None:
+            params["temperature"] = temperature
+        # Reasoning effort is the dominant cost lever on reasoning models; only
+        # send it when configured (non-reasoning models like Groq llama reject it).
+        if self.reasoning_effort:
+            params["reasoning_effort"] = self.reasoning_effort
+        return params
 
     async def health_check(self) -> bool:
         """Check if LLM service is available."""
@@ -152,8 +256,10 @@ class LLMService:
                 response = await client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperature=kwargs.get("temperature", 0.7),
-                    max_tokens=kwargs.get("max_tokens", settings.llm_max_tokens),
+                    **self._gen_params(
+                        kwargs.get("temperature", 0.7),
+                        kwargs.get("max_tokens"),
+                    ),
                 )
                 response_text = response.choices[0].message.content.strip()
 
@@ -222,10 +328,9 @@ class LLMService:
                 stream = await client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperature=temperature,
-                    max_tokens=settings.llm_max_tokens,
                     stream=True,
-                    stream_options={"include_usage": True}
+                    stream_options={"include_usage": True},
+                    **self._gen_params(temperature),
                 )
             except Exception as e:
                 if _is_rate_limit_error(e) and len(self._client_pool) > 1:
@@ -400,13 +505,34 @@ class LLMService:
                 response_wrapper = await client.chat.completions.with_raw_response.create(
                     model=self.model,
                     messages=current_messages,
-                    temperature=temperature,
-                    max_tokens=settings.llm_max_tokens,
-                    response_format={"type": "json_object"}
+                    response_format={"type": "json_object"},
+                    **self._gen_params(temperature),
                 )
 
                 response = response_wrapper.parse()
                 response_text = response.choices[0].message.content.strip()
+
+                # FAIL CLOSED on output truncation. finish_reason='length' means
+                # the model stopped because it hit max_tokens, so the JSON finding
+                # list is likely cut short — accepting it would silently
+                # under-report violations. Retrying won't help (same ceiling), so
+                # raise immediately → the chunk degrades to needs_review rather
+                # than recording an incomplete grade. Raise LLM_MAX_TOKENS for the
+                # deployed model to fix. (Audit: finish_reason never checked.)
+                finish_reason = getattr(response.choices[0], "finish_reason", None)
+                if finish_reason == "length":
+                    logger.error(
+                        "LLM output truncated (finish_reason='length') at "
+                        "max_tokens=%s; failing closed instead of accepting a "
+                        "possibly-incomplete result.",
+                        self.max_tokens,
+                    )
+                    raise LLMUnavailableError(
+                        f"LLM output truncated at max_tokens="
+                        f"{self.max_tokens} (finish_reason='length'); "
+                        f"refusing a possibly-incomplete grading result. "
+                        f"Increase LLM_MAX_TOKENS for the deployed model."
+                    )
 
                 # Extract token usage
                 token_usage = 0
@@ -501,12 +627,11 @@ class LLMService:
                 logger.error(f"Structured generation failed (non-retryable): {e}")
                 raise LLMUnavailableError(f"LLM call failed: {e}") from e
 
-    @staticmethod
-    def _estimate_tokens(messages: list) -> int:
+    def _estimate_tokens(self, messages: list) -> int:
         """Rough token estimate for rate-limiting: prompt tokens (tiktoken when
-        available, else ~4 chars/token) plus the configured output ceiling.
+        available, else ~4 chars/token) plus this profile's output ceiling.
         Reconciled against actual usage after the call."""
-        return LLMService._count_prompt_tokens(messages) + settings.llm_max_tokens
+        return self._count_prompt_tokens(messages) + self.max_tokens
 
     @staticmethod
     def _count_prompt_tokens(messages: list) -> int:
@@ -654,5 +779,9 @@ class LLMService:
             logger.warning(f"Failed to set usage_metadata on LangSmith run: {e}")
 
 
-# Singleton instance
-llm_service = LLMService()
+# Singleton instances.
+#   llm_service      → analysis / grading pipeline (main profile, e.g. Azure)
+#   chat_llm_service → streaming chat assistant (chat profile, e.g. Groq); falls
+#                      back to the main profile when no CHAT_LLM_* vars are set.
+llm_service = LLMService("main")
+chat_llm_service = LLMService("chat")

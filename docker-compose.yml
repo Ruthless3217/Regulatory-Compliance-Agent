@@ -1,68 +1,85 @@
+# /opt/Regulatory-Compliance-Agent/docker-compose.yml
+# =============================================================================
+# Compliance app — refactored to use the VM's SHARED infrastructure.
+#
+# Postgres, Redis and the reverse proxy now live in /opt/shared. This file only
+# builds + runs the app's own containers (backend, frontend) and its backup
+# sidecar. No host ports are published — shared-nginx fronts all external
+# traffic (/compliance/ and /compliance/api/).
+#
+# Start order is handled by /opt/shared/start-all.sh (cross-project depends_on
+# is NOT supported by compose, so this file cannot depend_on shared-postgres).
+#
+#     sudo /opt/shared/start-all.sh          # brings up shared infra + this app
+#     cd /opt/Regulatory-Compliance-Agent && sudo podman-compose up -d   # this app only
+#
+# Requires POSTGRES_PASSWORD in this directory's .env (same value as
+# /opt/shared/.env).
+# =============================================================================
+
 services:
-  postgres:
-    image: pgvector/pgvector:pg15
-    container_name: compliance-postgres
-    environment:
-      POSTGRES_USER: compliance_user
-      POSTGRES_PASSWORD: compliance_pass
-      POSTGRES_DB: compliance_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U compliance_user -d compliance_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    container_name: compliance-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: compliance-backend
+    pull_policy: never
     restart: unless-stopped
     # Resource limits so a malformed/large upload can't OOM the host (audit H7).
     mem_limit: 2g
     cpus: 2.0
-    ports:
-      - "8000:8000"
+    # No host port — reached via shared-nginx at /compliance/api/.
     environment:
-      DATABASE_URL: postgresql://compliance_user:compliance_pass@postgres:5432/compliance_db
-      REDIS_URL: redis://redis:6379
+      # --- Datastores: SHARED infra (container names on shared-network) ---
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@shared-postgres:5432/compliance
+      REDIS_URL: redis://shared-redis:6379
+      # --- Main LLM provider (analysis/grading) — Azure OpenAI by default ---
+      # LLM_PROVIDER=azure routes via AsyncAzureOpenAI (api-key header +
+      # api-version + deployment). For azure, LLM_BASE_URL is the resource root
+      # and LLM_MODEL is the deployment name. LLM_API_KEY may be a comma-list
+      # for key failover (OpenAI-compatible providers only).
+      LLM_PROVIDER: ${LLM_PROVIDER:-azure}
       LLM_API_KEY: ${LLM_API_KEY}
-      # Pass provider config through from .env so the container matches local
-      # dev (Groq). Defaults keep Groq if the vars are unset; override in .env
-      # to switch providers. LLM_API_KEY may be a comma-list for key failover.
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.groq.com/openai/v1}
-      LLM_MODEL: ${LLM_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
-      # Completion cap. Reasoning models (nemotron via Ollama) spend output
-      # tokens on thinking BEFORE the JSON answer; 4096 starves big grading
-      # prompts into empty content. Override via .env.
-      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_MODEL: ${LLM_MODEL}
+      LLM_AZURE_API_VERSION: ${LLM_AZURE_API_VERSION:-2025-04-01-preview}
+      # gpt-5 / o-series reasoning models reject max_tokens — use max_completion_tokens.
+      LLM_USE_MAX_COMPLETION_TOKENS: ${LLM_USE_MAX_COMPLETION_TOKENS:-true}
+      # gpt-5.4 reasoning mode rejects custom temperature → omit (default false).
+      LLM_SUPPORTS_TEMPERATURE: ${LLM_SUPPORTS_TEMPERATURE:-false}
+      # Reasoning effort = the main cost lever on reasoning models (high ≈ 5x the
+      # output tokens of low). Default low; empty for non-reasoning providers.
+      LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-low}
+      # Safety ceiling only (billed on actual tokens). 8000 is ample at low effort.
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-8000}
+      LLM_CONTEXT_WINDOW: ${LLM_CONTEXT_WINDOW:-128000}
+      # Bypass TLS verify for the LLM call. Required when reaching an external
+      # HTTPS provider from behind corporate SSL inspection (Cisco), which
+      # presents a re-signed cert httpx rejects. Harmless for localhost Ollama.
+      LLM_INSECURE_TLS: ${LLM_INSECURE_TLS:-false}
+      # --- Chat assistant LLM (streaming Q&A) — separate provider (Groq) ---
+      # Any CHAT_LLM_* left empty inherits the main LLM_* config above.
+      CHAT_LLM_PROVIDER: ${CHAT_LLM_PROVIDER:-}
+      CHAT_LLM_BASE_URL: ${CHAT_LLM_BASE_URL:-}
+      CHAT_LLM_MODEL: ${CHAT_LLM_MODEL:-}
+      CHAT_LLM_API_KEY: ${CHAT_LLM_API_KEY:-}
+      CHAT_LLM_MAX_TOKENS: ${CHAT_LLM_MAX_TOKENS:-0}
+      CHAT_LLM_INSECURE_TLS: ${CHAT_LLM_INSECURE_TLS:-false}
+      CHAT_LLM_REASONING_EFFORT: ${CHAT_LLM_REASONING_EFFORT:-}
+      GROQ_CITATION_MODEL: ${GROQ_CITATION_MODEL:-}
+      GROQ_CITATION_TPM: ${GROQ_CITATION_TPM:-12000}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
       LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
       LANGCHAIN_PROJECT: "${LANGCHAIN_PROJECT:-Regulatory Compliance Agent}"
-      CRITIC_ENABLED: ${CRIC_ENABLED:-true}
+      CRITIC_ENABLED: ${CRITIC_ENABLED:-true}
+      CROSS_CHUNK_CONTEXT_ENABLED: ${CROSS_CHUNK_CONTEXT_ENABLED:-true}
+      CROSS_CHUNK_CONTEXT_TOKEN_BUDGET: ${CROSS_CHUNK_CONTEXT_TOKEN_BUDGET:-8000}
       ENVIRONMENT: production
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    # NOTE: no depends_on for shared-postgres/shared-redis — they live in the
+    # /opt/shared compose project and compose cannot reference across projects.
+    # start-all.sh waits for shared-postgres health before starting this app.
+    networks:
+      - shared-network
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/logs:/app/logs
@@ -70,22 +87,23 @@ services:
       - ./dataset:/app/dataset:ro
 
   # Daily Postgres backup sidecar — sleeps 24h between dumps, retains 14 days.
-  # Manual trigger: `docker exec compliance-backup /scripts/db_backup.sh`
+  # Now targets SHARED Postgres. Manual trigger:
+  #   sudo podman exec compliance-backup /scripts/db_backup.sh
   db-backup:
-    image: postgres:15-alpine
+    image: docker.io/library/postgres:15-alpine
     container_name: compliance-backup
+    pull_policy: never
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      PGHOST: postgres
+      PGHOST: shared-postgres
       PGPORT: "5432"
-      PGUSER: compliance_user
-      PGPASSWORD: compliance_pass
-      PGDATABASE: compliance_db
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: compliance
       BACKUP_DIR: /backups
       RETAIN_DAYS: "14"
+    networks:
+      - shared-network
     volumes:
       - ./backend/scripts/db_backup.sh:/scripts/db_backup.sh:ro
       - ./backend/backups:/backups
@@ -101,8 +119,9 @@ services:
         NEXT_PUBLIC_API_BASE: http://localhost:8000
         INTERNAL_API_BASE: http://backend:8000
     container_name: compliance-frontend
-    ports:
-      - "3000:3000"
+    pull_policy: never
+    restart: unless-stopped
+    # No host port — reached via shared-nginx at /compliance/.
     environment:
       # Runtime so lib/api.ts can pick INTERNAL_API_BASE for SSR fetches.
       NEXT_PUBLIC_API_BASE: http://localhost:8000
@@ -110,7 +129,11 @@ services:
       NEXT_PUBLIC_BUILD_SHA: ${BUILD_SHA:-dev}
     depends_on:
       - backend
+    networks:
+      - shared-network
 
-volumes:
-  postgres_data:
-  redis_data:
+# shared-network is created and owned by /opt/shared/docker-compose.yml.
+networks:
+  shared-network:
+    external: true
+    name: shared-network

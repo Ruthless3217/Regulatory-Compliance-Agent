@@ -17,6 +17,13 @@ from typing import List
 from app.config import settings
 from app.services.rag.errors import RAGEmbedFailed
 
+try:
+    from langsmith import traceable
+except Exception:  # pragma: no cover
+    def traceable(*_a, **_kw):  # type: ignore
+        def _d(fn): return fn
+        return _d if not (_a and callable(_a[0])) else _a[0]
+
 logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 96
@@ -117,6 +124,7 @@ class CohereEmbedder:
                     continue
                 raise
 
+    @traceable(run_type="embedding", name="Cohere.embed")
     async def embed(self, texts: List[str], input_type: str = "search_document") -> List[List[float]]:
         """Embed texts, serving cache hits and embedding only the misses.
 

@@ -29,8 +29,45 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     llm_model: str = "gemini-2.0-flash"
+    # Provider transport: "openai" = any OpenAI-compatible endpoint (Groq, Ollama,
+    # OpenAI, internal gateway); "azure" = Azure OpenAI (api-key header +
+    # api-version query + deployment-based routing via AsyncAzureOpenAI). For
+    # azure, LLM_BASE_URL is the resource root (https://<res>.openai.azure.com)
+    # and LLM_MODEL is the *deployment* name (not the model family name).
+    llm_provider: str = "openai"
+    # api-version for the Azure LLM data-plane (chat completions). Newest models
+    # (gpt-5 / o-series) require a recent preview version. Only used when
+    # LLM_PROVIDER=azure.
+    llm_azure_api_version: str = "2025-04-01-preview"
+    # GPT-5 / o-series reasoning models reject `max_tokens` and require
+    # `max_completion_tokens`. Set True for those Azure deployments. Default False
+    # keeps the legacy `max_tokens` param for Groq/Ollama/OpenAI chat models.
+    llm_use_max_completion_tokens: bool = False
+    # Some reasoning models reject a non-default `temperature`. Set False to omit
+    # the temperature param entirely. gpt-5.4 accepts it, so default True.
+    llm_supports_temperature: bool = True
+    # Reasoning models burn "reasoning tokens" before answering — the dominant
+    # cost driver (high effort ≈ 5x the output tokens of low on the same task).
+    # "minimal" | "low" | "medium" | "high"; empty = omit the param (provider
+    # default) and is REQUIRED for non-reasoning models (Groq llama rejects it).
+    llm_reasoning_effort: str = ""
     llm_insecure_tls: bool = False  # set True to bypass TLS verify (e.g. behind Cisco SSL inspection)
     llm_max_tokens: int = 4096      # hard cap on generated tokens per call (cost-leak guard)
+
+    # --- Chat-feature LLM override -------------------------------------------
+    # The chat assistant (streaming Q&A) can run on a DIFFERENT provider than the
+    # analysis/grading pipeline. Any CHAT_LLM_* left empty falls back to the main
+    # LLM_* config above. Used to keep chat on Groq while analysis moves to Azure.
+    chat_llm_provider: str = ""
+    chat_llm_base_url: str = ""
+    chat_llm_model: str = ""
+    chat_llm_api_key: str = ""
+    chat_llm_max_tokens: int = 0          # 0 = inherit llm_max_tokens
+    chat_llm_insecure_tls: bool = False
+    chat_llm_use_max_completion_tokens: bool = False
+    chat_llm_supports_temperature: bool = True
+    chat_llm_azure_api_version: str = ""  # empty = inherit llm_azure_api_version
+    chat_llm_reasoning_effort: str = ""   # empty = omit (Groq llama rejects it)
     # Hard daily token ceiling across ALL keys/models/endpoints (wallet guard,
     # independent of per-key Groq TPM/TPD). 0 = disabled. When exceeded, every
     # LLM entrypoint fails closed until UTC midnight.
@@ -40,23 +77,36 @@ class Settings(BaseSettings):
     llm_context_window: int = 128_000
     critic_enabled: bool = True
 
+    @staticmethod
+    def _parse_keys(raw: str) -> List[str]:
+        """Parse a (possibly comma-separated) key string into an ordered,
+        de-duplicated list. Duplicates collapse because the same key is the same
+        upstream account/budget — rotating between identical keys buys nothing
+        and would corrupt per-key rate-limit accounting."""
+        seen = set()
+        keys: List[str] = []
+        for chunk in (raw or "").split(","):
+            k = chunk.strip()
+            if k and k not in seen:
+                seen.add(k)
+                keys.append(k)
+        return keys
+
     @property
     def llm_api_keys(self) -> List[str]:
         """LLM_API_KEY parsed into an ordered, de-duplicated list of keys.
 
         A bare key (no comma) yields a one-element list, preserving prior
-        single-key behaviour. Duplicates collapse because the same key is the
-        same upstream account/budget — rotating between identical keys buys
-        nothing and would corrupt per-key rate-limit accounting.
+        single-key behaviour.
         """
-        seen = set()
-        keys: List[str] = []
-        for raw in (self.llm_api_key or "").split(","):
-            k = raw.strip()
-            if k and k not in seen:
-                seen.add(k)
-                keys.append(k)
-        return keys
+        return self._parse_keys(self.llm_api_key)
+
+    @property
+    def chat_llm_api_keys(self) -> List[str]:
+        """CHAT_LLM_API_KEY parsed; empty falls back to the main LLM keys so the
+        chat feature inherits the analysis provider unless explicitly overridden."""
+        keys = self._parse_keys(self.chat_llm_api_key)
+        return keys or self.llm_api_keys
 
     # Redis (LangGraph Persistence)
     redis_url: str = "redis://localhost:6379"
@@ -168,6 +218,14 @@ class Settings(BaseSettings):
     # structured pass systematically under-enumerates on dense copy. This DOUBLES
     # LLM calls per chunk — disable on a tight Groq free-tier quota. Override via env.
     completeness_sweep_enabled: bool = True
+
+    # Cross-chunk context: grade each chunk against a read-only view of the whole
+    # document so a disclaimer/reference present elsewhere (e.g. footer) isn't
+    # falsely flagged as missing. Token budget caps the full-document mode; over
+    # budget falls back to a window that always keeps the footer. See
+    # docs/superpowers/specs/2026-06-15-cross-chunk-context-design.md.
+    cross_chunk_context_enabled: bool = True
+    cross_chunk_context_token_budget: int = 8000
 
     # Pinecone (alternative v1 vector store)
     pinecone_api_key: str = ""

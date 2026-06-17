@@ -21,6 +21,7 @@ for the empirical golden assertions.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import statistics
 from collections import Counter
@@ -40,8 +41,23 @@ _MAX_HEADING_CHARS = 120
 _RUNNING_HEADER_PAGE_FRACTION = 0.5
 #: y-grouping tolerance for words on the same visual line (points).
 _LINE_Y_TOLERANCE = 3.0
+#: A "table" bbox covering more than this fraction of its page is a
+#: false positive (a full-page border/ruling) — extracting it as a table
+#: would swallow every word on the page into a meaningless grid and strip
+#: the page of all prose. Ignore it so the text becomes normal sections.
+_FULL_PAGE_TABLE_FRACTION = 0.85
 
 _UIN_RE = re.compile(r"UIN[\s:\-]*([0-9]{2,3}[A-Z][0-9]{3}V[0-9]{2})")
+#: The product name in the running-header-less marketing leaflets appears as a
+#: ``Bajaj [Allianz] Life <Name>`` phrase in the body. Capture the lead word
+#: plus up to a few following tokens; _trim_product_name keeps only the name.
+_PRODUCT_PHRASE_RE = re.compile(
+    r"Bajaj(?:\s+Allianz)?\s+Life\s+"
+    r"([A-Z][A-Za-z0-9][A-Za-z0-9\-]*(?:\s+[A-Za-z0-9][A-Za-z0-9\-]*){0,6})"
+)
+#: The insurer's own legal name — never a product. Used to reject both a
+#: company-name running header and company-name body matches.
+_COMPANY_NAME_RE = re.compile(r"bajaj\s+(?:allianz\s+)?life\s+insurance", re.I)
 _DESCRIPTOR_RE = re.compile(
     r"\bAn?\b.{0,80}?(Linked|Participating).{0,80}?Plan\b", re.IGNORECASE
 )
@@ -112,6 +128,11 @@ def _group_lines(words: List[Dict]) -> List[Dict]:
     return lines
 
 
+def _bbox_area(bbox: Tuple[float, float, float, float]) -> float:
+    x0, top, x1, bottom = bbox
+    return abs((x1 - x0) * (bottom - top))
+
+
 def _inside_any_bbox(word: Dict, bboxes: List[Tuple[float, float, float, float]]) -> bool:
     cx = (word["x0"] + word["x1"]) / 2.0
     cy = (word["top"] + word["bottom"]) / 2.0
@@ -151,6 +172,103 @@ def _split_to_cap(body: str) -> List[str]:
     return parts or [body]
 
 
+#: ALL-CAPS keywords that sit next to a product name in the body but are never
+#: part of it — they would otherwise pass the capital-letter name-word test.
+_NAME_STOP_TOKENS = {"UIN"}
+
+
+def _is_name_word(word: str) -> bool:
+    """A token belongs to a product name if it leads with a capital or digit
+    (Title-Case, ALL-CAPS, a roman numeral like 'II', or 'ROP'); lowercase
+    connectors ('perfect', 'for', 'which', 'to') — and IRDAI keywords like
+    'UIN' — mark the end of the name."""
+    return (
+        bool(word)
+        and (word[0].isupper() or word[0].isdigit())
+        and word.strip(".,:").upper() not in _NAME_STOP_TOKENS
+    )
+
+
+def _trim_product_name(raw: str) -> str:
+    """Keep the leading run of name words, dropping the marketing tail
+    ('Guaranteed Wealth Goal perfect for YOU' -> 'Guaranteed Wealth Goal')."""
+    kept: List[str] = []
+    for w in raw.split():
+        if _is_name_word(w):
+            kept.append(w)
+        else:
+            break
+    return " ".join(kept).replace("- ", " ").strip(" -")
+
+
+def _stem_to_name(source_path: str) -> str:
+    """Last-resort product name from the filename when the document carries no
+    usable running header or body phrase (e.g. iSecure)."""
+    stem = os.path.splitext(os.path.basename(source_path))[0]
+    cleaned = re.sub(r"[-_]+", " ", stem).strip()
+    cleaned = re.sub(r"\s+(sl|brochure|leaflet|plan)$", "", cleaned, flags=re.I)
+    return cleaned.title().strip()
+
+
+def _extract_product_name(
+    running: set, page_lines: List[Tuple[int, Dict]], source_path: str
+) -> str:
+    """Product name, most-reliable source first:
+
+    1. the most-widespread running header (Phase-1 behaviour) — unless it is
+       the insurer's legal name (marketing leaflets repeat 'Bajaj Life ...');
+    2. the most-frequent ``Bajaj [Allianz] Life <Name>`` body phrase, excluding
+       company boilerplate and riders — this is how header-less leaflets name
+       their product;
+    3. the filename, title-cased.
+    """
+    # 1. running header (largest font wins ties), skipping company boilerplate
+    if running:
+        best = max(
+            running,
+            key=lambda k: (len(set(p for p, l in page_lines if _norm(l["text"]) == k)),
+                           max((l["size"] for p, l in page_lines if _norm(l["text"]) == k), default=0)),
+        )
+        for _, line in page_lines:
+            if _norm(line["text"]) == best:
+                disp = line["text"].strip()
+                if disp and not _COMPANY_NAME_RE.search(disp):
+                    return disp
+                break
+
+    # 2. product phrase in the body. Frequency alone can't separate the
+    #    leaflet's subject from a companion product it cross-references
+    #    (e.g. a 'Smart Secure ROP' leaflet that also discusses 'Secure Plus'),
+    #    so the filename — which names the actual product — breaks the tie.
+    norm_text = re.sub(r"\s+", " ", "\n".join(l["text"] for _, l in page_lines))
+    counts: Counter = Counter()
+    for m in _PRODUCT_PHRASE_RE.finditer(norm_text):
+        name = _trim_product_name(m.group(1))
+        low = name.lower()
+        # 'Rider' often falls just past the captured window
+        # ('... Accidental Permanent Total/Partial Disability Benefit Rider'),
+        # so scan a short tail too before accepting the phrase as a product.
+        tail = norm_text[m.end():m.end() + 50].lower()
+        if not name or low.startswith("insurance") or "rider" in low or "rider" in tail:
+            continue
+        counts[f"Bajaj Life {name}"] += 1
+    if counts:
+        stem_tokens = set(re.findall(r"[a-z0-9]+", _stem_to_name(source_path).lower()))
+
+        def _score(item: Tuple[str, int]) -> Tuple[int, int]:
+            name, freq = item
+            toks = set(re.findall(r"[a-z0-9]+", name.lower())) - {"bajaj", "life"}
+            # filename overlap is authoritative (it names the subject product);
+            # frequency only breaks ties when the filename is an abbreviation
+            # (e.g. 'SWT') that overlaps nothing.
+            return (len(toks & stem_tokens), freq)
+
+        return max(counts.items(), key=_score)[0]
+
+    # 3. filename fallback
+    return _stem_to_name(source_path)
+
+
 def parse_brochure(path: str) -> ParsedBrochure:
     import pdfplumber
 
@@ -165,7 +283,11 @@ def parse_brochure(path: str) -> ParsedBrochure:
         size_counter: Counter = Counter()
 
         for pi, page in enumerate(pdf.pages, start=1):
-            found = page.find_tables()
+            page_area = float(page.width) * float(page.height)
+            found = [
+                t for t in page.find_tables()
+                if not page_area or _bbox_area(t.bbox) <= _FULL_PAGE_TABLE_FRACTION * page_area
+            ]
             table_bboxes[pi] = [t.bbox for t in found]
             for ti, t in enumerate(found):
                 rows = t.extract()
@@ -203,19 +325,7 @@ def parse_brochure(path: str) -> ParsedBrochure:
             key for key, pages in short_line_pages.items()
             if len(pages) >= max(2, int(n_pages * _RUNNING_HEADER_PAGE_FRACTION))
         }
-        # product name = the most widespread running header (largest font wins ties)
-        product_name = ""
-        if running:
-            best = max(
-                running,
-                key=lambda k: (len(short_line_pages[k]),
-                               max((l["size"] for p, l in page_lines if _norm(l["text"]) == k), default=0)),
-            )
-            # recover original casing from the first occurrence
-            for pi, line in page_lines:
-                if _norm(line["text"]) == best:
-                    product_name = line["text"].strip()
-                    break
+        product_name = _extract_product_name(running, page_lines, path)
 
         # ---- pass 3: metadata -----------------------------------------------
         full_text = "\n".join(line["text"] for _, line in page_lines)

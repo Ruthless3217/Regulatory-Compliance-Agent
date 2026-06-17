@@ -10,7 +10,15 @@ import { normalizeSeverity } from "@/lib/format";
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
 
 export function ReportTab() {
-  const { violations, overallScore, grade, submission } = useSubmissionWorkspace();
+  const {
+    violations,
+    overallScore,
+    grade,
+    submission,
+    scores,
+    analysisIncomplete,
+    analysisMessage,
+  } = useSubmissionWorkspace();
 
   const groups = React.useMemo(() => {
     const m: Record<string, typeof violations> = { critical: [], high: [], medium: [], low: [] };
@@ -38,7 +46,19 @@ export function ReportTab() {
 
   return (
     <div className="h-full overflow-y-auto rounded-md border border-border bg-background pb-12">
-      <ScoreHero score={overallScore} grade={grade} scores={null} />
+      {analysisIncomplete && (
+        <div className="mx-8 mt-6 rounded-md border border-sev-medium/50 bg-sev-medium/5 px-4 py-3 text-sm text-sev-medium">
+          <p className="font-medium">
+            This document could not be fully analyzed — it has NOT been graded as
+            compliant.
+          </p>
+          <p className="mt-1 text-xs">
+            {analysisMessage ??
+              "The analysis was incomplete or degraded. Re-run the check or send it for manual review before relying on this result."}
+          </p>
+        </div>
+      )}
+      <ScoreHero score={overallScore} grade={grade} scores={scores} />
       <input type="hidden" data-submission-id={submission.id} />
       <KPIStrip violations={violations} />
       <div className="flex items-center justify-between px-8 py-4 no-print">
@@ -47,7 +67,9 @@ export function ReportTab() {
       </div>
       {violations.length === 0 ? (
         <div className="px-8 pb-12 text-center text-sm text-muted-foreground">
-          No violations recorded for this submission.
+          {analysisIncomplete
+            ? "No violations were recorded because the analysis did not complete — this is not a clean result."
+            : "No violations recorded for this submission."}
         </div>
       ) : (
         SEVERITIES.map((s) => (

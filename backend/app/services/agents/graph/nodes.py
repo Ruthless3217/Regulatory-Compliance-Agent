@@ -47,6 +47,42 @@ _RULE_SEVERITY_MAP = {
     "informational": "informational",
 }
 
+# Cap rules per chunk fed to the LLM (token control); rules carry a
+# regulator_quote from dispatch_node enrichment.
+_MAX_RULES_PER_CHUNK = 8
+
+
+def _select_rules_for_chunk(
+    chunk_id,
+    chunk_rules: Dict[str, Dict[str, List[Dict]]],
+    active_rules: Dict[str, List[Dict]],
+    rag_degraded: bool,
+    max_rules: int = _MAX_RULES_PER_CHUNK,
+) -> List[Dict]:
+    """Choose the Tier-2 rules to feed the LLM for one chunk.
+
+    Normal path: use the per-chunk RAG-retrieved rules (already ranked/filtered).
+    A chunk that legitimately matched no rules returns [] — we do NOT dump the
+    whole active set back in, which would re-introduce the noise retrieval
+    filtered out.
+
+    Degraded path (rag_degraded): per-chunk retrieval failed, so chunk_rules is
+    empty. Fall back to the FLAT active-rule set so the rule tier still runs —
+    otherwise the document is graded on precedent+novel alone and persisted as a
+    real grade (silent false negatives). See full-pipeline audit 2026-06-16.
+    """
+    if rag_degraded:
+        flat: List[Dict] = []
+        for rule_list in (active_rules or {}).values():
+            flat.extend(rule_list or [])
+        return flat[:max_rules]
+
+    by_cat = (chunk_rules or {}).get(str(chunk_id)) or {}
+    flat = []
+    for rule_list in by_cat.values():
+        flat.extend(rule_list or [])
+    return flat[:max_rules]
+
 
 def _citation_to_violation(
     c: Any, precedent: Dict[str, Any], *, chunk_id, chunk_index, location: str
@@ -56,9 +92,20 @@ def _citation_to_violation(
     the LLM supplies only the on-document reviewer_comment, action_type and
     evidence_needed (which land in violation_metadata)."""
     p = precedent
+    sev = p.get("severity") or "informational"
+    satisfied = bool(getattr(c, "satisfied_elsewhere", False))
+    # Scoped suppression: a satisfied-elsewhere finding is kept (audit lane) but
+    # not scored — EXCEPT a critical, which is never suppressed (false negatives
+    # on criticals are the worst failure mode for a fail-closed compliance tool).
+    suppressed = satisfied and sev != "critical"
     return {
         "category": p.get("violation_category") or "other",
-        "severity": p.get("severity") or "informational",
+        "severity": sev,
+        "suppressed": suppressed,
+        "suppressed_reason": (
+            "satisfied_elsewhere: required element already present elsewhere in the document"
+            if suppressed else None
+        ),
         "description": (c.reviewer_comment or "").strip(),
         "current_text": (c.current_text or "").strip(),
         "suggested_fix": p.get("final_text_chunk") or None,
@@ -81,6 +128,7 @@ def _citation_to_violation(
             "grounding": "precedent",
             "action_type": c.action_type,
             "evidence_needed": c.evidence_needed,
+            "satisfied_elsewhere": satisfied,
         },
     }
 
@@ -97,12 +145,17 @@ def _novel_finding_to_violation(
     Citation columns are NULL; grounding/regulatory_basis live in metadata.
     """
     conf = float(f.confidence)
-    suppressed = conf < NOVEL_CONFIDENCE_FLOOR
+    satisfied = bool(getattr(f, "satisfied_elsewhere", False))
+    below_floor = conf < NOVEL_CONFIDENCE_FLOOR
+    # Novel findings are never critical (_NOVEL_SEVERITY), so satisfied-elsewhere
+    # always suppresses them into the audit lane; sub-floor findings stay
+    # suppressed as before. Either way: persisted + visible, never dropped.
+    suppressed = below_floor or satisfied
     if suppressed:
         logger.info(
-            "Novel finding below confidence floor (%.2f < %.2f) — persisting as "
-            "SUPPRESSED for human review, not scored: %r",
-            conf, NOVEL_CONFIDENCE_FLOOR, (f.reviewer_comment or "")[:120],
+            "Novel finding suppressed (below_floor=%s satisfied_elsewhere=%s, "
+            "conf %.2f) — persisting for human review, not scored: %r",
+            below_floor, satisfied, conf, (f.reviewer_comment or "")[:120],
         )
     return {
         "category": _NOVEL_CATEGORY,
@@ -123,8 +176,10 @@ def _novel_finding_to_violation(
         "similarity_score": None,
         "suppressed": suppressed,
         "suppressed_reason": (
+            "satisfied_elsewhere: required element already present elsewhere in the document"
+            if satisfied else
             f"novel finding confidence {conf:.2f} below floor {NOVEL_CONFIDENCE_FLOOR}"
-            if suppressed else None
+            if below_floor else None
         ),
         "chunk_id": str(chunk_id),
         "chunk_index": chunk_index,
@@ -134,6 +189,7 @@ def _novel_finding_to_violation(
             "action_type": f.action_type,
             "evidence_needed": f.evidence_needed,
             "regulatory_basis": f.regulatory_basis,
+            "satisfied_elsewhere": satisfied,
         },
     }
 
@@ -146,9 +202,18 @@ def _rule_finding_to_violation(
     stay NULL (no precedent); grounding='rule' lives in violation_metadata."""
     raw_sev = str(rule.get("severity") or "").strip().lower()
     severity = _RULE_SEVERITY_MAP.get(raw_sev, "moderate")
+    satisfied = bool(getattr(f, "satisfied_elsewhere", False))
+    # Rule severity is capped at moderate (never critical), so satisfied-elsewhere
+    # always routes to the audit lane; the != critical guard is kept for symmetry.
+    suppressed = satisfied and severity != "critical"
     return {
         "category": rule.get("category") or _NOVEL_CATEGORY,
         "severity": severity,
+        "suppressed": suppressed,
+        "suppressed_reason": (
+            "satisfied_elsewhere: required element already present elsewhere in the document"
+            if suppressed else None
+        ),
         "description": (f.reviewer_comment or "").strip(),
         "current_text": (f.current_text or "").strip(),
         "suggested_fix": None,
@@ -171,6 +236,7 @@ def _rule_finding_to_violation(
             "grounding": "rule",
             "action_type": f.action_type,
             "evidence_needed": f.evidence_needed,
+            "satisfied_elsewhere": satisfied,
         },
     }
 
@@ -605,7 +671,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
     """
     logger.info("Node: Analysis (precedent) running...")
 
-    from app.services.preprocessing_service import ContextEngineeringService
+    from app.services.preprocessing_service import ContextEngineeringService, build_document_context
     from app.services.llm_service import llm_service
     from app.services.agents.validators import validate_agent_output
     from app.schemas.compliance_schemas import (
@@ -620,19 +686,18 @@ async def analysis_node(state: ComplianceState) -> Dict:
     # Per-chunk rules retrieved in dispatch_node — Tier-2 grounding (Fix A).
     # Shape: {chunk_id: {category: [rule_dict, ...]}}.
     chunk_rules = state.get("chunk_rules") or {}
+    # Flat active-rule set + the degraded flag, so the rule tier can fall back
+    # to the flat rules when per-chunk RAG retrieval failed (else the tier is
+    # silently skipped and the doc is graded on precedent+novel alone).
+    active_rules = state.get("active_rules") or {}
+    rag_degraded = bool((state.get("metadata") or {}).get("rag_degraded"))
     submission_id = state.get("submission_id")
     user_id = state.get("user_id")
 
-    # Cap rules per chunk fed to the LLM (token control); rules already carry a
-    # regulator_quote from dispatch_node enrichment.
-    _MAX_RULES_PER_CHUNK = 8
-
     def _rules_for_chunk(chunk_id) -> List[Dict]:
-        by_cat = chunk_rules.get(str(chunk_id)) or {}
-        flat: List[Dict] = []
-        for rule_list in by_cat.values():
-            flat.extend(rule_list or [])
-        return flat[:_MAX_RULES_PER_CHUNK]
+        return _select_rules_for_chunk(
+            chunk_id, chunk_rules, active_rules, rag_degraded, _MAX_RULES_PER_CHUNK
+        )
 
     new_violations: List[Dict] = []
 
@@ -696,7 +761,14 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 exec_id = str(execution.id)
                 task_db.commit()
 
-                prompt = context_service.create_precedent_prompts(chunk_text, precedents, rules=rules)
+                document_context = None
+                if _settings.cross_chunk_context_enabled:
+                    document_context = build_document_context(
+                        chunks_data, chunk_index, _settings.cross_chunk_context_token_budget
+                    )
+                prompt = context_service.create_precedent_prompts(
+                    chunk_text, precedents, rules=rules, document_context=document_context
+                )
                 system_prompt = (
                     "You are a senior Bajaj Allianz compliance reviewer. Cite "
                     "the historical precedents that apply to the new section. "
@@ -747,7 +819,8 @@ async def analysis_node(state: ComplianceState) -> Dict:
                             f.current_text for f in novel
                         ]
                         sweep_prompt = context_service.create_completeness_sweep_prompt(
-                            chunk_text, precedents, rules=rules, already_found=already
+                            chunk_text, precedents, rules=rules, already_found=already,
+                            document_context=document_context,
                         )
                         sweep = await _call(sweep_prompt)
                         citations, rule_findings, novel = merge_findings(

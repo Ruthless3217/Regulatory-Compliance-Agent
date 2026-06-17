@@ -24,11 +24,20 @@ export default async function SubmissionLayout({
   let violations: Violation[] = [];
   let overallScore: number | null = null;
   let grade: string | null = null;
+  let scores: Record<string, number> | null = null;
+  let analysisStatus: string | null = null;
+  let analysisMessage: string | null = null;
   try {
     const res = await getComplianceResults(id);
     violations = res.violations ?? [];
     overallScore = res.overall_score ?? null;
     grade = res.grade ?? null;
+    scores = res.scores ?? null;
+    analysisStatus = res.status ?? null;
+    // Present when the run was degraded/needs-review — i.e. the document could
+    // NOT be cleanly graded. Carrying it through stops the UI from rendering an
+    // un-gradeable doc as "clean" (full-pipeline audit 2026-06-16).
+    analysisMessage = res.message ?? null;
   } catch {
     // Submission may not yet have a check.
   }
@@ -39,6 +48,9 @@ export default async function SubmissionLayout({
       initialViolations={violations}
       initialScore={overallScore}
       initialGrade={grade}
+      initialScores={scores}
+      analysisStatus={analysisStatus}
+      analysisMessage={analysisMessage}
     >
       {/* Pin to viewport so Review/Chat tabs get exact remaining height for
           internal pane scroll. Report tab manages its own scroll via overflow. */}

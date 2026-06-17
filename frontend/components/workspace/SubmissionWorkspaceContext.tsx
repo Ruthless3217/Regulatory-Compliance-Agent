@@ -11,6 +11,15 @@ interface Ctx {
   overallScore: number | null;
   grade: string | null;
   setScore: (score: number | null, grade: string | null) => void;
+  scores: Record<string, number> | null;
+  // Status + message from the compliance result. `analysisMessage` is set when
+  // the run was degraded / needs review — the signal the UI uses to avoid
+  // showing an un-gradeable document as "clean".
+  analysisStatus: string | null;
+  analysisMessage: string | null;
+  // True when the document could NOT be cleanly graded (degraded/failed/needs
+  // review). Distinct from a genuine clean grade (which has no message).
+  analysisIncomplete: boolean;
 }
 
 const Context = React.createContext<Ctx | null>(null);
@@ -20,6 +29,9 @@ interface ProviderProps {
   initialViolations: Violation[];
   initialScore?: number | null;
   initialGrade?: string | null;
+  initialScores?: Record<string, number> | null;
+  analysisStatus?: string | null;
+  analysisMessage?: string | null;
   children: React.ReactNode;
 }
 
@@ -28,6 +40,9 @@ export function SubmissionWorkspaceProvider({
   initialViolations,
   initialScore = null,
   initialGrade = null,
+  initialScores = null,
+  analysisStatus = null,
+  analysisMessage = null,
   children,
 }: ProviderProps) {
   const [violations, setViolations] = React.useState<Violation[]>(initialViolations);
@@ -40,6 +55,11 @@ export function SubmissionWorkspaceProvider({
     setGrade(g);
   };
 
+  const analysisIncomplete =
+    !!analysisMessage ||
+    analysisStatus === "failed" ||
+    analysisStatus === "waiting_for_review";
+
   const value = React.useMemo(
     () => ({
       submission,
@@ -50,8 +70,22 @@ export function SubmissionWorkspaceProvider({
       overallScore,
       grade,
       setScore,
+      scores: initialScores,
+      analysisStatus,
+      analysisMessage,
+      analysisIncomplete,
     }),
-    [submission, violations, selectedViolationId, overallScore, grade]
+    [
+      submission,
+      violations,
+      selectedViolationId,
+      overallScore,
+      grade,
+      initialScores,
+      analysisStatus,
+      analysisMessage,
+      analysisIncomplete,
+    ]
   );
 
   return <Context.Provider value={value}>{children}</Context.Provider>;

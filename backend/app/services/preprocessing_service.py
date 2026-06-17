@@ -28,6 +28,56 @@ _MD_HEADING_RE = re.compile(r"^#{1,6}\s+(.*?)\s*#*$")
 _LIST_ITEM_RE = re.compile(r"^([-*•·]|\d+[.)])\s+")
 
 
+def build_document_context(
+    chunks: List[Dict],
+    focal_index: int,
+    token_budget: int = 8000,
+) -> str:
+    """Render an ordered, focal-marked view of the whole document for read-only
+    reference during grading.
+
+    The focal chunk is shown as a position marker only (its full text is already
+    the graded "NEW DOCUMENT SECTION"), so it is never duplicated. When the whole
+    document fits ``token_budget`` (char/4 estimate), every chunk is included;
+    otherwise a window keeps chunk 0, focal ±2, and the LAST TWO chunks (footers /
+    disclaimers live at the end), inserting "[… chunks A–B omitted …]" markers for
+    gaps. See docs/superpowers/specs/2026-06-15-cross-chunk-context-design.md.
+    """
+    def _est_tokens(s: str) -> int:
+        return max(1, len(s or "") // 4)
+
+    ordered = sorted(chunks, key=lambda c: c.get("chunk_index", 0))
+    if not ordered:
+        return ""
+    indices = [c.get("chunk_index", i) for i, c in enumerate(ordered)]
+    total = sum(_est_tokens(c.get("text", "")) for c in ordered)
+
+    if total <= token_budget:
+        keep = set(indices)
+    else:
+        keep = {indices[0], indices[-1]}
+        if len(indices) >= 2:
+            keep.add(indices[-2])
+        for idx in indices:
+            if focal_index - 2 <= idx <= focal_index + 2:
+                keep.add(idx)
+
+    parts: List[str] = []
+    prev_kept = None
+    for c in ordered:
+        idx = c.get("chunk_index", 0)
+        if idx not in keep:
+            continue
+        if prev_kept is not None and idx - prev_kept > 1:
+            parts.append(f"[… chunks {prev_kept + 1}–{idx - 1} omitted …]")
+        if idx == focal_index:
+            parts.append(f"[chunk {idx}] >>> THIS IS THE SECTION BEING GRADED (shown above) <<<")
+        else:
+            parts.append(f"[chunk {idx}] {(c.get('text') or '').strip()}")
+        prev_kept = idx
+    return "\n\n".join(parts)
+
+
 class ContextEngineeringService:
     """
     Context Engineering Service: Prepares document content for compliance analysis.
@@ -530,7 +580,8 @@ Constraints:
         return prompt
 
     def create_precedent_prompts(
-        self, content: str, precedents: List[Dict], rules: Optional[List[Dict]] = None
+        self, content: str, precedents: List[Dict], rules: Optional[List[Dict]] = None,
+        document_context: Optional[str] = None,
     ) -> str:
         """Build a reviewer-voice prompt over THREE grounding tiers (Fix A).
 
@@ -642,6 +693,24 @@ Constraints:
         import uuid as _uuid
         fence = f"UNTRUSTED-{_uuid.uuid4().hex[:12]}"
 
+        if document_context:
+            document_context_block = (
+                "DOCUMENT CONTEXT (the rest of this document, for REFERENCE ONLY —\n"
+                "do NOT grade it). Grade ONLY the NEW DOCUMENT SECTION below and quote\n"
+                "`current_text` ONLY from that section — never from DOCUMENT CONTEXT.\n"
+                "Use the context for ONE purpose: if a finding is a MISSING disclaimer,\n"
+                "MISSING footnote or MISSING reference whose required element ALREADY\n"
+                "appears elsewhere in DOCUMENT CONTEXT, still emit the finding but set\n"
+                "`satisfied_elsewhere: true` (it is kept for audit review, not scored).\n"
+                "NEVER set satisfied_elsewhere for a substantive issue — a claim,\n"
+                "guarantee, superlative, misleading or solicitation phrase — context\n"
+                "cannot cure those; the phrase itself is the problem. Never set it on a\n"
+                "critical finding.\n"
+                f"«{fence}»\n{document_context}\n«{fence}»\n\n"
+            )
+        else:
+            document_context_block = ""
+
         prompt = f"""You are a senior Bajaj Allianz Life compliance reviewer (Legal/Compliance/FPU).
 Your past colleagues' comments on similar copy are below — they show the
 substance you should be checking for AND the voice you should write in.
@@ -676,7 +745,7 @@ RULES (retrieved regulations — each carries a citation you must preserve):
 {rules_block}
 «{fence}»
 
-NEW DOCUMENT SECTION:
+{document_context_block}NEW DOCUMENT SECTION:
 «{fence}»
 {content}
 «{fence}»
@@ -766,13 +835,16 @@ valid JSON."""
         precedents: List[Dict],
         rules: Optional[List[Dict]] = None,
         already_found: Optional[List[str]] = None,
+        document_context: Optional[str] = None,
     ) -> str:
         """Second-pass prompt: same three-tier grading task, but the model is
         told which phrases were ALREADY flagged on the first pass and asked to
         return ONLY additional violations. A single structured pass reliably
         under-enumerates; this sweep recovers the missed findings (which
         merge_findings then dedupes back in). See recall fix 2026-06-08."""
-        base = self.create_precedent_prompts(content, precedents, rules=rules)
+        base = self.create_precedent_prompts(
+            content, precedents, rules=rules, document_context=document_context
+        )
         found = [a.strip() for a in (already_found or []) if a and a.strip()]
         listing = "\n".join(f'  - "{a}"' for a in found) if found else "  (none)"
         suffix = (

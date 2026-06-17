@@ -27,6 +27,11 @@ RUN update-ca-certificates
 # Copy requirements and install
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# rapidocr_onnxruntime pulls plain opencv-python (needs libGL.so.1, a system
+# lib we don't ship). opencv-python-headless — installed above — provides the
+# same cv2 module without it, so drop the heavy variant to keep the image
+# libGL-free.
+RUN pip uninstall -y opencv-python opencv-contrib-python || true
 
 # Python clients (requests, openai, cohere, langsmith) use certifi's bundle,
 # NOT /etc/ssl. Append all corp CAs to certifi's cacert.pem.
