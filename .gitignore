@@ -34,3 +34,6 @@ Thumbs.db
 
 # Build artifacts
 *.tsbuildinfo
+
+# Runtime/debug artifacts
+latest_calls.txt
