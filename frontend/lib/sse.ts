@@ -7,8 +7,18 @@ import { useEffect, useRef } from "react";
 
 export type SSEHandler = (event: string, data: string) => void;
 
-const SERVER_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
-const sseBase = () => (typeof window === "undefined" ? SERVER_BASE : "/api");
+// Mirror lib/api.ts so streaming respects the deploy topology:
+//  - Server-side (SSR) uses the in-container backend DNS name.
+//  - Browser uses a relative NEXT_PUBLIC_API_BASE ("/compliance/api") when set
+//    (shared platform behind nginx + basePath), else the same-origin "/api"
+//    proxy (standalone/local). Raw fetch() is NOT auto-prefixed by basePath.
+const SERVER_BASE =
+  process.env.INTERNAL_API_BASE ||
+  process.env.NEXT_PUBLIC_API_BASE ||
+  "http://localhost:8000";
+const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
+const BROWSER_BASE = PUBLIC_API_BASE.startsWith("/") ? PUBLIC_API_BASE : "/api";
+const sseBase = () => (typeof window === "undefined" ? SERVER_BASE : BROWSER_BASE);
 
 export async function streamSSE(
   path: string,
