@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/compliance", tags=["Compliance Analysis"])
 
 
-@router.post("/analyze/{submission_id}", dependencies=[Depends(llm_rate_limit)])
+@router.post("/analyze/{submission_id}", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
 async def analyze_submission(
     submission_id: str,
     background_tasks: BackgroundTasks,
@@ -71,7 +71,7 @@ async def _run_analysis(submission_id: str):
         db.close()
 
 
-@router.post("/analyze/{submission_id}/sync", dependencies=[Depends(llm_rate_limit)])
+@router.post("/analyze/{submission_id}/sync", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
 async def analyze_submission_sync(
     submission_id: str,
     db: Session = Depends(get_db)
@@ -294,7 +294,7 @@ async def _analyze_and_stream(submission_id: str):
             pass
 
 
-@router.post("/analyze/{submission_id}/stream", dependencies=[Depends(llm_rate_limit)])
+@router.post("/analyze/{submission_id}/stream", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
 async def analyze_submission_stream(submission_id: str):
     """SSE-stream analysis progress: stage / chunk / score / done / error."""
     return StreamingResponse(

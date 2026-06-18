@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     llm_model: str = "gemini-2.0-flash"
     llm_insecure_tls: bool = False  # set True to bypass TLS verify (e.g. behind Cisco SSL inspection)
     llm_max_tokens: int = 4096      # hard cap on generated tokens per call (cost-leak guard)
+    # Per-request timeout (seconds) and SDK-level retry count on the LLM client.
+    # A hung provider call would otherwise pin an async worker indefinitely.
+    llm_request_timeout: float = 60.0
+    llm_max_retries: int = 2
+    # Write the prompt/response excerpt log to disk (logs/log.json). Excerpts are
+    # PII-redacted first, but the file is still plaintext on the host — keep this
+    # False in production and rely on centralized (scrubbed) telemetry instead.
+    llm_log_to_file: bool = True
 
     # Provider selection. "" keeps the OpenAI-compatible path (Gemini/Groq/local
     # vLLM via base_url). Set LLM_PROVIDER=azure to route the analysis LLM through
@@ -111,6 +119,12 @@ class Settings(BaseSettings):
     # unavailable the ceiling cannot be enforced and calls are allowed (the
     # per-IP limiter still applies). Sized to your provider/Foundry quota.
     llm_daily_token_budget: int = 0
+
+    # Chat input caps (prompt-bloat / cost guard). Bound how much client-supplied
+    # text reaches the LLM: the latest message plus a tail of conversation history.
+    chat_max_message_chars: int = 8000
+    chat_max_history_messages: int = 20
+    chat_max_history_chars: int = 4000   # per history message
 
     # File Upload
     max_upload_size: int = 52428800  # 50MB

@@ -131,7 +131,13 @@ class LLMService:
         header — all handled by AsyncAzureOpenAI. Everything else (Gemini's
         OpenAI-compatible endpoint, Groq, local vLLM) uses AsyncOpenAI + base_url.
         """
-        client_kwargs: Dict[str, Any] = {"api_key": api_key or "placeholder"}
+        client_kwargs: Dict[str, Any] = {
+            "api_key": api_key or "placeholder",
+            # Bound every call so a hung provider can't pin an async worker
+            # forever; SDK-level retries cover transient transport blips.
+            "timeout": settings.llm_request_timeout,
+            "max_retries": settings.llm_max_retries,
+        }
         if settings.llm_insecure_tls:
             # Behind Cisco SSL inspection the verified handshake fails (httpx
             # SSLError); bypass verify so the external HTTPS call works.
@@ -541,15 +547,23 @@ class LLMService:
             logger.error(f"Failed to record tool invocation: {e}")
 
     async def _log_to_json(self, prompt: str, response: str, system_prompt: str = None, context: Dict = None):
-        """Log LLM interaction to log.json."""
+        """Log LLM interaction to log.json.
+
+        Off by default in production (settings.llm_log_to_file). Prompt/response
+        excerpts are PII-redacted before they touch disk — see redaction.py.
+        """
+        if not settings.llm_log_to_file:
+            return
         try:
+            from .redaction import redact_pii
+
             log_entry = {
                 "timestamp": datetime.now().isoformat(),
                 "model": self.model,
-                "system_prompt": system_prompt,
+                "system_prompt": redact_pii(system_prompt) if system_prompt else system_prompt,
                 "context": context,
-                "prompt": prompt[:500],
-                "response": response[:500]
+                "prompt": redact_pii(prompt[:500]),
+                "response": redact_pii(response[:500])
             }
             logs = []
             if os.path.exists(self.log_file):

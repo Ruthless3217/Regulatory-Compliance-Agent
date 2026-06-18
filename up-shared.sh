@@ -70,7 +70,8 @@ drop_bundled() {
   fi
 }
 
-# Open a tiled tmux session with one live `logs -f` pane per running container.
+# Open a tiled tmux session with one live `logs -f` pane per running container,
+# plus a final pane running `<engine> stats` for live CPU/mem/net/IO usage.
 open_log_tmux() {
   [ -n "${NO_TMUX:-}" ] && return 0
   if ! command -v tmux >/dev/null 2>&1; then
@@ -97,6 +98,9 @@ open_log_tmux() {
     tmux select-pane -T "${running[i]}"
     tmux select-layout -t "$session" tiled >/dev/null
   done
+  # One extra pane with live container resource usage (CPU / mem / net / IO).
+  tmux split-window -t "$session" "$ENGINE stats ${running[*]}"
+  tmux select-pane -T "stats"
   tmux set-option -t "$session" pane-border-status top >/dev/null 2>&1 || true
   tmux select-layout -t "$session" tiled >/dev/null
 
