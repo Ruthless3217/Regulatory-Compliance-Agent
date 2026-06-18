@@ -34,8 +34,12 @@ services:
       DATABASE_URL: postgresql://compliance_user:${COMPLIANCE_DB_PASSWORD:-compliance_pass}@shared-postgres:5432/compliance_db
       REDIS_URL: redis://shared-redis:6379
     volumes:
-      - ./backend/uploads:/app/uploads
-      - ./backend/logs:/app/logs
+      # :U makes Podman recursively chown these bind mounts to the container
+      # user (appuser, uid 10001) so the backend can WRITE uploaded docs / logs.
+      # Without it the host dir stays owned by another uid → PermissionError on
+      # rule-generation file writes.
+      - ./backend/uploads:/app/uploads:U
+      - ./backend/logs:/app/logs:U
       - ./docs:/app/docs:ro
       - ./dataset:/app/dataset:ro
     networks:
