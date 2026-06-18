@@ -288,17 +288,23 @@ async def _stream_chat(
 
     system_prompt = _build_system_prompt(submission, ctx, db)
     hist = [{"role": h.role, "content": h.content} for h in history]
-    total_tokens = 0
+    # Real token count from the provider's final usage chunk (set via on_usage);
+    # `chunks` is only a fallback when the provider omits usage.
+    usage = {"tokens": 0}
+    chunks = 0
     try:
         async for delta in llm_service.stream_response(
-            prompt=message, system_prompt=system_prompt, history=hist
+            prompt=message,
+            system_prompt=system_prompt,
+            history=hist,
+            on_usage=lambda t: usage.__setitem__("tokens", t),
         ):
-            total_tokens += 1
+            chunks += 1
             yield _format_sse("token", delta)
         yield _format_sse(
             "done",
             {
-                "tokens_used": total_tokens,
+                "tokens_used": usage["tokens"] or chunks,
                 "model": llm_service.model,
                 "rag": {
                     "degraded": ctx.degraded,

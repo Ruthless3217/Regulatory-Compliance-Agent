@@ -2,7 +2,7 @@ import json
 import asyncio
 import time
 import os
-from typing import Dict, Any, Optional, Type, TypeVar, AsyncIterator, List
+from typing import Dict, Any, Optional, Type, TypeVar, AsyncIterator, List, Callable
 from sqlalchemy.orm import Session
 import logging
 from datetime import datetime
@@ -23,6 +23,16 @@ except Exception:  # pragma: no cover
         def _decorate(fn):
             return fn
         return _decorate if not (_a and callable(_a[0])) else _a[0]
+
+# wrap_openai instruments the raw OpenAI/Azure client so every
+# chat.completions.create call becomes a traced LLM run WITH token usage
+# (prompt/completion/total) attached — which a plain @traceable returning a
+# string cannot capture. No-op fallback when the SDK/extra isn't present.
+try:
+    from langsmith.wrappers import wrap_openai
+except Exception:  # pragma: no cover
+    def wrap_openai(client):  # type: ignore
+        return client
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -116,13 +126,21 @@ class LLMService:
             client_kwargs["http_client"] = httpx.AsyncClient(verify=False)
 
         if settings.llm_is_azure:
-            return AsyncAzureOpenAI(
+            client = AsyncAzureOpenAI(
                 azure_endpoint=self.base_url,
                 api_version=settings.llm_azure_api_version,
                 **client_kwargs,
             )
-        client_kwargs["base_url"] = self.base_url
-        return AsyncOpenAI(**client_kwargs)
+        else:
+            client_kwargs["base_url"] = self.base_url
+            client = AsyncOpenAI(**client_kwargs)
+
+        # When LangSmith tracing is on, wrap the client so token usage shows up
+        # on every LLM run in the trace UI (cost tracking). wrap_openai is a
+        # transparent proxy — all SDK calls keep working unchanged.
+        if (settings.langchain_tracing_v2 or "").lower() == "true":
+            return wrap_openai(client)
+        return client
 
     def _chat_kwargs(self, *, temperature: float, max_tokens: int) -> Dict[str, Any]:
         """Per-call chat-completion params shaped for the active provider.
@@ -206,8 +224,13 @@ class LLMService:
         system_prompt: Optional[str] = None,
         history: Optional[List[Dict[str, str]]] = None,
         temperature: float = 0.7,
+        on_usage: Optional[Callable[[int], None]] = None,
     ) -> AsyncIterator[str]:
-        """Stream response tokens from LLM. Yields text deltas."""
+        """Stream response tokens from LLM. Yields text deltas.
+
+        ``on_usage`` (optional) is invoked once with the real total token count
+        from the provider's final usage chunk (requires stream_options below).
+        """
         messages: List[Dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -224,6 +247,9 @@ class LLMService:
                     model=self.model,
                     messages=messages,
                     stream=True,
+                    # Ask the provider to emit a final usage chunk so we get the
+                    # REAL token count (raw-SDK equivalent of stream_usage=True).
+                    stream_options={"include_usage": True},
                     **self._chat_kwargs(
                         temperature=temperature,
                         max_tokens=settings.llm_max_tokens,
@@ -239,6 +265,13 @@ class LLMService:
                 return
             try:
                 async for chunk in stream:
+                    # The final chunk carries usage and has empty choices.
+                    usage = getattr(chunk, "usage", None)
+                    if usage and on_usage:
+                        try:
+                            on_usage(int(getattr(usage, "total_tokens", 0) or 0))
+                        except Exception:
+                            pass
                     if not chunk.choices:
                         continue
                     delta = chunk.choices[0].delta
@@ -342,7 +375,11 @@ class LLMService:
 
         for attempt in range(max_retries):
             try:
-                response_wrapper = await client.chat.completions.with_raw_response.create(
+                # Plain create (not with_raw_response): standard for Azure/OpenAI
+                # and the path wrap_openai instruments, so token usage is
+                # captured on the LangSmith run automatically. (The old raw path
+                # existed only to parse Gemini's non-standard usageMetadata.)
+                response = await client.chat.completions.create(
                     model=model,
                     messages=current_messages,
                     response_format={"type": "json_object"},
@@ -352,16 +389,13 @@ class LLMService:
                     ),
                 )
 
-                response = response_wrapper.parse()
                 response_text = response.choices[0].message.content.strip()
 
-                # Extract token usage
+                # Token usage for the DB tool-invocation record (LangSmith gets
+                # it from wrap_openai).
                 token_usage = 0
                 try:
-                    raw_data = json.loads(response_wrapper.http_response.text)
-                    if "usageMetadata" in raw_data:
-                        token_usage = raw_data["usageMetadata"].get("totalTokenCount", 0)
-                    elif hasattr(response, 'usage') and response.usage:
+                    if getattr(response, "usage", None):
                         token_usage = response.usage.total_tokens
                 except Exception:
                     token_usage = 0
