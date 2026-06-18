@@ -263,13 +263,18 @@ class LLMService:
         db: Session = None,
         tool_name: str = "llm_structured",
         temperature: float = 0.2,
+        model: Optional[str] = None,
     ) -> T:
         """Generate a structured response validated against a Pydantic model.
 
-        Drives the request across all configured API keys: when a key is over
-        its daily budget (proactive) or returns HTTP 429 (reactive) we rotate
-        to the next key. Only when every key is exhausted do we fail closed.
+        ``model`` overrides the deployment for this call (e.g. the cheap
+        LLM_CLASSIFY_MODEL for the critic pass); it defaults to LLM_MODEL.
+
+        Drives the request across all configured API keys: when a key returns
+        HTTP 429 we rotate to the next key. Only when every key is exhausted do
+        we fail closed.
         """
+        use_model = model or self.model
         schema_instruction = (
             f"\nYou must output JSON that adheres to this schema:\n"
             f"{output_model.model_json_schema()}\n"
@@ -278,49 +283,18 @@ class LLMService:
         full_system_prompt = (system_prompt or "") + schema_instruction
         base_messages = self._build_chat_messages(prompt, full_system_prompt, context)
 
-        # Groq enforces TPM/TPD ceilings PER KEY. Reserve budget before each call
-        # so we rotate (or queue) rather than burn a 429-doomed run. Only applies
-        # to Groq — other providers (Gemini) must not inherit Groq's limits.
-        # See architect-audit C7.
-        is_groq = "groq" in (self.base_url or "").lower()
-        get_rate_limiter = None
-        DailyLimitApproaching = ()  # so `except DailyLimitApproaching` is a no-op when not Groq
-        if is_groq:
-            from app.services.groq_rate_limiter import (
-                get_rate_limiter,
-                DailyLimitApproaching,
-            )
-
         last_exc: Optional[Exception] = None
-        daily_blocked = 0
         pool = self._client_pool
         for key_id, client in pool:
             # Fresh message copy per key — a failed key's JSON-correction turns
             # must not leak into the next key's conversation.
             current_messages = list(base_messages)
-
-            limiter = None
-            token_estimate = 0
-            if get_rate_limiter is not None:
-                limiter = get_rate_limiter(self.model, key_id)
-                token_estimate = self._estimate_tokens(current_messages)
-                try:
-                    await limiter.acquire(token_estimate)
-                except DailyLimitApproaching as e:
-                    logger.warning(
-                        f"[failover] key …{key_id} at daily cap; trying next key ({e})"
-                    )
-                    last_exc = e
-                    daily_blocked += 1
-                    continue
-
             try:
                 return await self._structured_attempts(
                     client=client,
-                    limiter=limiter,
-                    token_estimate=token_estimate,
                     output_model=output_model,
                     current_messages=current_messages,
+                    model=use_model,
                     prompt=prompt,
                     system_prompt=system_prompt,
                     context=context,
@@ -330,17 +304,12 @@ class LLMService:
                     temperature=temperature,
                 )
             except _RateLimitFailover as e:
-                logger.warning(f"[failover] key …{key_id} hit 429 (TPM/TPD); trying next key")
+                logger.warning(f"[failover] key …{key_id} hit 429; trying next key")
                 last_exc = e.__cause__ or e
                 continue
 
         # Every key is exhausted — fail closed (callers must not treat this as a
         # clean document; see LLMUnavailableError).
-        if pool and daily_blocked == len(pool):
-            # All keys over their daily budget → re-raise DailyLimitApproaching so
-            # the caller queues the submission (status=pending_token_budget) for
-            # the daily reset rather than failing it permanently.
-            raise last_exc
         raise LLMUnavailableError(
             f"All {len(pool)} LLM key(s) exhausted; last error: {last_exc}"
         ) from last_exc
@@ -349,10 +318,9 @@ class LLMService:
         self,
         *,
         client,
-        limiter,
-        token_estimate: int,
         output_model: Type[T],
         current_messages: list,
+        model: str,
         prompt: str,
         system_prompt: Optional[str],
         context: Optional[Dict[str, Any]],
@@ -375,7 +343,7 @@ class LLMService:
         for attempt in range(max_retries):
             try:
                 response_wrapper = await client.chat.completions.with_raw_response.create(
-                    model=self.model,
+                    model=model,
                     messages=current_messages,
                     response_format={"type": "json_object"},
                     **self._chat_kwargs(
@@ -412,10 +380,6 @@ class LLMService:
 
                 result = output_model.model_validate_json(response_text)
                 end_time = time.time()
-
-                # Correct the reserved estimate against Groq's reported usage.
-                if limiter is not None:
-                    limiter.reconcile(token_estimate, token_usage or token_estimate)
 
                 if execution_id and db:
                     await self._record_tool_invocation(
@@ -465,13 +429,14 @@ class LLMService:
                 logger.error(f"Structured generation failed (non-retryable): {e}")
                 raise LLMUnavailableError(f"LLM call failed: {e}") from e
 
-    @staticmethod
-    def _estimate_tokens(messages: list) -> int:
-        """Rough token estimate for rate-limiting: ~4 chars/token for the
-        prompt plus the configured output ceiling. Reconciled against actual
-        usage after the call."""
-        chars = sum(len(str(m.get("content", ""))) for m in messages)
-        return chars // 4 + settings.llm_max_tokens
+    @property
+    def classify_model(self) -> str:
+        """Deployment for cheap/fast first-pass calls (e.g. gpt-5.4-nano).
+
+        Returns LLM_CLASSIFY_MODEL when set, else falls back to LLM_MODEL so a
+        single-model deployment keeps working unchanged.
+        """
+        return settings.llm_classify_model or self.model
 
     def _build_chat_messages(
         self,

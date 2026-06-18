@@ -42,17 +42,13 @@ services:
     cpus: 2.0
     ports:
       - "8000:8000"
+    # All LLM / embedding / Foundry config comes from .env (Azure OpenAI +
+    # Azure AI Foundry inference). The explicit values below override the
+    # shared-stack networking so it can't be accidentally changed in .env.
+    env_file: .env
     environment:
       DATABASE_URL: postgresql://compliance_user:compliance_pass@postgres:5432/compliance_db
       REDIS_URL: redis://redis:6379
-      LLM_API_KEY: ${LLM_API_KEY}
-      # Pass provider config through from .env so the container matches local
-      # dev (Groq). Defaults keep Groq if the vars are unset; override in .env
-      # to switch providers. LLM_API_KEY may be a comma-list for key failover.
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.groq.com/openai/v1}
-      LLM_MODEL: ${LLM_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
-      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
-      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
       LANGCHAIN_PROJECT: regulatory-compliance-agent
       ENVIRONMENT: production
     depends_on:

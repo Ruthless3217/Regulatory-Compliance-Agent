@@ -58,9 +58,8 @@ The LLM and embedding providers are **driven by environment variables**, so whit
 
 | Host | Port | Why | When required |
 |---|---|---|---|
-| **`generativelanguage.googleapis.com`** | 443 | Google **Gemini** — the LLM that grades copy, answers chat, extracts rules | If `LLM_BASE_URL` points to Gemini (current team default) |
-| **`api.openai.com`** | 443 | OpenAI **`text-embedding-3-small`** — embeddings that power precedent retrieval (RAG) | If `RAG_EMBEDDING_PROVIDER=openai` (default) |
-| `api.groq.com` | 443 | **Groq** LLM (Llama models) — alternative LLM provider | If `LLM_BASE_URL` points to Groq (base-compose default value) |
+| **`generativelanguage.googleapis.com`** | 443 | Google **Gemini** — OpenAI-compatible LLM (dev fallback only) | If `LLM_BASE_URL` points to Gemini |
+| **`api.openai.com`** | 443 | OpenAI **`text-embedding-3-small`** — embeddings (dev fallback) | If `RAG_EMBEDDING_PROVIDER=openai` |
 
 The app is **non-functional without one LLM host and one embeddings host**. At minimum whitelist the LLM host you set in `LLM_BASE_URL` **and** the embeddings host for `RAG_EMBEDDING_PROVIDER`.
 
@@ -68,70 +67,77 @@ The app is **non-functional without one LLM host and one embeddings host**. At m
 
 | Host | Port | Enable only if |
 |---|---|---|
-| `api.cohere.com` | 443 | `RAG_EMBEDDING_PROVIDER=cohere` |
-| `<resource>.openai.azure.com` | 443 | `RAG_EMBEDDING_PROVIDER=azure_openai` (Azure OpenAI embeddings) |
+| `api.cohere.com` | 443 | `RAG_EMBEDDING_PROVIDER=cohere` (public Cohere — dev fallback) |
+| `<resource>.openai.azure.com` | 443 | `RAG_EMBEDDING_PROVIDER=azure_openai` (Azure OpenAI embeddings — alternative) |
 | `<resource>.search.windows.net` | 443 | `RAG_VECTOR_BACKEND=azure_search` (Azure AI Search vector store) |
-| `*.pinecone.io` (e.g. `<index>.svc.<env>.pinecone.io`) | 443 | `RAG_VECTOR_BACKEND=pinecone` |
 | `api.smith.langchain.com` | 443 | `LANGCHAIN_TRACING_V2=true` (LangSmith tracing — off by default) |
 | `securetoken.googleapis.com`, `identitytoolkit.googleapis.com`, `*.googleapis.com` | 443 | Firebase auth is enabled (`firebase_service_account_path` set) — currently optional/unused |
 
-> Default deployment (pgvector + OpenAI embeddings + Gemini-or-Groq LLM) needs **none** of §3b.
+> The **production** default (`azure_cohere` embeddings via Azure AI Foundry) is covered by §3d, not §3b.
 
 ### 3c. Not needed at runtime (handled at build time)
 - `openaipublic.blob.core.windows.net` — tiktoken's BPE vocabulary. The Dockerfile **pre-caches** it into the image (`TIKTOKEN_CACHE_DIR=/opt/tiktoken-cache`), so the running container never calls it. The Bajaj firewall blocks it anyway.
 
-### 3d. Production provider — Azure Microsoft AI Foundry (LLM + embeddings)
+### 3d. Production provider — Azure AI Foundry (LLM + Cohere embeddings)
 
-In production the **LLM is served exclusively** from this Bajaj Azure AI Foundry resource — it is the **only** LLM provider (Gemini / Groq / public OpenAI are dev-only and are not used in production):
+In production both the LLM and the embeddings come from a single Bajaj Azure AI
+Foundry project (`bl-bajaj-compliance-resource`). Gemini / Groq / public OpenAI /
+public Cohere are dev-only and are **not** used in production.
 
-**Production LLM Target URI (from Azure portal):**
-`https://bl-prod02-opai-bajaj-compliance-app-01.openai.azure.com/openai/responses?api-version=2025-04-01-preview`
-
-**The single host to whitelist:**
+The project exposes **two host surfaces**, and the app uses both:
 
 | Host | Port | Protocol | What uses it |
 |---|---|---|---|
-| `bl-prod02-opai-bajaj-compliance-app-01.openai.azure.com` | 443 | HTTPS | The production Azure OpenAI / AI Foundry resource — serves the LLM (and, if you put an embedding deployment on the same resource, the embeddings too). This is the only external egress the app needs. |
+| `bl-bajaj-compliance-resource.openai.azure.com` | 443 | HTTPS | Azure OpenAI surface — the **LLM** (`gpt-5.4` grading + `gpt-5.4-nano` critic). |
+| `bl-bajaj-compliance-resource.services.ai.azure.com` | 443 | HTTPS | Azure AI Foundry **model-inference** surface — **Cohere embed v3** (and rerank v4). Cohere is NOT served on the `.openai.azure.com` host. |
 
-That is the entire production egress whitelist for the LLM. No `generativelanguage.googleapis.com`, no `api.groq.com`, no `api.openai.com`.
+That is the entire production egress whitelist. No `generativelanguage.googleapis.com`, no `api.groq.com`, no `api.openai.com`, no `api.cohere.com`.
 
 #### Config — wiring the app to Azure AI Foundry
 
-Two halves, because the LLM path and the embeddings path are built differently in code:
-
-**1) Embeddings + (optional) vector store — already Azure-native.** The app ships an `AzureOpenAIEmbedder` (uses the `AsyncAzureOpenAI` client) and an Azure AI Search store. Just set:
-
-```bash
-RAG_EMBEDDING_PROVIDER=azure_openai
-AZURE_OPENAI_ENDPOINT=https://<resource-name>.openai.azure.com
-AZURE_OPENAI_API_KEY=<azure-key>
-AZURE_OPENAI_EMBED_DEPLOYMENT=<your-embedding-deployment-name>   # e.g. text-embedding-3-small
-AZURE_OPENAI_API_VERSION=2024-02-01
-RAG_EMBEDDING_DIM=1536          # keep 1536 for text-embedding-3-small (must match the ingested corpus)
-
-# Optional — only if using Azure AI Search instead of pgvector:
-# RAG_VECTOR_BACKEND=azure_search
-# AZURE_SEARCH_ENDPOINT=https://<search-service>.search.windows.net
-# AZURE_SEARCH_API_KEY=<search-admin-key>
-```
-
-> ⚠️ **Embedding dimension must match the knowledge base.** The precedent corpus is ingested with whatever model/dim was used at `ingest_knowledge_base` time. If you switch embedding providers, re-ingest (`docker exec compliance-backend python -m scripts.ingest_knowledge_base`) so query vectors and stored vectors are comparable. Staying on `text-embedding-3-small` (1536-dim) keeps it consistent with the OpenAI default.
-
-**2) LLM — the production Azure resource (important wiring detail).** `llm_service.py` builds a **generic `AsyncOpenAI(base_url=...)` client** that calls **Chat Completions**, *not* the `AsyncAzureOpenAI` client and *not* the Responses API. The portal "Target URI" ends in `/openai/responses?api-version=...`, but you must **not** put that path in `LLM_BASE_URL`. Use the same resource's **OpenAI-compatible `/openai/v1/` surface** instead, and set `LLM_MODEL` to your **deployment name**:
+**1) LLM — Azure OpenAI surface.** `llm_service.py` uses the `AsyncAzureOpenAI`
+client (selected by `LLM_PROVIDER=azure`). `LLM_BASE_URL` is the resource
+**root** — no `/openai/v1` or `/openai/responses` path; the SDK builds the
+`/openai/deployments/<model>/...?api-version=` path itself. `LLM_MODEL` and
+`LLM_CLASSIFY_MODEL` are **deployment names**.
 
 ```bash
-LLM_BASE_URL=https://bl-prod02-opai-bajaj-compliance-app-01.openai.azure.com/openai/v1/
-LLM_MODEL=<your-chat-deployment-name>     # the deployment name in the Foundry resource (e.g. gpt-4o), NOT the Target URI path
-LLM_API_KEY=<AZURE_OPENAI_KEY>            # ⚠️ real key lives in .env (gitignored) / secrets — never commit it
-LLM_INSECURE_TLS=false                     # keep TLS verification ON in production
+LLM_PROVIDER=azure
+LLM_BASE_URL=https://bl-bajaj-compliance-resource.openai.azure.com
+LLM_MODEL=gpt-5.4
+LLM_CLASSIFY_MODEL=gpt-5.4-nano          # cheap/fast critic pass
+LLM_API_KEY=<AZURE_OPENAI_KEY>           # ⚠️ real key lives in .env (gitignored) — never commit it
+LLM_AZURE_API_VERSION=2025-04-01-preview
+LLM_USE_MAX_COMPLETION_TOKENS=true       # gpt-5.4 is a reasoning model
+LLM_SUPPORTS_TEMPERATURE=false
+LLM_REASONING_EFFORT=low
+LLM_INSECURE_TLS=false                    # keep TLS verification ON in production
 ```
 
-- ✅ Works with the existing code **unchanged** because the Azure `/openai/v1/` route is OpenAI-wire-compatible (path, key auth, no per-call `api-version`). The host you whitelist is identical to the Target URI host.
-- ⚠️ **Do not** put `/openai/responses?api-version=2025-04-01-preview` (the Responses API) or the classic `/openai/deployments/<dep>/...?api-version=...` form into `LLM_BASE_URL`. Both require switching `_build_client` in `llm_service.py` to `AsyncAzureOpenAI` (and, for Responses, a larger rewrite away from `chat.completions`). Only do that if the resource truly does not expose `/openai/v1/`.
-- You need the **deployment name** for `LLM_MODEL`. The Target URI does not contain it — get it from the Foundry resource's *Deployments* tab in the Azure portal.
-- The `health_check` calls `client.models.list()`; the `/openai/v1/` surface supports it. A failing health check is non-fatal but logs a warning.
+**2) Embeddings — Cohere embed v3 via Foundry inference.** The app ships an
+`AzureCohereEmbedder` (uses the `azure-ai-inference` SDK against the
+`.services.ai.azure.com/models` host). Output is **1024-dim** — identical to
+public `embed-english-v3.0`, so an index built against the public Cohere API
+stays compatible (no re-ingest for the english variant).
 
-**Embeddings in production:** the app still needs an embeddings provider for RAG (the LLM endpoint does not do embeddings). Cleanest is to deploy an embedding model (e.g. `text-embedding-3-small`) on the **same Azure resource** so there is still only one egress host — then set `RAG_EMBEDDING_PROVIDER=azure_openai`, `AZURE_OPENAI_ENDPOINT=https://bl-prod02-opai-bajaj-compliance-app-01.openai.azure.com`, `AZURE_OPENAI_API_KEY=<key>`, and `AZURE_OPENAI_EMBED_DEPLOYMENT=<embedding-deployment-name>` as in part (1) above. **Confirm an embedding deployment exists on the resource** — the URI you were given is a chat/responses deployment only.
+```bash
+RAG_EMBEDDING_PROVIDER=azure_cohere
+RAG_EMBEDDING_DIM=1024
+AZURE_INFERENCE_ENDPOINT=https://bl-bajaj-compliance-resource.services.ai.azure.com/models
+AZURE_INFERENCE_API_KEY=                  # blank → reuse LLM_API_KEY (same resource)
+AZURE_INFERENCE_API_VERSION=2024-05-01-preview
+AZURE_COHERE_EMBED_DEPLOYMENT=<cohere-embed-v3-deployment-name>
+```
+
+> ⚠️ **Embedding dimension must match the knowledge base.** The precedent corpus
+> is ingested with whatever model/dim was used at `ingest_knowledge_base` time.
+> Cohere embed v3 is 1024-dim; if the index was built on `embed-english-v3.0`
+> (also 1024-dim) it stays compatible. If you switch to a different model/dim,
+> re-ingest: `docker exec compliance-backend python -m scripts.ingest_knowledge_base`.
+
+> The reasoning LLM's `health_check` calls `client.models.list()`, which Azure
+> does not expose at the resource root — the probe logs an info line and treats
+> the deployment as available (chat calls are verified at runtime).
 
 ---
 
@@ -211,9 +217,9 @@ Endpoints that call the paid LLM are rate-limited per IP (`HTTP_RATE_LIMIT_PER_M
 
 - [ ] Open inbound **3000/tcp** and **8000/tcp** on the internal network (not internet).
 - [ ] Keep 5432 / 6379 container-internal (do **not** expose).
-- [ ] **Production:** whitelist outbound **443** to the single host `bl-prod02-opai-bajaj-compliance-app-01.openai.azure.com` — the only LLM provider (and embeddings, if deployed on the same resource). See §3d.
-- [ ] **Production config:** `LLM_BASE_URL=https://bl-prod02-opai-bajaj-compliance-app-01.openai.azure.com/openai/v1/` (NOT the `/openai/responses` Target URI), `LLM_MODEL`=deployment name, key in `.env` only. For embeddings: `RAG_EMBEDDING_PROVIDER=azure_openai` + `AZURE_OPENAI_*` vars (§3d).
-- [ ] *(Dev / non-Azure only)* whitelist your dev LLM host (`generativelanguage.googleapis.com` **or** `api.groq.com`) **and** `api.openai.com` for embeddings.
+- [ ] **Production:** whitelist outbound **443** to **two** hosts on the `bl-bajaj-compliance-resource` Foundry project: `bl-bajaj-compliance-resource.openai.azure.com` (LLM) and `bl-bajaj-compliance-resource.services.ai.azure.com` (Cohere embed/rerank). See §3d.
+- [ ] **Production config:** `LLM_PROVIDER=azure`, `LLM_BASE_URL=https://bl-bajaj-compliance-resource.openai.azure.com` (resource root, no path), `LLM_MODEL=gpt-5.4`, `LLM_CLASSIFY_MODEL=gpt-5.4-nano`, key in `.env` only. For embeddings: `RAG_EMBEDDING_PROVIDER=azure_cohere` + `AZURE_INFERENCE_*` / `AZURE_COHERE_EMBED_DEPLOYMENT` (§3d).
+- [ ] *(Dev / non-Azure only)* whitelist your dev LLM host (`generativelanguage.googleapis.com`) **and** `api.openai.com` for embeddings.
 - [ ] Add §3b hosts only for any optional providers you enable.
 - [ ] Prefer **pre-built images from the internal registry** → drop all §4 build hosts from the VM's whitelist.
 - [ ] **Delete/rename `docker-compose.override.yml`** before starting on the VM.

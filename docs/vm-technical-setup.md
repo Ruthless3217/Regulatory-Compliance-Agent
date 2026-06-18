@@ -36,13 +36,14 @@ Images and language packages come from the **internal Artifactory / registry mir
 
 ### 2a. Required — runtime, continuous (whole stack lifetime)
 
-Production uses a **single external endpoint** — a Bajaj-tenant **Azure OpenAI / AI Foundry** resource. It is the *only* LLM provider, and (with an embedding deployment on the same resource) also serves the embeddings.
+Production uses one Bajaj-tenant **Azure AI Foundry** project (`bl-bajaj-compliance-resource`) over **two host surfaces** — the *only* external AI provider, serving both LLM and embeddings.
 
 | # | URL / Host | Port | Protocol | Use case | Duration |
 |---|------------|------|----------|----------|----------|
-| 1 | `bl-prod02-opai-bajaj-compliance-app-01.openai.azure.com` | 443 | HTTPS | Bajaj Azure OpenAI / AI Foundry resource. Serves the LLM (compliance analysis, chat, rule extraction) and the `text-embedding-3-small` embeddings for precedent retrieval (RAG). App is non-functional without it. | Permanent (life of app) |
+| 1 | `bl-bajaj-compliance-resource.openai.azure.com` | 443 | HTTPS | Azure OpenAI surface — the **LLM** (`gpt-5.4` analysis/chat/rule-extraction, `gpt-5.4-nano` critic). App is non-functional without it. | Permanent (life of app) |
+| 2 | `bl-bajaj-compliance-resource.services.ai.azure.com` | 443 | HTTPS | Azure AI Foundry **model-inference** surface — **Cohere embed v3** (RAG embeddings) and rerank v4. Cohere is not served on the `.openai.azure.com` host. | Permanent (life of app) |
 
-> Production LLM Target URI (Azure portal): `https://bl-prod02-opai-bajaj-compliance-app-01.openai.azure.com/openai/responses?api-version=2025-04-01-preview`. The firewall rule only needs the **host** above on port 443. The app is wired against the same resource's OpenAI-compatible `/openai/v1/` surface (see §5).
+> Both hosts belong to the same Foundry project and share one API key; firewall rules need only the **hosts** above on port 443 (see §5).
 >
 > This host is intercepted by Cisco Umbrella SSL inspection. The app trusts the Bajaj root + Cisco Umbrella CA chain (registered into the VM trust store in §3a), so no TLS-bypass is required. As a Bajaj-tenant Azure resource, the marketing copy stays within Bajaj's Azure subscription, not a public third-party AI API.
 
@@ -69,7 +70,7 @@ Normally **internal Artifactory** proxies, not public internet. Public origin sh
 | `api.smith.langchain.com` | 443 | LangSmith tracing. Disabled by default (`LANGCHAIN_TRACING_V2=false`). |
 | `generativelanguage.googleapis.com`, `api.groq.com`, `api.openai.com` | 443 | **Dev/local-only** LLM/embedding providers. **Not used in production** (production uses the single Azure host in §2a). Keep blocked on the VM. |
 | `api.cohere.com` | 443 | Only if embeddings switched to Cohere. Not used in production. |
-| `<search-service>.search.windows.net`, Pinecone endpoints | 443 | Only if the vector store is switched away from on-VM pgvector. Not used by default (pgvector runs on the VM, no egress). |
+| `<search-service>.search.windows.net` | 443 | Only if the vector store is switched away from on-VM pgvector to Azure AI Search. Not used by default (pgvector runs on the VM, no egress). |
 
 ---
 

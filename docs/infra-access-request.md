@@ -24,7 +24,7 @@ The tool ingests a draft, retrieves the most similar **past human-reviewer decis
 - Reduces regulatory exposure (IRDAI/SEBI penalties, forced ad withdrawals) by catching violations earlier and more consistently.
 - Standardizes reviewer judgment into a reusable, auditable knowledge base.
 
-The RHEL 9 VM is required to host this application internally. No customer data or PII is processed; only the marketing draft under review is sent (chunked) to the single approved Bajaj-tenant Azure OpenAI endpoint for analysis and embeddings — see the *Data that leaves the network* note above. All reviewer data, scores, reports and the knowledge base remain on Bajaj infrastructure.
+The RHEL 9 VM is required to host this application internally. No customer data or PII is processed; only the marketing draft under review is sent (chunked) to the approved Bajaj-tenant Azure AI Foundry project (Azure OpenAI LLM + Cohere embeddings, same tenant) for analysis and embeddings — see the *Data that leaves the network* note above. All reviewer data, scores, reports and the knowledge base remain on Bajaj infrastructure.
 
 ---
 
@@ -34,15 +34,16 @@ Because images and language packages are served from the **internal Artifactory 
 
 ### 2a. Required — runtime, continuous (whole stack lifetime)
 
-**Production uses a single external endpoint — a Bajaj-tenant Azure OpenAI / AI Foundry resource.** It is the *only* LLM provider, and (with an embedding deployment on the same resource) also serves the embeddings.
+**Production uses one Bajaj-tenant Azure AI Foundry project (`bl-bajaj-compliance-resource`), exposed over two host surfaces.** It is the *only* external AI provider — serving both the LLM and the embeddings.
 
 | # | URL / Host | Port | Protocol | Use case | Duration |
 |---|------------|------|----------|----------|----------|
-| 1 | `bl-prod02-opai-bajaj-compliance-app-01.openai.azure.com` | 443 | HTTPS | Bajaj Azure OpenAI / AI Foundry resource. Serves the LLM that performs compliance analysis, chat answers and rule extraction, and the `text-embedding-3-small` embeddings that power precedent retrieval (RAG). Core function; the app is non-functional without it. | Permanent (life of app) |
+| 1 | `bl-bajaj-compliance-resource.openai.azure.com` | 443 | HTTPS | Azure OpenAI surface — the **LLM** (`gpt-5.4` compliance analysis / chat / rule extraction, `gpt-5.4-nano` critic). Core function; the app is non-functional without it. | Permanent (life of app) |
+| 2 | `bl-bajaj-compliance-resource.services.ai.azure.com` | 443 | HTTPS | Azure AI Foundry **model-inference** surface — **Cohere embed v3** embeddings that power precedent retrieval (RAG), and Cohere rerank v4. Cohere is not served on the `.openai.azure.com` host. | Permanent (life of app) |
 
-> Production LLM Target URI (from the Azure portal): `https://bl-prod02-opai-bajaj-compliance-app-01.openai.azure.com/openai/responses?api-version=2025-04-01-preview`. The firewall rule only needs the **host** above (port 443); the app is configured against the same resource's OpenAI-compatible `/openai/v1/` surface.
+> Both hosts belong to the same Foundry project and share one API key. The firewall rules only need the **hosts** above (port 443).
 >
-> Note: this host is intercepted by Cisco Umbrella SSL inspection. The app already trusts the Bajaj root + Cisco Umbrella CA chain (registered into the VM trust store in §3), so no TLS-bypass is required. As a Bajaj-tenant Azure resource, the marketing copy stays within Bajaj's Azure subscription rather than going to a public third-party AI API.
+> Note: these hosts are intercepted by Cisco Umbrella SSL inspection. The app already trusts the Bajaj root + Cisco Umbrella CA chain (registered into the VM trust store in §3), so no TLS-bypass is required. As a Bajaj-tenant Azure resource, the marketing copy stays within Bajaj's Azure subscription rather than going to a public third-party AI API.
 
 ### 2b. Build / setup — served from internal mirror (confirm internal hostnames with Infra)
 
@@ -64,8 +65,8 @@ These are normally **internal Artifactory** proxies, not public internet. Listed
 | `openaipublic.blob.core.windows.net` | 443 | tiktoken tokenizer download. **Pre-cached in the image — not needed at runtime.** Keep blocked. |
 | `api.smith.langchain.com` | 443 | LangSmith tracing. Disabled by default (`LANGCHAIN_TRACING_V2=false`). Request only if observability tracing is turned on. |
 | `api.cohere.com` | 443 | Only if embeddings switched to Cohere. Not used in production. |
-| `generativelanguage.googleapis.com`, `api.groq.com`, `api.openai.com` | 443 | **Dev/local only** LLM/embedding providers. **Not used in production** — production uses the single Azure host in §2a. Keep blocked on the VM. |
-| `<search-service>.search.windows.net`, Pinecone endpoints | 443 | Only if the vector store is switched away from on-VM pgvector to Azure AI Search / Pinecone. Not used by default (pgvector runs on the VM, no egress). |
+| `generativelanguage.googleapis.com`, `api.openai.com`, `api.cohere.com` | 443 | **Dev/local only** LLM/embedding providers. **Not used in production** — production uses the Azure Foundry hosts in §2a. Keep blocked on the VM. |
+| `<search-service>.search.windows.net` | 443 | Only if the vector store is switched away from on-VM pgvector to Azure AI Search. Not used by default (pgvector runs on the VM, no egress). |
 
 ---
 

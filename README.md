@@ -4,7 +4,7 @@ An AI-powered regulatory compliance checking tool for Bajaj Allianz Life marketi
 
 The engine grades by **imitating real past reviewer decisions** (precedents) retrieved from a vector knowledge base, not just static rules — see [Precedent Compliance Engine](#precedent-compliance-engine-vector-memory) below.
 
-**Stack:** Next.js 15 + React 19 + TypeScript + Tailwind frontend · FastAPI + LangGraph + Gemini 2.0 Flash backend · PostgreSQL (pgvector) + Redis · pluggable RAG (pgvector / Azure AI Search / Pinecone, embeddings via OpenAI / Azure OpenAI / Cohere).
+**Stack:** Next.js 15 + React 19 + TypeScript + Tailwind frontend · FastAPI + LangGraph + Azure OpenAI (gpt-5.4) backend · PostgreSQL (pgvector) + Redis · pluggable RAG (pgvector / Azure AI Search, embeddings via OpenAI / Azure OpenAI / Cohere / Azure-Foundry Cohere).
 
 ## Quick Start (docker-compose)
 
@@ -142,8 +142,8 @@ The retrieval layer is provider-agnostic, selected entirely via config
 
 | Concern | Implementations | Selected by |
 |---------|-----------------|-------------|
-| **Embedders** | OpenAI (default), Azure OpenAI, Cohere | `RAG_EMBEDDING_PROVIDER` |
-| **Vector stores** | pgvector (default), Azure AI Search, Pinecone | `RAG_VECTOR_BACKEND` |
+| **Embedders** | OpenAI, Azure OpenAI, Cohere, Azure-Foundry Cohere (`azure_cohere`, default) | `RAG_EMBEDDING_PROVIDER` |
+| **Vector stores** | pgvector (default), Azure AI Search | `RAG_VECTOR_BACKEND` |
 | **Indexers** | `rag_chunks`, `rag_rules`, `rag_source_docs`, `rag_compliance_examples` | — |
 | **Retrievers** | precedent, rules, chat, similar-submissions, source-docs | — |
 
@@ -319,8 +319,8 @@ curl "http://localhost:8000/compliance/results/{id}"
 | `MAX_UPLOAD_SIZE` | Max upload bytes | `52428800` (50 MB) |
 | `UPLOAD_DIR` | Upload directory | `./uploads` |
 | **RAG** | | |
-| `RAG_EMBEDDING_PROVIDER` | `openai` \| `azure_openai` \| `cohere` | `openai` |
-| `RAG_VECTOR_BACKEND` | `pgvector` \| `azure_search` \| `pinecone` | `pgvector` |
+| `RAG_EMBEDDING_PROVIDER` | `openai` \| `azure_openai` \| `cohere` \| `azure_cohere` | `azure_cohere` |
+| `RAG_VECTOR_BACKEND` | `pgvector` \| `azure_search` | `pgvector` |
 | `RAG_EMBEDDING_MODEL` | Embedding model | `text-embedding-3-small` |
 | `RAG_EMBEDDING_DIM` | Embedding dimension (1024 for Cohere) | `1536` |
 | `RAG_TOP_K_ANALYSIS` / `RAG_TOP_K_CHAT` / `RAG_TOP_K_SIMILAR` | Top-K per use case | `8` / `5` / `3` |
@@ -331,10 +331,11 @@ curl "http://localhost:8000/compliance/results/{id}"
 | `KB_MIN_FUZZY_SCORE` | RapidFuzz anchor-match threshold | `60` |
 | `VIZ_POINTS_PER_INDEX` | Projection point cap per index | `2000` |
 | **Provider keys** | | |
+| `LLM_CLASSIFY_MODEL` | Cheap/fast model for the critic pass (e.g. `gpt-5.4-nano`) | — (falls back to `LLM_MODEL`) |
 | `OPENAI_API_KEY` | OpenAI embeddings key | — |
 | `AZURE_OPENAI_*` / `AZURE_SEARCH_*` | Azure OpenAI + AI Search config | — |
-| `COHERE_API_KEY` / `COHERE_EMBEDDING_MODEL` | Cohere embeddings | `embed-english-v3.0` |
-| `PINECONE_API_KEY` / `PINECONE_INDEX_NAME` / `PINECONE_NAMESPACE_*` | Pinecone config | — |
+| `AZURE_INFERENCE_ENDPOINT` / `AZURE_INFERENCE_API_KEY` / `AZURE_COHERE_EMBED_DEPLOYMENT` | Azure AI Foundry Cohere embeddings (`azure_cohere`) | — |
+| `COHERE_API_KEY` / `COHERE_EMBEDDING_MODEL` | Cohere embeddings (public API) | `embed-english-v3.0` |
 | **Tracing** | | |
 | `LANGCHAIN_TRACING_V2` / `LANGCHAIN_API_KEY` / `LANGCHAIN_PROJECT` | LangSmith tracing | `false` / — / `regulatory-compliance-agent` |
 

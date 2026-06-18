@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     llm_supports_temperature: bool = True           # LLM_SUPPORTS_TEMPERATURE
     llm_reasoning_effort: str = ""                  # LLM_REASONING_EFFORT: "" | minimal | low | medium | high
 
+    # Cheap/fast first-pass model (e.g. gpt-5.4-nano). When set, lighter-weight
+    # calls — currently the generator-critic verification pass — route here
+    # instead of LLM_MODEL, which stays reserved for the heavy citation/grading
+    # call. Empty → use LLM_MODEL for everything (single-model behaviour).
+    llm_classify_model: str = ""                    # LLM_CLASSIFY_MODEL
+
     @property
     def llm_is_azure(self) -> bool:
         """True when the analysis LLM should use the Azure OpenAI client.
@@ -113,8 +119,8 @@ class Settings(BaseSettings):
     langchain_project: str = "regulatory-compliance-agent"
 
     # RAG — pluggable backend
-    rag_embedding_provider: str = "openai"        # openai | azure_openai | cohere
-    rag_vector_backend: str = "pgvector"          # pgvector | azure_search | pinecone
+    rag_embedding_provider: str = "openai"        # openai | azure_openai | cohere | azure_cohere
+    rag_vector_backend: str = "pgvector"          # pgvector | azure_search
     rag_embedding_model: str = "text-embedding-3-small"
     rag_embedding_dim: int = 1536
     rag_top_k_analysis: int = 8
@@ -147,6 +153,20 @@ class Settings(BaseSettings):
     azure_openai_api_version: str = "2024-02-01"
     azure_openai_embed_deployment: str = "text-embedding-3-small"
 
+    # Azure AI Foundry — model-inference endpoint. Cohere models (embed v3,
+    # rerank v4) deployed in the Foundry project are NOT served on the Azure
+    # OpenAI surface (.openai.azure.com); they are reached via the
+    # azure-ai-inference SDK at https://<resource>.services.ai.azure.com/models
+    # with an api-version query + key credential. Used by
+    # RAG_EMBEDDING_PROVIDER=azure_cohere. If AZURE_INFERENCE_API_KEY is empty
+    # the embedder falls back to the first LLM_API_KEY (same Foundry resource).
+    azure_inference_endpoint: str = ""              # AZURE_INFERENCE_ENDPOINT
+    azure_inference_api_key: str = ""               # AZURE_INFERENCE_API_KEY
+    azure_inference_api_version: str = "2024-05-01-preview"
+    azure_cohere_embed_deployment: str = "embed-v-3-english"   # AZURE_COHERE_EMBED_DEPLOYMENT
+    # Reserved: rerank is not wired into the pgvector retrieval path yet.
+    azure_cohere_rerank_deployment: str = ""        # AZURE_COHERE_RERANK_DEPLOYMENT
+
     # Azure AI Search (v2, vector store)
     azure_search_endpoint: str = ""
     azure_search_api_key: str = ""
@@ -160,30 +180,11 @@ class Settings(BaseSettings):
     # Per-text embedding cache (Priority 4d) — avoids re-embedding repeated chunks.
     embed_cache_size: int = 2048
 
-    # Groq two-model strategy + token rate limiting (Priority 4).
-    # classify = cheap/fast first pass, citation = stronger generation.
-    groq_classify_model: str = "llama-3.1-8b-instant"
-    groq_citation_model: str = "llama-3.3-70b-versatile"
-    # Token ceilings per model (Groq free-tier defaults; override via env).
-    groq_classify_tpm: int = 6000
-    groq_classify_tpd: int = 500000
-    groq_citation_tpm: int = 12000
-    groq_citation_tpd: int = 100000
-    # Queue a submission once daily usage crosses this fraction of the TPD cap.
-    groq_daily_cap_fraction: float = 0.9
     # Max chunks graded concurrently. Each grading call is a large (precedents +
-    # rules) prompt (~6-10k tokens); firing many at once bursts past Groq's
-    # per-minute token limit (30k TPM free tier) → 429 → chunk fails → run fails
-    # closed at "waiting_for_review". Keep this low (1-2) on the free tier so
-    # calls fit under TPM; raise it on a paid/Dev tier. Override via env.
+    # rules) prompt (~6-10k tokens). Keep this modest so concurrent calls fit
+    # under the provider's per-minute token limit; raise it on higher tiers.
+    # Override via env.
     grade_concurrency: int = 2
-
-    # Pinecone (alternative v1 vector store)
-    pinecone_api_key: str = ""
-    pinecone_index_name: str = ""
-    pinecone_namespace_rules: str = "rag_rules"
-    pinecone_namespace_chunks: str = "rag_chunks"
-    pinecone_namespace_srcdocs: str = "rag_source_docs"
 
     class Config:
         env_file = ".env"
