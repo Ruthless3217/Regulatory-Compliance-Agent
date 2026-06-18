@@ -56,7 +56,26 @@ the infra first, then this agent — they are independent compose stacks.
    >   "GRANT ALL ON SCHEMA public TO compliance_user;"
    > ```
 
-## Deploy
+## Quick boot — `up-shared.sh`
+
+Once the shared stack is up (above), the whole agent is one command:
+
+```bash
+sudo ./up-shared.sh           # cleans stray bundled containers, builds, starts on shared infra, reloads nginx
+sudo ./up-shared.sh ps        # show the running stack
+sudo ./up-shared.sh logs      # tail backend logs
+sudo ./up-shared.sh ingest    # re-embed the knowledge base
+sudo ./up-shared.sh down      # stop the agent (shared infra left running)
+```
+
+It runs **only** `compliance-backend` + `compliance-frontend` against the shared
+stack and removes any leftover bundled `compliance-postgres` / `compliance-redis`
+/ `compliance-backup` from a prior standalone run, so you can't accidentally talk
+to the wrong database. (Local engine? `ENGINE=docker ./up-shared.sh`.)
+
+The manual equivalent is below.
+
+## Deploy (manual)
 
 ```bash
 # Clone the agent next to the platform dirs (any path is fine; build context

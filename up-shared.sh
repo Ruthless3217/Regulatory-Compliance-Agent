@@ -17,9 +17,11 @@
 #   sudo ./up-shared.sh logs         # tail the backend logs
 #   sudo ./up-shared.sh ps           # show the running stack
 #   sudo ./up-shared.sh ingest       # re-embed the knowledge base
+#   sudo ./up-shared.sh tmux         # open all container logs in a tmux split
 #
 # Env:
 #   ENGINE=podman|docker             # container engine (default: podman)
+#   NO_TMUX=1                        # skip the auto split-log view after `up`
 # ===========================================================================
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -30,6 +32,9 @@ ENGINE="${ENGINE:-podman}"
 # Bundled containers owned by the standalone docker-compose.yml. They must NOT
 # run in shared mode — the agent talks to shared-postgres / shared-redis.
 BUNDLED=(compliance-postgres compliance-redis compliance-backup)
+
+# Containers whose logs the split-screen view tails (only the running ones show).
+LOG_CONTAINERS=(shared-postgres shared-redis shared-nginx compliance-backend compliance-frontend)
 
 if [ "$ENGINE" = podman ]; then
   command -v podman-compose >/dev/null 2>&1 || { echo "ERROR: podman-compose not found (set ENGINE=docker?)"; exit 1; }
@@ -65,6 +70,44 @@ drop_bundled() {
   fi
 }
 
+# Open a tiled tmux session with one live `logs -f` pane per running container.
+open_log_tmux() {
+  [ -n "${NO_TMUX:-}" ] && return 0
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "tmux not installed — skipping split-log view. Tail one with: $ENGINE logs -f compliance-backend"
+    return 0
+  fi
+  [ -t 1 ] || { echo "(not a TTY — skipping tmux log view; run 'sudo ./up-shared.sh tmux' from a terminal)"; return 0; }
+
+  local running=()
+  local c
+  for c in "${LOG_CONTAINERS[@]}"; do c_running "$c" && running+=("$c"); done
+  [ "${#running[@]}" -gt 0 ] || { echo "No running containers to show logs for."; return 0; }
+
+  local session="compliance-logs"
+  tmux kill-session -t "$session" 2>/dev/null || true
+
+  # First pane = first container; split one pane per remaining container, then tile.
+  tmux new-session -d -s "$session" -x "$(tput cols 2>/dev/null || echo 200)" -y "$(tput lines 2>/dev/null || echo 50)" \
+    "$ENGINE logs -f --tail 50 ${running[0]}"
+  tmux select-pane -t "$session" -T "${running[0]}"
+  local i
+  for ((i = 1; i < ${#running[@]}; i++)); do
+    tmux split-window -t "$session" "$ENGINE logs -f --tail 50 ${running[i]}"
+    tmux select-pane -T "${running[i]}"
+    tmux select-layout -t "$session" tiled >/dev/null
+  done
+  tmux set-option -t "$session" pane-border-status top >/dev/null 2>&1 || true
+  tmux select-layout -t "$session" tiled >/dev/null
+
+  echo "Opening logs in tmux ('$session') — detach: Ctrl-b d  ·  reopen: sudo ./up-shared.sh tmux"
+  if [ -n "${TMUX:-}" ]; then
+    tmux switch-client -t "$session"        # already inside tmux
+  else
+    tmux attach-session -t "$session"
+  fi
+}
+
 cmd_up() {
   require_shared
   drop_bundled
@@ -90,6 +133,8 @@ cmd_up() {
   echo
   echo "App: http://<host>/compliance/   ·   API: http://<host>/compliance/api/health"
   echo "If embeddings changed, re-ingest the KB:  sudo ./up-shared.sh ingest"
+  echo
+  open_log_tmux
 }
 
 cmd_down() {
@@ -115,6 +160,7 @@ case "${1:-up}" in
   down)   cmd_down ;;
   ps)     cmd_ps ;;
   logs)   cmd_logs ;;
+  tmux)   open_log_tmux ;;
   ingest) cmd_ingest ;;
-  *) echo "Usage: sudo ./up-shared.sh [up|down|ps|logs|ingest]"; exit 1 ;;
+  *) echo "Usage: sudo ./up-shared.sh [up|down|ps|logs|tmux|ingest]"; exit 1 ;;
 esac
