@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, Set
 
 from app.api.rate_limit import llm_rate_limit
+from app.services.llm_budget import llm_budget_guard
 from app.database import get_db, SessionLocal
 from app.models.submission import Submission
 from app.models.compliance_check import ComplianceCheck

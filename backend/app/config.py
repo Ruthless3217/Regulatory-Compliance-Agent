@@ -100,6 +100,17 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     # Per-IP per-minute cap on paid LLM endpoints (cost-explosion guard, H8).
     http_rate_limit_per_min: int = 30
+    # Trust the X-Forwarded-For header for the rate-limit / budget caller key.
+    # Enable ONLY when the app sits behind a trusted reverse proxy / ingress
+    # that sets XFF — when the app is directly internet-facing this header is
+    # client-controlled and trivially spoofed, so leave it False there.
+    trust_forwarded_for: bool = False
+    # Global daily ceiling on total LLM tokens (prompt+completion) across ALL
+    # callers — the hard backstop against runaway spend. 0 disables it.
+    # Enforced via a shared Redis counter keyed on the UTC date; when Redis is
+    # unavailable the ceiling cannot be enforced and calls are allowed (the
+    # per-IP limiter still applies). Sized to your provider/Foundry quota.
+    llm_daily_token_budget: int = 0
 
     # File Upload
     max_upload_size: int = 52428800  # 50MB

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.rate_limit import llm_rate_limit
+from app.services.llm_budget import llm_budget_guard
 from app.database import get_db
 from app.models.compliance_check import ComplianceCheck
 from app.models.rule import Rule
@@ -329,7 +330,7 @@ def _resolve_violation(violation_id: Optional[UUID], db: Session) -> Violation:
     return v
 
 
-@router.post("", dependencies=[Depends(llm_rate_limit)])
+@router.post("", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
 async def chat(req: ChatRequest, db: Session = Depends(get_db)):
     submission = _fetch_submission(req.submission_id, db)
     return StreamingResponse(
@@ -339,7 +340,7 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/quote-violation", dependencies=[Depends(llm_rate_limit)])
+@router.post("/quote-violation", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
 async def quote_violation(req: QuickPromptRequest, db: Session = Depends(get_db)):
     submission = _fetch_submission(req.submission_id, db)
     target = _resolve_violation(req.violation_id, db)
@@ -370,7 +371,7 @@ async def quote_violation(req: QuickPromptRequest, db: Session = Depends(get_db)
     )
 
 
-@router.post("/suggest-rewrite", dependencies=[Depends(llm_rate_limit)])
+@router.post("/suggest-rewrite", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
 async def suggest_rewrite(req: QuickPromptRequest, db: Session = Depends(get_db)):
     submission = _fetch_submission(req.submission_id, db)
     target = _resolve_violation(req.violation_id, db)

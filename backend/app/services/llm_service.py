@@ -39,6 +39,18 @@ T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
 
+async def _record_budget_tokens(tokens: int) -> None:
+    """Add real token usage to the global daily budget counter. Best-effort:
+    a budget/Redis hiccup must never break an LLM call (imported lazily to
+    avoid a circular import at module load)."""
+    try:
+        from .llm_budget import record_tokens
+
+        await record_tokens(tokens)
+    except Exception:  # pragma: no cover - defensive
+        pass
+
+
 class LLMUnavailableError(RuntimeError):
     """Raised when the LLM cannot produce a usable result (transport failure,
     or schema-invalid output after all retries).
@@ -267,11 +279,16 @@ class LLMService:
                 async for chunk in stream:
                     # The final chunk carries usage and has empty choices.
                     usage = getattr(chunk, "usage", None)
-                    if usage and on_usage:
-                        try:
-                            on_usage(int(getattr(usage, "total_tokens", 0) or 0))
-                        except Exception:
-                            pass
+                    if usage:
+                        total = int(getattr(usage, "total_tokens", 0) or 0)
+                        # Feed the real count to both the caller and the global
+                        # daily-budget counter (cost backstop).
+                        if on_usage:
+                            try:
+                                on_usage(total)
+                            except Exception:
+                                pass
+                        await _record_budget_tokens(total)
                     if not chunk.choices:
                         continue
                     delta = chunk.choices[0].delta
@@ -400,6 +417,7 @@ class LLMService:
                 except Exception:
                     token_usage = 0
 
+                await _record_budget_tokens(token_usage)
                 await self._log_to_json(prompt, response_text, system_prompt, context)
 
                 # Clean JSON
