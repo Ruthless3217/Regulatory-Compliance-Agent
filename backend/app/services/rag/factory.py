@@ -27,10 +27,6 @@ def get_embedder() -> Embedder:
         from app.services.rag.embedders.openai_embedder import OpenAIEmbedder
         logger.info("RAG embedder: OpenAIEmbedder")
         return OpenAIEmbedder()
-    if provider == "cohere":
-        from app.services.rag.embedders.cohere_embedder import CohereEmbedder
-        logger.info("RAG embedder: CohereEmbedder")
-        return CohereEmbedder()
     if provider == "azure_cohere":
         from app.services.rag.embedders.azure_cohere_embedder import AzureCohereEmbedder
         logger.info("RAG embedder: AzureCohereEmbedder")

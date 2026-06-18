@@ -67,7 +67,6 @@ The app is **non-functional without one LLM host and one embeddings host**. At m
 
 | Host | Port | Enable only if |
 |---|---|---|
-| `api.cohere.com` | 443 | `RAG_EMBEDDING_PROVIDER=cohere` (public Cohere — dev fallback) |
 | `<resource>.openai.azure.com` | 443 | `RAG_EMBEDDING_PROVIDER=azure_openai` (Azure OpenAI embeddings — alternative) |
 | `<resource>.search.windows.net` | 443 | `RAG_VECTOR_BACKEND=azure_search` (Azure AI Search vector store) |
 | `api.smith.langchain.com` | 443 | `LANGCHAIN_TRACING_V2=true` (LangSmith tracing — off by default) |

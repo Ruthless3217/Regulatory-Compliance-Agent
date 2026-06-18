@@ -119,7 +119,7 @@ class Settings(BaseSettings):
     langchain_project: str = "regulatory-compliance-agent"
 
     # RAG — pluggable backend
-    rag_embedding_provider: str = "openai"        # openai | azure_openai | cohere | azure_cohere
+    rag_embedding_provider: str = "openai"        # openai | azure_openai | azure_cohere
     rag_vector_backend: str = "pgvector"          # pgvector | azure_search
     rag_embedding_model: str = "text-embedding-3-small"
     rag_embedding_dim: int = 1536
@@ -174,9 +174,6 @@ class Settings(BaseSettings):
     azure_search_chunks_index: str = "rag-chunks"
     azure_search_source_docs_index: str = "rag-source-docs"
 
-    # Cohere (alternative embeddings — 1024-dim)
-    cohere_api_key: str = ""
-    cohere_embedding_model: str = "embed-english-v3.0"
     # Per-text embedding cache (Priority 4d) — avoids re-embedding repeated chunks.
     embed_cache_size: int = 2048
 

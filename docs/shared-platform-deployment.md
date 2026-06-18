@@ -4,13 +4,23 @@ This agent can run two ways:
 
 | Mode             | Compose file                 | Postgres/Redis/Nginx        |
 |------------------|------------------------------|-----------------------------|
-| **Standalone**   | `docker-compose.yml` (+ override) | bundled in this repo   |
-| **Shared platform** | `docker-compose.shared.yml` | provided by `/opt/shared` |
+| **Standalone** (local dev) | `docker-compose.yml` (+ override) | bundled in this repo   |
+| **Shared platform** (VM / production) | `docker-compose.shared.yml` | the platform `shared/` stack |
 
-This doc covers the **shared platform** mode, where the
-[bajaj-ai-platform](https://github.com/Thunderk3g/bajaj-ai-infra) repo owns the
-shared `shared-postgres` / `shared-redis` / `shared-nginx` stack and routes
-this agent at the `/compliance/` path.
+This doc covers the **shared platform** mode — the production path. The
+[bajaj-ai-platform](https://github.com/Thunderk3g/bajaj-ai-infra) repo owns a
+standalone `shared/` stack (`shared-postgres` / `shared-redis` / `shared-nginx`)
+that is brought up **separately, once**, and every agent joins it. You bring up
+the infra first, then this agent — they are independent compose stacks.
+
+> **This agent is already registered in the platform** — no platform edits
+> needed on a fresh clone:
+> - `shared/init-db.sh` seeds the `compliance_user` role + `compliance_db` (pgvector enabled).
+> - `shared/nginx.conf` ships the `/compliance/` and `/compliance/api/` routes.
+> - `docs/port-registry.md` lists `compliance-frontend:3000` / `compliance-backend:8000` as **active**.
+>
+> So the whole job is: (1) bring up `shared/` separately, (2) `up -d` this agent
+> against the external `shared-network`.
 
 ## What makes it platform-ready
 
@@ -60,7 +70,10 @@ cd /opt/compliance-agent
 #   scp -r dataset/ user@vm:/opt/compliance-agent/dataset/
 
 sudo cp .env.shared.example .env
-sudo nano .env            # set COMPLIANCE_DB_PASSWORD (match shared/.env), LLM_API_KEY, embeddings
+sudo nano .env            # set: COMPLIANCE_DB_PASSWORD (MUST match shared/.env),
+                          #      LLM_API_KEY (Azure Foundry key — same key serves the
+                          #      LLM and the Cohere embed/rerank inference surface),
+                          #      AZURE_COHERE_EMBED_DEPLOYMENT, etc.
 
 sudo podman-compose -f docker-compose.shared.yml up -d --build
 
@@ -82,6 +95,15 @@ Alembic migrations run automatically on backend start. Seed the rules/KB once:
 # Example — adjust to your scripts:
 sudo podman exec -it compliance-backend python -m dataset.seed   # or psql -f seed_extracted_rules.sql
 ```
+
+> **Re-ingest after the embedding switch.** The knowledge base must be embedded
+> with the **same** model used at query time. The production embedder is now
+> `Cohere-embed-v3-multilingual` (1024-dim) via Azure AI Foundry — if the corpus
+> was previously embedded with public `embed-english-v3.0`, re-ingest so the
+> stored vectors match (dim is unchanged, so no DB migration — only re-embedding):
+> ```bash
+> sudo podman exec -it compliance-backend python -m scripts.ingest_knowledge_base
+> ```
 
 ## Verify
 

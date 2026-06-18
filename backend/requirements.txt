@@ -56,10 +56,6 @@ google-generativeai>=0.8.3
 # default since the import is gated.
 azure-search-documents>=11.5.0
 
-# RAG — Cohere embeddings via public API (loaded lazily; only required when
-# RAG_EMBEDDING_PROVIDER=cohere).
-cohere>=5.13.0
-
 # RAG — Azure AI Foundry model inference (loaded lazily; only required when
 # RAG_EMBEDDING_PROVIDER=azure_cohere). Serves Cohere embed/rerank deployed in
 # the Foundry project. aiohttp backs azure-core's async transport.

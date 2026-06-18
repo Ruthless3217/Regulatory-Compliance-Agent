@@ -142,7 +142,7 @@ The retrieval layer is provider-agnostic, selected entirely via config
 
 | Concern | Implementations | Selected by |
 |---------|-----------------|-------------|
-| **Embedders** | OpenAI, Azure OpenAI, Cohere, Azure-Foundry Cohere (`azure_cohere`, default) | `RAG_EMBEDDING_PROVIDER` |
+| **Embedders** | Azure-Foundry Cohere (`azure_cohere`, default), Azure OpenAI, OpenAI | `RAG_EMBEDDING_PROVIDER` |
 | **Vector stores** | pgvector (default), Azure AI Search | `RAG_VECTOR_BACKEND` |
 | **Indexers** | `rag_chunks`, `rag_rules`, `rag_source_docs`, `rag_compliance_examples` | — |
 | **Retrievers** | precedent, rules, chat, similar-submissions, source-docs | — |
@@ -334,8 +334,7 @@ curl "http://localhost:8000/compliance/results/{id}"
 | `LLM_CLASSIFY_MODEL` | Cheap/fast model for the critic pass (e.g. `gpt-5.4-nano`) | — (falls back to `LLM_MODEL`) |
 | `OPENAI_API_KEY` | OpenAI embeddings key | — |
 | `AZURE_OPENAI_*` / `AZURE_SEARCH_*` | Azure OpenAI + AI Search config | — |
-| `AZURE_INFERENCE_ENDPOINT` / `AZURE_INFERENCE_API_KEY` / `AZURE_COHERE_EMBED_DEPLOYMENT` | Azure AI Foundry Cohere embeddings (`azure_cohere`) | — |
-| `COHERE_API_KEY` / `COHERE_EMBEDDING_MODEL` | Cohere embeddings (public API) | `embed-english-v3.0` |
+| `AZURE_INFERENCE_ENDPOINT` / `AZURE_INFERENCE_API_KEY` / `AZURE_COHERE_EMBED_DEPLOYMENT` | Azure AI Foundry Cohere embeddings (`azure_cohere`, default) | — |
 | **Tracing** | | |
 | `LANGCHAIN_TRACING_V2` / `LANGCHAIN_API_KEY` / `LANGCHAIN_PROJECT` | LangSmith tracing | `false` / — / `regulatory-compliance-agent` |
 
