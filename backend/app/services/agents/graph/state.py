@@ -27,6 +27,13 @@ class ComplianceState(TypedDict):
     # Shape: { chunk_id: [precedent_dict, ...] }
     retrieved_examples: Dict[str, List[Dict[str, Any]]]
 
+    # Product-doc grounding (2026-06-22). Set by dispatch_node when the
+    # submission matched ≥1 approved product (metadata.product_match).
+    # product_facts: deterministic fact cards, per DOCUMENT (same for all chunks).
+    # product_passages: approved brochure passages, per CHUNK.
+    product_facts: List[Dict[str, Any]]
+    product_passages: Dict[str, List[Dict[str, Any]]]
+
     # Analysis Results - Using operator.add to append violations from parallel agents
     violations: Annotated[List[Dict[str, Any]], operator.add]
 

@@ -554,11 +554,35 @@ async def preprocess_node(state: ComplianceState) -> Dict:
         except Exception as e:
             logger.warning(f"RAG chunk indexing failed (non-fatal): {e}")
 
+        # Resolve which approved product(s) this submission is about (additive;
+        # a no-match leaves all downstream grounding off). Non-fatal.
+        product_match: List[Dict[str, Any]] = []
+        try:
+            from app.config import settings as _s
+            if _s.product_grounding_enabled:
+                from app.services.fact_card_service import get_fact_card_service
+                from app.services.product_resolver import resolve_products
+                full_text = "\n".join(c["text"] for c in chunks_data)
+                product_match = resolve_products(
+                    full_text, get_fact_card_service(),
+                    max_matches=_s.product_match_max,
+                    min_fuzzy_score=_s.kb_min_fuzzy_score,
+                )
+                if product_match:
+                    logger.info("product grounding: matched %s",
+                                [m["uin"] for m in product_match])
+        except Exception as e:
+            logger.warning(f"product resolution failed (non-fatal): {e}")
+
+        md = dict(state.get("metadata") or {})
+        md["product_match"] = product_match
+
         return {
             "chunks": chunks_data,
+            "metadata": md,
             "messages": [AIMessage(
                 content=f"Librarian: Prepared {len(chunks_data)} chunks "
-                        f"(RAG indexed: {rag_indexed})."
+                        f"(RAG indexed: {rag_indexed}; products matched: {len(product_match)})."
             )]
         }
 
@@ -568,6 +592,54 @@ async def preprocess_node(state: ComplianceState) -> Dict:
             "messages": [AIMessage(content=f"Librarian: Error during preprocessing - {str(e)}")],
             "status": "failed"
         }
+
+
+async def _resolve_product_grounding(state: Dict, chunks: List[Dict]) -> tuple:
+    """Return (product_facts, product_passages) for the matched product(s).
+
+    product_facts: deterministic fact cards (per document). product_passages:
+    {chunk_id: [passage,...]} approved-brochure passages, scoped by matched UIN
+    (per chunk). Both empty when grounding is off or no product matched.
+    Fail-soft: any retrieval error degrades to empty, never raises.
+    """
+    from app.config import settings
+    if not settings.product_grounding_enabled:
+        return [], {}
+    matches = (state.get("metadata") or {}).get("product_match") or []
+    if not matches:
+        return [], {}
+
+    uins = [m["uin"] for m in matches]
+    try:
+        from app.services.fact_card_service import get_fact_card_service
+        product_facts = get_fact_card_service().lookup_many(uins)
+    except Exception as e:
+        logger.warning(f"fact-card lookup failed (non-fatal): {e}")
+        product_facts = []
+
+    product_passages: Dict[str, List[Dict]] = {}
+    try:
+        from app.services.rag.retrievers.product_docs_retriever import get_product_docs_retriever
+        retriever = get_product_docs_retriever()
+        primary_uin = uins[0]  # scope passages to the first/strongest match
+        for c in chunks:
+            cid = str(c.get("id"))
+            text = c.get("text") or ""
+            if not text.strip():
+                product_passages[cid] = []
+                continue
+            try:
+                product_passages[cid] = await retriever.retrieve(
+                    query=text, uin=primary_uin, top_k=settings.product_docs_top_k,
+                )
+            except Exception as e:
+                logger.warning(f"product-docs retrieval failed for chunk {cid} (non-fatal): {e}")
+                product_passages[cid] = []
+    except Exception as e:
+        logger.warning(f"product-docs retrieval failed (non-fatal): {e}")
+        product_passages = {}
+
+    return product_facts, product_passages
 
 
 @traceable(run_type="chain", name="graph.dispatch_node")
@@ -716,12 +788,16 @@ async def dispatch_node(state: ComplianceState) -> Dict:
     if "agent_precedent" not in active_agents:
         active_agents.append("agent_precedent")
 
+    product_facts, product_passages = await _resolve_product_grounding(state, chunks)
+
     return {
         "active_rules": rules_serializable,
         "chunk_rules": chunk_rules,
         "retrieved_examples": retrieved_examples,
         "active_agents": active_agents,
         "metadata": md,
+        "product_facts": product_facts,
+        "product_passages": product_passages,
         "messages": [AIMessage(
             content=(
                 f"Brain: Dispatched precedent analysis over {len(chunks)} chunks "
