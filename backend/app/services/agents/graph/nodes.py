@@ -635,6 +635,7 @@ async def _resolve_product_grounding(state: Dict, chunks: List[Dict]) -> tuple:
             except Exception as e:
                 logger.warning(f"product-docs retrieval failed for chunk {cid} (non-fatal): {e}")
                 product_passages[cid] = []
+    # outer guard: retriever-init / non-per-chunk failure -> no passages (fail-soft); per-chunk failures are caught in the loop above
     except Exception as e:
         logger.warning(f"product-docs retrieval failed (non-fatal): {e}")
         product_passages = {}

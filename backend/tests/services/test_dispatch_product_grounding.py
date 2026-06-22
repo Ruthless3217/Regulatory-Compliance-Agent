@@ -32,3 +32,16 @@ def test_no_match_yields_empty_grounding():
     facts, passages = asyncio.run(nodes._resolve_product_grounding(state, state["chunks"]))
     assert facts == []
     assert passages == {}
+
+
+def test_grounding_disabled_yields_empty():
+    """When product_grounding_enabled=False, return empty grounding regardless of matches."""
+    state = {
+        "chunks": [{"id": "c1", "chunk_index": 0, "text": "Get guaranteed returns 116N198V07", "metadata": {}}],
+        "metadata": {"product_match": [{"uin": "116N198V07", "product_name": "eTouch II",
+                                        "confidence": 1.0, "method": "uin_regex"}]},
+    }
+    with patch("app.config.settings.product_grounding_enabled", False):
+        facts, passages = asyncio.run(nodes._resolve_product_grounding(state, state["chunks"]))
+    assert facts == []
+    assert passages == {}
