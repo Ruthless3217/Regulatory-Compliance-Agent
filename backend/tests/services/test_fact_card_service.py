@@ -71,3 +71,9 @@ def test_missing_dir_yields_empty_service(tmp_path: Path):
     svc = FactCardService(tmp_path / "does_not_exist")
     assert svc.all_products() == []
     assert svc.get("116N198V07") is None
+
+
+def test_card_without_uin_is_skipped(cards_dir: Path):
+    _write_card(cards_dir, "no-uin.json", {"product_name": "Orphan Card"})
+    svc = FactCardService(cards_dir)  # must not raise
+    assert len(svc.all_products()) == 2

@@ -11,13 +11,13 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 
 class FactCardService:
-    def __init__(self, cards_dir: Path):
+    def __init__(self, cards_dir: Union[str, Path]):
         self._by_uin: Dict[str, Dict[str, Any]] = {}
         self._cards: List[Dict[str, Any]] = []
         self._load(Path(cards_dir))
@@ -72,3 +72,9 @@ def get_fact_card_service() -> FactCardService:
         from app.config import settings
         _singleton = FactCardService(Path(settings.product_fact_cards_dir))
     return _singleton
+
+
+def _reset_singleton_for_testing() -> None:  # pragma: no cover
+    """Clear the cached singleton so tests can rebuild it against a different dir."""
+    global _singleton
+    _singleton = None
