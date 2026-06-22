@@ -762,6 +762,8 @@ async def analysis_node(state: ComplianceState) -> Dict:
     # silently skipped and the doc is graded on precedent+novel alone).
     active_rules = state.get("active_rules") or {}
     rag_degraded = bool((state.get("metadata") or {}).get("rag_degraded"))
+    product_facts = state.get("product_facts") or []
+    product_passages_by_chunk = state.get("product_passages") or {}
     submission_id = state.get("submission_id")
     user_id = state.get("user_id")
 
@@ -794,6 +796,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
         chunk_text = chunk_data.get("text", "")
         precedents = retrieved.get(str(chunk_id), [])
         rules = _rules_for_chunk(chunk_id)
+        passages = product_passages_by_chunk.get(str(chunk_id), [])
         # No early-return on empty precedents: the prompt still emits rule-grounded
         # (Tier-2) and novel (Tier-3) findings so issues outside the precedent
         # corpus are still caught (2026-05-28 reviewer-voice design + Fix A).
@@ -838,7 +841,8 @@ async def analysis_node(state: ComplianceState) -> Dict:
                         chunks_data, chunk_index, _settings.cross_chunk_context_token_budget
                     )
                 prompt = context_service.create_precedent_prompts(
-                    chunk_text, precedents, rules=rules, document_context=document_context
+                    chunk_text, precedents, rules=rules, document_context=document_context,
+                    product_facts=product_facts, product_passages=passages,
                 )
                 system_prompt = (
                     "You are a senior Bajaj Allianz compliance reviewer. Cite "
@@ -861,6 +865,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 citations = list(result.citations or [])
                 rule_findings = list(getattr(result, "rule_findings", None) or [])
                 novel = list(result.novel_findings or [])
+                product_ff = list(getattr(result, "product_fact_findings", None) or [])
 
                 # One corrective retry if any citation has an out-of-range
                 # index. Keep whichever pass yields more in-range citations;
@@ -874,6 +879,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                         citations = list(retry.citations or [])
                         rule_findings = list(getattr(retry, "rule_findings", None) or [])
                         novel = list(retry.novel_findings or [])
+                        product_ff = list(getattr(retry, "product_fact_findings", None) or [])
                 citations = _in_range(citations)
 
                 # Completeness sweep: a single structured pass under-enumerates on
@@ -888,17 +894,22 @@ async def analysis_node(state: ComplianceState) -> Dict:
                             f.current_text for f in rule_findings
                         ] + [
                             f.current_text for f in novel
+                        ] + [
+                            f.current_text for f in product_ff
                         ]
                         sweep_prompt = context_service.create_completeness_sweep_prompt(
                             chunk_text, precedents, rules=rules, already_found=already,
                             document_context=document_context,
+                            product_facts=product_facts, product_passages=passages,
                         )
                         sweep = await _call(sweep_prompt)
-                        citations, rule_findings, novel = merge_findings(
+                        citations, rule_findings, novel, product_ff = merge_findings(
                             citations, rule_findings, novel,
                             _in_range(list(sweep.citations or [])),
                             list(getattr(sweep, "rule_findings", None) or []),
                             list(sweep.novel_findings or []),
+                            product_fact_findings=product_ff,
+                            add_product_fact_findings=list(getattr(sweep, "product_fact_findings", None) or []),
                         )
                     except Exception as e:
                         logger.warning(
@@ -911,14 +922,16 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 if meta_loc.get("page_number"):
                     loc += f":page:{meta_loc['page_number']}"
 
-                # Map all three tiers — precedent citations, rule-grounded
-                # findings (rule_id + regulator_quote carried from the rule), and
-                # novel findings — into the shared violation shape.
+                # Map all four tiers — precedent citations, rule-grounded
+                # findings (rule_id + regulator_quote carried from the rule),
+                # novel findings, and product-fact findings — into the shared
+                # violation shape.
                 filtered = PrecedentCitationsResult(
-                    citations=citations, rule_findings=rule_findings, novel_findings=novel
+                    citations=citations, rule_findings=rule_findings,
+                    novel_findings=novel, product_fact_findings=product_ff,
                 )
                 for v in map_findings_to_violations(
-                    filtered, precedents, rules=rules,
+                    filtered, precedents, rules=rules, product_facts=product_facts,
                     chunk_id=chunk_id, chunk_index=chunk_index, location=loc,
                 ):
                     ok, errs = validate_agent_output(v)
