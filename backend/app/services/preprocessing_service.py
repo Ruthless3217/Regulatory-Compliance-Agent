@@ -619,6 +619,15 @@ Constraints:
             return s if len(s) <= n else s[: n - 1].rstrip() + "…"
 
         if has_p:
+            # Surface the reviewer's rationale / cited guideline (added to the
+            # precedent dict in PKB2 Task 11) so the analysis LLM sees *why* a
+            # phrase was flagged — previously these keys were dropped before
+            # the prompt. We ENRICH the existing block (not replace it) to
+            # preserve the established prompt structure and per-field token
+            # caps. The same field set + labels are codified in the pure,
+            # unit-tested ``graph.nodes.format_precedent_context`` helper, which
+            # is the canonical contract for the "why" block (used directly where
+            # the prompt-budget cap is not required).
             blocks = []
             for i, p in enumerate(precedents):
                 block = (
@@ -629,6 +638,10 @@ Constraints:
                     f"Violation type: {p.get('violation_category') or 'other'}\n"
                     f"Severity: {p.get('severity') or 'informational'}\n"
                 )
+                if p.get("why_rationale"):
+                    block += f"Why it was flagged: {_cap(p['why_rationale'], 400)}\n"
+                if p.get("guideline_ref"):
+                    block += f"Guideline: {_cap(p['guideline_ref'], 200)}\n"
                 if p.get("final_text_chunk"):
                     block += f"Approved rewrite (for reference): {_cap(p['final_text_chunk'], 400)}\n"
                 blocks.append(block)
@@ -729,22 +742,26 @@ Constraints:
                 "    remove, term to standardize). Emit one `rule_findings` entry per\n"
                 "    applicable rule, with its `rule_index`."
             )
-        instr_parts.append(
-            "(B) Decide if any issue is clearly present in this section that NEITHER\n"
-            "    a listed precedent NOR a listed rule covers. Emit those under\n"
-            "    `novel_findings` (each REQUIRES a regulatory_basis and confidence ≥ 0.75)."
-        )
         if not has_p and not has_r:
             novel_only = (
                 "No historical precedents or rules were retrieved for this section. Do\n"
                 "NOT emit any `citations` or `rule_findings`. Review the section yourself\n"
                 "and emit ONLY `novel_findings` for issues clearly present.\n"
             )
+            # (B) is NOT added on this path: novel_only already directs everything to
+            # novel_findings. instr_parts here holds only (P) (when product_facts is
+            # present); when there is no product either, instr_parts is empty and the
+            # prompt is byte-identical to the pre-product-grounding output.
             if instr_parts:
                 mode_instruction = "\n\n".join(instr_parts) + "\n\n" + novel_only
             else:
                 mode_instruction = novel_only
         else:
+            instr_parts.append(
+                "(B) Decide if any issue is clearly present in this section that NEITHER\n"
+                "    a listed precedent NOR a listed rule covers. Emit those under\n"
+                "    `novel_findings` (each REQUIRES a regulatory_basis and confidence ≥ 0.75)."
+            )
             mode_instruction = "\n\n".join(instr_parts) + "\n"
 
         # Fence untrusted content with a per-call random delimiter so an

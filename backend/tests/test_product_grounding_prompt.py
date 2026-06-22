@@ -54,3 +54,19 @@ def test_no_product_args_matches_legacy_signature():
     # Back-compat: callable without the new kwargs.
     p = _svc().create_precedent_prompts("Some copy.", precedents=[], rules=[])
     assert "PRODUCT FACTS" not in p
+
+
+def test_product_facts_with_no_precedents_emits_P_instruction():
+    p = _svc().create_precedent_prompts(
+        "Get guaranteed returns!", precedents=[], rules=[],
+        product_facts=[CARD], product_passages=[])
+    assert "(P) Check this section" in p
+    assert "No historical precedents" in p  # novel_only still present
+
+
+def test_empty_no_precedent_no_rule_omits_B_instruction():
+    # Byte-identity guard: with no product and no precedent/rule, (B) must NOT
+    # appear (it is subsumed by novel_only), matching pre-product-grounding output.
+    p = _svc().create_precedent_prompts("Some copy.", precedents=[], rules=[])
+    assert "(B) Decide" not in p
+    assert "No historical precedents" in p
