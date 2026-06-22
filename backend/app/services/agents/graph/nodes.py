@@ -241,6 +241,55 @@ def _rule_finding_to_violation(
     }
 
 
+def _product_fact_finding_to_violation(
+    f: Any, card: Dict[str, Any], *, chunk_id, chunk_index, location: str
+) -> Dict[str, Any]:
+    """Map one product-fact finding to a violation dict. The fact card supplies
+    the authoritative guardrail; provenance lives in violation_metadata under
+    grounding='product_fact'. No rule_id / precedent columns."""
+    severity = str(getattr(f, "severity", "moderate") or "moderate").strip().lower()
+    if severity not in ("critical", "moderate", "informational"):
+        severity = "moderate"
+    satisfied = bool(getattr(f, "satisfied_elsewhere", False))
+    suppressed = satisfied and severity != "critical"
+    return {
+        "category": "product compliance",
+        "severity": severity,
+        "suppressed": suppressed,
+        "suppressed_reason": (
+            "satisfied_elsewhere: required element already present elsewhere in the document"
+            if suppressed else None
+        ),
+        "description": (f.reviewer_comment or "").strip(),
+        "current_text": (getattr(f, "current_text", "") or "").strip(),
+        "suggested_fix": None,
+        "auto_fixable": False,
+        "confidence": float(f.confidence if f.confidence is not None else 0.85),
+        "rule_id": None,
+        "regulator_quote": None,
+        "cited_precedent_id": None,
+        "cited_document_id": None,
+        "cited_source_file": None,
+        "cited_anchor_text": None,
+        "cited_comment_verbatim": None,
+        "cited_final_text": None,
+        "similarity_score": None,
+        "chunk_id": str(chunk_id),
+        "chunk_index": chunk_index,
+        "location": location,
+        "violation_metadata": {
+            "grounding": "product_fact",
+            "product_uin": card.get("uin"),
+            "product_name": card.get("product_name"),
+            "guardrail_text": (f.guardrail_text or "").strip(),
+            "finding_kind": f.finding_kind,
+            "action_type": f.action_type,
+            "evidence_needed": getattr(f, "evidence_needed", None),
+            "satisfied_elsewhere": satisfied,
+        },
+    }
+
+
 def _normalize_ws(s: str) -> str:
     """Lowercase + collapse all whitespace runs to single spaces."""
     return " ".join((s or "").lower().split())
@@ -253,14 +302,13 @@ def merge_findings(
     add_citations: List[Any],
     add_rule_findings: List[Any],
     add_novel_findings: List[Any],
+    product_fact_findings: Optional[List[Any]] = None,
+    add_product_fact_findings: Optional[List[Any]] = None,
 ) -> tuple:
     """Merge completeness-sweep findings into the first-pass findings, dropping
     exact duplicates so a phrase the sweep re-reports isn't double-counted.
 
-    Dedup keys err toward KEEPING findings (recall-critical): citations/rules key
-    on (index, normalized current_text); novel findings additionally key on the
-    reviewer_comment, so the same phrase flagged for two distinct reasons is
-    preserved. Returns the merged (citations, rule_findings, novel_findings).
+    Returns (citations, rule_findings, novel_findings, product_fact_findings).
     """
     seen_c = {(int(c.precedent_index), _normalize_ws(c.current_text)) for c in citations}
     for c in add_citations:
@@ -286,7 +334,17 @@ def merge_findings(
             seen_n.add(key)
             novel_findings.append(f)
 
-    return citations, rule_findings, novel_findings
+    product_fact_findings = product_fact_findings if product_fact_findings is not None else []
+    add_product_fact_findings = add_product_fact_findings or []
+    seen_pf = {(int(f.product_index), _normalize_ws(f.current_text), _normalize_ws(f.guardrail_text)[:60])
+               for f in product_fact_findings}
+    for f in add_product_fact_findings:
+        key = (int(f.product_index), _normalize_ws(f.current_text), _normalize_ws(f.guardrail_text)[:60])
+        if key not in seen_pf:
+            seen_pf.add(key)
+            product_fact_findings.append(f)
+
+    return citations, rule_findings, novel_findings, product_fact_findings
 
 
 def verify_evidence_grounding(
@@ -318,7 +376,7 @@ def verify_evidence_grounding(
 _SEVERITY_RANK = {
     "critical": 5, "high": 4, "moderate": 3, "medium": 3, "low": 2, "informational": 1,
 }
-_TIER_RANK = {"precedent": 3, "rule": 2, "novel": 1}
+_TIER_RANK = {"product_fact": 4, "precedent": 3, "rule": 2, "novel": 1}
 
 
 def _violation_rank(v: Dict[str, Any]) -> tuple:
@@ -403,10 +461,12 @@ def map_findings_to_violations(
     chunk_index,
     location: str,
     rules: Optional[List[Dict[str, Any]]] = None,
+    product_facts: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
-    """Flatten a PrecedentCitationsResult into violation dicts across all three
-    grounding tiers: precedent citations, rule-grounded findings, and novel
-    findings. Out-of-range indices and sub-floor novel findings are dropped."""
+    """Flatten a PrecedentCitationsResult into violation dicts across all four
+    grounding tiers: precedent citations, rule-grounded findings, novel
+    findings, and product-fact findings. Out-of-range indices and sub-floor
+    novel findings are dropped."""
     rules = rules or []
     out: List[Dict[str, Any]] = []
     for c in (result.citations or []):
@@ -433,6 +493,16 @@ def map_findings_to_violations(
         out.append(
             _novel_finding_to_violation(
                 f, chunk_id=chunk_id, chunk_index=chunk_index, location=location
+            )
+        )
+    product_facts = product_facts or []
+    for f in (getattr(result, "product_fact_findings", None) or []):
+        idx = int(f.product_index)
+        if not (0 <= idx < len(product_facts)):
+            continue
+        out.append(
+            _product_fact_finding_to_violation(
+                f, product_facts[idx], chunk_id=chunk_id, chunk_index=chunk_index, location=location
             )
         )
     return out
