@@ -248,6 +248,58 @@ class RuleFinding(BaseModel):
     )
 
 
+class ProductFactFinding(BaseModel):
+    """Product-grounded finding: the section violates the matched product's
+    curated fact-card guardrail (a banned claim, a missing mandatory element, a
+    wrong/absent regulatory descriptor, or a claim that is valid only for a
+    specific variant). Authoritative + deterministic — the guardrail is verbatim
+    from the approved fact card. Hard-leaning: a present `claims_marketing_must_avoid`
+    item IS a finding."""
+
+    product_index: int = Field(
+        ...,
+        ge=0,
+        description="Zero-based index into the input PRODUCT FACTS list of the product whose guardrail is violated.",
+    )
+    current_text: str = Field(
+        "",
+        description="EXACT offending phrase from the NEW section, verbatim. Empty ONLY for a missing-mandatory finding (nothing to quote).",
+    )
+    reviewer_comment: str = Field(
+        ...,
+        min_length=10,
+        description="1-2 sentences in reviewer voice: name the offending phrase (or the missing element), and state the product-specific reason from the guardrail.",
+    )
+    guardrail_text: str = Field(
+        ...,
+        min_length=1,
+        description="The fact-card guardrail line being applied, copied verbatim.",
+    )
+    finding_kind: Literal["banned-claim", "missing-mandatory", "wrong-descriptor", "unqualified-claim"] = Field(
+        ...,
+        description="banned-claim (a must_avoid claim present) | missing-mandatory (a must_state element absent) | wrong-descriptor (regulatory descriptor wrong/absent) | unqualified-claim (a must_support claim not variant-qualified).",
+    )
+    action_type: ACTION_TYPES = Field(
+        ...,
+        description="One of rewrite | share-evidence | add-disclaimer | verify-source | remove.",
+    )
+    evidence_needed: Optional[str] = Field(None)
+    severity: Literal["critical", "moderate", "informational"] = Field(
+        "moderate",
+        description="banned-claim / wrong-descriptor → critical; unqualified-claim / missing-mandatory → moderate.",
+    )
+    confidence: float = Field(
+        0.85,
+        ge=0.0,
+        le=1.0,
+        description="0.0–1.0 confidence the section actually violates this product guardrail.",
+    )
+    satisfied_elsewhere: bool = Field(
+        False,
+        description="Set TRUE only for a MISSING mandatory element that ALREADY appears elsewhere in DOCUMENT CONTEXT. Never for a banned/unqualified claim.",
+    )
+
+
 class PrecedentCitationsResult(BaseModel):
     citations: List[PrecedentCitation] = Field(
         default_factory=list,
@@ -260,4 +312,8 @@ class PrecedentCitationsResult(BaseModel):
     novel_findings: List[NovelFinding] = Field(
         default_factory=list,
         description="Issues clearly present in this section that NO listed precedent OR rule covers. Each REQUIRES a regulatory_basis and confidence ≥ 0.75. Do not invent findings.",
+    )
+    product_fact_findings: List[ProductFactFinding] = Field(
+        default_factory=list,
+        description="Violations of the matched product's fact-card guardrails (banned claims, missing mandatory elements, wrong descriptor, variant-unqualified claims). Emit one entry per applicable guardrail. Empty when no product was matched.",
     )
