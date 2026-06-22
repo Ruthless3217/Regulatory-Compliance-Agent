@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field
-from typing import List
+from pydantic import Field, field_validator
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
@@ -68,6 +68,42 @@ class Settings(BaseSettings):
     chat_llm_supports_temperature: bool = True
     chat_llm_azure_api_version: str = ""  # empty = inherit llm_azure_api_version
     chat_llm_reasoning_effort: str = ""   # empty = omit (Groq llama rejects it)
+
+    # --- Critic LLM override (independent generator/critic dual model) --------
+    # The generator/critic loop runs the critic on a DIFFERENT model than the
+    # analysis generator (e.g. generator gpt-5.4, critic gpt-5.4-nano). Any
+    # CRITIC_LLM_* left empty falls back to the main LLM_* config above. In
+    # practice only CRITIC_LLM_MODEL (the nano deployment name) is set.
+    critic_llm_provider: str = ""
+    critic_llm_base_url: str = ""
+    critic_llm_model: str = ""
+    critic_llm_api_key: str = ""
+    critic_llm_max_tokens: int = 0          # 0 = inherit llm_max_tokens
+    critic_llm_insecure_tls: bool = False
+    # None = inherit the main LLM_* value. These MUST inherit (not default) so a
+    # critic on the same Azure gpt-5.4 family picks up LLM_SUPPORTS_TEMPERATURE=
+    # false / LLM_USE_MAX_COMPLETION_TOKENS=true. The validator below maps the
+    # empty string that docker-compose forwards (${VAR:-}) to None — without it
+    # pydantic raises on '' and the backend never boots.
+    critic_llm_use_max_completion_tokens: Optional[bool] = None
+    critic_llm_supports_temperature: Optional[bool] = None
+    critic_llm_azure_api_version: str = ""  # empty = inherit llm_azure_api_version
+    critic_llm_reasoning_effort: str = ""   # empty = omit
+
+    @field_validator(
+        "critic_llm_use_max_completion_tokens",
+        "critic_llm_supports_temperature",
+        mode="before",
+    )
+    @classmethod
+    def _blank_critic_bool_means_inherit(cls, v):
+        # docker-compose forwards these as ${VAR:-}; an unset host var arrives as
+        # an empty string. Treat blank as None ("inherit main") rather than let
+        # pydantic fail bool-parsing '' (which would crash Settings() at import).
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
+
     # Hard daily token ceiling across ALL keys/models/endpoints (wallet guard,
     # independent of per-key Groq TPM/TPD). 0 = disabled. When exceeded, every
     # LLM entrypoint fails closed until UTC midnight.
@@ -76,6 +112,9 @@ class Settings(BaseSettings):
     # check so the assembled prompt can't silently overflow and truncate the tail.
     llm_context_window: int = 128_000
     critic_enabled: bool = True
+    # Independent on/off for the gpt-5.4-nano LLM critic on the precedent path.
+    # Separate from critic_enabled, which gates the deterministic grounding check.
+    llm_critic_enabled: bool = True
 
     @staticmethod
     def _parse_keys(raw: str) -> List[str]:
@@ -106,6 +145,13 @@ class Settings(BaseSettings):
         """CHAT_LLM_API_KEY parsed; empty falls back to the main LLM keys so the
         chat feature inherits the analysis provider unless explicitly overridden."""
         keys = self._parse_keys(self.chat_llm_api_key)
+        return keys or self.llm_api_keys
+
+    @property
+    def critic_llm_api_keys(self) -> List[str]:
+        """CRITIC_LLM_API_KEY parsed; empty falls back to the main LLM keys so the
+        critic inherits the analysis provider unless explicitly overridden."""
+        keys = self._parse_keys(self.critic_llm_api_key)
         return keys or self.llm_api_keys
 
     # Redis (LangGraph Persistence)
@@ -192,6 +238,17 @@ class Settings(BaseSettings):
     # Cohere (alternative embeddings — 1024-dim)
     cohere_api_key: str = ""
     cohere_embedding_model: str = "embed-english-v3.0"
+
+    # Azure AI Foundry inference surface (RAG_EMBEDDING_PROVIDER=azure_cohere).
+    # Cohere embed models are served from the Foundry MODELS endpoint
+    # (https://<resource>.services.ai.azure.com/models), NOT the Azure OpenAI
+    # surface. Auth is the Foundry resource key; blank reuses LLM_API_KEY (same
+    # resource). The deployment is the Foundry deployment name, which doubles as
+    # the embedding_model fingerprint stamped on every vector.
+    azure_inference_endpoint: str = ""
+    azure_inference_api_key: str = ""
+    azure_inference_api_version: str = "2024-05-01-preview"
+    azure_cohere_embed_deployment: str = "Cohere-embed-v3-multilingual"
     # Per-text embedding cache (Priority 4d) — avoids re-embedding repeated chunks.
     embed_cache_size: int = 2048
 

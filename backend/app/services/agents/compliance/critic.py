@@ -28,7 +28,7 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
-from app.services.llm_service import llm_service
+from app.services.llm_service import critic_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -65,33 +65,58 @@ def _build_critic_prompt(
     rules_block = "\n".join(
         f"- (ID: {r.get('id')}) [{r.get('severity', '?')}] {r.get('rule_text', '')}"
         for r in rules
-    )
-    viol_block = "\n".join(
-        f"[{i}] rule_id={v.get('rule_id')}  severity={v.get('severity')}  "
-        f"primary_conf={v.get('confidence')}\n"
-        f"    description: {v.get('description', '')}\n"
-        f"    current_text: \"{(v.get('current_text') or '').strip()[:200]}\""
-        for i, v in enumerate(violations)
-    )
-    return f"""You are an independent compliance critic. Another LLM just produced
-the violation list below. Your job is to verify each one against the actual
-document text and the cited rule. Be skeptical: stylistic preferences and
-vague claims are NOT compliance violations.
+    ) or "(none)"
 
-For each violation, decide:
-- keep=true  if the violation is a real, defensible breach of the cited rule
-            with evidence verbatim in the document text
-- keep=false if the rule_id doesn't match the listed rules, the cited text
-            isn't actually in the document, or the violation is invented /
-            stretched / merely stylistic
+    lines = []
+    for i, v in enumerate(violations):
+        meta = v.get("violation_metadata") or {}
+        grounding = meta.get("grounding", "novel")
+        head = (
+            f"[{i}] grounding={grounding}  severity={v.get('severity')}  "
+            f"primary_conf={v.get('confidence')}\n"
+            f"    description: {v.get('description', '')}\n"
+            f"    current_text: \"{(v.get('current_text') or '').strip()[:200]}\""
+        )
+        if grounding == "rule":
+            evidence = (
+                f"\n    cited rule_id={v.get('rule_id')}  "
+                f"regulator_quote: \"{(v.get('regulator_quote') or '').strip()[:200]}\"\n"
+                f"    CHECK: does current_text breach this exact rule, with the breach "
+                f"visible verbatim in the document?"
+            )
+        elif grounding == "precedent":
+            evidence = (
+                f"\n    cited precedent (reviewer's historical note): "
+                f"\"{(v.get('cited_comment_verbatim') or '').strip()[:200]}\"\n"
+                f"    CHECK: does the precedent genuinely apply to current_text "
+                f"(same issue, present verbatim in the document)?"
+            )
+        else:  # novel
+            evidence = (
+                "\n    no rule / no precedent (model's own judgment)\n"
+                "    CHECK: is this a real, defensible compliance breach grounded "
+                "verbatim in the document — NOT a stylistic preference?"
+            )
+        lines.append(head + evidence)
+    viol_block = "\n".join(lines)
 
-Provide a 0.0-1.0 confidence in your own verdict. Use ≤0.4 only when you're
-fairly sure the primary LLM hallucinated — those will be dropped.
+    return f"""You are an independent compliance critic. Another LLM produced the
+violation list below across three grounding tiers (rule / precedent / novel).
+Verify each one against the actual document text and its cited evidence.
+Be skeptical: stylistic preferences and vague claims are NOT compliance violations.
+
+For each violation decide:
+- keep=true  if it is a real, defensible breach with evidence verbatim in the document
+- keep=false if the cited rule/precedent doesn't apply, the cited text isn't in the
+            document, or the violation is invented / stretched / merely stylistic
+
+Provide a 0.0-1.0 confidence in your OWN verdict. Use <0.4 only when you are fairly
+sure the primary LLM hallucinated — those will be dropped.
 
 DOCUMENT (chunk):
 {chunk_text[:4000]}
 
-INPUT RULES (only these rule_ids are valid):
+INPUT RULES (only these rule_ids are valid for rule-tier findings):
 {rules_block}
 
 PRIMARY VIOLATIONS TO REVIEW:
@@ -105,22 +130,27 @@ async def critique_violations(
     chunk_text: str,
     rules: List[Dict[str, Any]],
     violations: List[Dict[str, Any]],
+    precedents: List[Dict[str, Any]] | None = None,
 ) -> List[Dict[str, Any]]:
     """Filter / downgrade the violation list via an independent LLM check.
 
     Returns the new violation list. Never raises — on critic failure the
     original violations pass through unchanged so the pipeline is resilient.
+
+    The ``precedents`` param is accepted for symmetry/future use; per-violation
+    evidence is read directly off each violation dict (cited_comment_verbatim,
+    cited_anchor_text, regulator_quote) rather than a separate precedents list.
     """
     if not violations:
         return violations
     try:
-        result = await llm_service.generate_structured_response(
+        result = await critic_llm_service.generate_structured_response(
             prompt=_build_critic_prompt(chunk_text, rules, violations),
             output_model=CritiqueResult,
             system_prompt=(
                 "You are a meticulous compliance auditor. You ONLY validate "
-                "violations against the provided rules and document text. "
-                "Return strict JSON."
+                "violations against the provided rules, precedents and document "
+                "text. Return strict JSON."
             ),
             tool_name="critic_review",
         )
@@ -138,19 +168,28 @@ async def critique_violations(
             # know it didn't pass through the critic loop.
             surviving.append(v)
             continue
-        if not c.keep and c.confidence >= _DROP_BELOW:
+        is_critical = str(v.get("severity", "")).strip().lower() == "critical"
+        if not c.keep and c.confidence < _DROP_BELOW and not is_critical:
+            meta = v.get("violation_metadata") or {}
+            grounding = meta.get("grounding", "unknown")
             logger.info(
                 f"Critic dropped violation {i} "
-                f"(rule_id={v.get('rule_id')}, critic_conf={c.confidence:.2f}): {c.reason}"
+                f"(rule_id={v.get('rule_id')}, grounding={grounding}, critic_conf={c.confidence:.2f}): {c.reason}"
             )
             dropped += 1
             continue
-        # Downgrade primary confidence to min(primary, critic_confidence)
+        # Confidence adjustment logic:
+        #   keepers              → min(primary, critic_conf)   caps primary at critic's certainty
+        #   non-dropped non-critical rejects → critic_conf * 0.5  conservative floor, not a placeholder
+        #   criticals            → primary confidence preserved  (never weakened by critic)
         try:
             primary_conf = float(v.get("confidence", 0.85))
         except (TypeError, ValueError):
             primary_conf = 0.85
-        new_conf = round(min(primary_conf, c.confidence), 3) if c.keep else round(c.confidence * 0.5, 3)
+        if is_critical:
+            new_conf = primary_conf
+        else:
+            new_conf = round(min(primary_conf, c.confidence), 3) if c.keep else round(c.confidence * 0.5, 3)
         if new_conf != primary_conf:
             downgraded += 1
         v_out = dict(v)

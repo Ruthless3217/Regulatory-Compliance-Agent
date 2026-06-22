@@ -85,6 +85,8 @@ def _resolve_profile(profile: str) -> Dict[str, Any]:
     streaming chat assistant off the CHAT_LLM_* vars, each field falling back to
     the main profile when left empty — so chat can run on a different provider
     (e.g. Groq) than analysis (e.g. Azure) without duplicating config.
+    ``"critic"`` drives the independent generator/critic model (e.g. gpt-5.4-nano)
+    off the CRITIC_LLM_* vars with the same fallback semantics.
     """
     if profile == "chat":
         provider = (settings.chat_llm_provider or settings.llm_provider or "openai").lower()
@@ -97,6 +99,28 @@ def _resolve_profile(profile: str) -> Dict[str, Any]:
         supports_temperature = settings.chat_llm_supports_temperature
         azure_api_version = settings.chat_llm_azure_api_version or settings.llm_azure_api_version
         reasoning_effort = settings.chat_llm_reasoning_effort
+    elif profile == "critic":
+        provider = (settings.critic_llm_provider or settings.llm_provider or "openai").lower()
+        base_url = settings.critic_llm_base_url or settings.llm_base_url
+        model = settings.critic_llm_model or settings.llm_model
+        api_keys = settings.critic_llm_api_keys
+        max_tokens = settings.critic_llm_max_tokens or settings.llm_max_tokens
+        insecure_tls = settings.critic_llm_insecure_tls
+        # None (unset/blank) inherits main; an explicit True/False is honored.
+        # The critic shares the main Azure resource, so these MUST track main —
+        # e.g. gpt-5.4-nano rejects `temperature` exactly like gpt-5.4.
+        use_max_completion = (
+            settings.critic_llm_use_max_completion_tokens
+            if settings.critic_llm_use_max_completion_tokens is not None
+            else settings.llm_use_max_completion_tokens
+        )
+        supports_temperature = (
+            settings.critic_llm_supports_temperature
+            if settings.critic_llm_supports_temperature is not None
+            else settings.llm_supports_temperature
+        )
+        azure_api_version = settings.critic_llm_azure_api_version or settings.llm_azure_api_version
+        reasoning_effort = settings.critic_llm_reasoning_effort
     else:  # "main"
         provider = (settings.llm_provider or "openai").lower()
         base_url = settings.llm_base_url
@@ -780,8 +804,11 @@ class LLMService:
 
 
 # Singleton instances.
-#   llm_service      → analysis / grading pipeline (main profile, e.g. Azure)
-#   chat_llm_service → streaming chat assistant (chat profile, e.g. Groq); falls
-#                      back to the main profile when no CHAT_LLM_* vars are set.
+#   llm_service        → analysis / grading pipeline (main profile, e.g. Azure)
+#   chat_llm_service   → streaming chat assistant (chat profile, e.g. Groq); falls
+#                        back to the main profile when no CHAT_LLM_* vars are set.
+#   critic_llm_service → independent generator/critic model (critic profile, e.g.
+#                        gpt-5.4-nano); falls back to main when CRITIC_LLM_* unset.
 llm_service = LLMService("main")
 chat_llm_service = LLMService("chat")
+critic_llm_service = LLMService("critic")

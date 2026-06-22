@@ -680,6 +680,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
     )
     from app.models.agent_execution import AgentExecution
     from app.database import SessionLocal
+    from app.services.agents.compliance.critic import critique_violations
 
     chunks_data = state.get("chunks", [])
     retrieved = state.get("retrieved_examples") or {}
@@ -860,6 +861,15 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 # chunk (fabricated current_text). See architect-audit C7.
                 if _settings.critic_enabled:
                     kept = verify_evidence_grounding(kept, chunk_text)
+
+                # LLM critic (dual-model): an independent gpt-5.4-nano reviews
+                # every surviving finding (precedent / rule / novel) and may
+                # downgrade or drop hallucinated/stylistic ones. Fail-open and
+                # never drops a critical. Separate flag from critic_enabled.
+                if _settings.llm_critic_enabled and kept:
+                    kept = await critique_violations(
+                        chunk_text, rules, kept, precedents
+                    )
 
                 # Precision (recall fix 2026-06-08): collapse cross-tier
                 # duplicates (same phrase flagged by precedent + rule + novel),
