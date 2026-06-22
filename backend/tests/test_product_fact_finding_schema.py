@@ -23,6 +23,7 @@ def test_product_fact_finding_missing_mandatory_has_empty_current_text():
         action_type="add-disclaimer",
     )
     assert f.finding_kind == "missing-mandatory"
+    assert f.current_text == ""
 
 
 def test_result_has_product_fact_findings_default_empty():

@@ -283,7 +283,10 @@ class ProductFactFinding(BaseModel):
         ...,
         description="One of rewrite | share-evidence | add-disclaimer | verify-source | remove.",
     )
-    evidence_needed: Optional[str] = Field(None)
+    evidence_needed: Optional[str] = Field(
+        None,
+        description="Named artifact (e.g. a specific IRDAI circular or approved source) the reviewer should obtain before acting. None when not required.",
+    )
     severity: Literal["critical", "moderate", "informational"] = Field(
         "moderate",
         description="banned-claim / wrong-descriptor → critical; unqualified-claim / missing-mandatory → moderate.",
