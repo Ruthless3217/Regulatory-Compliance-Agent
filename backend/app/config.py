@@ -252,6 +252,14 @@ class Settings(BaseSettings):
     # Per-text embedding cache (Priority 4d) — avoids re-embedding repeated chunks.
     embed_cache_size: int = 2048
 
+    # Product-doc grounding (2026-06-22) — fact cards (deterministic) + brochure
+    # passages (semantic) injected into the analysis prompt. Additive: a no-match
+    # leaves precedent/rule/novel grading unchanged.
+    product_grounding_enabled: bool = True
+    product_fact_cards_dir: str = "data/product_fact_cards"
+    product_docs_top_k: int = 3          # brochure passages per chunk (Path B)
+    product_match_max: int = 3           # max products grounded per document
+
     # Groq two-model strategy + token rate limiting (Priority 4).
     # classify = cheap/fast first pass, citation = stronger generation.
     groq_classify_model: str = "llama-3.1-8b-instant"
