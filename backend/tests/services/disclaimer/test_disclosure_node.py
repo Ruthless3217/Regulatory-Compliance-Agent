@@ -36,18 +36,26 @@ def _chunks(text):
 
 
 def test_node_flags_missing_ulip_and_tax(monkeypatch):
+    from pathlib import Path
+    from app.services.disclaimer import registry as reg_mod
+    _disclaimers_dir = Path(__file__).resolve().parents[3] / "data" / "disclaimers"
+    monkeypatch.setattr("app.config.settings.disclaimers_dir", str(_disclaimers_dir))
     monkeypatch.setattr("app.config.settings.disclosure_check_enabled", True)
     monkeypatch.setattr("app.config.settings.disclosure_llm_backstop_enabled", False)
-    doc = ("Invest in our ULIP plan. Save tax under Section 80C. "
-           "Enjoy guaranteed loyalty additions.")
-    state = {"chunks": _chunks(doc), "metadata": {"product_match": []}}
-    out = asyncio.run(disclosure_node(state))
-    ids = {v["violation_metadata"]["disclaimer_id"] for v in out["violations"]}
-    assert "ulip_risk" in ids          # keyword 'ULIP'
-    assert "tax_123_80c" in ids        # 'Section 80C'
-    assert "guaranteed" in ids
-    # all are document-level findings with verbatim fixes
-    assert all(v["suggested_fix"] for v in out["violations"])
+    reg_mod._reset_singleton_for_testing()
+    try:
+        doc = ("Invest in our ULIP plan. Save tax under Section 80C. "
+               "Enjoy guaranteed loyalty additions.")
+        state = {"chunks": _chunks(doc), "metadata": {"product_match": []}}
+        out = asyncio.run(disclosure_node(state))
+        ids = {v["violation_metadata"]["disclaimer_id"] for v in out["violations"]}
+        assert "ulip_risk" in ids          # keyword 'ULIP'
+        assert "tax_123_80c" in ids        # 'Section 80C'
+        assert "guaranteed" in ids
+        # all are document-level findings with verbatim fixes
+        assert all(v["suggested_fix"] for v in out["violations"])
+    finally:
+        reg_mod._reset_singleton_for_testing()
 
 
 def test_node_noop_when_disabled(monkeypatch):
@@ -75,7 +83,6 @@ def test_node_fail_closed_when_registry_has_corrupted_file(monkeypatch, tmp_path
     purely offline via loaded_ok=False.
     """
     import json as _json
-    from app.services.disclaimer.registry import _REQUIRED_FIELDS
 
     # One malformed JSON (will fail parse) alongside one syntactically valid disclaimer.
     (tmp_path / "broken.json").write_text("{not valid json", encoding="utf-8")
