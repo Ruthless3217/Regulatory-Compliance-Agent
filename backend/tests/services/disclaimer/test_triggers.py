@@ -93,3 +93,25 @@ def test_resolve_required_degrades_on_llm_error():
     assert degraded is True
     assert "tax_123_80c" in required  # deterministic still fired
     assert required["tax_123_80c"]["source"] == "deterministic"
+
+
+def test_resolve_required_combined_supersedes_deterministic_component():
+    # Deterministic fires the 80C component (tax_123_80c via '80c'); the LLM
+    # backstop surfaces the broader combined 123-&-11 disclaimer, whose verbatim
+    # text covers BOTH Section 123/80C and Section 11/10(10D). The combined
+    # supersedes the narrower component, so the checker verifies the combined
+    # text (surfaced as source='llm'). This is the ONE case where an LLM
+    # obligation replaces a deterministic one — only because it fully covers it.
+    ctx = ProductContext(is_ulip=False, is_par=False, has_product=True)
+    doc = "tax-free under Section 80C"
+
+    async def fake_llm(_doc, _types):
+        return ["tax_123_and_11"]  # llm_obligation_type of the combined disclaimer
+
+    required, degraded = asyncio.run(
+        resolve_required(doc, ctx, REG, llm_call=fake_llm, enable_llm=True)
+    )
+    assert "tax_123_and_11" in required
+    assert required["tax_123_and_11"]["source"] == "llm"
+    assert "tax_123_80c" not in required   # component superseded by the combined
+    assert degraded is False

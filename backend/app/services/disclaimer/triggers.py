@@ -2,8 +2,10 @@
 
 Hybrid: a deterministic layer (product line + keyword regex) unioned with an
 optional LLM backstop that recovers paraphrased obligations the regex misses.
-The LLM only ADDS obligations; it never removes a deterministic one. If it
-fails, we fall back to deterministic-only and flag recall as degraded.
+The LLM only ADDS obligations; it never drops one except to let a broader
+combined disclaimer it also surfaced supersede the narrower components that
+combined text fully covers (see _SUPPRESSES). If it fails, we fall back to
+deterministic-only and flag recall as degraded.
 """
 from __future__ import annotations
 
