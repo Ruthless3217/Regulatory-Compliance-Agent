@@ -52,9 +52,26 @@ def classify(
     doc_norm = normalize(document_text)
     req_norm = normalize(required_text)
     sim = _similarity(req_norm, doc_norm)
-    anchors_ok = _anchors_present(anchors or [], doc_norm)
+    declared_anchors = anchors or []
+    anchors_ok = _anchors_present(declared_anchors, doc_norm)
     if sim >= present_threshold and anchors_ok:
         return "present", sim
-    if sim >= altered_threshold or (sim >= present_threshold and not anchors_ok):
+
+    # A declared statutory anchor is ABSENT — the disclaimer's defining content
+    # (e.g. the ULIP investment-risk line) is not in the document. Treat this as
+    # "altered" (present-but-tampered) ONLY when the body is otherwise strongly
+    # present (sim >= present_threshold); otherwise it is effectively MISSING.
+    # A high partial-ratio overlap with unrelated text (a shared footer that is a
+    # substring of the required text) must NEVER soften a genuine omission of a
+    # mandated statutory line — that omission must keep full severity so the
+    # critical-cap can bind.
+    if declared_anchors and not anchors_ok:
+        if sim >= present_threshold:
+            return "altered", sim
+        return "missing", sim
+
+    # No declared anchors (or all anchors present but similarity below present):
+    # partial presence ⇒ altered, otherwise missing.
+    if sim >= altered_threshold:
         return "altered", sim
     return "missing", sim
