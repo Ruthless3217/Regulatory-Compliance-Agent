@@ -8,6 +8,7 @@ from .graph.nodes import (
     preprocess_node,
     dispatch_node,
     analysis_node,
+    disclosure_node,
     scoring_node,
     refinement_node
 )
@@ -44,6 +45,7 @@ class ComplianceOrchestrator:
         workflow.add_node("preprocess_node", preprocess_node)
         workflow.add_node("dispatch_node", dispatch_node)
         workflow.add_node("analysis_node", analysis_node)
+        workflow.add_node("disclosure_node", disclosure_node)
         workflow.add_node("scoring_node", scoring_node)
         workflow.add_node("refinement_node", refinement_node)
 
@@ -51,7 +53,8 @@ class ComplianceOrchestrator:
         workflow.add_edge(START, "preprocess_node")
         workflow.add_edge("preprocess_node", "dispatch_node")
         workflow.add_edge("dispatch_node", "analysis_node")
-        workflow.add_edge("analysis_node", "scoring_node")
+        workflow.add_edge("analysis_node", "disclosure_node")
+        workflow.add_edge("disclosure_node", "scoring_node")
         workflow.add_edge("scoring_node", "refinement_node")
         workflow.add_edge("refinement_node", END)
 

@@ -41,6 +41,7 @@ class ComplianceEngine:
         "analysis_incomplete",
         "rag_degraded",
         "rules_unavailable",
+        "disclosure_unavailable",
     }
 
     @staticmethod
