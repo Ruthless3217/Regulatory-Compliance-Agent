@@ -12,6 +12,7 @@ import datetime
 import asyncio
 from typing import Dict, Any, List, Optional
 from langchain_core.messages import AIMessage
+from pydantic import BaseModel, Field
 
 try:
     from langsmith import traceable
@@ -339,6 +340,29 @@ def _disclosure_finding_to_violation(
             "trigger_provenance": provenance,
         },
     }
+
+
+class _ObligationResult(BaseModel):
+    obligations: List[str] = Field(default_factory=list)
+
+
+async def _disclosure_llm_call(document_text: str, obligation_types: List[str]) -> List[str]:
+    """LLM backstop: which obligation types apply to this content? Returns a
+    subset of obligation_types. Uses the critic profile (cheap, independent)."""
+    from app.services.llm_service import critic_llm_service
+    prompt = (
+        "You classify which mandatory-disclaimer obligations apply to the marketing "
+        "content below. Consider paraphrases, not just exact phrases (e.g. 'our fund "
+        "grew 12% last year' implies a past-performance obligation).\n\n"
+        f"Allowed obligation types: {obligation_types}\n\n"
+        f"CONTENT:\n{document_text[:6000]}\n\n"
+        "Return the obligation types that apply."
+    )
+    result = await critic_llm_service.generate_structured_response(
+        prompt=prompt, output_model=_ObligationResult,
+        tool_name="disclosure_backstop", temperature=0.0,
+    )
+    return [t for t in (result.obligations or []) if t in obligation_types]
 
 
 def _normalize_ws(s: str) -> str:
@@ -1142,6 +1166,66 @@ def _log_grade_error(chunk_id, violation: Dict, errors: List[str]) -> None:
     os.makedirs("logs", exist_ok=True)
     with open(os.path.join("logs", "grade_errors.log"), "a", encoding="utf-8") as f:
         f.write(_json.dumps({"chunk_id": str(chunk_id), "errors": errors, "violation": violation}) + "\n")
+
+
+@traceable(run_type="chain", name="graph.disclosure_node")
+async def disclosure_node(state: ComplianceState) -> Dict:
+    """Deterministic mandatory-disclosure checker. Runs after analysis so it
+    sees the whole document + resolved product. Emits document-level findings
+    for missing/altered mandated disclaimers; fails closed if the registry is
+    unavailable. See docs/superpowers/specs/2026-06-26-mandatory-disclosure-checker-design.md."""
+    from app.config import settings as _s
+    if not _s.disclosure_check_enabled:
+        return {}
+
+    from app.services.disclaimer.registry import get_disclaimer_registry
+    from app.services.disclaimer.triggers import derive_product_context, resolve_required
+    from app.services.disclaimer.matcher import classify
+    from app.services.fact_card_service import get_fact_card_service
+
+    md = dict(state.get("metadata") or {})
+    registry = get_disclaimer_registry()
+    if not registry.loaded_ok:
+        logger.error("disclosure_node: registry unavailable — failing closed")
+        md["degraded"] = "disclosure_unavailable"
+        return {"metadata": md}
+
+    document_text = "\n".join((c.get("text") or "") for c in (state.get("chunks") or []))
+    if not document_text.strip():
+        return {}
+
+    ctx = derive_product_context(md.get("product_match") or [], get_fact_card_service())
+    required, recall_degraded = await resolve_required(
+        document_text, ctx, registry,
+        llm_call=_disclosure_llm_call,
+        enable_llm=_s.disclosure_llm_backstop_enabled,
+    )
+
+    violations: List[Dict[str, Any]] = []
+    summary: List[Dict[str, Any]] = []
+    for did, info in required.items():
+        d = registry.get(did)
+        if d is None:
+            continue
+        status, sim = classify(d.text, d.anchors, document_text, d.present_threshold, d.altered_threshold)
+        summary.append({"disclaimer_id": did, "status": status, "similarity": round(sim, 3),
+                        "provenance": info["provenance"], "source": info["source"]})
+        if status == "present":
+            continue
+        confidence = 1.0 if info["source"] == "deterministic" else 0.85
+        violations.append(_disclosure_finding_to_violation(
+            d, status=status, similarity=sim, provenance=info["provenance"], confidence=confidence))
+
+    if recall_degraded:
+        md["disclosure_recall_degraded"] = True
+
+    logger.info("disclosure_node: %d required, %d findings", len(required), len(violations))
+    return {
+        "violations": violations,
+        "disclosure_findings": violations,
+        "required_disclosures": summary,
+        "metadata": md,
+    }
 
 
 @traceable(run_type="chain", name="graph.scoring_node")
