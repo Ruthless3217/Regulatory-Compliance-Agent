@@ -1222,7 +1222,7 @@ async def disclosure_node(state: ComplianceState) -> Dict:
     logger.info("disclosure_node: %d required, %d findings", len(required), len(violations))
     return {
         "violations": violations,
-        "disclosure_findings": violations,
+        "disclosure_findings": list(violations),
         "required_disclosures": summary,
         "metadata": md,
     }

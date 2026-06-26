@@ -1,5 +1,10 @@
+import asyncio
+
 from app.services.disclaimer.registry import Disclaimer
-from app.services.agents.graph.nodes import _disclosure_finding_to_violation
+from app.services.agents.graph.nodes import (
+    _disclosure_finding_to_violation,
+    disclosure_node,
+)
 
 D = Disclaimer(
     id="ulip_risk", type="ULIP Disclaimer", text="IN THIS POLICY, THE INVESTMENT RISK ...",
@@ -24,11 +29,6 @@ def test_altered_uses_altered_severity():
     v = _disclosure_finding_to_violation(D, status="altered", similarity=0.6, provenance="kw", confidence=0.85)
     assert v["severity"] == "high"
     assert v["confidence"] == 0.85
-
-
-import asyncio
-from unittest.mock import patch
-from app.services.agents.graph.nodes import disclosure_node
 
 
 def _chunks(text):
