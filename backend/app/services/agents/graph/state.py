@@ -52,3 +52,9 @@ class ComplianceState(TypedDict):
 
     # HITL feedback
     user_feedback: Optional[str]
+
+    # Mandatory-Disclosure Checker (2026-06-26). Set by disclosure_node.
+    # required_disclosures: per-doc obligation summary for the audit trail.
+    # disclosure_findings: the missing/altered findings (also merged into violations).
+    required_disclosures: List[Dict[str, Any]]
+    disclosure_findings: List[Dict[str, Any]]

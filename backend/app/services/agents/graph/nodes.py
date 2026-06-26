@@ -290,6 +290,57 @@ def _product_fact_finding_to_violation(
     }
 
 
+def _disclosure_finding_to_violation(
+    d: "Any", *, status: str, similarity: float, provenance: str, confidence: float
+) -> Dict[str, Any]:
+    """Map one missing/altered mandated disclaimer to a violation dict.
+
+    Document-level (chunk_id=None, empty current_text): a disclaimer obligation
+    is about the whole document, not a single span. The verbatim registry text
+    is surfaced as suggested_fix — paste-ready, never paraphrased. Severity is
+    the registry's per-disclaimer value (one notch lower for 'altered')."""
+    severity = d.severity if status == "missing" else d.altered_severity
+    if status == "missing":
+        desc = f"Required disclaimer missing: {d.type}. ({provenance})"
+    else:
+        desc = (
+            f"Disclaimer present but altered/incomplete: {d.type} "
+            f"(similarity {similarity:.2f}). Replace with the approved wording. ({provenance})"
+        )
+    return {
+        "category": "mandatory disclosure",
+        "severity": severity,
+        "suppressed": False,
+        "suppressed_reason": None,
+        "description": desc,
+        "current_text": "",
+        "suggested_fix": d.text,
+        "auto_fixable": False,
+        "confidence": float(confidence),
+        "rule_id": None,
+        "regulator_quote": None,
+        "cited_precedent_id": None,
+        "cited_document_id": None,
+        "cited_source_file": None,
+        "cited_anchor_text": None,
+        "cited_comment_verbatim": None,
+        "cited_final_text": None,
+        "cited_why_rationale": None,
+        "cited_guideline_ref": None,
+        "similarity_score": float(similarity),
+        "chunk_id": None,
+        "chunk_index": 0,
+        "location": "document",
+        "violation_metadata": {
+            "grounding": "disclosure",
+            "disclaimer_id": d.id,
+            "disclaimer_type": d.type,
+            "match_status": status,
+            "trigger_provenance": provenance,
+        },
+    }
+
+
 def _normalize_ws(s: str) -> str:
     """Lowercase + collapse all whitespace runs to single spaces."""
     return " ".join((s or "").lower().split())
@@ -376,7 +427,7 @@ def verify_evidence_grounding(
 _SEVERITY_RANK = {
     "critical": 5, "high": 4, "moderate": 3, "medium": 3, "low": 2, "informational": 1,
 }
-_TIER_RANK = {"product_fact": 4, "precedent": 3, "rule": 2, "novel": 1}
+_TIER_RANK = {"disclosure": 5, "product_fact": 4, "precedent": 3, "rule": 2, "novel": 1}
 
 
 def _violation_rank(v: Dict[str, Any]) -> tuple:
