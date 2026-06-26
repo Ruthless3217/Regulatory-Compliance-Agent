@@ -16,10 +16,21 @@ from .registry import Disclaimer, DisclaimerRegistry
 
 logger = logging.getLogger(__name__)
 
-# Disclaimer ids that belong to a mutually-exclusive family. Within a family,
-# collapse_precedence keeps only the highest-precedence fired member.
-_TAX_FAMILY = {"tax_123_80c", "tax_11_10_10d", "tax_123_and_11", "tax_generic"}
-_PRODUCT_FAMILY = {"general_product", "generic_non_product"}
+# When the KEY disclaimer fires, the listed disclaimers become redundant and are
+# dropped. This encodes spec precedence WITHOUT numeric tie-breaking:
+#   - a specific tax disclaimer suppresses the GENERIC tax fallback;
+#   - the COMBINED 123-&-11 disclaimer (fires only when BOTH "Section 123" and
+#     "Section 11" appear) supersedes its two single-section components;
+#   - a resolved-product disclaimer suppresses the no-product generic.
+# The two single-section tax disclaimers (80C / 10(10D)) are NOT mutually
+# exclusive: a document claiming both obligations must carry both.
+# (User decision 2026-06-26.)
+_SUPPRESSES: Dict[str, set] = {
+    "tax_123_80c": {"tax_generic"},
+    "tax_11_10_10d": {"tax_generic"},
+    "tax_123_and_11": {"tax_generic", "tax_123_80c", "tax_11_10_10d"},
+    "general_product": {"generic_non_product"},
+}
 
 
 @dataclass(frozen=True)
@@ -76,22 +87,16 @@ def deterministic_triggers(
 
 
 def collapse_precedence(fired: Dict[str, str], registry: DisclaimerRegistry) -> Dict[str, str]:
-    """Within each mutually-exclusive family keep only the highest-precedence
-    fired member; pass everything else through unchanged."""
-    def _winner(ids: List[str]) -> Optional[str]:
-        present = [i for i in ids if i in fired]
-        if not present:
-            return None
-        return max(present, key=lambda i: (registry.get(i).precedence if registry.get(i) else 0))
-
+    """Drop disclaimers made redundant by a more-specific/authoritative fired
+    sibling (see _SUPPRESSES). Order-independent and deterministic — no
+    precedence-number tie-breaking. `registry` is retained for interface
+    stability and to ignore ids it does not recognize."""
     out = dict(fired)
-    for family in (_TAX_FAMILY, _PRODUCT_FAMILY):
-        win = _winner(list(family))
-        if win is None:
+    for fired_id in list(fired):
+        if registry.get(fired_id) is None:
             continue
-        for i in family:
-            if i != win and i in out:
-                del out[i]
+        for suppressed in _SUPPRESSES.get(fired_id, ()):
+            out.pop(suppressed, None)
     return out
 
 

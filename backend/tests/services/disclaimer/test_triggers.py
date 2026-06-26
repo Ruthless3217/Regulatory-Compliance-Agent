@@ -50,6 +50,26 @@ def test_precedence_drops_generic_tax_when_specific_fires():
     assert "generic_non_product" not in kept  # product wins over non-product
 
 
+def test_precedence_two_specific_tax_coexist():
+    # 80C and 10(10D) are distinct obligations — both survive; only generic drops.
+    fired = {"tax_123_80c": "kw", "tax_11_10_10d": "kw", "tax_generic": "kw"}
+    kept = collapse_precedence(fired, REG)
+    assert "tax_123_80c" in kept
+    assert "tax_11_10_10d" in kept
+    assert "tax_generic" not in kept
+
+
+def test_precedence_combined_supersedes_components():
+    # The combined 123-&-11 disclaimer makes the single-section ones redundant.
+    fired = {"tax_123_and_11": "kw", "tax_123_80c": "kw",
+             "tax_11_10_10d": "kw", "tax_generic": "kw"}
+    kept = collapse_precedence(fired, REG)
+    assert "tax_123_and_11" in kept
+    assert "tax_123_80c" not in kept
+    assert "tax_11_10_10d" not in kept
+    assert "tax_generic" not in kept
+
+
 def test_resolve_required_unions_llm_backstop():
     ctx = ProductContext(is_ulip=False, is_par=False, has_product=True)
     doc = "Our fund delivered strong double-digit growth last year."  # no 'past performance' literal
