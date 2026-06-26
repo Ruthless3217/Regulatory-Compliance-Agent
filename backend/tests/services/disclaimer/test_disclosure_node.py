@@ -74,6 +74,51 @@ def test_node_fail_closed_when_registry_unavailable(monkeypatch, tmp_path):
     reg_mod._reset_singleton_for_testing()
 
 
+def test_node_llm_backstop_failure_degrades_recall(monkeypatch):
+    """LLM backstop raises → recall_degraded=True, but deterministic findings still emit."""
+    from pathlib import Path
+    from app.services.disclaimer import registry as reg_mod
+    _disclaimers_dir = Path(__file__).resolve().parents[3] / "data" / "disclaimers"
+    monkeypatch.setattr("app.config.settings.disclaimers_dir", str(_disclaimers_dir))
+    monkeypatch.setattr("app.config.settings.disclosure_check_enabled", True)
+    monkeypatch.setattr("app.config.settings.disclosure_llm_backstop_enabled", True)
+    reg_mod._reset_singleton_for_testing()
+    try:
+        async def boom(_doc, _types):
+            raise RuntimeError("llm backstop down")
+        monkeypatch.setattr("app.services.agents.graph.nodes._disclosure_llm_call", boom)
+        doc = "Invest in our ULIP plan. Save tax under Section 80C."
+        out = asyncio.run(disclosure_node({"chunks": [{"text": doc}], "metadata": {"product_match": []}}))
+        assert out["metadata"].get("disclosure_recall_degraded") is True
+        ids = {v["violation_metadata"]["disclaimer_id"] for v in out["violations"]}
+        assert "ulip_risk" in ids  # deterministic findings still emit despite the LLM failure
+    finally:
+        reg_mod._reset_singleton_for_testing()
+
+
+def test_node_llm_backstop_adds_obligation_at_0_85_confidence(monkeypatch):
+    """LLM backstop returns an obligation the regex would miss → surfaced at confidence 0.85."""
+    from pathlib import Path
+    from app.services.disclaimer import registry as reg_mod
+    _disclaimers_dir = Path(__file__).resolve().parents[3] / "data" / "disclaimers"
+    monkeypatch.setattr("app.config.settings.disclaimers_dir", str(_disclaimers_dir))
+    monkeypatch.setattr("app.config.settings.disclosure_check_enabled", True)
+    monkeypatch.setattr("app.config.settings.disclosure_llm_backstop_enabled", True)
+    reg_mod._reset_singleton_for_testing()
+    try:
+        async def fake_llm(_doc, _types):
+            return ["past_performance"]            # an obligation the regex would miss
+        monkeypatch.setattr("app.services.agents.graph.nodes._disclosure_llm_call", fake_llm)
+        doc = "Our flagship fund delivered strong double-digit growth last year."
+        out = asyncio.run(disclosure_node({"chunks": [{"text": doc}], "metadata": {"product_match": [{"uin": "X"}]}}))
+        pp = [v for v in out["violations"] if v["violation_metadata"]["disclaimer_id"] == "past_performance"]
+        assert pp, "LLM-only past_performance obligation should be surfaced"
+        assert pp[0]["confidence"] == 0.85
+        assert out["metadata"].get("disclosure_recall_degraded") is not True
+    finally:
+        reg_mod._reset_singleton_for_testing()
+
+
 def test_node_fail_closed_when_registry_has_corrupted_file(monkeypatch, tmp_path):
     """A registry with one corrupted file (partial load) must route to needs_review.
 
