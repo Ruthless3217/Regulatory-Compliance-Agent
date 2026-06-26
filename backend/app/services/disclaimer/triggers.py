@@ -2,10 +2,10 @@
 
 Hybrid: a deterministic layer (product line + keyword regex) unioned with an
 optional LLM backstop that recovers paraphrased obligations the regex misses.
-The LLM only ADDS obligations; it never drops one except to let a broader
-combined disclaimer it also surfaced supersede the narrower components that
-combined text fully covers (see _SUPPRESSES). If it fails, we fall back to
-deterministic-only and flag recall as degraded.
+The LLM only ADDS obligations; it never drops a DETERMINISTIC obligation except
+via a sanctioned combined disclaimer (_SANCTIONED_COMBINED_SUPPRESSORS) whose
+verbatim text genuinely covers the components it supersedes. If the LLM fails,
+we fall back to deterministic-only and flag recall as degraded.
 """
 from __future__ import annotations
 
@@ -33,6 +33,11 @@ _SUPPRESSES: Dict[str, set] = {
     "tax_123_and_11": {"tax_generic", "tax_123_80c", "tax_11_10_10d"},
     "general_product": {"generic_non_product"},
 }
+
+# A combined disclaimer whose verbatim text FULLY covers the obligations it
+# suppresses — so it may supersede them even when only the LLM surfaced it.
+# Everything else may NOT let an LLM-only obligation drop a deterministic one.
+_SANCTIONED_COMBINED_SUPPRESSORS = {"tax_123_and_11"}
 
 
 @dataclass(frozen=True)
@@ -130,13 +135,34 @@ async def resolve_required(
             recall_degraded = True
             fired_types = []
         llm_fired = {type_to_id[t]: t for t in (fired_types or []) if t in type_to_id}
-        # Union, then re-collapse families so an LLM-only specific tax beats the generic.
-        merged = dict(det)
+        # Union the LLM-only obligations onto the deterministic set, then apply
+        # SOURCE-GATED suppression: a DETERMINISTIC obligation may be dropped only
+        # by a deterministic-sourced suppressor, or by the sanctioned combined-tax
+        # disclaimer whose verbatim text genuinely covers its components. An LLM-only
+        # obligation may be dropped by anything. This prevents an LLM-only
+        # general_product from suppressing a deterministic generic_non_product
+        # (product-line presence is deterministic ground truth).
+        source = {did: "deterministic" for did in det}
         for did in llm_fired:
-            merged.setdefault(did, "llm_backstop")
-        merged = collapse_precedence(merged, registry)
+            source.setdefault(did, "llm")
+
+        survivors = set(source)
+        for fired_id in list(source):
+            if registry.get(fired_id) is None:
+                continue
+            suppressor_is_det = source[fired_id] == "deterministic"
+            for suppressed in _SUPPRESSES.get(fired_id, ()):
+                if suppressed not in survivors:
+                    continue
+                suppressed_is_det = source.get(suppressed) == "deterministic"
+                if suppressed_is_det and not (
+                    suppressor_is_det or fired_id in _SANCTIONED_COMBINED_SUPPRESSORS
+                ):
+                    continue  # LLM-only suppressor must not drop a deterministic obligation
+                survivors.discard(suppressed)
+
         out: Dict[str, Dict[str, str]] = {}
-        for did in merged:
+        for did in survivors:
             if did in required:
                 out[did] = required[did]
             else:

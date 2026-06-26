@@ -115,3 +115,22 @@ def test_resolve_required_combined_supersedes_deterministic_component():
     assert required["tax_123_and_11"]["source"] == "llm"
     assert "tax_123_80c" not in required   # component superseded by the combined
     assert degraded is False
+
+
+def test_llm_only_general_product_does_not_suppress_deterministic_generic_non_product():
+    # has_product=False fires generic_non_product deterministically (product-line
+    # ground truth). An LLM guess that general_product applies must NOT suppress that
+    # deterministic obligation — general_product does not COVER generic_non_product
+    # (they are mutually exclusive). Confirmed-bug regression.
+    ctx = ProductContext(is_ulip=False, is_par=False, has_product=False)
+    doc = "An informational article about retirement planning with no specific product."
+
+    async def fake_llm(_doc, _types):
+        return ["general_product"]  # llm_obligation_type of general_product
+
+    required, degraded = asyncio.run(
+        resolve_required(doc, ctx, REG, llm_call=fake_llm, enable_llm=True)
+    )
+    assert "generic_non_product" in required
+    assert required["generic_non_product"]["source"] == "deterministic"
+    assert degraded is False
