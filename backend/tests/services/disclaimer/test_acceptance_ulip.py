@@ -36,10 +36,32 @@ def test_ulip_doc_finds_core_obligations_and_caps_grade(monkeypatch):
     # All findings are document-level with a paste-ready verbatim fix.
     assert all(v["suggested_fix"] for v in out["violations"])
 
-    # The critical ULIP-risk miss (confidence 1.0) hits the critical cap → grade ≤ C, fails.
+    # The page misses 5 mandated disclaimers incl. the critical ULIP-risk line →
+    # the document FAILS outright (grade F). (The critical-cap that forces ≤ C is
+    # exercised separately below, in the fixture where it actually binds.)
     scores = ScoringService.calculate_scores(out["violations"], db=None)
-    assert scores["overall"] <= 70.0
-    assert scores["grade"] in ("C", "D", "F")
+    assert scores["grade"] == "F"
+    assert scores["overall"] < 60.0
     ulip = next(v for v in out["violations"] if v["violation_metadata"]["disclaimer_id"] == "ulip_risk")
     assert ulip["severity"] == "critical"
     assert "INVESTMENT RISK" in ulip["suggested_fix"]
+
+
+def test_single_critical_disclosure_binds_the_grade_cap():
+    # A SINGLE missing critical disclaimer (confidence 1.0) deducts only 20 pts →
+    # raw score 80 (grade B). The high-confidence-critical cap (CRITICAL_SCORE_CAP)
+    # must clamp it to exactly 70 (grade C). This is the end-to-end proof that the
+    # cap binds — the worked-example test never exercises it (that doc scores 42).
+    from app.services.disclaimer.registry import Disclaimer
+    from app.services.agents.graph.nodes import _disclosure_finding_to_violation
+    d = Disclaimer(
+        id="ulip_risk", type="ULIP Disclaimer",
+        text="IN THIS POLICY, THE INVESTMENT RISK IN INVESTMENT PORTFOLIO IS BORNE BY THE POLICYHOLDER.",
+        anchors=[], severity="critical", altered_severity="high", triggers={},
+        present_threshold=0.85, altered_threshold=0.45, precedence=100, source="x",
+    )
+    v = _disclosure_finding_to_violation(d, status="missing", similarity=0.0,
+                                         provenance="kw", confidence=1.0)
+    scores = ScoringService.calculate_scores([v], db=None)
+    assert scores["overall"] == 70.0   # clamped from raw 80; without the cap this grades B
+    assert scores["grade"] == "C"
