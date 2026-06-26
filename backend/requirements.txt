@@ -75,6 +75,11 @@ pinecone==9.0.1
 # RAG — Cohere embeddings (loaded lazily; only required when
 # RAG_EMBEDDING_PROVIDER=cohere).
 cohere>=5.13.0  # NOT INSTALLED — pin manually
+# RAG — Azure AI Foundry model inference (loaded lazily; only required when
+# RAG_EMBEDDING_PROVIDER=azure_cohere). Serves Cohere embed/rerank deployed in
+# the Foundry project. aiohttp backs azure-core's async transport.
+azure-ai-inference>=1.0.0b9
+aiohttp>=3.10.0
 
 # Precedent compliance engine (Phase 1)
 rapidfuzz==3.14.5

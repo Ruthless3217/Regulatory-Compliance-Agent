@@ -170,6 +170,23 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     # Per-IP per-minute cap on paid LLM endpoints (cost-explosion guard, H8).
     http_rate_limit_per_min: int = 30
+    # Trust the X-Forwarded-For header for the rate-limit / budget caller key.
+    # Enable ONLY when the app sits behind a trusted reverse proxy / ingress
+    # that sets XFF — when the app is directly internet-facing this header is
+    # client-controlled and trivially spoofed, so leave it False there.
+    trust_forwarded_for: bool = False
+    # Global daily ceiling on total LLM tokens (prompt+completion) across ALL
+    # callers — the hard backstop against runaway spend. 0 disables it.
+    # Enforced via a shared Redis counter keyed on the UTC date; when Redis is
+    # unavailable the ceiling cannot be enforced and calls are allowed (the
+    # per-IP limiter still applies). Sized to your provider/Foundry quota.
+    llm_daily_token_budget: int = 0
+
+    # Chat input caps (prompt-bloat / cost guard). Bound how much client-supplied
+    # text reaches the LLM: the latest message plus a tail of conversation history.
+    chat_max_message_chars: int = 8000
+    chat_max_history_messages: int = 20
+    chat_max_history_chars: int = 4000   # per history message
 
     # File Upload
     max_upload_size: int = 52428800  # 50MB
@@ -189,8 +206,8 @@ class Settings(BaseSettings):
     langchain_project: str = "Regulatory Compliance Agent"
 
     # RAG — pluggable backend
-    rag_embedding_provider: str = "openai"        # openai | azure_openai | cohere
-    rag_vector_backend: str = "pgvector"          # pgvector | azure_search | pinecone
+    rag_embedding_provider: str = "openai"        # openai | azure_openai | azure_cohere
+    rag_vector_backend: str = "pgvector"          # pgvector | azure_search
     rag_embedding_model: str = "text-embedding-3-small"
     rag_embedding_dim: int = 1536
     rag_top_k_analysis: int = 8
@@ -227,6 +244,20 @@ class Settings(BaseSettings):
     azure_openai_api_key: str = ""
     azure_openai_api_version: str = "2024-02-01"
     azure_openai_embed_deployment: str = "text-embedding-3-small"
+
+    # Azure AI Foundry — model-inference endpoint. Cohere models (embed v3,
+    # rerank v4) deployed in the Foundry project are NOT served on the Azure
+    # OpenAI surface (.openai.azure.com); they are reached via the
+    # azure-ai-inference SDK at https://<resource>.services.ai.azure.com/models
+    # with an api-version query + key credential. Used by
+    # RAG_EMBEDDING_PROVIDER=azure_cohere. If AZURE_INFERENCE_API_KEY is empty
+    # the embedder falls back to the first LLM_API_KEY (same Foundry resource).
+    azure_inference_endpoint: str = ""              # AZURE_INFERENCE_ENDPOINT
+    azure_inference_api_key: str = ""               # AZURE_INFERENCE_API_KEY
+    azure_inference_api_version: str = "2024-05-01-preview"
+    azure_cohere_embed_deployment: str = "embed-v-3-english"   # AZURE_COHERE_EMBED_DEPLOYMENT
+    # Reserved: rerank is not wired into the pgvector retrieval path yet.
+    azure_cohere_rerank_deployment: str = ""        # AZURE_COHERE_RERANK_DEPLOYMENT
 
     # Azure AI Search (v2, vector store)
     azure_search_endpoint: str = ""
@@ -305,6 +336,8 @@ class Settings(BaseSettings):
     pinecone_namespace_chunks: str = "rag_chunks"
     pinecone_namespace_srcdocs: str = "rag_source_docs"
 
+=======
+>>>>>>> origin/main
     class Config:
         env_file = ".env"
         case_sensitive = False

@@ -1,5 +1,6 @@
-# Local override (auto-merged by docker compose) — pulls Groq config from .env
-# and remaps frontend to 3001 (3000 is taken by another local Next.js dev).
+# Local override (auto-merged by docker compose). Backend config comes from
+# .env via env_file in docker-compose.yml; this only remaps the frontend to
+# 3001 (3000 is taken by another local Next.js dev).
 services:
   backend:
     environment:

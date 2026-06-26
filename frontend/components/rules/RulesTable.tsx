@@ -1,12 +1,12 @@
 "use client";
 import * as React from "react";
 import { toast } from "sonner";
-import { Pencil, Check, X } from "lucide-react";
+import { Pencil, Check, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge, Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { categoryLabel, normalizeSeverity } from "@/lib/format";
-import { updateRule } from "@/lib/api";
+import { categoryLabel } from "@/lib/format";
+import { updateRule, deleteRule } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { Rule } from "@/lib/types";
 
@@ -32,7 +32,7 @@ export function RulesTable({ initialRules }: Props) {
 
   const filtered = rules.filter((r) => {
     if (cat !== "all" && r.category.toLowerCase() !== cat) return false;
-    if (sev !== "all" && normalizeSeverity(r.severity) !== sev) return false;
+    if (sev !== "all" && r.severity.toLowerCase() !== sev) return false;
     if (act === "active" && !r.is_active) return false;
     if (act === "inactive" && r.is_active) return false;
     return true;
@@ -80,6 +80,22 @@ export function RulesTable({ initialRules }: Props) {
     }
   };
 
+  const remove = async (r: Rule) => {
+    const preview = r.rule_text.length > 120 ? `${r.rule_text.slice(0, 120)}…` : r.rule_text;
+    if (!confirm(`Delete this rule? This cannot be undone.\n\n"${preview}"`)) return;
+    setBusy(r.id, true);
+    try {
+      await deleteRule(r.id);
+      setRules((rs) => rs.filter((x) => x.id !== r.id));
+      if (editingId === r.id) cancelEdit();
+      toast.success("Rule deleted");
+    } catch (e) {
+      toast.error(`Delete failed: ${(e as Error).message}`);
+    } finally {
+      setBusy(r.id, false);
+    }
+  };
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -101,7 +117,7 @@ export function RulesTable({ initialRules }: Props) {
               <th className="px-4 py-3 micro-label w-[90px]">Severity</th>
               <th className="px-4 py-3 micro-label">Rule</th>
               <th className="px-4 py-3 micro-label w-[110px] text-right">Status</th>
-              <th className="px-4 py-3 micro-label w-[100px] text-right">Actions</th>
+              <th className="px-4 py-3 micro-label w-[120px] text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -154,9 +170,21 @@ export function RulesTable({ initialRules }: Props) {
                         </Button>
                       </div>
                     ) : (
-                      <Button variant="ghost" size="icon" onClick={() => startEdit(r)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="inline-flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => startEdit(r)} title="Edit rule">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => remove(r)}
+                          disabled={pending.has(r.id)}
+                          title="Delete rule"
+                          className="text-muted-foreground hover:text-sev-critical"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     )}
                   </td>
                 </tr>

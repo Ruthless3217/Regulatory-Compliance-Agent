@@ -107,8 +107,8 @@ services:
     volumes:
       - ./backend/scripts/db_backup.sh:/scripts/db_backup.sh:ro
       - ./backend/backups:/backups
-    entrypoint: ["sh", "-c"]
-    command: ["while true; do /scripts/db_backup.sh || true; sleep 86400; done"]
+    entrypoint: [ "sh", "-c" ]
+    command: [ "while true; do /scripts/db_backup.sh || true; sleep 86400; done" ]
 
   frontend:
     build:

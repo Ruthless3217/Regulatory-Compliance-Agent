@@ -2,7 +2,7 @@ import json
 import asyncio
 import time
 import os
-from typing import Dict, Any, Optional, Type, TypeVar, AsyncIterator, List
+from typing import Dict, Any, Optional, Type, TypeVar, AsyncIterator, List, Callable
 from sqlalchemy.orm import Session
 import logging
 from datetime import datetime
@@ -38,6 +38,18 @@ except Exception:  # pragma: no cover
 T = TypeVar("T", bound=BaseModel)
 
 logger = logging.getLogger(__name__)
+
+
+async def _record_budget_tokens(tokens: int) -> None:
+    """Add real token usage to the global daily budget counter. Best-effort:
+    a budget/Redis hiccup must never break an LLM call (imported lazily to
+    avoid a circular import at module load)."""
+    try:
+        from .llm_budget import record_tokens
+
+        await record_tokens(tokens)
+    except Exception:  # pragma: no cover - defensive
+        pass
 
 
 class LLMUnavailableError(RuntimeError):
@@ -225,7 +237,10 @@ class LLMService:
 
         client_kwargs: Dict[str, Any] = {
             "api_key": api_key or "placeholder",
-            "base_url": self.base_url,
+            # Bound every call so a hung provider can't pin an async worker
+            # forever; SDK-level retries cover transient transport blips.
+            "timeout": settings.llm_request_timeout,
+            "max_retries": settings.llm_max_retries,
         }
         if http_client is not None:
             client_kwargs["http_client"] = http_client
@@ -247,12 +262,23 @@ class LLMService:
         return params
 
     async def health_check(self) -> bool:
-        """Check if LLM service is available."""
+        """Check if LLM service is available.
+
+        Azure OpenAI does not expose ``/models`` on the resource root, so
+        ``models.list()`` 404s there even when chat calls succeed. Treat that as
+        available rather than failing the probe (and warning about a non-issue).
+        """
         try:
             await self.client.models.list()
             logger.info(f"✅ LLM service available with model '{self.model}'")
             return True
         except Exception as e:
+            if settings.llm_is_azure:
+                logger.info(
+                    f"Azure endpoint has no models.list; assuming deployment "
+                    f"'{self.model}' is available (chat calls verified at runtime)"
+                )
+                return True
             logger.warning(f"LLM health check failed: {str(e)}")
             return False
 
@@ -326,8 +352,13 @@ class LLMService:
         system_prompt: Optional[str] = None,
         history: Optional[List[Dict[str, str]]] = None,
         temperature: float = 0.7,
+        on_usage: Optional[Callable[[int], None]] = None,
     ) -> AsyncIterator[str]:
-        """Stream response tokens from LLM. Yields text deltas."""
+        """Stream response tokens from LLM. Yields text deltas.
+
+        ``on_usage`` (optional) is invoked once with the real total token count
+        from the provider's final usage chunk (requires stream_options below).
+        """
         messages: List[Dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -402,13 +433,18 @@ class LLMService:
         db: Session = None,
         tool_name: str = "llm_structured",
         temperature: float = 0.2,
+        model: Optional[str] = None,
     ) -> T:
         """Generate a structured response validated against a Pydantic model.
 
-        Drives the request across all configured API keys: when a key is over
-        its daily budget (proactive) or returns HTTP 429 (reactive) we rotate
-        to the next key. Only when every key is exhausted do we fail closed.
+        ``model`` overrides the deployment for this call (e.g. the cheap
+        LLM_CLASSIFY_MODEL for the critic pass); it defaults to LLM_MODEL.
+
+        Drives the request across all configured API keys: when a key returns
+        HTTP 429 we rotate to the next key. Only when every key is exhausted do
+        we fail closed.
         """
+        use_model = model or self.model
         schema_instruction = (
             f"\nYou must output JSON that adheres to this schema:\n"
             f"{output_model.model_json_schema()}\n"
@@ -434,7 +470,6 @@ class LLMService:
             )
 
         last_exc: Optional[Exception] = None
-        daily_blocked = 0
         pool = self._client_pool
         for key_id, client in pool:
             # Fresh message copy per key — a failed key's JSON-correction turns
@@ -469,10 +504,9 @@ class LLMService:
             try:
                 return await self._structured_attempts(
                     client=client,
-                    limiter=limiter,
-                    token_estimate=token_estimate,
                     output_model=output_model,
                     current_messages=current_messages,
+                    model=use_model,
                     prompt=prompt,
                     system_prompt=system_prompt,
                     context=context,
@@ -482,17 +516,12 @@ class LLMService:
                     temperature=temperature,
                 )
             except _RateLimitFailover as e:
-                logger.warning(f"[failover] key …{key_id} hit 429 (TPM/TPD); trying next key")
+                logger.warning(f"[failover] key …{key_id} hit 429; trying next key")
                 last_exc = e.__cause__ or e
                 continue
 
         # Every key is exhausted — fail closed (callers must not treat this as a
         # clean document; see LLMUnavailableError).
-        if pool and daily_blocked == len(pool):
-            # All keys over their daily budget → re-raise DailyLimitApproaching so
-            # the caller queues the submission (status=pending_token_budget) for
-            # the daily reset rather than failing it permanently.
-            raise last_exc
         raise LLMUnavailableError(
             f"All {len(pool)} LLM key(s) exhausted; last error: {last_exc}"
         ) from last_exc
@@ -501,10 +530,9 @@ class LLMService:
         self,
         *,
         client,
-        limiter,
-        token_estimate: int,
         output_model: Type[T],
         current_messages: list,
+        model: str,
         prompt: str,
         system_prompt: Optional[str],
         context: Optional[Dict[str, Any]],
@@ -526,14 +554,17 @@ class LLMService:
 
         for attempt in range(max_retries):
             try:
-                response_wrapper = await client.chat.completions.with_raw_response.create(
-                    model=self.model,
+                # Plain create (not with_raw_response): standard for Azure/OpenAI
+                # and the path wrap_openai instruments, so token usage is
+                # captured on the LangSmith run automatically. (The old raw path
+                # existed only to parse Gemini's non-standard usageMetadata.)
+                response = await client.chat.completions.create(
+                    model=model,
                     messages=current_messages,
                     response_format={"type": "json_object"},
                     **self._gen_params(temperature),
                 )
 
-                response = response_wrapper.parse()
                 response_text = response.choices[0].message.content.strip()
 
                 # FAIL CLOSED on output truncation. finish_reason='length' means

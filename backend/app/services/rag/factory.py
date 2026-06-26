@@ -27,10 +27,10 @@ def get_embedder() -> Embedder:
         from app.services.rag.embedders.openai_embedder import OpenAIEmbedder
         logger.info("RAG embedder: OpenAIEmbedder")
         return OpenAIEmbedder()
-    if provider == "cohere":
-        from app.services.rag.embedders.cohere_embedder import CohereEmbedder
-        logger.info("RAG embedder: CohereEmbedder")
-        return CohereEmbedder()
+    if provider == "azure_cohere":
+        from app.services.rag.embedders.azure_cohere_embedder import AzureCohereEmbedder
+        logger.info("RAG embedder: AzureCohereEmbedder")
+        return AzureCohereEmbedder()
     raise RAGDegraded(f"Unknown RAG_EMBEDDING_PROVIDER: {provider}")
 
 
@@ -41,10 +41,6 @@ def get_vector_store() -> VectorStore:
         from app.services.rag.stores.azure_search_store import AzureSearchStore
         logger.info("RAG vector store: AzureSearchStore")
         return AzureSearchStore()
-    if backend == "pinecone":
-        from app.services.rag.stores.pinecone_store import PineconeStore
-        logger.info("RAG vector store: PineconeStore")
-        return PineconeStore()
     if backend == "pgvector":
         from app.services.rag.stores.pgvector_store import PgVectorStore
         logger.info("RAG vector store: PgVectorStore")

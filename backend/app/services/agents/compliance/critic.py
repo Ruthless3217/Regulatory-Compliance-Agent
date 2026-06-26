@@ -153,6 +153,9 @@ async def critique_violations(
                 "text. Return strict JSON."
             ),
             tool_name="critic_review",
+            # Cheap/fast second pass: route to LLM_CLASSIFY_MODEL (gpt-5.4-nano)
+            # when configured. The heavy citation/grading call keeps LLM_MODEL.
+            model=llm_service.classify_model,
         )
     except Exception as e:
         logger.warning(f"Critic call failed; passing primary violations through: {e}")

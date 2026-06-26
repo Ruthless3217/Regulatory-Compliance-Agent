@@ -15,13 +15,23 @@ import type {
 } from "./types";
 
 // Server-side fetches run inside the container and need the docker DNS name.
-// Browser fetches go through Next.js's /api/* proxy (see next.config rewrites).
 const SERVER_BASE =
   process.env.INTERNAL_API_BASE ||
   process.env.NEXT_PUBLIC_API_BASE ||
   "http://localhost:8000";
+
+// Browser fetch base:
+//  - Standalone/local: NEXT_PUBLIC_API_BASE is absolute (http://localhost:8000),
+//    so we route through Next.js's same-origin "/api/*" proxy (next.config
+//    rewrites). Preserves the original dev behaviour.
+//  - Shared platform: NEXT_PUBLIC_API_BASE is a relative path (e.g.
+//    "/compliance/api") that nginx maps straight to the backend, so we call it
+//    directly. (Raw fetch() is NOT auto-prefixed by basePath, hence this.)
+const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
+const BROWSER_BASE = PUBLIC_API_BASE.startsWith("/") ? PUBLIC_API_BASE : "/api";
+
 const isServer = typeof window === "undefined";
-const base = () => (isServer ? SERVER_BASE : "/api");
+const base = () => (isServer ? SERVER_BASE : BROWSER_BASE);
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
