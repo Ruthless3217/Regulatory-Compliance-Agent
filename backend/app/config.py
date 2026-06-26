@@ -257,6 +257,12 @@ class Settings(BaseSettings):
     # leaves precedent/rule/novel grading unchanged.
     product_grounding_enabled: bool = True
     product_fact_cards_dir: str = "data/product_fact_cards"
+    # Mandatory-Disclosure Checker (2026-06-26). Gates disclosure_node.
+    disclosure_check_enabled: bool = True
+    disclaimers_dir: str = "data/disclaimers"
+    # LLM backstop recovers paraphrased obligations the regex misses; when off,
+    # only deterministic (product-line + keyword) triggers fire.
+    disclosure_llm_backstop_enabled: bool = True
     product_docs_top_k: int = 3          # brochure passages per chunk (Path B)
     product_match_max: int = 3           # max products grounded per document
 
