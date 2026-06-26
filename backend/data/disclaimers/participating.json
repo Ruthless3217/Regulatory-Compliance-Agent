@@ -12,7 +12,8 @@
     "keywords_regex": [
       "\\bparticipating\\b",
       "\\bpar plan\\b",
-      "\\bbonus(es)?\\b"
+      "\\bwith[- ]profits?\\b",
+      "\\b(reversionary|terminal|interim|simple|compound|cash)\\s+bonus(es)?\\b"
     ],
     "llm_obligation_type": "participating_plan"
   },

@@ -8,7 +8,7 @@
   "triggers": {
     "product_lines": [],
     "keywords_regex": [
-      "section\\s*123(?=.*section\\s*11)"
+      "(?s)section\\s*123(?=.*section\\s*11)|section\\s*11(?=.*section\\s*123)"
     ],
     "llm_obligation_type": "tax_123_and_11"
   },

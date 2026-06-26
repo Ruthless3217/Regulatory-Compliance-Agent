@@ -117,6 +117,34 @@ def test_resolve_required_combined_supersedes_deterministic_component():
     assert degraded is False
 
 
+def test_combined_tax_fires_order_independent_and_across_newlines():
+    # Reversed order + a newline between the two section refs must still fire the
+    # combined disclaimer (and, via collapse, supersede its components).
+    ctx = ProductContext(is_ulip=False, is_par=False, has_product=False)
+    doc = "Maturity is exempt under Section 11 of the Income Tax Act.\nDeduction is available under Section 123 (old regime)."
+    fired = deterministic_triggers(doc, ctx, REG)
+    assert "tax_123_and_11" in fired
+    kept = collapse_precedence(fired, REG)
+    assert "tax_123_and_11" in kept
+    assert "tax_123_80c" not in kept and "tax_11_10_10d" not in kept  # components superseded
+
+
+def test_participating_not_required_for_non_par_doc_mentioning_bonus():
+    # A non-par ULIP doc mentioning a loyalty/no-claim "bonus" must NOT trigger the
+    # high-severity participating disclaimer (bare 'bonus' was a false-positive magnet).
+    ctx = ProductContext(is_ulip=True, is_par=False, has_product=True)
+    doc = "Enjoy guaranteed loyalty bonus and a no-claim bonus that boost your fund value."
+    fired = deterministic_triggers(doc, ctx, REG)
+    assert "participating" not in fired
+
+
+def test_participating_still_fires_on_par_context():
+    # Genuine participating context (explicit term or a participating-type bonus) must still fire.
+    ctx = ProductContext(is_ulip=False, is_par=False, has_product=True)
+    for doc in ["This is a participating with-profits plan.", "Reversionary bonus is declared annually."]:
+        assert "participating" in deterministic_triggers(doc, ctx, REG), doc
+
+
 def test_llm_only_general_product_does_not_suppress_deterministic_generic_non_product():
     # has_product=False fires generic_non_product deterministically (product-line
     # ground truth). An LLM guess that general_product applies must NOT suppress that
