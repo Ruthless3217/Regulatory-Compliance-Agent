@@ -140,7 +140,7 @@ services:
       BACKUP_DIR: /backups
       RETAIN_DAYS: "14"
     volumes:
-      - ./backend/scripts/db_backup.sh:/scripts/db_backup.sh:ro
+      - ./backend/scripts:/scripts:ro   # db_backup.sh + db_restore.sh
       - ./backend/backups:/backups
     entrypoint: ["sh", "-c"]
     command: ["while true; do /scripts/db_backup.sh || true; sleep 86400; done"]
