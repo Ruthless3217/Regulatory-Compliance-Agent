@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Union
 logger = logging.getLogger(__name__)
 
 _REQUIRED_FIELDS = ("id", "type", "text", "severity", "altered_severity", "triggers", "precedence")
+_VALID_SEVERITIES = {"critical", "high", "moderate", "low"}
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,15 @@ class DisclaimerRegistry:
             missing = [f for f in _REQUIRED_FIELDS if f not in raw]
             if missing:
                 logger.warning("DisclaimerRegistry: %s missing %s; skipping", path.name, missing)
+                continue
+            bad_sev = next(
+                (v for v in (raw["severity"], raw["altered_severity"]) if v not in _VALID_SEVERITIES),
+                None,
+            )
+            if bad_sev is not None:
+                logger.warning(
+                    "DisclaimerRegistry: %s has invalid severity %r; skipping", path.name, bad_sev
+                )
                 continue
             match = raw.get("match") or {}
             disc = Disclaimer(
