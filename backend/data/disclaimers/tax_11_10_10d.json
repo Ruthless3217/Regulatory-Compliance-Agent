@@ -8,7 +8,7 @@
   "triggers": {
     "product_lines": [],
     "keywords_regex": [
-      "\bsection\\s*11\b",
+      "\\bsection\\s*11\\b",
       "10\\s*\\(\\s*10d\\s*\\)"
     ],
     "llm_obligation_type": "tax_10_10d"

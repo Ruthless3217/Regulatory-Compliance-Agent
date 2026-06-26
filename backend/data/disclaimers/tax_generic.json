@@ -8,9 +8,9 @@
   "triggers": {
     "product_lines": [],
     "keywords_regex": [
-      "\btax benefit",
-      "\btax-free\b",
-      "\btax saving"
+      "\\btax benefit",
+      "\\btax-free\\b",
+      "\\btax saving"
     ],
     "llm_obligation_type": "tax_generic"
   },

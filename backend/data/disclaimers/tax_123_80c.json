@@ -8,8 +8,8 @@
   "triggers": {
     "product_lines": [],
     "keywords_regex": [
-      "\bsection\\s*123\b",
-      "\b80\\s*c\b"
+      "\\bsection\\s*123\\b",
+      "\\b80\\s*c\\b"
     ],
     "llm_obligation_type": "tax_80c"
   },

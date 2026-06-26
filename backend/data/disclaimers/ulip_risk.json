@@ -12,8 +12,8 @@
       "ulip"
     ],
     "keywords_regex": [
-      "\bunit[- ]linked\b",
-      "\bULIP\b"
+      "\\bunit[- ]linked\\b",
+      "\\bULIP\\b"
     ],
     "llm_obligation_type": "ulip_investment_risk"
   },

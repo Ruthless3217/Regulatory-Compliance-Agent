@@ -8,7 +8,7 @@
   "triggers": {
     "product_lines": [],
     "keywords_regex": [
-      "\bpast performance\b"
+      "\\bpast performance\\b"
     ],
     "llm_obligation_type": "past_performance"
   },
