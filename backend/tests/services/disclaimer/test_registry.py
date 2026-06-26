@@ -50,15 +50,21 @@ def test_empty_dir_is_not_loaded_ok(tmp_path):
     assert reg.all() == []
 
 
-def test_malformed_json_is_skipped_healthy_still_loads(tmp_path):
+def test_malformed_json_makes_registry_not_loaded_ok(tmp_path):
+    """A single corrupted file in the dir must flip loaded_ok to False (fail-closed).
+    The valid disclaimer still loads into _by_id for diagnostics, but the registry
+    is NOT certified healthy — disclosure_node will route to needs_review."""
     (tmp_path / "broken.json").write_text("{not valid json", encoding="utf-8")
     (tmp_path / "good.json").write_text(
         json.dumps(_valid_disclaimer_dict("good_one")), encoding="utf-8"
     )
     reg = DisclaimerRegistry(tmp_path)
-    assert reg.loaded_ok is True
-    ids = {d.id for d in reg.all()}
-    assert ids == {"good_one"}
+    # Fail-closed: one bad file poisons the whole registry.
+    assert reg.loaded_ok is False
+    # The bad filename is reported so operators know what to fix.
+    assert "broken.json" in reg.load_errors
+    # Valid data still loads for diagnostics (not silently discarded).
+    assert reg.get("good_one") is not None
 
 
 def test_invalid_severity_is_skipped(tmp_path):
@@ -72,3 +78,20 @@ def test_invalid_severity_is_skipped(tmp_path):
     ids = {d.id for d in reg.all()}
     assert "bad_sev" not in ids
     assert "ok_one" in ids
+    # Fail-closed: a bad severity file poisons the registry.
+    assert reg.loaded_ok is False
+    assert "bad_sev.json" in reg.load_errors
+
+
+def test_duplicate_id_fails_closed(tmp_path):
+    """Two files sharing the same disclaimer id must flip loaded_ok to False."""
+    (tmp_path / "first.json").write_text(
+        json.dumps(_valid_disclaimer_dict("dup_id")), encoding="utf-8"
+    )
+    (tmp_path / "second.json").write_text(
+        json.dumps(_valid_disclaimer_dict("dup_id")), encoding="utf-8"
+    )
+    reg = DisclaimerRegistry(tmp_path)
+    assert reg.loaded_ok is False
+    # The duplicate file (second alphabetically) must appear in load_errors.
+    assert "second.json" in reg.load_errors

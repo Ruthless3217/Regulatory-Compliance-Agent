@@ -38,30 +38,43 @@ class DisclaimerRegistry:
     def __init__(self, disclaimers_dir: Union[str, Path]):
         self._by_id: Dict[str, Disclaimer] = {}
         self._loaded_ok = False
+        self._discovered = 0
+        self._load_errors: List[str] = []
         self._load(Path(disclaimers_dir))
 
     def _load(self, d: Path) -> None:
         if not d.is_dir():
             logger.warning("DisclaimerRegistry: dir not found: %s", d)
             return
-        for path in sorted(d.glob("*.json")):
+        paths = sorted(d.glob("*.json"))
+        self._discovered = len(paths)
+        for path in paths:
             try:
                 raw = json.loads(path.read_text(encoding="utf-8"))
             except Exception as e:
-                logger.warning("DisclaimerRegistry: skipping malformed %s: %s", path.name, e)
+                logger.error("DisclaimerRegistry: skipping malformed %s: %s", path.name, e)
+                self._load_errors.append(path.name)
                 continue
             missing = [f for f in _REQUIRED_FIELDS if f not in raw]
             if missing:
-                logger.warning("DisclaimerRegistry: %s missing %s; skipping", path.name, missing)
+                logger.error("DisclaimerRegistry: %s missing %s; skipping", path.name, missing)
+                self._load_errors.append(path.name)
                 continue
             bad_sev = next(
                 (v for v in (raw["severity"], raw["altered_severity"]) if v not in _VALID_SEVERITIES),
                 None,
             )
             if bad_sev is not None:
-                logger.warning(
+                logger.error(
                     "DisclaimerRegistry: %s has invalid severity %r; skipping", path.name, bad_sev
                 )
+                self._load_errors.append(path.name)
+                continue
+            if raw["id"] in self._by_id:
+                logger.error(
+                    "DisclaimerRegistry: duplicate id %r in %s; skipping", raw["id"], path.name
+                )
+                self._load_errors.append(path.name)
                 continue
             match = raw.get("match") or {}
             disc = Disclaimer(
@@ -78,11 +91,19 @@ class DisclaimerRegistry:
                 source=raw.get("source", ""),
             )
             self._by_id[disc.id] = disc
-        self._loaded_ok = len(self._by_id) > 0
+        # Fail-closed: the registry is healthy ONLY if every discovered file loaded
+        # cleanly. A single corrupted/edited/duplicate file must NOT let a run certify
+        # a document with that obligation silently dropped — loaded_ok=False routes the
+        # run to needs_review via disclosure_node's existing fail-closed branch.
+        self._loaded_ok = self._discovered > 0 and not self._load_errors
 
     @property
     def loaded_ok(self) -> bool:
         return self._loaded_ok
+
+    @property
+    def load_errors(self) -> List[str]:
+        return list(self._load_errors)
 
     def all(self) -> List[Disclaimer]:
         return list(self._by_id.values())

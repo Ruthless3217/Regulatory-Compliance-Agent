@@ -64,3 +64,43 @@ def test_node_fail_closed_when_registry_unavailable(monkeypatch, tmp_path):
     out = asyncio.run(disclosure_node({"chunks": _chunks("ULIP"), "metadata": {}}))
     assert out["metadata"]["degraded"] == "disclosure_unavailable"
     reg_mod._reset_singleton_for_testing()
+
+
+def test_node_fail_closed_when_registry_has_corrupted_file(monkeypatch, tmp_path):
+    """A registry with one corrupted file (partial load) must route to needs_review.
+
+    This is the critical fail-closed guarantee: a registry that silently dropped an
+    obligation (e.g. ulip_risk.json is corrupted) must NOT certify a document clean.
+    The node must degrade to disclosure_unavailable WITHOUT making any LLM call —
+    purely offline via loaded_ok=False.
+    """
+    import json as _json
+    from app.services.disclaimer.registry import _REQUIRED_FIELDS
+
+    # One malformed JSON (will fail parse) alongside one syntactically valid disclaimer.
+    (tmp_path / "broken.json").write_text("{not valid json", encoding="utf-8")
+    valid = {
+        "id": "ulip_risk",
+        "type": "ULIP Disclaimer",
+        "text": "IN THIS POLICY, THE INVESTMENT RISK IN THE INVESTMENT PORTFOLIO IS BORNE BY THE POLICYHOLDER.",
+        "anchors": ["IN THIS POLICY, THE INVESTMENT RISK"],
+        "severity": "critical",
+        "altered_severity": "high",
+        "triggers": {"product_lines": ["ulip"], "keywords_regex": ["\\bULIP\\b"], "llm_obligation_type": "ulip_risk"},
+        "match": {"present_threshold": 0.85, "altered_threshold": 0.45},
+        "precedence": 100,
+        "source": "irdai",
+    }
+    (tmp_path / "ulip_risk.json").write_text(_json.dumps(valid), encoding="utf-8")
+
+    monkeypatch.setattr("app.config.settings.disclosure_check_enabled", True)
+    monkeypatch.setattr("app.config.settings.disclosure_llm_backstop_enabled", False)
+    monkeypatch.setattr("app.config.settings.disclaimers_dir", str(tmp_path))
+
+    from app.services.disclaimer import registry as reg_mod
+    reg_mod._reset_singleton_for_testing()
+    try:
+        out = asyncio.run(disclosure_node({"chunks": _chunks("ULIP"), "metadata": {}}))
+        assert out["metadata"]["degraded"] == "disclosure_unavailable"
+    finally:
+        reg_mod._reset_singleton_for_testing()
