@@ -336,8 +336,6 @@ class Settings(BaseSettings):
     pinecone_namespace_chunks: str = "rag_chunks"
     pinecone_namespace_srcdocs: str = "rag_source_docs"
 
-=======
->>>>>>> origin/main
     class Config:
         env_file = ".env"
         case_sensitive = False
