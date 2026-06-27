@@ -37,3 +37,7 @@ Thumbs.db
 
 # Runtime/debug artifacts
 latest_calls.txt
+
+# PII / sensitive data — never track (user-uploaded customer docs, DB dumps)
+backend/uploads/
+backend/backups/
