@@ -50,3 +50,10 @@ latest_calls.txt
 # PII / sensitive data — never track (user-uploaded customer docs, DB dumps)
 backend/uploads/
 backend/backups/
+
+# Generated exports
+exports/
+backend/exports/
+
+# PDFs (brochures, reference docs — large binaries, never track)
+*.pdf
