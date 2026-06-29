@@ -20,7 +20,10 @@ cd "$(dirname "$0")"
 ENGINE="${ENGINE:-podman}"
 
 echo "Building localhost/compliance-frontend:latest with NEXT_PUBLIC_BASE_PATH=/compliance ..."
-"$ENGINE" build --no-cache \
+# No --no-cache: changing the NEXT_PUBLIC_BASE_PATH build-arg value invalidates
+# the cache from that layer onward anyway, so the base path still bakes in,
+# while the heavy `npm ci` layer is reused (avoids "no space left on device").
+"$ENGINE" build \
   --build-arg NEXT_PUBLIC_BASE_PATH=/compliance \
   --build-arg NEXT_PUBLIC_API_BASE=/compliance/api \
   --build-arg INTERNAL_API_BASE=http://compliance-backend:8000 \
