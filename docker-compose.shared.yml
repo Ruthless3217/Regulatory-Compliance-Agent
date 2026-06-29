@@ -43,7 +43,9 @@ services:
     # No host port — reached via shared-nginx at /compliance/api/.
     environment:
       # --- Datastores: SHARED infra (container names on shared-network) ---
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@shared-postgres:5432/compliance
+      # DB name is compliance_db (the restored KB lives here); postgres superuser
+      # auth is proven working over TCP, and can read compliance_user-owned tables.
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@shared-postgres:5432/compliance_db
       REDIS_URL: redis://shared-redis:6379
       # --- Main LLM provider (analysis/grading) — Azure OpenAI by default ---
       # LLM_PROVIDER=azure routes via AsyncAzureOpenAI (api-key header +
@@ -124,7 +126,7 @@ services:
       PGPORT: "5432"
       PGUSER: postgres
       PGPASSWORD: ${POSTGRES_PASSWORD}
-      PGDATABASE: compliance
+      PGDATABASE: compliance_db
       BACKUP_DIR: /backups
       RETAIN_DAYS: "14"
     networks:
