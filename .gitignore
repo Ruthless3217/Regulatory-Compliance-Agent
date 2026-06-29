@@ -57,3 +57,11 @@ backend/exports/
 
 # PDFs (brochures, reference docs — large binaries, never track)
 *.pdf
+
+# Large input corpora / source documents (never track)
+docs/downloads/
+docs/ledger/
+
+# Runtime logs
+backend/logs/
+logs/
