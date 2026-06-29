@@ -24,6 +24,12 @@ htmlcov/
 *.swp
 *.swo
 
+# Superseded / experimental frontend — not built or deployed by any compose
+frontend-v2/
+
+# Playwright MCP page dumps (debug artifacts)
+.playwright-mcp/
+
 # OS generated files
 .DS_Store
 Thumbs.db
