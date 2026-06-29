@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Literal, Optional, Protocol, runtime_checkab
 
 IndexName = Literal[
     "rag_rules", "rag_chunks", "rag_source_docs", "rag_compliance_examples",
-    "rag_product_docs",
+    "rag_product_docs", "precedent_cases",
 ]
 
 

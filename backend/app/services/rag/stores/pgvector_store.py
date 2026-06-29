@@ -38,6 +38,9 @@ _FILTER_WHITELIST: Dict[IndexName, set] = {
         "reviewer_name", "violation_category", "severity", "document_id",
     },
     "rag_product_docs": {"product_document_id", "uin", "product_name", "block_type"},
+    "precedent_cases": {
+        "issue_type", "severity", "ticket", "is_reviewer", "guideline_ref",
+    },
 }
 
 # Per-index column lists for return shape.
@@ -62,6 +65,14 @@ _RETURN_COLUMNS: Dict[IndexName, List[str]] = {
     "rag_product_docs": [
         "id", "product_document_id", "uin", "product_name", "chunk_index",
         "page_number", "section_path", "block_type", "text",
+    ],
+    "precedent_cases": [
+        "id", "canonical_hash", "highlighted_span", "span_context",
+        "reviewer_comment", "reviewer_role", "is_reviewer", "thread", "resolved",
+        "before_text", "after_text", "regulation_tags", "issue_type",
+        "why_rationale", "guideline_ref", "severity", "product_category",
+        "ticket", "source_file", "comment_date", "occurrence_count",
+        "example_tickets",
     ],
 }
 
@@ -224,6 +235,48 @@ _UPSERT_SQL: Dict[IndexName, str] = {
           embedding_dim = EXCLUDED.embedding_dim,
           updated_at = NOW()
     """,
+    "precedent_cases": """
+        INSERT INTO precedent_cases (
+            id, canonical_hash, highlighted_span, span_context, reviewer_comment,
+            reviewer_role, is_reviewer, thread, resolved, before_text, after_text,
+            regulation_tags, issue_type, why_rationale, guideline_ref, severity,
+            product_category, ticket, source_file, comment_date, occurrence_count,
+            example_tickets, embed_text, embedding, embedding_model, embedding_dim, updated_at)
+        VALUES (
+            :id, :canonical_hash, :highlighted_span, :span_context, :reviewer_comment,
+            :reviewer_role, :is_reviewer, CAST(:thread AS JSONB), :resolved, :before_text, :after_text,
+            CAST(:regulation_tags AS JSONB), :issue_type, :why_rationale, :guideline_ref, :severity,
+            :product_category, :ticket, :source_file, CAST(:comment_date AS TIMESTAMPTZ), :occurrence_count,
+            CAST(:example_tickets AS JSONB), :embed_text, CAST(:embedding AS VECTOR),
+            :embedding_model, :embedding_dim, NOW())
+        ON CONFLICT (id) DO UPDATE SET
+          canonical_hash = EXCLUDED.canonical_hash,
+          highlighted_span = EXCLUDED.highlighted_span,
+          span_context = EXCLUDED.span_context,
+          reviewer_comment = EXCLUDED.reviewer_comment,
+          reviewer_role = EXCLUDED.reviewer_role,
+          is_reviewer = EXCLUDED.is_reviewer,
+          thread = EXCLUDED.thread,
+          resolved = EXCLUDED.resolved,
+          before_text = EXCLUDED.before_text,
+          after_text = EXCLUDED.after_text,
+          regulation_tags = EXCLUDED.regulation_tags,
+          issue_type = EXCLUDED.issue_type,
+          why_rationale = EXCLUDED.why_rationale,
+          guideline_ref = EXCLUDED.guideline_ref,
+          severity = EXCLUDED.severity,
+          product_category = EXCLUDED.product_category,
+          ticket = EXCLUDED.ticket,
+          source_file = EXCLUDED.source_file,
+          comment_date = EXCLUDED.comment_date,
+          occurrence_count = EXCLUDED.occurrence_count,
+          example_tickets = EXCLUDED.example_tickets,
+          embed_text = EXCLUDED.embed_text,
+          embedding = EXCLUDED.embedding,
+          embedding_model = EXCLUDED.embedding_model,
+          embedding_dim = EXCLUDED.embedding_dim,
+          updated_at = NOW()
+    """,
 }
 
 
@@ -312,6 +365,32 @@ def _upsert_params(index: IndexName, doc: VectorDoc) -> Dict[str, Any]:
             "section_path": f.get("section_path"),
             "block_type": f.get("block_type", "prose"),
             "text": f.get("text", ""),
+        }
+    if index == "precedent_cases":
+        return {
+            **base,
+            "canonical_hash": f["canonical_hash"],
+            "highlighted_span": f.get("highlighted_span", ""),
+            "span_context": f.get("span_context"),
+            "reviewer_comment": f.get("reviewer_comment", ""),
+            "reviewer_role": f.get("reviewer_role"),
+            "is_reviewer": bool(f.get("is_reviewer", False)),
+            "thread": json.dumps(f.get("thread") or []),
+            "resolved": bool(f.get("resolved", False)),
+            "before_text": f.get("before_text"),
+            "after_text": f.get("after_text"),
+            "regulation_tags": json.dumps(f.get("regulation_tags") or []),
+            "issue_type": f.get("issue_type"),
+            "why_rationale": f.get("why_rationale"),
+            "guideline_ref": f.get("guideline_ref"),
+            "severity": f.get("severity", "informational"),
+            "product_category": f.get("product_category"),
+            "ticket": f.get("ticket"),
+            "source_file": f.get("source_file", ""),
+            "comment_date": f.get("comment_date"),
+            "occurrence_count": int(f.get("occurrence_count", 1)),
+            "example_tickets": json.dumps(f.get("example_tickets") or []),
+            "embed_text": f.get("embed_text", ""),
         }
     raise ValueError(f"Unknown index: {index}")
 

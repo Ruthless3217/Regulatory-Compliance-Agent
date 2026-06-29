@@ -1,48 +1,50 @@
+# /opt/Regulatory-Compliance-Agent/docker-compose.shared.yml
+# =============================================================================
+# Compliance app — SHARED-INFRASTRUCTURE variant (VM ONLY).
+#
+# Postgres, Redis and the reverse proxy live in /opt/shared. This file only
+# builds + runs the app's own containers (backend, frontend) and its backup
+# sidecar. No host ports are published — shared-nginx fronts all external
+# traffic (/compliance/ and /compliance/api/).
+#
+# Run it EXPLICITLY with -f so the local-dev docker-compose.override.yml is NOT
+# auto-merged (that override remaps the frontend to 3001 and switches embeddings
+# to OpenAI — both wrong for the VM):
+#
+#     sudo /opt/shared/start-all.sh                          # infra + this app
+#     # or, this app only:
+#     cd /opt/Regulatory-Compliance-Agent \
+#       && sudo podman-compose -f docker-compose.shared.yml up -d
+#
+# NOTE: docker-compose.yml (no -f) is the self-contained LOCAL DEV stack and is
+# unrelated to this file. Start order here is handled by start-all.sh —
+# cross-project depends_on (shared-postgres/redis) is not supported by compose.
+#
+# Requires POSTGRES_PASSWORD in this directory's .env (same value as
+# /opt/shared/.env).
+# =============================================================================
+
 services:
-  postgres:
-    image: pgvector/pgvector:pg15
-    container_name: compliance-postgres
-    environment:
-      POSTGRES_USER: compliance_user
-      POSTGRES_PASSWORD: compliance_pass
-      POSTGRES_DB: compliance_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U compliance_user -d compliance_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    container_name: compliance-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: compliance-backend
+    pull_policy: never
     restart: unless-stopped
     # Resource limits so a malformed/large upload can't OOM the host (audit H7).
-    mem_limit: 2g
+    # Backend is the memory-hungry service: ~0.5G Python/UMAP/numba import baseline
+    # + a transient UMAP projection spike (hundreds of MB) + pdfplumber on a 50MB
+    # PDF can together approach/exceed 2g and OOM-kill the single uvicorn worker.
+    # 8g gives generous headroom for ingest/embedding batches, UMAP projection
+    # and concurrent PDF parsing. (Dial down toward 4g if the host is tight.)
+    mem_limit: 8g
     cpus: 2.0
-    ports:
-      - "8000:8000"
+    # No host port — reached via shared-nginx at /compliance/api/.
     environment:
-      DATABASE_URL: postgresql://compliance_user:compliance_pass@postgres:5432/compliance_db
-      REDIS_URL: redis://redis:6379
+      # --- Datastores: SHARED infra (container names on shared-network) ---
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@shared-postgres:5432/compliance
+      REDIS_URL: redis://shared-redis:6379
       # --- Main LLM provider (analysis/grading) — Azure OpenAI by default ---
       # LLM_PROVIDER=azure routes via AsyncAzureOpenAI (api-key header +
       # api-version + deployment). For azure, LLM_BASE_URL is the resource root
@@ -76,20 +78,6 @@ services:
       CHAT_LLM_MAX_TOKENS: ${CHAT_LLM_MAX_TOKENS:-0}
       CHAT_LLM_INSECURE_TLS: ${CHAT_LLM_INSECURE_TLS:-false}
       CHAT_LLM_REASONING_EFFORT: ${CHAT_LLM_REASONING_EFFORT:-}
-      # Critic LLM (dual-model generator/critic). Any CRITIC_LLM_* left empty
-      # inherits the main LLM_* config above; only CRITIC_LLM_MODEL (the nano
-      # deployment name) typically differs.
-      CRITIC_LLM_PROVIDER: ${CRITIC_LLM_PROVIDER:-}
-      CRITIC_LLM_BASE_URL: ${CRITIC_LLM_BASE_URL:-}
-      CRITIC_LLM_MODEL: ${CRITIC_LLM_MODEL:-}
-      CRITIC_LLM_API_KEY: ${CRITIC_LLM_API_KEY:-}
-      CRITIC_LLM_MAX_TOKENS: ${CRITIC_LLM_MAX_TOKENS:-0}
-      CRITIC_LLM_INSECURE_TLS: ${CRITIC_LLM_INSECURE_TLS:-false}
-      CRITIC_LLM_USE_MAX_COMPLETION_TOKENS: ${CRITIC_LLM_USE_MAX_COMPLETION_TOKENS:-}
-      CRITIC_LLM_SUPPORTS_TEMPERATURE: ${CRITIC_LLM_SUPPORTS_TEMPERATURE:-}
-      CRITIC_LLM_AZURE_API_VERSION: ${CRITIC_LLM_AZURE_API_VERSION:-}
-      CRITIC_LLM_REASONING_EFFORT: ${CRITIC_LLM_REASONING_EFFORT:-}
-      LLM_CRITIC_ENABLED: ${LLM_CRITIC_ENABLED:-true}
       GROQ_CITATION_MODEL: ${GROQ_CITATION_MODEL:-}
       GROQ_CITATION_TPM: ${GROQ_CITATION_TPM:-12000}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
@@ -98,10 +86,9 @@ services:
       CRITIC_ENABLED: ${CRITIC_ENABLED:-true}
       CROSS_CHUNK_CONTEXT_ENABLED: ${CROSS_CHUNK_CONTEXT_ENABLED:-true}
       CROSS_CHUNK_CONTEXT_TOKEN_BUDGET: ${CROSS_CHUNK_CONTEXT_TOKEN_BUDGET:-8000}
-      # --- RAG embeddings ---
-      # azure_cohere = Cohere embed served via the Azure AI Foundry /models
-      # inference surface (AZURE_INFERENCE_*). cohere/openai/azure_openai also
-      # supported — see backend/app/services/rag/factory.py.
+      # --- RAG embeddings — Cohere via Azure AI Foundry /models (azure_cohere) ---
+      # Without these the container falls back to provider=openai with an empty
+      # key and every embedding call (analysis/retrieval/ingest) errors.
       RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-azure_cohere}
       RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-embed-multilingual-v3.0}
       RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1024}
@@ -110,16 +97,14 @@ services:
       AZURE_INFERENCE_API_KEY: ${AZURE_INFERENCE_API_KEY:-}
       AZURE_INFERENCE_API_VERSION: ${AZURE_INFERENCE_API_VERSION:-2024-05-01-preview}
       AZURE_COHERE_EMBED_DEPLOYMENT: ${AZURE_COHERE_EMBED_DEPLOYMENT:-Cohere-embed-v3-multilingual}
-      # Public-Cohere / OpenAI keys — only used when RAG_EMBEDDING_PROVIDER is
-      # cohere / openai respectively. Harmless when azure_cohere is active.
       COHERE_API_KEY: ${COHERE_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ENVIRONMENT: production
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    # NOTE: no depends_on for shared-postgres/shared-redis — they live in the
+    # /opt/shared compose project and compose cannot reference across projects.
+    # start-all.sh waits for shared-postgres health before starting this app.
+    networks:
+      - shared-network
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/logs:/app/logs
@@ -127,24 +112,25 @@ services:
       - ./dataset:/app/dataset:ro
 
   # Daily Postgres backup sidecar — sleeps 24h between dumps, retains 14 days.
-  # Manual trigger: `docker exec compliance-backup /scripts/db_backup.sh`
+  # Now targets SHARED Postgres. Manual trigger:
+  #   sudo podman exec compliance-backup /scripts/db_backup.sh
   db-backup:
-    image: postgres:15-alpine
+    image: docker.io/library/postgres:15-alpine
     container_name: compliance-backup
+    pull_policy: never
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      PGHOST: postgres
+      PGHOST: shared-postgres
       PGPORT: "5432"
-      PGUSER: compliance_user
-      PGPASSWORD: compliance_pass
-      PGDATABASE: compliance_db
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: compliance
       BACKUP_DIR: /backups
       RETAIN_DAYS: "14"
+    networks:
+      - shared-network
     volumes:
-      - ./backend/scripts:/scripts:ro   # db_backup.sh + db_restore.sh
+      - ./backend/scripts/db_backup.sh:/scripts/db_backup.sh:ro
       - ./backend/backups:/backups
     entrypoint: ["sh", "-c"]
     command: ["while true; do /scripts/db_backup.sh || true; sleep 86400; done"]
@@ -158,8 +144,13 @@ services:
         NEXT_PUBLIC_API_BASE: http://localhost:8000
         INTERNAL_API_BASE: http://backend:8000
     container_name: compliance-frontend
-    ports:
-      - "3000:3000"
+    pull_policy: never
+    restart: unless-stopped
+    # Next.js standalone server (node server.js). 2g is comfortable headroom for
+    # SSR + any build-on-start; caps it so it can't balloon to host RAM.
+    mem_limit: 2g
+    cpus: 1.0
+    # No host port — reached via shared-nginx at /compliance/.
     environment:
       # Runtime so lib/api.ts can pick INTERNAL_API_BASE for SSR fetches.
       NEXT_PUBLIC_API_BASE: http://localhost:8000
@@ -167,7 +158,11 @@ services:
       NEXT_PUBLIC_BUILD_SHA: ${BUILD_SHA:-dev}
     depends_on:
       - backend
+    networks:
+      - shared-network
 
-volumes:
-  postgres_data:
-  redis_data:
+# shared-network is created and owned by /opt/shared/docker-compose.yml.
+networks:
+  shared-network:
+    external: true
+    name: shared-network

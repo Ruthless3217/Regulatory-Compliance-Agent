@@ -1,3 +1,6 @@
+# Build / deploy artifacts (Docker image tarballs — rebuilt on demand, >100MB)
+dist/
+
 # Environments
 .env
 .venv
@@ -34,3 +37,31 @@ Thumbs.db
 
 # Build artifacts
 *.tsbuildinfo
+
+# --- Runtime data, generated outputs & large inputs (never commit) ---
+backend/backups/
+backend/uploads/
+backend/logs/
+backend/exports/
+backend/eval/
+logs/
+
+# Browser-automation snapshots
+.playwright-mcp/
+
+# Large input corpora / reference binaries
+Broch/
+docs/downloads/
+docs/ledger/
+docs/*.pdf
+docs/*.xlsx
+docs/*.docx
+/Rules.docx
+/re-29200_GEO content for Smart Secure.docx
+
+# Scratch notes
+whatiwant.txt
+whitelist.md
+
+# Local, per-machine Claude Code settings
+.claude/settings.local.json

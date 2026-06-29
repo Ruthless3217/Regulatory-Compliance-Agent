@@ -16,9 +16,11 @@ set -euo pipefail
 
 SHARED_DIR="/opt/shared"
 
-# Registered apps, in start order. Add new apps here as "<name>:<dir>".
+# Registered apps, in start order. Format: "<name>:<dir>:<compose-file>".
+# The compose file is passed with -f so each app's local docker-compose.override
+# (dev-only) is NOT auto-merged on the VM.
 APPS=(
-  "compliance:/opt/Regulatory-Compliance-Agent"
+  "compliance:/opt/Regulatory-Compliance-Agent:docker-compose.shared.yml"
 )
 
 # Use sudo unless we are already root (Podman here is rootful).
@@ -48,13 +50,15 @@ done
 echo "==> [3/5] Starting registered apps ..."
 for entry in "${APPS[@]}"; do
   name="${entry%%:*}"
-  dir="${entry#*:}"
-  if [ ! -f "${dir}/docker-compose.yml" ]; then
-    echo "!!  ${name}: no docker-compose.yml at ${dir} — skipping." >&2
+  rest="${entry#*:}"
+  dir="${rest%%:*}"
+  file="${rest#*:}"
+  if [ ! -f "${dir}/${file}" ]; then
+    echo "!!  ${name}: no ${file} at ${dir} — skipping." >&2
     continue
   fi
-  echo "    -> ${name} (${dir})"
-  ( cd "${dir}" && ${COMPOSE} up -d )
+  echo "    -> ${name} (${dir}/${file})"
+  ( cd "${dir}" && ${COMPOSE} -f "${file}" up -d )
 done
 
 echo "==> [4/5] Restarting nginx so it resolves the app upstreams ..."
