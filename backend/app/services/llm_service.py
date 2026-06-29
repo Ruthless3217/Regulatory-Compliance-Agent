@@ -470,6 +470,7 @@ class LLMService:
             )
 
         last_exc: Optional[Exception] = None
+        daily_blocked = 0
         pool = self._client_pool
         for key_id, client in pool:
             # Fresh message copy per key — a failed key's JSON-correction turns
@@ -514,6 +515,8 @@ class LLMService:
                     db=db,
                     tool_name=tool_name,
                     temperature=temperature,
+                    limiter=limiter,
+                    token_estimate=token_estimate,
                 )
             except _RateLimitFailover as e:
                 logger.warning(f"[failover] key …{key_id} hit 429; trying next key")
@@ -540,6 +543,8 @@ class LLMService:
         db: Optional[Session],
         tool_name: str,
         temperature: float,
+        limiter=None,
+        token_estimate: int = 0,
     ) -> T:
         """Run the schema-validation retry loop against a single key's client.
 
