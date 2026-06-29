@@ -159,3 +159,28 @@ def reset_global_budget() -> None:
     """Test helper — drop the cached singleton."""
     global _budget
     _budget = None
+
+
+async def llm_budget_guard() -> None:
+    """FastAPI dependency — reject new LLM-backed requests once the global daily
+    token budget is already exhausted, so a single endpoint can't keep spending
+    past the ceiling. No-op when the budget is disabled
+    (``llm_global_daily_token_budget = 0``, the default).
+
+    This is a coarse pre-request gate; precise per-call accounting still happens
+    via ``GlobalTokenBudget.reserve``/``reconcile`` inside the LLM service.
+    """
+    budget = get_global_budget()
+    if not budget.enabled:
+        return
+    spent = await budget.spent_today()
+    if spent >= budget.budget:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"Global daily LLM token budget exhausted ({spent}/{budget.budget}). "
+                "Requests resume after UTC midnight."
+            ),
+        )
