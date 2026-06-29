@@ -80,7 +80,7 @@ async def _run(folder: str, eval_frac: float, max_docs: int | None = None, top_k
         align_comment_to_chunk,
     )
     from app.services.rag.retrievers.precedent_retriever import get_precedent_retriever
-    from app.services.preprocessing_service import ContextEngineeringService
+    from app.services.preprocessing_service import ContextEngineeringService, build_document_context
     from app.services.llm_service import llm_service
     from app.schemas.compliance_schemas import PrecedentCitationsResult
     from app.services.rag.factory import get_embedder
@@ -231,7 +231,12 @@ async def _run(folder: str, eval_frac: float, max_docs: int | None = None, top_k
             preds = retrieved.get(cobj["id"], [])
             # No longer skip empty-precedent chunks: novel-only mode lets the
             # model flag corpus-uncovered issues (2026-05-28 design).
-            prompt = ctx.create_precedent_prompts(cobj["text"], preds)
+            doc_ctx = None
+            if settings.cross_chunk_context_enabled:
+                doc_ctx = build_document_context(
+                    chunk_objs, cobj["chunk_index"], settings.cross_chunk_context_token_budget
+                )
+            prompt = ctx.create_precedent_prompts(cobj["text"], preds, document_context=doc_ctx)
             try:
                 result = await llm_service.generate_structured_response(
                     prompt=prompt, output_model=PrecedentCitationsResult,
@@ -250,9 +255,11 @@ async def _run(folder: str, eval_frac: float, max_docs: int | None = None, top_k
                     break
                 continue
 
-            citations = list(result.citations or [])
-            novel = list(result.novel_findings or [])
-            if not citations and not novel:
+            raw_citations = list(result.citations or [])
+            raw_novel = list(result.novel_findings or [])
+            # Quota/throttle detection runs on the RAW response (an empty response
+            # is a provider failure, not a real grading outcome).
+            if not raw_citations and not raw_novel:
                 consec_empty_calls += 1
                 if consec_empty_calls >= EMPTY_BAIL_THRESHOLD:
                     logger.error(
@@ -263,6 +270,22 @@ async def _run(folder: str, eval_frac: float, max_docs: int | None = None, top_k
                     break
                 continue
             consec_empty_calls = 0  # got a real response
+
+            # Mirror persistence/scoring: a satisfied-elsewhere finding is routed to
+            # the suppressed audit lane and NOT scored, so it does not count as a
+            # surfaced flag here. A critical is never suppressed.
+            def _active_cite(c):
+                if not getattr(c, "satisfied_elsewhere", False):
+                    return True
+                idx = int(c.precedent_index)
+                return (0 <= idx < len(preds)) and preds[idx].get("severity") == "critical"
+
+            citations = [c for c in raw_citations if _active_cite(c)]
+            novel = [f for f in raw_novel if not getattr(f, "satisfied_elsewhere", False)]
+            if not citations and not novel:
+                # Everything flagged here is satisfied elsewhere → surfaces nothing
+                # to the reviewer; not a "generated" chunk.
+                continue
 
             # A chunk counts as "generated" if it produced a citation OR a
             # novel finding — both surface as a flag the reviewer would see.

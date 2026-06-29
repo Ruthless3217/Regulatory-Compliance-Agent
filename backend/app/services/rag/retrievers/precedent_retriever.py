@@ -1,4 +1,4 @@
-"""Precedent retriever — per-chunk hybrid lookup against rag_compliance_examples.
+"""Precedent retriever — per-chunk hybrid lookup against precedent_cases.
 
 Returns { chunk_id: [precedent_dict, ...] }. Used by dispatch_node to attach
 state.retrieved_examples for the precedent analysis path.
@@ -6,93 +6,49 @@ state.retrieved_examples for the precedent analysis path.
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any, Dict, List, Optional
 
 from app.config import settings
 from app.services.rag.errors import RAGDegraded, RAGEmbedFailed
 from app.services.rag.factory import get_embedder, get_vector_store
 from app.services.rag.ports import SearchHit
+from app.services.rag.precedent_filters import is_thin_comment
 
 logger = logging.getLogger(__name__)
 
 
-# Pure-response reviewer comments carry no compliance signal — they're the
-# reviewer accepting/closing a thread, not flagging an issue. Mirror of the
-# 0007 corpus-purge denylist; this runtime guard repeats the filter so a bad
-# future ingest can't reintroduce thin rows into analysis.
-_RESPONSE_TOKENS = frozenset({
-    "done", "ok", "okay", "yes", "no",
-    "noted", "agreed", "agree", "fine", "accepted", "approved", "confirmed",
-    "added", "edited", "deleted", "revised", "rephrased", "checked", "check",
-})
-
-# High-frequency reviewer chatter that carries no compliance signal *as a
-# precedent example* (KB/rules quality audit, 2026-06-02). Unlike the 0007
-# response tokens these are multi-word, so they're matched after normalization
-# (lowercase, collapsed whitespace, stripped surrounding punctuation/quotes).
-# Suppressed at retrieval only — the rows stay in the corpus for audit, and
-# `_RESPONSE_TOKENS` stays untouched so the 0007 sync guard holds.
-#
-# Buckets are kept explicit so the kill-list is reviewable. Deliberately NOT
-# included: anything disclaimer-related ('ulip disclaimer', 'ref sign and
-# disclaimer'), source-contradiction flags ('not there in source'), and terse
-# but real issues ('incorrect') — those are genuine signal.
-_NOISE_STATUS = {
-    "new content", "new content added", "newly added", "changed", "corrected",
-    "removed", "updated", "same comment as above",
-    "this is already approved hence not rephrasing",
-}
-_NOISE_EDITORIAL = {
-    "rephrase", "pls rephrase", "rephrase this", "pls rephrase this",
-    "what do we mean by this", "what does this mean", "what is this", "what",
-    "how", "pls elaborate", "pls elaborate how", "grammar check", "full form",
-}
-_NOISE_ROUTING = {
-    "tax team to vet", "tax team approval",
-    "pls take this ahead basis marketing pd approval",
-    "pls take this ahead basis tax team approval",
-}
-# Generic source-request cluster. The rule tier now grounds 'claims need
-# sources' with a real regulatory quote, so these contentless asks are
-# redundant as few-shot precedents.
-_NOISE_SOURCE_REQUEST = {
-    "source", "request source", "request source link", "pls add source",
-    "pls add source link", "pls give us source", "pls attach source link",
-    "attach source link", "pls help us locate", "pls help us locate in source link",
-    "pls help us locate this in the source link", "pls help us locate this in source link",
-    "pls help us locate in the source link", "pls align basis source link",
-    "made changes basis source link", "where have we taken this from",
-    "where is this in the source link",
-}
-_NOISE_PHRASES = frozenset(
-    _NOISE_STATUS | _NOISE_EDITORIAL | _NOISE_ROUTING | _NOISE_SOURCE_REQUEST
-)
-
-_WS_RE = re.compile(r"\s+")
-# Surrounding punctuation/quotes to strip before phrase comparison (incl. the
-# curly apostrophe ’ that appears in the real corpus).
-_STRIP_CHARS = " .,!?;:\"'’"
-
-
-def _normalize_comment(text: Optional[str]) -> str:
-    c = _WS_RE.sub(" ", (text or "").strip().lower())
-    return c.strip(_STRIP_CHARS)
-
-
 def _is_thin(precedent: Dict[str, Any]) -> bool:
-    """True when a precedent's comment carries no actionable signal as a
-    few-shot example: a pure-response token (done/ok/added/…), shorter than 3
-    chars, or high-frequency reviewer chatter (status/editorial/routing/generic
-    source-request). Substantive short flags ('ulip disclaimer', 'not there in
-    source', 'incorrect') are preserved."""
-    raw = (precedent.get("comment_text") or "").strip().lower().rstrip(".!?")
-    if raw in _RESPONSE_TOKENS or len(raw) < 3:
-        return True
-    return _normalize_comment(precedent.get("comment_text")) in _NOISE_PHRASES
+    return is_thin_comment(precedent.get("comment_text"))
 
 
 def _hit_to_precedent(hit: SearchHit) -> Dict[str, Any]:
+    f = hit.fields or {}
+    return {
+        "id": hit.id,
+        "score": hit.score,
+        # Downstream-stable keys (graph/nodes.py) mapped from precedent_cases.
+        "reviewer_name": f.get("reviewer_role"),
+        "comment_text": f.get("reviewer_comment"),
+        "chunk_text": f.get("span_context"),
+        "anchor_text": f.get("highlighted_span"),
+        "final_text_chunk": f.get("after_text"),
+        "violation_category": f.get("issue_type"),
+        "severity": f.get("severity"),
+        "document_id": f.get("ticket"),
+        "source_file": f.get("source_file"),
+        # New context fields the prompt/UI can use for the "why".
+        "why_rationale": f.get("why_rationale"),
+        "guideline_ref": f.get("guideline_ref"),
+        "occurrence_count": f.get("occurrence_count"),
+    }
+
+
+def _hit_to_precedent_legacy(hit: SearchHit) -> Dict[str, Any]:
+    """Map a rag_compliance_examples hit to the same downstream-stable keys.
+
+    Column names in rag_compliance_examples differ from precedent_cases, so
+    this mapping bridges the gap when the v2 table hasn't been populated yet.
+    """
     f = hit.fields or {}
     return {
         "id": hit.id,
@@ -106,7 +62,38 @@ def _hit_to_precedent(hit: SearchHit) -> Dict[str, Any]:
         "severity": f.get("severity"),
         "document_id": f.get("document_id"),
         "source_file": f.get("source_file"),
+        "why_rationale": None,
+        "guideline_ref": None,
+        "occurrence_count": None,
     }
+
+
+# Cache: None = not checked, True = has rows, False = empty.
+_precedent_cases_populated: Optional[bool] = None
+
+
+def _check_precedent_cases_populated() -> bool:
+    """Check once per process whether precedent_cases has any rows."""
+    global _precedent_cases_populated
+    if _precedent_cases_populated is not None:
+        return _precedent_cases_populated
+    try:
+        from sqlalchemy import text as sa_text
+        from app.database import SessionLocal
+        db = SessionLocal()
+        try:
+            row = db.execute(sa_text("SELECT EXISTS(SELECT 1 FROM precedent_cases LIMIT 1)")).scalar()
+            _precedent_cases_populated = bool(row)
+        finally:
+            db.close()
+    except Exception:
+        _precedent_cases_populated = False
+    logger.info(
+        "precedent_cases populated: %s (will %s rag_compliance_examples)",
+        _precedent_cases_populated,
+        "NOT fall back to" if _precedent_cases_populated else "fall back to",
+    )
+    return _precedent_cases_populated
 
 
 class PrecedentRetriever:
@@ -117,9 +104,19 @@ class PrecedentRetriever:
         exclude_document_id: Optional[str] = None,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """For each chunk, return its top_k most-similar precedents.
-        On embed/store failure for a chunk, that chunk yields []."""
+        On embed/store failure for a chunk, that chunk yields [].
+
+        Falls back to the legacy rag_compliance_examples table when
+        precedent_cases is empty (v2 ingestion not yet run).
+        """
         if not chunks:
             return {}
+
+        # Decide which index + mapper to use.
+        use_v2 = _check_precedent_cases_populated()
+        index = "precedent_cases" if use_v2 else "rag_compliance_examples"
+        mapper = _hit_to_precedent if use_v2 else _hit_to_precedent_legacy
+
         k = top_k or settings.pgvector_top_k
         embedder = get_embedder()
         store = get_vector_store()
@@ -145,7 +142,7 @@ class PrecedentRetriever:
             cid = str(chunk.get("id"))
             try:
                 hits = await store.hybrid_search(
-                    index="rag_compliance_examples",
+                    index=index,
                     query_text=chunk.get("text", ""),
                     query_vector=qvec,
                     top_k=k,
@@ -153,7 +150,7 @@ class PrecedentRetriever:
                     rrf_k=settings.rag_rrf_k,
                     filters=None,
                 )
-                precedents = [_hit_to_precedent(h) for h in hits]
+                precedents = [mapper(h) for h in hits]
                 # Runtime safety net (mirrors the 0007 corpus purge): drop
                 # pure-response precedents the store may still surface. Idempotent
                 # with the migration; protects against bad future ingests.
@@ -183,3 +180,4 @@ def get_precedent_retriever() -> PrecedentRetriever:
     if _singleton is None:
         _singleton = PrecedentRetriever()
     return _singleton
+

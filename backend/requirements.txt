@@ -32,17 +32,6 @@ openpyxl==3.1.5
 tiktoken==0.13.0
 pdfplumber==0.11.9
 
-# Brochure OCR fallback (loaded lazily; only used when a product PDF has a
-# garbage/cid text layer or a UIN trapped in an image). pypdfium2 rasterizes
-# pages (BSD/Apache — NOT PyMuPDF/AGPL); rapidocr_onnxruntime is offline,
-# pip-only, with models bundled in the wheel (no runtime download behind the
-# firewall). opencv-python-headless avoids the libGL system dep that plain
-# opencv-python (rapidocr's default) needs — the Dockerfile drops opencv-python
-# after install so only headless remains.
-pypdfium2==5.10.1
-rapidocr_onnxruntime==1.4.4
-opencv-python-headless==4.13.0.92
-
 # YAML for seed data
 PyYAML==6.0.3
 
@@ -78,6 +67,12 @@ cohere>=5.13.0  # NOT INSTALLED — pin manually
 # RAG — Azure AI Foundry model inference (loaded lazily; only required when
 # RAG_EMBEDDING_PROVIDER=azure_cohere). Serves Cohere embed/rerank deployed in
 # the Foundry project. aiohttp backs azure-core's async transport.
+azure-ai-inference>=1.0.0b9
+aiohttp>=3.10.0
+
+# RAG — Cohere via Azure AI Foundry (loaded lazily; only required when
+# RAG_EMBEDDING_PROVIDER=azure_cohere). The async EmbeddingsClient needs an
+# async transport, so aiohttp is required alongside it.
 azure-ai-inference>=1.0.0b9
 aiohttp>=3.10.0
 

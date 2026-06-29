@@ -1,3 +1,6 @@
+# Build / deploy artifacts (Docker image tarballs — rebuilt on demand, >100MB)
+dist/
+
 # Environments
 .env
 .venv
