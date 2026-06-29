@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Supreme - Horizon",
+  "uin": "116L211V02",
+  "rider_uins": [],
+  "source_file": "supreme-horizon-leaflet.pdf",
+  "product_category": "ulip",
+  "regulatory_descriptor": "A Unit-linked Non-Participating Individual Life Savings Insurance Plan",
+  "structural_flags": {
+    "is_unit_linked": true,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": true,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": true,
+    "offers_loan": false
+  },
+  "variants": ["Horizon (one of the variants of Bajaj Life Supreme)"],
+  "key_benefits": [
+    "Maturity Benefit — Fund Value payable on maturity (provided Life Assured is alive); option to take as lump sum or systematic payout over a maximum of 5 years (Settlement Option)",
+    "Death Benefit — higher of Prevailing Sum Assured (incl. top-up), Fund Value on date of intimation of death, or Guaranteed Death Benefit (105% of Total Premiums Paid)",
+    "Guaranteed Wealth Booster — premium allocation charges accrued at a guaranteed 7% p.a. (compounded annually) added back to fund value at end of 15th policy year (marketed as 'effectively zero premium allocation charge')",
+    "Loyalty Additions — from the 16th policy year, 0.25% of average fund value of last 3 years added annually",
+    "Return of Mortality Charge (ROMC) — life-cover charges added back (100% at end of 15th year and every 5th year thereafter; 100% at maturity)",
+    "Systematic Partial Withdrawals (available after the 5-year lock-in)",
+    "Fund switching (marketed as 'Tax-free 4 Fund Switching')"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Whole Life option available (illustration uses Whole Life with 10-year PPT); full PT range not captured in this parse",
+    "premium_payment_term": "Single / Limited / Regular (illustration uses 10-year limited pay); full range not captured in this parse",
+    "note": "Eligibility boundary table not recovered from this leaflet parse — verify against policy document. 'Horizon' is one variant of the Bajaj Life Supreme plan."
+  },
+  "key_terms": {
+    "free_look_period_days": null,
+    "free_look_note": "Free-look period not explicitly captured in this leaflet parse; standard 30 days expected for a ULIP — verify against policy document.",
+    "grace_period": "Not explicitly captured in this leaflet parse — verify against policy document.",
+    "suicide_clause": "Not explicitly captured in this leaflet parse — verify against policy document.",
+    "lock_in_note": "Unit-Linked products offer NO liquidity during the first 5 years — no full or partial surrender/withdrawal permitted until the end of the fifth year.",
+    "zero_charge_note": "'Effectively zero premium allocation charge' is a defined, conditional claim — premium allocation charges are deducted and only added back to fund value at the end of the 15th policy year after accruing at 7% p.a., provided the policy is in force; it does NOT mean no charge is ever deducted, and it excludes top-up premium allocation charges and GST.",
+    "tax_note": "'Tax-free fund switching' / tax benefits per prevailing Section 11 (read with Schedule II) of the Income Tax Act — subject to change; consult a tax advisor. Returns shown at 4% and 8% are illustrative and not guaranteed."
+  },
+  "mandatory_disclosures_present": [
+    "Section 41 — Prohibition of Rebate",
+    "Section 45 — Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "ULIP market-risk statement ('ULIPs are different from traditional insurance products and are subject to risk factors; premium is subject to investment risks; NAV may go up or down; insured is responsible for his/her decisions')",
+    "Risk Factors & Warning Statements (product name does not indicate quality/future prospects/returns)",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Any 'zero premium allocation charge' / 'zero charge' claim must be qualified as 'effectively zero' with the footnote condition: charges are deducted and added back via the Guaranteed Wealth Booster only at end of the 15th year (accrued at 7% p.a.), only while the policy is in force, and excluding top-up allocation charges and GST.",
+      "Any 'guaranteed 7% / guaranteed growth' wording refers ONLY to the Guaranteed Wealth Booster accrual on allocation charges — not to fund/investment returns; it does NOT apply if the policy is surrendered, discontinued or paid-up.",
+      "'Guaranteed' Death Benefit = 105% of Total Premiums Paid is a floor, not a projected return.",
+      "Loyalty Additions begin only from the 16th policy year; Systematic Partial Withdrawals only after the 5-year lock-in.",
+      "'Tax-free fund switching' is bounded by prevailing tax law (Section 11 / Schedule II) and must carry the consult-a-tax-advisor caveat."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT advertise 'guaranteed returns' or 'assured market growth' — the fund value is subject to investment/market risk borne entirely by the policyholder; NAV may go up or down. The 7% guarantee applies to allocation-charge return, not investment performance.",
+      "Do NOT present 'zero premium allocation charge' as unconditional — it is 'effectively zero' subject to the policy remaining in force to the 15th year.",
+      "Do NOT show only the 8% (or any single) illustrative return as if promised — both 4% and 8% must be shown as illustrative, not guaranteed, and not as upper/lower limits.",
+      "Do NOT use 'tax-free' unconditionally — must reference prevailing Income Tax Act provisions and the consult-your-tax-advisor caveat.",
+      "Do NOT imply liquidity in the first 5 years — there is a mandatory 5-year lock-in."
+    ],
+    "must_state": [
+      "Plan UIN 116L211V02 (shared across Bajaj Life Supreme variants)",
+      "Full regulatory descriptor: 'A Unit-linked Non-Participating Individual Life Savings Insurance Plan'",
+      "Mandatory ULIP market-risk disclosure (premium subject to investment risk; NAV may go up or down; policyholder bears the risk)",
+      "The 'effectively zero premium allocation charge' footnote condition whenever the zero-charge claim is made",
+      "5-year lock-in / no-liquidity statement for the first five years",
+      "Standard disclaimer to read the sales brochure and policy document before concluding a sale"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of supreme-horizon-leaflet.pdf",
+    "confidence": "medium",
+    "gaps": [
+      "'Horizon' is one variant of Bajaj Life Supreme; plan UIN 116L211V02 is legitimately shared with the Gold variant (filename-based slug keeps the files distinct).",
+      "Numeric entry/maturity age, sum-assured, free-look, grace-period and suicide-clause specifics not recovered from this leaflet parse."
+    ]
+  }
+}

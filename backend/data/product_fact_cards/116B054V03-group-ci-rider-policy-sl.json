@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Group Critical Illness (CI) Rider",
+  "uin": "116B054V03",
+  "rider_uins": [],
+  "source_file": "group-ci-rider-policy-sl.pdf",
+  "product_category": "rider",
+  "regulatory_descriptor": "A Non-Linked, Non-Participating, Group Health Rider (to be attached to a group base Policy)",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": false,
+    "offers_maturity_benefit": false,
+    "offers_loan": false
+  },
+  "variants": ["17 Critical Illnesses cover", "32 Critical Illnesses cover", "Accelerated CI Benefit", "Additional CI Benefit"],
+  "key_benefits": [
+    "Rider Sum Assured payable on first diagnosis of a covered Critical Illness during the policy tenure",
+    "Cover options for 17 or 32 Critical Illnesses, available as either Accelerated CI Benefit or Additional CI Benefit",
+    "Rider premium rates guaranteed throughout the membership term of the member",
+    "Member can include the rider from inception or any Annual Renewal Date, and opt out at any Annual Renewal Date"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Aligned to the group base policy / membership term",
+    "premium_payment_term": "As per base policy",
+    "note": "Member entry-age and sum-assured boundaries not stated numerically in this sales literature. Maximum cover ceasing age per rider terms. Verify against policy document before asserting numeric limits."
+  },
+  "key_terms": {
+    "free_look_period_days": null,
+    "free_look_note": "Same as the base product, applicable from the Date of Commencement of Rider if different from the base policy's Date of Commencement of Risk.",
+    "grace_period": "As per the base policy. On occurrence of Critical Illness during the grace period, the CI Benefit is payable subject to deduction of due-but-unpaid rider premium.",
+    "waiting_period": "90 days from start of coverage (CI diagnosed within the Waiting Period is excluded; not applicable on consecutive renewal of CI cover for the member).",
+    "survival_period": "30 days — no benefit if the insured dies within 30 days of diagnosis of the covered Critical Illness.",
+    "maturity_benefit_condition": "No maturity benefit under the rider.",
+    "tax_note": "Tax benefits 'as per applicable tax laws'. GST charged additionally over and above premium."
+  },
+  "mandatory_disclosures_present": [
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 41 — Prohibition of Rebate",
+    "Section 45 — Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "Detailed CI definitions, conditions and exclusions (17 & 32 CI lists)",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "This is a RIDER, not a standalone policy — every claim must reference that it attaches to and depends on a group base policy.",
+      "Each listed Critical Illness pays only if the strict policy definition and severity criteria are met (e.g. specified histological/imaging/severity thresholds); illnesses are not covered in plain-language form.",
+      "Benefit is payable only on FIRST diagnosis, only after the 90-day Waiting Period, and only if the member survives the 30-day Survival Period.",
+      "Number of conditions covered must be stated accurately as the chosen option (17 or 32 CIs)."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT market as a standalone health/insurance plan — it cannot be sold without a group base policy.",
+      "Do NOT imply maturity, savings, surrender or loan value — there is no maturity benefit and no surrender value on exclusion of the rider.",
+      "Do NOT state 'all cancers / all heart attacks' covered — many sub-conditions (e.g. carcinoma in situ, early-stage cancers, angina, TIA) are explicitly excluded.",
+      "Do NOT omit Waiting Period (90 days), Survival Period (30 days), pre-existing-disease and other standard exclusions when describing the benefit.",
+      "Tax benefits must not be stated as assured — always carry the 'as per applicable tax laws' caveat."
+    ],
+    "must_state": [
+      "Rider UIN 116B054V03",
+      "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Group Health Rider' attaching to a group base policy",
+      "That the rider must be read with the base policy; CI definitions, Waiting Period, Survival Period and exclusions apply",
+      "Standard disclaimer to read the sales brochure and policy document before concluding a sale"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of group-ci-rider-policy-sl.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Descriptor line not emitted by parser; reconstructed from body text ('non-linked, non-participating, group health rider').",
+      "Numeric member entry-age and sum-assured boundaries not stated in this sales literature — left null."
+    ]
+  }
+}

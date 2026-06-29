@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Group Sampoorna Jeevan Suraksha",
+  "uin": "116N166V02",
+  "rider_uins": [],
+  "source_file": "gsjs-sl.pdf",
+  "product_category": "group",
+  "regulatory_descriptor": "A Non-linked Non-Participating Group Micro Term Life Insurance Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": false,
+    "offers_maturity_benefit": false,
+    "offers_loan": false
+  },
+  "variants": ["Single Life", "Joint Life Option 1 (single Sum Assured on both lives)", "Joint Life Option 2 (individual Sum Assured per life)", "Level Cover", "Reducing Cover", "OYRT (One Year Renewable Term)"],
+  "key_benefits": [
+    "Base Death Benefit (Prevailing Sum Assured) at nominal cost; covers employer-employee and non-employer-employee groups",
+    "Optional in-built covers: Accidental Death Benefit (ADB), Accelerated Accidental Total Permanent Disability Benefit (AATPD), and/or Accelerated Critical Illness Benefit (ACI), each 10%-100% of Death Benefit",
+    "Choice of Level or Reducing cover; suited to protect against loan-repayment liability (lender-borrower schemes)",
+    "Policy Term from 1 month to 180 months; Single and Regular premium options",
+    "Joint Life option; Death Benefit payable as lump sum or in instalments"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "1 month to 180 months",
+    "premium_payment_term": "Single or Regular premium",
+    "note": "Member entry/maturity age and sum-assured boundaries not recovered from this parse. Verify against policy document before asserting numeric limits."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the Policy Document (except where policy tenure is less than a year); processed within 7 days.",
+    "grace_period": "Regular premium: 30 days (yearly/half-yearly/quarterly); 15 days (monthly). Single premium: grace period not applicable. Cover continues during grace period; due-but-unpaid premium deducted from benefit.",
+    "suicide_clause": "On death by suicide within 12 months from Date of Commencement of risk (or latest revival), the suicide-clause refund applies; covered for Single Life and both Joint Life options as detailed in the policy.",
+    "maturity_benefit_condition": "No maturity benefit under this plan (pure term/protection).",
+    "surrender_note": "Surrender Value availability depends on premium/cover option; not available for Regular Premium Level Cover or short-term Single Premium Level/Reducing Cover. No policy loan available.",
+    "tax_note": "Premium and benefits 'may be eligible' for tax benefits per extant Income Tax Act; consult a tax consultant. GST per prevailing tax laws."
+  },
+  "mandatory_disclosures_present": [
+    "Section 39 — Nomination",
+    "Section 41 — Prohibition of Rebate",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "This is a pure-risk GROUP term plan with NO maturity benefit — any 'returns'/'maturity'/'money-back' framing is unsupportable.",
+      "ADB, AATPD and ACI are OPTIONAL in-built covers chosen at inception (10%-100% of Death Benefit, AATPD% + ACI% capped at 100%) and cannot be changed during the term — must be qualified as optional and selection-bound, not automatic.",
+      "Under Reducing Cover the Prevailing Sum Assured declines per the inception schedule — any cover-amount claim must reflect level vs reducing choice.",
+      "Surrender Value is not available under several cover options — must not be claimed generally."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT position as a savings/investment or maturity product — there is no maturity benefit, no loan, and limited/no surrender value.",
+      "Do NOT use 'guaranteed returns' / 'bonus' language — non-linked, non-participating pure protection.",
+      "Do NOT imply ADB/AATPD/ACI are always included — they are optional, selected at inception.",
+      "Do NOT describe Critical Illness or disability cover without the policy definitions and exclusions.",
+      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+    ],
+    "must_state": [
+      "Plan UIN 116N166V02",
+      "Full regulatory descriptor: 'A Non-linked Non-Participating Group Micro Term Life Insurance Plan'",
+      "That there is no maturity benefit (pure-risk cover)",
+      "Standard disclaimer to read the policy document / certificate of insurance for full terms and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of gsjs-sl.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Parser NAME field was generic ('Bajaj Life'); real product name 'Bajaj Life Group Sampoorna Jeevan Suraksha' taken from descriptor/body and confirmed in Contact Details footer.",
+      "Numeric member eligibility (entry/maturity age, sum-assured) not recovered from this parse — left null."
+    ]
+  }
+}

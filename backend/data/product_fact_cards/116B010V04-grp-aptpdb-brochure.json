@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Group Accidental Permanent Total/Partial Disability Benefit Rider",
+  "uin": "116B010V04",
+  "rider_uins": [],
+  "source_file": "grp-APTPDB-brochure.pdf",
+  "product_category": "rider",
+  "regulatory_descriptor": "A Non-Participating, Non-Linked Group Health Rider (to be attached to a base group plan)",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": false,
+    "offers_maturity_benefit": false,
+    "offers_loan": false
+  },
+  "variants": [],
+  "key_benefits": [
+    "Group health rider attached to a base group plan, covering members for Accidental Permanent Total or Partial Disability.",
+    "Permanent Partial Disability: lower of 50% of rider sum assured or Rs 50,00,000 per member across all Bajaj group policies.",
+    "Permanent Total Disability: lower of the rider sum assured or Rs 1,00,00,000 per member across all Bajaj group policies.",
+    "Disability must occur within 180 days of the accident and persist continuously for at least 180 days; defined dismemberment/loss schedule applies.",
+    "Option to take the disability benefit in equal monthly installments over 5 years (factor 1.04) or 10 years (factor 1.08).",
+    "No death benefit, no maturity benefit, no surrender benefit under the rider."
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": 65,
+    "min_sum_assured": null,
+    "max_benefit_total_disability": "Rs 1,00,00,000 per member across all Bajaj group policies",
+    "max_benefit_partial_disability": "Rs 50,00,000 per member across all Bajaj group policies",
+    "policy_term": "As per the base group plan (rider terminates at membership anniversary on which attained age is 65)",
+    "premium_payment_term": "As per base group plan",
+    "note": "Numeric entry-age and rider sum-assured ranges are not captured in the parse; benefit caps above are stated explicitly in the brochure. Verify other limits against the policy document."
+  },
+  "key_terms": {
+    "free_look_period_days": null,
+    "free_look_note": "As per the base policy, applicable from the Date of Commencement of Rider if different from the base Date of Commencement of Risk.",
+    "grace_period": "As per the base policy; disability occurring during grace is payable subject to deduction of due-but-unpaid rider premium.",
+    "suicide_clause": "Not applicable (no death benefit); intentional self-inflicted injury / attempted suicide is an excluded cause of disability.",
+    "surrender_value": "No surrender benefit under the rider.",
+    "tax_note": "Tax benefits 'as per applicable tax laws' — consult a tax consultant; GST per prevailing tax laws."
+  },
+  "mandatory_disclosures_present": [
+    "Section 41 — Prohibition of Rebate",
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 45 — Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "Exclusions ('What is not covered under this rider')",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "This is a rider attached to a base group plan — it cannot be marketed as a standalone policy; any claim must reference the base group plan.",
+      "Disability benefit is the LOWER of the rider sum assured and a per-member cap (Rs 50 lakh partial / Rs 1 crore total across all Bajaj group policies) — must not be presented as an uncapped payout.",
+      "'Accidental Permanent Total/Partial Disability' is defined by a specific dismemberment/loss schedule with a 180-day occurrence and 180-day persistence requirement — claims must reflect these conditions, not generic 'any disability'.",
+      "Installment payout factors (1.04 over 5 yrs / 1.08 over 10 yrs) are subject to periodic IRDAI-approved revision."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT present as a savings/investment or maturity product — there is no maturity, surrender or death benefit.",
+      "Do NOT use 'guaranteed returns' / 'bonus' / 'money back' language.",
+      "Do NOT imply any disability is covered — only the listed permanent total/partial dismemberment events qualify, and a long list of exclusions (criminal acts, war, intoxication, hazardous sports, aviation, self-injury, nuclear) applies.",
+      "Do NOT omit the per-member benefit caps across all Bajaj group policies.",
+      "Tax benefits must not be stated as assured — always carry the 'as per applicable tax laws' caveat."
+    ],
+    "must_state": [
+      "Rider UIN 116B010V04",
+      "Full regulatory descriptor: 'A Non-Participating, Non-Linked Group Health Rider' attached to a base group plan",
+      "That it is a rider (not a standalone plan) with no death/maturity/surrender benefit.",
+      "Standard disclaimer to read the policy document / benefit illustration for full conditions and exclusions."
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of grp-APTPDB-brochure.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Parser NAME was generic 'Bajaj Life'; real product name inferred from the brochure heading and body.",
+      "Numeric entry-age and rider sum-assured ranges not captured in the parse (max-coverage caps and age-65 termination were captured)."
+    ]
+  }
+}

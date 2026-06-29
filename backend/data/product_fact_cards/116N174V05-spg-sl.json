@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Smart Protection Goal",
+  "uin": "116N174V05",
+  "rider_uins": [],
+  "source_file": "spg-sl.pdf",
+  "product_category": "term",
+  "regulatory_descriptor": "A Non Linked, Non Participating, Individual Life Insurance Term Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": true,
+    "offers_loan": true
+  },
+  "variants": ["Life Cover (base)", "with Return of Premium (ROP)", "with Critical Illness Benefit (CIB)", "Whole of Life (cover up to age 99)"],
+  "key_benefits": [
+    "Death Benefit — Sum Assured paid to nominee/legal heir on death of Life Assured; policy terminates",
+    "Maturity Benefit (Return of Premium) — total premiums paid returned as lump sum ONLY if ROP option chosen; NIL if ROP not chosen",
+    "Optional Critical Illness Benefit (CIB) with separate CI Sum Assured — Minor CI 25% (Angioplasty lower of Rs 5 Lacs or 25%), Major CI 100%, max four Minor CI claims",
+    "Whole of Life cover up to age 99 (only with limited premium payment; not available with ROP)",
+    "Policy loan up to 50% of Surrender Value — ONLY if ROP feature opted and policy has acquired Surrender Value"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Whole of Life option covers up to age 99; exact PT range not captured in this parse",
+    "premium_payment_term": "Limited (5, 10, 15, 20, Pay-till-60; max PPT cessation age 75) or Regular; for Limited+ROP minimum PT-minus-PPT difference is 5 years",
+    "note": "Eligibility age/sum-assured boundary table not recovered from this leaflet parse — verify against policy document before asserting numeric limits."
+  },
+  "key_terms": {
+    "free_look_period_days": null,
+    "free_look_note": "Free-look period not explicitly captured in this leaflet parse; standard 30 days expected — verify against policy document.",
+    "grace_period": "Not explicitly captured in this leaflet parse; on non-payment policy lapses (no ROP) or converts to paid-up (with ROP, after at least one full year's premium).",
+    "suicide_clause": "Not explicitly captured in this leaflet parse — verify against policy document.",
+    "maturity_benefit_condition": "Maturity Benefit (return of total premiums paid) applies ONLY if the Return of Premium (ROP) option is chosen at inception; if ROP not chosen, Maturity Benefit is NIL (pure term). ROP and Whole of Life cannot both be chosen.",
+    "loan_condition": "Policy loan (up to 50% of Surrender Value, current interest 10% p.a. compounding half-yearly) is available ONLY if ROP feature opted and the policy has acquired Surrender Value.",
+    "tax_note": "Tax benefits 'as per prevailing tax laws' — GST/applicable taxes extra and subject to change; consult a tax advisor."
+  },
+  "mandatory_disclosures_present": [
+    "Section 41 — Prohibition of Rebate",
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 45 — Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning",
+    "Disclaimer — sales literature gives salient features only; policy document is conclusive"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Any 'get your premiums back' / 'return of premium' / 'maturity benefit' claim is valid ONLY when the ROP option is chosen — must be option-qualified; base Life Cover pays NO maturity benefit.",
+      "Any 'whole life / cover up to age 99' claim is valid ONLY with the limited-premium Whole of Life option, and is NOT available together with ROP.",
+      "Any 'take a loan against your policy' claim is valid ONLY when ROP is opted and Surrender Value has been acquired.",
+      "Critical Illness payouts are option-bound (separate CI Sum Assured, waiting/survival periods) — Minor CI pays 25% (Angioplasty capped), Major CI 100%, max four Minor CI claims."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT position as an investment, savings or wealth-creation product — it is non-linked, non-participating term protection (the savings element is only return-of-premium, not growth).",
+      "Do NOT use 'guaranteed returns' / 'bonus' language — there are no bonuses (non-par); the only money-back is return-of-premium on the ROP option.",
+      "Do NOT present the base term cover as paying a maturity amount.",
+      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+    ],
+    "must_state": [
+      "Plan UIN 116N174V05",
+      "Full regulatory descriptor: 'A Non Linked, Non Participating, Individual Life Insurance Term Plan'",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of spg-sl.pdf",
+    "confidence": "high",
+    "gaps": ["numeric entry/maturity age, minimum sum-assured and free-look/grace/suicide specifics not recovered from this leaflet parse"]
+  }
+}

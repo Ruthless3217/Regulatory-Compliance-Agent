@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Group Term Life",
+  "uin": "116N021V08",
+  "rider_uins": ["116B005V06", "116B010V04", "116B026V05", "116B053V02", "116B054V02"],
+  "source_file": "gtl.pdf",
+  "product_category": "group",
+  "regulatory_descriptor": "A Non-Linked Non-Participating Group Term Insurance Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": false,
+    "offers_maturity_benefit": false,
+    "offers_loan": false
+  },
+  "variants": ["Uniform cover", "Graded cover", "Joint Life cover (self and spouse)"],
+  "key_benefits": [
+    "One-year renewable group term life cover for members of Employer-Employee (EE) and Non-Employer-Employee (NEE) groups",
+    "Death Benefit (Sum Assured) on death of the member, payable as lump sum or partly lump sum and remainder in instalments over a chosen period",
+    "Joint Life cover for self and spouse — death benefit payable on first death of either",
+    "Optional profit sharing for the group based on experience rating (applied as a reduction in next year's renewal premium), if opted",
+    "Free Cover Limit (FCL) offered per Board Approved Underwriting Policy (BAUP)"
+  ],
+  "riders_available": [
+    "Bajaj Life Group Accidental Death Benefit Rider",
+    "Bajaj Life Group Accidental Permanent Total/Partial Disability Benefit Rider",
+    "Bajaj Life Group Accelerated Critical Illness Benefit Rider",
+    "Bajaj Life Group New Terminal Illness Rider",
+    "Bajaj Life Group Critical Illness Rider"
+  ],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": 80,
+    "min_sum_assured": null,
+    "policy_term": "One-year renewable group term contract (annual renewal date).",
+    "premium_payment_term": "Yearly / half-yearly / quarterly / monthly; one-year renewable.",
+    "note": "Cover terminates at age 70 for NEE schemes and age 80 for EE schemes (older member under joint life). Numeric entry-age and sum-assured limits not stated in the parse; sum assured is per justifiable factor and BAUP. Verify against the policy document."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the policy document (electronic or otherwise), to review terms — except where the policy tenure is less than a year. Refund of premium less proportionate risk premium and expenses; processed within 7 days.",
+    "grace_period": "No grace period for yearly mode. 30 days for all frequencies other than monthly; 15 days for monthly.",
+    "suicide_clause": "Applies ONLY to NEE schemes where membership is not compulsory: on death by suicide within 12 months of commencement of membership, the contract is terminated by paying 80% of the premium paid for that member (in force). Not applicable to EE schemes or to NEE schemes where membership is compulsory. There are no other exclusions.",
+    "maturity_benefit": "No maturity benefit under this plan.",
+    "surrender_benefit": "No surrender value under this plan; on surrender no new members may be enrolled and existing members continue to be covered (on payment of due premiums).",
+    "loan": "No policy loan available under this plan.",
+    "tax_note": "Tax benefits as per applicable tax laws. GST per prevailing tax laws — subject to change."
+  },
+  "mandatory_disclosures_present": [
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 41 — Prohibition of Rebate",
+    "Section 45 — Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "This is a one-year renewable PURE-RISK group term plan — cover is for one year at a time and the insurer may renew or decline renewal per BAUP; premiums and terms are reviewable yearly.",
+      "Profit sharing is OPTIONAL and experience-rated (minimum 1,000 life-years covered) and is delivered only as a reduction in the next renewal premium — not a cash bonus or payout to members.",
+      "Joint Life cover is limited to self and spouse and pays on first death only.",
+      "The suicide-payout (80% of premium) clause applies only to NEE schemes with non-compulsory membership."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT position as a savings, investment or wealth product — there is NO maturity benefit and NO surrender value; it is pure-risk group term protection.",
+      "Do NOT use 'guaranteed returns', 'maturity amount', 'money-back' or 'bonus' language — non-linked, non-participating; 'profit sharing' is a renewal-premium reduction, not a bonus to members.",
+      "Do NOT imply a loan can be taken — no policy loan is available.",
+      "Do NOT imply lifelong/permanent cover — it is annually renewable and terminates at age 70 (NEE) / 80 (EE).",
+      "Tax benefits must not be stated as assured — carry the 'as per applicable tax laws' caveat."
+    ],
+    "must_state": [
+      "Plan UIN 116N021V08",
+      "Full regulatory descriptor: 'A Non-Linked Non-Participating Group Term Insurance Plan'",
+      "Standard disclaimer to read the policy document (and policy exclusions) for full terms and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of gtl.pdf",
+    "confidence": "high",
+    "gaps": ["Numeric entry-age and sum-assured boundaries not stated in the brochure (left to BAUP / justifiable factor); only the termination ages (70 NEE / 80 EE) are explicit. Parser's NAME-field UIN (116B005V06) is a rider UIN; the plan N-UIN per the contact-details page is 116N021V08."]
+  }
+}

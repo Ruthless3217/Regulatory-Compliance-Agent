@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Smart Wealth Goal VI (Joint Life Wealth variant)",
+  "uin": "116L214V01",
+  "rider_uins": ["116A059V01", "116A060V01"],
+  "source_file": "swg-Joint-Life-brochure.pdf",
+  "product_category": "ulip",
+  "regulatory_descriptor": "A Unit-Linked Non-Participating Individual Life Savings Insurance Plan",
+  "structural_flags": {
+    "is_unit_linked": true,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": true,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": true,
+    "offers_loan": false
+  },
+  "variants": ["Wealth", "Child Wealth", "Joint Life Wealth"],
+  "key_benefits": [
+    "This card covers the Joint Life Wealth variant (the 'Wealth' and 'Child Wealth' variants have separate sales literature).",
+    "Maturity Benefit = Fund Value on the maturity date, provided the Policy is in-force and either life is alive (market-linked, not guaranteed).",
+    "Joint Life cover on primary & secondary life assured; on first death the death cover continues on the surviving life.",
+    "Death Benefit on second death is subject to a Guaranteed Benefit of at least 105% of Total Premiums Paid.",
+    "Loyalty Benefits: Return of Premium Allocation Charge (ROAC) at end of 15th policy year and Fund Boosters at 10/15/20/25/30 years.",
+    "Return of Mortality Charge (ROMC) added to Fund Value at maturity, subject to both lives alive at maturity.",
+    "Family Benefit for existing-customer families; Return Enhancer (0.5% hike-up) on installment maturity/death payouts.",
+    "Choice of five investment portfolio strategies and a wide range of unit-linked funds.",
+    "Single Premium payment for the Joint Life Wealth variant; option to take Maturity/Death Benefit in installments (settlement option)."
+  ],
+  "riders_available": [
+    "Bajaj Life Care Plus Rider (UIN 116A059V01)",
+    "Bajaj Life Linked New Critical Illness Benefit Rider (UIN 116A060V01)"
+  ],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": null,
+    "premium_payment_term": "Single Premium (Joint Life Wealth variant)",
+    "note": "Eligibility table (entry/maturity age, sum-assured and premium bands) is not captured numerically in the brochure parse — it states 'Maximum Sum Assured / Premium shall be as per the Board Approved Underwriting Policy (BAUP)'. Verify against policy document before asserting numeric limits."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the policy document (whether electronic or otherwise); not applicable to policies with tenure of less than a year. Refund subject to proportionate risk premium, medical/stamp-duty expenses and repurchase of units at the cancellation-date price.",
+    "grace_period": "Standard ULIP grace; the Joint Life brochure does not restate the day-count numerically (sister Goal-VI/LongLife brochures use 30 days for non-monthly and 15 days for monthly).",
+    "suicide_clause": "On second death by suicide within 12 months of commencement of risk or latest revival (whichever is later), the nominee receives the Fund Value as on date of intimation; on first death by suicide within 12 months no benefit is paid and the policy continues on the surviving life.",
+    "lock_in": "5-year lock-in: ULIPs do not offer any liquidity during the first five years; no surrender/withdrawal of monies completely or partially till the end of the fifth year.",
+    "tax_note": "Premium, Maturity, Death and Surrender benefits 'eligible for tax benefits as per extant Income Tax Act, subject to the provisions stated therein' — consult a tax consultant; GST applicable per prevailing tax laws."
+  },
+  "mandatory_disclosures_present": [
+    "Risks of Investment in the Units of the Plan (market-risk / NAV-may-go-up-or-down statement)",
+    "5-year no-liquidity lock-in disclosure",
+    "Section 41 — Prohibition of Rebate",
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 45 — Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Any 'guaranteed' claim is bounded: the only guarantee is the Guaranteed Benefit of 105% of Total Premiums Paid on the second death — it is NOT a guaranteed maturity/return figure.",
+      "Maturity Benefit equals the Fund Value, which is market-linked — any value/return figure shown must carry the 'illustrative, not guaranteed, 4%/8% assumed' caveat.",
+      "Loyalty Benefits (ROAC, Fund Boosters), ROMC and Family Benefit each have conditions (in-force, not surrendered/paid-up, exclude top-ups) and must be stated with those conditions, not as unconditional add-ons.",
+      "Joint-life death-benefit mechanics differ on first vs second death — any 'pays on death' claim must reflect that first death continues cover on the survivor."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT promise 'guaranteed returns', 'assured returns' or any fixed maturity corpus — this is a unit-linked plan where investment risk is borne by the policyholder and funds do not offer a guaranteed or assured return.",
+      "Do NOT use 'bonus' language — it is non-participating.",
+      "Do NOT imply liquidity in the first 5 years — the brochure mandates the no-surrender/no-withdrawal-for-5-years statement.",
+      "Do NOT present the 4%/8% illustrative figures as expected or upper/lower limits of returns.",
+      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat.",
+      "Do NOT state a loan facility — no loan is available under this plan."
+    ],
+    "must_state": [
+      "Plan UIN 116L214V01",
+      "Full regulatory descriptor: 'A Unit-Linked Non-Participating Individual Life Savings Insurance Plan'",
+      "Mandatory ULIP market-risk disclosure (premiums subject to investment risks associated with capital markets; NAV may go up or down; policyholder responsible for decisions; 'Bajaj Life Smart Wealth Goal VI is only the name of the plan and does not indicate quality/future prospects/returns').",
+      "The 5-year no-liquidity lock-in statement.",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions."
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of swg-Joint-Life-brochure.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Numeric eligibility (entry/maturity age, min/max sum assured, premium bands) not present in the parse — brochure defers to BAUP.",
+      "Grace-period day-count not restated numerically in this variant's brochure.",
+      "Parser's primary UIN (116A059V01) is actually a rider; the plan UIN 116L214V01 was taken from the brochure's contact-page UIN line."
+    ]
+  }
+}

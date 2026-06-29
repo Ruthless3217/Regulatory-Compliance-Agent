@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Future Wealth Gain IV",
+  "uin": "116L202V01",
+  "rider_uins": ["116A057V02", "116A059V01", "116A060V01"],
+  "source_file": "future-wealth-gain.pdf",
+  "product_category": "ulip",
+  "regulatory_descriptor": "A Unit-Linked Non-Participating Individual Life Savings Insurance Plan",
+  "structural_flags": {
+    "is_unit_linked": true,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": true,
+    "offers_guaranteed_benefits": false,
+    "offers_maturity_benefit": true,
+    "offers_loan": false
+  },
+  "variants": [],
+  "key_benefits": [
+    "Maturity Benefit equal to the Fund Value on survival to the maturity date (market-linked, not guaranteed)",
+    "Death Benefit — higher of (Prevailing Sum Assured or Regular Premium Fund Value) plus higher of (Top-up Sum Assured or Top-up Premium Fund Value), subject to a minimum Guaranteed Death Benefit of 105% of Total Premiums Paid till date of death",
+    "Loyalty Additions added to the Regular Premium Fund Value at each 5-year interval from the 15th policy year onwards (all due premiums paid)",
+    "Choice of 2 investment portfolio strategies and multiple funds",
+    "Option to take death & maturity benefit in instalments (Settlement Option)",
+    "Option to choose high life-insurance cover via a sum-assured multiplier",
+    "Option to reduce regular/limited premium and to change premium payment term/frequency"
+  ],
+  "riders_available": [
+    "Bajaj Life Linked Accident Protection Rider II",
+    "Bajaj Life Care Plus Rider",
+    "Bajaj Life Linked New Critical Illness Benefit Rider",
+    "Waiver of Premium (WOP) Rider"
+  ],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Multiple policy terms available; numeric range not recovered from this brochure parse.",
+    "premium_payment_term": "Regular / Limited premium payment (non-participating, individual, unit-linked plan).",
+    "note": "Eligibility table did not survive the structural parse; maximum sum assured and maximum premium are stated as 'per Board Approved Underwriting Policy (BAUP)'. Verify numeric limits against the policy document."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "Standard 30-day free-look from receipt of the policy document is the family/ULIP standard; verbatim free-look text was not cleanly recovered from this brochure parse — verify against the policy document.",
+    "grace_period": "30 days for yearly/half-yearly/quarterly frequency; 15 days for monthly (family/ULIP standard; verify against policy document).",
+    "suicide_clause": "On death by suicide within 12 months of commencement or revival (whichever is later), the nominee is entitled to the Fund Value as on the date of intimation of death (standard ULIP clause; verbatim text not recovered from this parse).",
+    "loan": "No loan facility available under this plan.",
+    "tax_note": "Tax benefits 'as per applicable tax laws, as amended from time to time'; consult a tax consultant. GST per prevailing tax laws — subject to change.",
+    "settlement_note": "Death/Maturity benefit can be taken in instalments over up to 5 years; during the settlement/installment period the death benefit is not less than the 105%-of-Total-Premiums Guaranteed Death Benefit. If WOP rider is triggered, on termination the present value of future WOP installments (discounted at 4% p.a.) is payable."
+  },
+  "mandatory_disclosures_present": [
+    "ULIP market-risk statement (investment subject to capital-market risk; policyholder solely responsible for decisions)",
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 41 — Prohibition of Rebate",
+    "Section 45 — Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Maturity Benefit is the Fund Value — a market-linked, non-guaranteed amount; any return figure must be shown as illustrative (e.g. 4% and 8%) and labelled 'not guaranteed'.",
+      "The ONLY guaranteed element is the 105%-of-Total-Premiums-Paid floor on the Death Benefit; Loyalty Additions are conditional on all due premiums paid and an in-force (not discontinued/paid-up) policy and start only from the 15th policy year.",
+      "Any 'high cover' claim is tied to the chosen sum-assured multiplier and the minimum/maximum sum-assured criteria."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT describe fund value, returns or maturity proceeds as 'guaranteed', 'assured' or 'fixed' — this is a unit-linked plan and the policyholder bears all investment/market risk.",
+      "Do NOT use 'bonus' language — the plan is non-participating; there are no bonuses.",
+      "Do NOT imply liquidity in the first 5 years — ULIP lock-in applies.",
+      "Do NOT present Loyalty Additions as immediate or unconditional — they begin from the 15th policy year and are not paid on Top-up premiums or on discontinued/paid-up policies.",
+      "Do NOT state tax benefits as assured — always carry the 'subject to prevailing tax laws' caveat."
+    ],
+    "must_state": [
+      "Plan UIN 116L202V01",
+      "Full regulatory descriptor: 'A Unit-Linked Non-Participating Individual Life Savings Insurance Plan'",
+      "ULIP market-risk disclosure: investment in ULIPs is subject to risks associated with the capital markets; the policyholder is solely responsible for his/her investment decisions",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of future-wealth-gain.pdf",
+    "confidence": "medium",
+    "gaps": ["Numeric eligibility table not recovered (limits deferred to BAUP).", "Verbatim free-look, grace-period and suicide-clause text not cleanly recovered from this parse; the values stated follow the ULIP family standard and should be verified against the policy document before assertion."]
+  }
+}

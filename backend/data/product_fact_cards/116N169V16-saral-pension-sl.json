@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Saral Pension",
+  "uin": "116N169V16",
+  "rider_uins": [],
+  "source_file": "saral-pension-sl.pdf",
+  "product_category": "pension_annuity",
+  "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual, Immediate Annuity Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": false,
+    "offers_loan": true
+  },
+  "variants": [
+    "Option A - Life Annuity with Return of Purchase Price (ROP) on death",
+    "Option B - Joint Life Last Survivor with 100% annuity to spouse and Return of Purchase Price on death of last survivor"
+  ],
+  "key_benefits": [
+    "Lifelong guaranteed regular annuity income (single-premium immediate annuity)",
+    "Return of Purchase Price (ROP) paid to nominee on death",
+    "Joint Life option with annuity continuing for the spouse",
+    "Choice of annuity payout frequency (monthly / quarterly / half-yearly / annual)",
+    "Loan facility available after 6 months from commencement",
+    "Surrender allowed on diagnosis of a listed Critical Illness (self/spouse/children): 95% of Purchase Price",
+    "Standardised IRDAI 'Saral Pension' product construct; available to NPS and QROPS subscribers"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "min_purchase_price": null,
+    "policy_term": "Whole-life immediate annuity (annuity payable for life / last survivor)",
+    "premium_payment_term": "Single Premium (Purchase Price)",
+    "note": "Numeric entry-age and minimum purchase-price / annuity eligibility table was not recovered from this parse (rendered as a table). Verify against policy document before asserting numeric limits."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the Policy Document. For NPS/QROPS-sourced policies, free-look proceeds are returned only to the originating fund house per NPS/HMRC rules.",
+    "grace_period": "Not applicable in the usual sense — single-premium immediate annuity (no recurring premiums).",
+    "suicide_clause": "Not applicable as a standard exclusion — this is a return-of-purchase-price immediate annuity; on death the Purchase Price (ROP) is returned to the nominee per the chosen option. No suicide exclusion was surfaced in the parsed text.",
+    "maturity_benefit_condition": "There is NO maturity/survival lump-sum benefit — benefit is a lifelong annuity; Purchase Price is returned only on death (per option).",
+    "loan_note": "Loan available after 6 months from commencement; max loan such that annual loan interest does not exceed 50% of annual annuity. Loan interest = 10-yr G-Sec + 200 bps (current 8.58% p.a.).",
+    "surrender_note": "Surrender allowed only after 6 months and only on diagnosis of a listed Critical Illness (annuitant/spouse/children); surrender value is 95% of Purchase Price less any outstanding loan.",
+    "tax_note": "Tax benefits 'as per applicable tax laws as amended from time to time'; GST and cess collected over and above the Single Premium."
+  },
+  "mandatory_disclosures_present": [
+    "Section 41 - Prohibition of Rebate",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning",
+    "NPS / QROPS-specific cancellation and forfeiture conditions"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Annuity income is fixed and guaranteed for life at the rate locked in at inception based on Purchase Price, entry age and chosen option — figures must be tied to those parameters.",
+      "Return of Purchase Price is paid to the nominee on death (Option A) or on death of the last survivor (Option B) — ROP timing must be option-qualified.",
+      "Surrender is permitted ONLY on diagnosis of a listed Critical Illness (not freely surrenderable) and yields 95% of Purchase Price; loan is capped relative to annuity.",
+      "Annuity option once chosen cannot be changed during the term."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT position as a wealth-creation, investment or market-linked product — it is a non-linked, non-participating immediate annuity with no bonus and no investment upside.",
+      "Do NOT use 'bonus' or 'returns' language — the benefit is a fixed annuity plus return of the original Purchase Price.",
+      "Do NOT imply free liquidity / surrender on demand — surrender is restricted to listed critical-illness diagnosis.",
+      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+    ],
+    "must_state": [
+      "Plan UIN 116N169V16",
+      "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Individual, Immediate Annuity Plan'",
+      "That annuity rates are fixed at inception and the chosen annuity option cannot be changed later",
+      "Standard disclaimer to read the policy document for full terms, conditions and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of saral-pension-sl.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Entry-age and minimum purchase-price / annuity eligibility table not recovered from parse (rendered as a table).",
+      "Sample annuity illustration values were table/image content and not captured."
+    ]
+  }
+}
