@@ -142,9 +142,17 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Build-time so Next.js bakes the rewrites destination correctly.
-        NEXT_PUBLIC_API_BASE: http://localhost:8000
-        INTERNAL_API_BASE: http://backend:8000
+        # Build-time, baked into the standalone server. Behind shared-nginx the
+        # app is served under /compliance, so Next.js MUST prefix its assets
+        # (/compliance/_next/...) and its client-side API base. Without the
+        # base path the browser requests /_next/... which nginx can't route to
+        # this app → it gets an HTML 404 → "Unexpected token '<'" parsing JS.
+        NEXT_PUBLIC_BASE_PATH: /compliance
+        NEXT_PUBLIC_API_BASE: /compliance/api
+        INTERNAL_API_BASE: http://compliance-backend:8000
+    # Explicit image tag so it can also be built directly with `podman build`
+    # (podman-compose's build-arg handling has been flaky across versions).
+    image: localhost/compliance-frontend:latest
     container_name: compliance-frontend
     pull_policy: never
     restart: unless-stopped
@@ -154,9 +162,10 @@ services:
     cpus: 1.0
     # No host port — reached via shared-nginx at /compliance/.
     environment:
-      # Runtime so lib/api.ts can pick INTERNAL_API_BASE for SSR fetches.
-      NEXT_PUBLIC_API_BASE: http://localhost:8000
-      INTERNAL_API_BASE: http://backend:8000
+      # Runtime so next.config rewrites() can reach the backend for SSR fetches.
+      # NEXT_PUBLIC_* is inlined at build time, so this is only the SSR target.
+      NEXT_PUBLIC_API_BASE: /compliance/api
+      INTERNAL_API_BASE: http://compliance-backend:8000
       NEXT_PUBLIC_BUILD_SHA: ${BUILD_SHA:-dev}
     depends_on:
       - backend
