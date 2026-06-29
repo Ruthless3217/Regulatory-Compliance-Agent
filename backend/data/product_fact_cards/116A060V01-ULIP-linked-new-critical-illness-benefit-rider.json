@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Linked New Critical Illness Benefit Rider",
+  "uin": "116A060V01",
+  "rider_uins": [],
+  "source_file": "ULIP-linked-new-critical-illness-benefit-rider.pdf",
+  "product_category": "rider",
+  "regulatory_descriptor": "A Linked, Non-Participating, Individual, Pure Risk Health Rider",
+  "structural_flags": {
+    "is_unit_linked": true,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": false,
+    "offers_maturity_benefit": false,
+    "offers_loan": false
+  },
+  "variants": ["Critical (10 major CIs)", "Enhanced (25 major CIs)", "Comprehensive (60 major CIs)"],
+  "key_benefits": [
+    "Critical Illness lump-sum benefit — on first diagnosis of a covered critical illness, the Rider Sum Assured is paid in lump sum, subject to the Life Assured surviving 14 days from confirmed diagnosis",
+    "Choice of 3 options covering 10 / 25 / 60 major critical illnesses (Critical / Enhanced / Comprehensive)",
+    "Women-specific illness coverage in each option (cancer relating to breast, corpus uteri, cervix uteri, ovary, vulva, vagina)",
+    "Health Management Services while the rider is in force",
+    "Tax benefit as per prevailing income tax laws"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Rider Policy Term and Rider PPT must align with the base policy term and base PPT; numeric range not captured in this parse",
+    "premium_payment_term": "Aligned to base policy (single / limited / regular); numeric range not captured",
+    "note": "This is a LINKED (unit-linked) RIDER attachable to a base policy. One of three options (Critical/Enhanced/Comprehensive) chosen at inception. Eligibility boundary table not recovered from this parse."
+  },
+  "key_terms": {
+    "free_look_period_days": null,
+    "free_look_note": "Free look period is as per the base policy (commonly 30 days) — verify against the base policy / rider document.",
+    "grace_period": "Same as the base policy.",
+    "suicide_clause": "Not separately stated for this pure-risk health rider in this parse — handled per base policy; verify against rider policy document.",
+    "survival_period_note": "Benefit is payable only if the Life Assured survives 14 days from the date of confirmed diagnosis; a waiting period and survival-period exclusion apply.",
+    "loan_note": "No loan / no maturity benefit — pure risk health rider.",
+    "tax_note": "Tax benefits as per prevailing income tax laws as amended — consult a tax advisor. GST/cess collected over and above the premium."
+  },
+  "mandatory_disclosures_present": [
+    "Free Look Period (as per base policy)",
+    "Grace Period",
+    "Applicability of Goods & Service Tax",
+    "Exclusions (waiting period, survival period)",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "The number of critical illnesses covered (10 / 25 / 60) is option-dependent (Critical / Enhanced / Comprehensive) — any '60 critical illnesses' claim is valid ONLY for the Comprehensive option and must be option-qualified.",
+      "Payout is conditional on first diagnosis AND the Life Assured surviving 14 days from confirmed diagnosis, and is subject to waiting/survival-period exclusions.",
+      "Women-specific cover is included in each option (not an add-on).",
+      "Rider Sum Assured is paid on a covered CI claim — it is a protection benefit, not a return."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT market this as a standalone product — it is a rider that MUST reference and be attached to an eligible base policy.",
+      "Do NOT advertise '60 critical illnesses' without specifying the Comprehensive option, nor imply all illnesses are covered from day one (waiting and 14-day survival periods apply).",
+      "Do NOT position as an investment, savings, maturity or money-back product — it is a pure-risk health rider with no maturity benefit and no loan, despite being a 'Linked' rider.",
+      "Tax benefits must not be stated as assured — carry the 'as per prevailing income tax laws' caveat."
+    ],
+    "must_state": [
+      "Rider UIN 116A060V01 and reference to the base policy it is attached to",
+      "Full regulatory descriptor: 'A Linked, Non-Participating, Individual, Pure Risk Health Rider'",
+      "The chosen option (Critical/Enhanced/Comprehensive) and the applicable waiting/survival-period conditions whenever the CI count is claimed",
+      "Standard disclaimer to read the rider sales literature with the benefit illustration and policy document"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of ULIP-linked-new-critical-illness-benefit-rider.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Numeric entry/maturity age, rider sum-assured and rider-term boundary table not recovered from this parse.",
+      "Free-look days inherited from base policy (not stated explicitly in the rider leaflet)."
+    ]
+  }
+}

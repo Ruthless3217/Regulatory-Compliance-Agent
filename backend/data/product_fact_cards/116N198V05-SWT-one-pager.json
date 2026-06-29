@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Superwoman Term",
+  "uin": "116N198V05",
+  "rider_uins": ["116B058V01", "116B056V01"],
+  "source_file": "SWT-one-pager.pdf",
+  "product_category": "term",
+  "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual Life Insurance Term Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": false,
+    "offers_loan": false
+  },
+  "variants": ["Bajaj Life eTouch II - Life Shield variant (base term cover, UIN 116N198V05)"],
+  "key_benefits": [
+    "Death Benefit — lump sum paid to nominee on death of the Life Assured",
+    "Terminal Illness (TI) Benefit — lump sum on diagnosis of terminal illness, up to Rs 2 Crores",
+    "Critical Illness rider benefit — lump sum on diagnosis of any of 60 covered critical illnesses, including women-specific conditions (breast, corpus uteri, cervix uteri, ovary, vulva, vagina)",
+    "Child Care rider benefit (optional) — 105% of total rider premiums paid plus a monthly income until the child turns 25, on death or ATPD of the Life Assured",
+    "Health Management Services worth up to Rs 36,500 p.a. (comprehensive health check-up, OPD consultations, pregnancy OPD wallet, emotional wellness, nutritionist)"
+  ],
+  "riders_available": [
+    "Bajaj Life New Critical Illness Benefit Rider - Comprehensive variant (Non-Linked, Non-Participating, Individual, Pure Risk Health Rider, UIN 116B058V01)",
+    "Bajaj Life Family Protect Rider - Child Care variant (Non-Linked, Non-Participating, Individual, Pure Risk Health Rider, UIN 116B056V01)"
+  ],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Illustrations use a 40-year policy term; full PT range not captured in this one-pager",
+    "premium_payment_term": "Not captured in this one-pager",
+    "note": "This is a women-focused packaging of Bajaj Life eTouch II - Life Shield variant (base term plan 116N198V05) bundled with the New Critical Illness Benefit Rider (116B058V01) and the Family Protect - Child Care Rider (116B056V01). eTouch II is also available standalone or with other riders. Eligibility boundary table not recovered from this one-pager."
+  },
+  "key_terms": {
+    "free_look_period_days": null,
+    "free_look_note": "Not captured in this one-pager; standard 30 days expected (per the eTouch II base plan) — verify against policy document.",
+    "grace_period": "Not captured in this one-pager — verify against policy document.",
+    "suicide_clause": "Not captured in this one-pager — verify against policy document.",
+    "maturity_benefit_condition": "Pure term cover (Life Shield variant) — NO maturity benefit; no money is returned on survival.",
+    "terminal_illness_note": "Terminal Illness benefit is an acceleration of the death benefit, capped at Rs 2 Crores.",
+    "tax_note": "Tax benefits per prevailing Section 10(10D) and Section 80C (under the old tax regime) of the Income Tax Act — subject to change; consult a tax advisor."
+  },
+  "mandatory_disclosures_present": [
+    "Risk Factors & Warning Statements (product/rider names do not indicate quality/future prospects/returns)",
+    "Beware-of-spurious-calls warning",
+    "Statement that eTouch II is also available individually without/with other riders"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Any Critical Illness payout claim depends on the New Critical Illness Benefit Rider (116B058V01) being attached — it is a rider benefit, not base-plan cover; the '60 critical illnesses' figure is the Comprehensive variant.",
+      "Any 'monthly income for the child / child care' claim depends on the optional Family Protect - Child Care Rider (116B056V01) being chosen; income runs only until the child turns 25 and triggers on death or ATPD.",
+      "Terminal Illness benefit is an acceleration of (not additional to) the death benefit, capped at Rs 2 Crores.",
+      "Health Management Services value (up to Rs 36,500 p.a.) is an estimated average market price for assumed service frequencies, not a cash benefit."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT position as an investment, savings or money-back product — it is non-linked, non-participating pure term protection with NO maturity benefit.",
+      "Do NOT present rider benefits (critical illness, child care, health services) as base-plan guarantees without referencing the relevant rider and its UIN.",
+      "Do NOT use 'guaranteed returns' / 'bonus' language — there are no bonuses (non-par) and no maturity/return-of-premium on this variant.",
+      "Tax benefits must not be stated as assured — carry the 'subject to prevailing tax laws / old tax regime' caveat."
+    ],
+    "must_state": [
+      "Base plan UIN 116N198V05 (Bajaj Life eTouch II - Life Shield variant) plus rider UINs 116B058V01 and 116B056V01 wherever those rider benefits are referenced",
+      "Full regulatory descriptor of the base term plan: 'A Non-Linked, Non-Participating, Individual Life Insurance Term Plan' (riders are 'Non-Linked, Non-Participating, Individual, Pure Risk Health Rider')",
+      "Standard disclaimer to read the sales brochure and policy document of base plan and riders before concluding a sale"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of SWT-one-pager.pdf",
+    "confidence": "medium",
+    "gaps": [
+      "'Superwoman Term' is a marketing package over eTouch II - Life Shield (116N198V05) + two riders (116B058V01, 116B056V01); confirm whether 'Superwoman Term' has its own IRDAI filing or is purely a marketing bundle.",
+      "This is a 2-page one-pager — entry/maturity age, sum-assured, PPT, free-look, grace-period and suicide-clause specifics not present."
+    ]
+  }
+}

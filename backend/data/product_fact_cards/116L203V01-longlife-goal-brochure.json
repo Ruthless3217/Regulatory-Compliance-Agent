@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life LongLife Goal III",
+  "uin": "116L203V01",
+  "rider_uins": ["116A057V02", "116A059V01", "116A060V01"],
+  "source_file": "longlife-goal-brochure.pdf",
+  "product_category": "ulip",
+  "regulatory_descriptor": "A Unit-linked Non-Participating Whole Life Insurance Plan",
+  "structural_flags": {
+    "is_unit_linked": true,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": true,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": true,
+    "offers_loan": false
+  },
+  "variants": ["LongLife Goal without Waiver of Premium", "LongLife Goal with Waiver of Premium"],
+  "key_benefits": [
+    "Whole-of-life unit-linked cover (limited premium payment); Maturity Benefit = Fund Value on the maturity date, provided the Policy is in-force (market-linked).",
+    "Death Benefit = higher of Prevailing Sum Assured, Regular Premium Fund Value, or Guaranteed Death Benefit (105% of Total Premiums Paid).",
+    "Retired Life Income (RLI): optional systematic partial withdrawals of 0-12% of Fund Value p.a. from age 45 or after 10th policy year (whichever later), with a 0.5% Return Enhancer.",
+    "Waiver of Premium benefit on Accidental Permanent Total Disability (and on death of policyholder if different from life assured) — ONLY under the 'with Waiver of Premium' variant.",
+    "Periodical Return of Mortality Charge (PROMC) and Periodical Return of Waiver of Premium Charge (PROWC) added back to Fund Value at intervals (subject to all due premiums paid, not surrendered/paid-up).",
+    "Loyalty Additions every year from the 10th policy year (policies with Annualized Premium < Rs 10 Lakhs).",
+    "Choice of 4 investment portfolio strategies and multiple funds; settlement option for Maturity/Death Benefit over up to 5 years."
+  ],
+  "riders_available": [
+    "Bajaj Life Linked Accident Protection Rider II (UIN 116A057V02)",
+    "Bajaj Life Care Plus Rider (UIN 116A059V01)",
+    "Bajaj Life Linked New Critical Illness Benefit Rider (UIN 116A060V01)"
+  ],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Whole of life",
+    "premium_payment_term": "Limited premium payment",
+    "note": "Eligibility table is referenced but not captured numerically in the parse; 'Maximum Premium / Maximum Sum Assured shall be as per the Board Approved Underwriting Policy (BAUP)'. In case of a minor life the policy vests at age 18. Verify numeric limits against the policy document."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the policy document (electronic or otherwise); not applicable to policies with tenure of less than a year. Refund subject to proportionate risk premium, medical/stamp-duty expenses and repurchase of units at cancellation-date price.",
+    "grace_period": "30 days for yearly/half-yearly/quarterly frequencies; 15 days for monthly frequency.",
+    "suicide_clause": "On death by suicide within 12 months of commencement or latest revival of the Policy, the nominee receives the Fund Value as on date of intimation of death (charges other than FMC/guarantee charge recovered after death are added back). No other death exclusion.",
+    "lock_in": "5-year lock-in: no liquidity / no surrender or partial withdrawal during the first five policy years; surrender during lock-in moves Fund Value (less discontinuance charge) to the Discontinued Life Policy Fund.",
+    "maturity_benefit_condition": "Maturity Benefit is the market-linked Fund Value (whole-of-life), not a guaranteed amount.",
+    "tax_note": "Premium, Maturity, Death, partial withdrawal, RLI and Surrender benefits 'may be eligible for tax benefits as per extant Income Tax Act' — consult a tax consultant; GST per prevailing tax laws."
+  },
+  "mandatory_disclosures_present": [
+    "Risks of Investment in the Units of the Plan (market-risk / NAV-may-go-up-or-down statement)",
+    "Funds 'do not offer a guaranteed or assured return' disclosure",
+    "Section 41 — Prohibition of Rebate",
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 45 — Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Any 'Retired Life Income' / 'regular income' / 'pension-like' claim must state RLI is a systematic partial withdrawal from the policyholder's own Fund Value (0-12% chosen by the customer), subject to the Fund Value not dropping below 105% of Total Premiums Paid — it is not a guaranteed annuity.",
+      "Any 'guaranteed' claim is bounded to the Guaranteed Death Benefit of 105% of Total Premiums Paid — not a guaranteed maturity/return.",
+      "Waiver-of-Premium, PROWC and any WOP-linked benefit are valid ONLY under the 'LongLife Goal with Waiver of Premium' variant and must be variant-qualified.",
+      "Loyalty Additions are conditional (policies with Annualized Premium < Rs 10 Lakhs, all due premiums paid, not surrendered/paid-up) and must be stated with those conditions."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT promise 'guaranteed returns', 'assured income' or a fixed retirement corpus — this is a unit-linked plan; investment risk is borne by the policyholder and funds do not offer a guaranteed or assured return.",
+      "Do NOT use 'bonus' language — it is non-participating.",
+      "Do NOT position RLI as a guaranteed/lifelong pension — it depends on fund availability and stops if the Fund Value floor is breached.",
+      "Do NOT imply liquidity in the first 5 years.",
+      "Do NOT present the 4%/8% illustrative figures as expected returns or as upper/lower limits.",
+      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat.",
+      "Do NOT state a loan facility — no loan is available under this plan."
+    ],
+    "must_state": [
+      "Plan UIN 116L203V01",
+      "Full regulatory descriptor: 'A Unit-linked Non-Participating Whole Life Insurance Plan'",
+      "Mandatory ULIP market-risk disclosure (premiums subject to capital-market investment risk; NAV may go up or down; policyholder responsible for decisions; product name does not indicate quality/future prospects/returns).",
+      "The 5-year no-liquidity lock-in statement.",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions."
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of longlife-goal-brochure.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Numeric eligibility (entry/maturity age, min/max sum assured, premium bands) not present in the parse — brochure defers to BAUP.",
+      "Parser's primary UIN (116A057V02) is actually a rider; the plan UIN 116L203V01 was taken from the brochure's contact-page UIN line."
+    ]
+  }
+}

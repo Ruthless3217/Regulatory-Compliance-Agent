@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life iSecure II",
+  "uin": "116N208V03",
+  "rider_uins": ["116B034V02", "116B036V02", "116B056V01", "116B058V01"],
+  "source_file": "isecure-insurance-plan.pdf",
+  "product_category": "term",
+  "regulatory_descriptor": "A non-linked, non-participating, individual, regular/limited premium payment, pure risk and savings life insurance plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": true,
+    "offers_loan": false
+  },
+  "variants": ["Variant 1 - Life", "Variant 2 - ROP (Return of Premiums)", "Variant 3 - Easy"],
+  "key_benefits": [
+    "Death Benefit — Sum Assured on death paid as lump sum (or as monthly income for 5/10/20/30/40 years, or combination); not less than Guaranteed Death Benefit (105% of Total Premiums Paid)",
+    "Maturity Benefit — Sum Assured on Maturity returned ONLY under Variant 2 (ROP); Variants 1 (Life) and 3 (Easy) have NO maturity benefit",
+    "Early Exit Value — return of 100% of Total Premiums Paid; available ONLY under Variant 1 (Life), exercisable in the first 5 policy years after the life assured attains age 60 (subject to entry age <= 50, PT >= 35 years, maturity age >= 70)",
+    "Auto Cover Continuance Benefit — defer premiums up to 12 months keeping full cover (Variants 1 & 2; after 3 completed policy years)",
+    "Health Management Services — inbuilt wellness benefit (Variants 1 & 2)",
+    "Maturity Benefit in instalments option (ROP variant) — 120% of Maturity Benefit / 5 paid yearly over 5 years"
+  ],
+  "riders_available": [
+    "Bajaj Life Accidental Death Benefit Rider (UIN 116B034V02)",
+    "Bajaj Life Accidental Permanent Total/Partial Disability Benefit Rider (UIN 116B036V02)",
+    "Bajaj Life Family Protect Rider (UIN 116B056V01)",
+    "Bajaj Life New Critical Illness Benefit Rider (UIN 116B058V01)"
+  ],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Illustrations use 25-50 year terms (covering up to age 85); full PT range not captured in this parse. Early Exit Value requires PT >= 35 years.",
+    "premium_payment_term": "Regular or Limited; full numeric range not captured in this parse",
+    "note": "Eligibility boundary table not recovered from this parse — verify against policy document. Early Exit Value carries explicit sub-conditions: entry age <= 50, PT >= 35 years, maturity age >= 70."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from the date of receipt of the Policy Document; refund subject to proportionate risk premium, expenses and stamp duty; processed within 7 days.",
+    "grace_period": "30 days for premium frequencies other than monthly; 15 days for monthly. On non-payment: lapses if less than one full year's premium paid, else converts to paid-up.",
+    "suicide_clause": "On death due to suicide within 12 months from date of commencement of risk or date of revival, nominee is entitled to at least 80% of Total Premiums Paid (or surrender/termination value if higher); no other benefit. Verify exact higher-of formula against policy document.",
+    "maturity_benefit_condition": "Maturity Benefit (Sum Assured on Maturity) applies ONLY to Variant 2 (ROP). Variant 1 (Life) and Variant 3 (Easy) pay NO maturity benefit (pure term). Variant 1 instead offers an Early Exit Value (return of premiums) under strict conditions.",
+    "tax_note": "Premium, Maturity Benefit, Early Exit Value and Death Benefit may be eligible for tax benefits per the extant Income Tax Act, as amended — consult a tax advisor."
+  },
+  "mandatory_disclosures_present": [
+    "Section 41 — Prohibition of Rebate",
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 45 — Fraud & Misstatement",
+    "Free Look Period (30 days)",
+    "Grace Period",
+    "Suicide clause",
+    "Applicability of Goods & Service Tax",
+    "Disclaimer — policy document is the conclusive evidence of contract",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Any 'get your premiums back' / 'return of premium' / 'maturity benefit' claim is valid ONLY for Variant 2 (ROP) — must be variant-qualified; Variants 1 (Life) and 3 (Easy) pay NO maturity benefit.",
+      "Any 'exit and get your money back' claim refers to the Early Exit Value, which is ONLY under Variant 1 (Life) and is bound by strict conditions (entry age <= 50, PT >= 35 years, exercise in the first 5 years after age 60, maturity age >= 70).",
+      "Accidental-death, disability, critical-illness or family-protect benefits depend on the relevant optional rider (116B034V02 / 116B036V02 / 116B056V01 / 116B058V01) being attached.",
+      "Death Benefit floor '105% of Total Premiums Paid' (Guaranteed Death Benefit) is a minimum, not a return."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT position as a market-linked investment or wealth-creation product — it is non-linked, non-participating; the only 'savings' element is return-of-premium on the ROP variant.",
+      "Do NOT use 'guaranteed returns' / 'bonus' language — there are no bonuses (non-par); the only money-back is ROP (Variant 2) or Early Exit Value (Variant 1, conditional).",
+      "Do NOT present the Life or Easy variant as paying a maturity amount.",
+      "Tax benefits must not be stated as assured — carry the 'subject to prevailing tax laws' caveat."
+    ],
+    "must_state": [
+      "Plan UIN 116N208V03 (the four rider UINs only where those rider benefits are referenced)",
+      "Full regulatory descriptor: 'A non-linked, non-participating, individual, regular/limited premium payment, pure risk and savings life insurance plan'",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of isecure-insurance-plan.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Numeric entry/maturity age and minimum sum-assured boundary table not recovered from this parse.",
+      "Parser's primary UIN (116B034V02) is a rider; the real plan UIN 116N208V03 was taken from the brochure footer/disclosure line."
+    ]
+  }
+}
