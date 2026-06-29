@@ -1,4 +1,4 @@
-."""
+"""
 Chat endpoint — streams compliance-aware Q&A grounded in a submission.
 
 Stateless on server side: the client manages conversation history.
