@@ -6,7 +6,16 @@
       "Bash(curl -s -o /dev/null -w \"GET /api/health → HTTP %{http_code}\\\\n\" http://localhost:3000/api/health)",
       "Bash(docker cp *)",
       "Bash(MSYS_NO_PATHCONV=1 docker exec compliance-backend python /app/scripts/_inspect_docx_comments.py /tmp/sample_a.docx 15)",
-      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8000/health)"
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8000/health)",
+      "Bash(python -m compileall -q app)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(cd /d/Regulatory-Compliance-Agent)",
+      "Bash(cat frontend/next.config.*)",
+      "Bash(grep -nE 'NEXT_PUBLIC_BASE_PATH|ARG|ENV|basePath|BASE_PATH' frontend/Dockerfile)",
+      "Bash(git add *)",
+      "Bash(git update-index *)",
+      "Bash(git commit -m 'chore\\(vm\\): add build-frontend-vm.sh to rebuild frontend with baked basePath *)",
+      "Bash(git push *)"
     ]
   }
 }

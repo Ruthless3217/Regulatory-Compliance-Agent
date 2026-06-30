@@ -113,8 +113,8 @@ def test_response_token_filter():
     assert _is_thin({}) is True
 
     # Real reviewer flags — short but substantive → kept.
-    assert _is_thin({"comment_text": "source?"}) is False
-    assert _is_thin({"comment_text": "rephrase."}) is False
+    assert _is_thin({"comment_text": "missing?"}) is False
+    assert _is_thin({"comment_text": "incorrect value"}) is False
     assert _is_thin({"comment_text": "Lockin- period Ulip disclaimer missing"}) is False
 
 
@@ -138,7 +138,7 @@ def test_thin_precedents_filtered_in_retrieval():
             return [_FakeHit(real), _FakeHit(thin)]
 
     class _FakeEmbedder:
-        async def embed(self, texts):
+        async def embed(self, texts, *args, **kwargs):
             return [[0.0]] * len(texts)
 
     orig_store = pr.get_vector_store
@@ -300,7 +300,10 @@ def test_novel_finding_confidence_floor():
         _result(novel_findings=[keep, drop]), precedents=[],
         chunk_id="c2", chunk_index=1, location="chunk:c2",
     )
-    assert len(vios) == 1
+    assert len(vios) == 2
+    assert vios[0]["suppressed"] is False
+    assert vios[1]["suppressed"] is True
+    assert "below floor" in vios[1]["suppressed_reason"]
     v = vios[0]
     assert v["current_text"] == "GST is not applicable on individual life insurance premium"
     # Novel findings have NULL citation columns.
@@ -343,9 +346,9 @@ def test_alembic_0007_predicate_matches_runtime_guard():
     """The migration's purge set must not be looser than the runtime guard's
     denylist — both should agree on the canonical response tokens."""
     mig = _load_migration_0007()
-    from app.services.rag.retrievers.precedent_retriever import _RESPONSE_TOKENS
+    from app.services.rag.precedent_filters import RESPONSE_TOKENS
 
-    assert mig.RESPONSE_DENYLIST == _RESPONSE_TOKENS
+    assert mig.RESPONSE_DENYLIST == RESPONSE_TOKENS
 
 
 @pytest.mark.skipif(

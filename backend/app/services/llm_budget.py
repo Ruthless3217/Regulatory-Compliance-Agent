@@ -30,6 +30,17 @@ class LLMBudgetExceeded(RuntimeError):
         super().__init__(f"Global LLM daily token budget exhausted ({spent}/{budget})")
 
 
+def is_over_budget(spent: int, budget: int) -> bool:
+    """Pure decision: has cumulative ``spent`` reached the ``budget`` ceiling?
+
+    ``budget <= 0`` disables the guard (never over). Reaching the ceiling fails
+    closed — the call that would tip us to/over the limit is refused.
+    """
+    if budget <= 0:
+        return False
+    return spent >= budget
+
+
 def _day_index(clock: Callable[[], float]) -> int:
     return int(clock() // 86_400)
 

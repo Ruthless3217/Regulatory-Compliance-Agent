@@ -7,7 +7,7 @@ from app.config import settings
 
 
 def test_kb_defaults_present():
-    assert settings.pgvector_top_k == 5
+    assert settings.pgvector_top_k == 15
     assert settings.kb_chunk_size == 500
     assert settings.kb_chunk_overlap == 50
     assert settings.kb_batch_size == 100

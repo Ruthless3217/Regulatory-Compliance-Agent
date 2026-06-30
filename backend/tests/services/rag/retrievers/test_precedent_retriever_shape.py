@@ -12,14 +12,14 @@ def test_hit_to_precedent_maps_fields_and_score():
         id="abc",
         score=0.73,
         fields={
-            "reviewer_name": "Ayushi Sharma/Pune HO/Legal Compliance and FPU/Life",
-            "comment_text": "Add disclaimer",
-            "chunk_text": "draft chunk",
-            "final_text_chunk": "final",
-            "violation_category": "disclaimer issue",
+            "reviewer_role": "Ayushi Sharma/Pune HO/Legal Compliance and FPU/Life",
+            "reviewer_comment": "Add disclaimer",
+            "span_context": "draft chunk",
+            "after_text": "final",
+            "issue_type": "disclaimer issue",
             "severity": "critical",
-            "document_id": "123",
-            "anchor_text": "anchor",
+            "ticket": "123",
+            "highlighted_span": "anchor",
         },
     )
     p = _hit_to_precedent(hit)

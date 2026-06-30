@@ -30,8 +30,34 @@ from app.services.rag.retrievers.source_docs_retriever import (
     get_source_docs_retriever,
 )
 
+from app.config import settings
+from app.services.llm_budget import llm_budget_guard
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["Chat"])
+
+
+def clamp_text(text: str, max_chars: int) -> str:
+    """Truncate ``text`` to ``max_chars`` (+ a trailing ellipsis when cut).
+    Non-str input collapses to an empty string."""
+    if not isinstance(text, str):
+        return ""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "…"
+
+
+def clamp_history(history: List[Dict[str, str]], max_messages: int, max_chars: int) -> List[Dict[str, str]]:
+    """Bound client-supplied chat history before it reaches the LLM: keep only
+    the most recent ``max_messages`` turns, truncate each to ``max_chars``, and
+    drop turns with no content."""
+    recent = history[-max_messages:] if max_messages > 0 else []
+    out: List[Dict[str, str]] = []
+    for m in recent:
+        content = clamp_text(m.get("content", ""), max_chars)
+        if content:
+            out.append({"role": m.get("role", "user"), "content": content})
+    return out
 
 
 class ChatMessage(BaseModel):
@@ -320,8 +346,13 @@ async def _stream_chat(
         logger.warning(f"chat retriever failed, using degraded context: {e}")
         ctx = ChatContext(degraded=True)
 
-    system_prompt = _build_system_prompt(submission, ctx, db)
-    hist = [{"role": h.role, "content": h.content} for h in history]
+    # Bound client-supplied input before it hits the LLM (prompt-bloat guard).
+    message = clamp_text(message, settings.chat_max_message_chars)
+    hist = clamp_history(
+        [{"role": h.role, "content": h.content} for h in history],
+        max_messages=settings.chat_max_history_messages,
+        max_chars=settings.chat_max_history_chars,
+    )
     total_tokens = 0
     try:
         async for delta in chat_llm_service.stream_response(
@@ -364,7 +395,7 @@ def _resolve_violation(violation_id: Optional[UUID], db: Session) -> Violation:
     return v
 
 
-@router.post("", dependencies=[Depends(llm_rate_limit)])
+@router.post("", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
 async def chat(req: ChatRequest, request: Request, db: Session = Depends(get_db)):
     submission = _fetch_submission(req.submission_id, db)
     return StreamingResponse(
@@ -374,7 +405,7 @@ async def chat(req: ChatRequest, request: Request, db: Session = Depends(get_db)
     )
 
 
-@router.post("/quote-violation", dependencies=[Depends(llm_rate_limit)])
+@router.post("/quote-violation", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
 async def quote_violation(req: QuickPromptRequest, request: Request, db: Session = Depends(get_db)):
     submission = _fetch_submission(req.submission_id, db)
     target = _resolve_violation(req.violation_id, db)
@@ -405,7 +436,7 @@ async def quote_violation(req: QuickPromptRequest, request: Request, db: Session
     )
 
 
-@router.post("/suggest-rewrite", dependencies=[Depends(llm_rate_limit)])
+@router.post("/suggest-rewrite", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
 async def suggest_rewrite(req: QuickPromptRequest, request: Request, db: Session = Depends(get_db)):
     submission = _fetch_submission(req.submission_id, db)
     target = _resolve_violation(req.violation_id, db)

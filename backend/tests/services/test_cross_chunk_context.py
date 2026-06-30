@@ -66,7 +66,7 @@ def test_prompt_with_context_adds_reference_block_and_instructions():
     assert "DOCUMENT CONTEXT" in p
     assert "Returns not guaranteed." in p
     assert "ONLY from" in p
-    assert "do NOT raise it" in p
+    assert "satisfied_elsewhere" in p
 
 
 def test_sweep_prompt_forwards_document_context():
