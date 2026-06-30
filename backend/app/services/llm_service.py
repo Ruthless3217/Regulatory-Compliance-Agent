@@ -594,22 +594,17 @@ class LLMService:
                         f"Increase LLM_MAX_TOKENS for the deployed model."
                     )
 
-                # Extract token usage
+                # Extract token usage from the standard OpenAI response object.
+                # (The old raw_response / usageMetadata path was removed when we
+                # switched from with_raw_response to plain create().)
                 token_usage = 0
                 input_tokens = 0
                 output_tokens = 0
-                try:
-                    raw_data = json.loads(response_wrapper.http_response.text)
-                    if "usageMetadata" in raw_data:
-                        token_usage = raw_data["usageMetadata"].get("totalTokenCount", 0)
-                        input_tokens = raw_data["usageMetadata"].get("promptTokenCount", 0)
-                        output_tokens = raw_data["usageMetadata"].get("candidatesTokenCount", 0)
-                    elif hasattr(response, 'usage') and response.usage:
-                        token_usage = response.usage.total_tokens
-                        input_tokens = response.usage.prompt_tokens
-                        output_tokens = response.usage.completion_tokens
-                except Exception:
-                    token_usage = 0
+                if hasattr(response, 'usage') and response.usage:
+                    input_tokens = getattr(response.usage, 'prompt_tokens', 0) or 0
+                    output_tokens = getattr(response.usage, 'completion_tokens', 0) or 0
+                    token_usage = getattr(response.usage, 'total_tokens', 0) or 0
+
 
                 self._update_langsmith_usage(
                     input_tokens,

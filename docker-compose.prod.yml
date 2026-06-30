@@ -96,8 +96,8 @@ services:
       # --- RAG / embeddings ---
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       COHERE_API_KEY: ${COHERE_API_KEY:-}
-      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-cohere}
-      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-embed-english-v3.0}
+      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-azure_cohere}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-Cohere-embed-v3-multilingual}
       RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1024}
       COHERE_EMBEDDING_MODEL: ${COHERE_EMBEDDING_MODEL:-embed-english-v3.0}
       # --- Tracing (optional) ---

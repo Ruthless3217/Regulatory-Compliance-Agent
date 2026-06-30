@@ -17,7 +17,7 @@ services:
       # indexed KB. AZURE_INFERENCE_* / RAG_EMBEDDING_* are forwarded by the base
       # docker-compose.yml; these lines just keep the local defaults aligned.
       RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-azure_cohere}
-      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-embed-multilingual-v3.0}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-Cohere-embed-v3-multilingual}
       RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1024}
   frontend:
     # `!override` REPLACES the base ports list instead of appending to it.

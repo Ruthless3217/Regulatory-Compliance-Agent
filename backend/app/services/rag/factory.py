@@ -18,24 +18,15 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1)
 def get_embedder() -> Embedder:
-    provider = (settings.rag_embedding_provider or "openai").lower()
-    if provider == "azure_openai":
-        from app.services.rag.embedders.azure_embedder import AzureOpenAIEmbedder
-        logger.info("RAG embedder: AzureOpenAIEmbedder")
-        return AzureOpenAIEmbedder()
-    if provider == "openai":
-        from app.services.rag.embedders.openai_embedder import OpenAIEmbedder
-        logger.info("RAG embedder: OpenAIEmbedder")
-        return OpenAIEmbedder()
-    if provider == "cohere":
-        from app.services.rag.embedders.cohere_embedder import CohereEmbedder
-        logger.info("RAG embedder: CohereEmbedder")
-        return CohereEmbedder()
+    provider = (settings.rag_embedding_provider or "azure_cohere").lower()
     if provider == "azure_cohere":
         from app.services.rag.embedders.azure_cohere_embedder import AzureCohereEmbedder
         logger.info("RAG embedder: AzureCohereEmbedder")
         return AzureCohereEmbedder()
-    raise RAGDegraded(f"Unknown RAG_EMBEDDING_PROVIDER: {provider}")
+    raise RAGDegraded(
+        f"RAG_EMBEDDING_PROVIDER '{provider}' is disabled/removed. "
+        "Only 'azure_cohere' (Cohere-embed-v3-multilingual on Azure AI Foundry) is supported."
+    )
 
 
 @lru_cache(maxsize=1)

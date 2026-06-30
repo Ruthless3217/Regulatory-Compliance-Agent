@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     llm_reasoning_effort: str = ""
     llm_insecure_tls: bool = False  # set True to bypass TLS verify (e.g. behind Cisco SSL inspection)
     llm_max_tokens: int = 4096      # hard cap on generated tokens per call (cost-leak guard)
+    llm_request_timeout: float = 120.0  # per-request timeout in seconds (SDK-level)
+    llm_max_retries: int = 2            # SDK-level retry count for transient errors
 
     # --- Chat-feature LLM override -------------------------------------------
     # The chat assistant (streaming Q&A) can run on a DIFFERENT provider than the
@@ -206,10 +208,10 @@ class Settings(BaseSettings):
     langchain_project: str = "Regulatory Compliance Agent"
 
     # RAG — pluggable backend
-    rag_embedding_provider: str = "openai"        # openai | azure_openai | azure_cohere
+    rag_embedding_provider: str = "azure_cohere"   # ONLY azure_cohere is supported
     rag_vector_backend: str = "pgvector"          # pgvector | azure_search
-    rag_embedding_model: str = "text-embedding-3-small"
-    rag_embedding_dim: int = 1536
+    rag_embedding_model: str = "Cohere-embed-v3-multilingual"
+    rag_embedding_dim: int = 1024
     rag_top_k_analysis: int = 8
     rag_top_k_chat: int = 5
     rag_top_k_similar: int = 3
@@ -239,11 +241,7 @@ class Settings(BaseSettings):
     # OpenAI (direct API — v1 default for embeddings)
     openai_api_key: str = ""
 
-    # Azure OpenAI (v2, embeddings)
-    azure_openai_endpoint: str = ""
-    azure_openai_api_key: str = ""
-    azure_openai_api_version: str = "2024-02-01"
-    azure_openai_embed_deployment: str = "text-embedding-3-small"
+
 
     # Azure AI Foundry — model-inference endpoint. Cohere models (embed v3,
     # rerank v4) deployed in the Foundry project are NOT served on the Azure
@@ -255,9 +253,11 @@ class Settings(BaseSettings):
     azure_inference_endpoint: str = ""              # AZURE_INFERENCE_ENDPOINT
     azure_inference_api_key: str = ""               # AZURE_INFERENCE_API_KEY
     azure_inference_api_version: str = "2024-05-01-preview"
-    azure_cohere_embed_deployment: str = "embed-v-3-english"   # AZURE_COHERE_EMBED_DEPLOYMENT
+    azure_cohere_embed_deployment: str = "Cohere-embed-v3-multilingual"   # AZURE_COHERE_EMBED_DEPLOYMENT
     # Reserved: rerank is not wired into the pgvector retrieval path yet.
     azure_cohere_rerank_deployment: str = ""        # AZURE_COHERE_RERANK_DEPLOYMENT
+    # Per-text embedding cache (Priority 4d) — avoids re-embedding repeated chunks.
+    embed_cache_size: int = 2048
 
     # Azure AI Search (v2, vector store)
     azure_search_endpoint: str = ""
@@ -266,22 +266,8 @@ class Settings(BaseSettings):
     azure_search_chunks_index: str = "rag-chunks"
     azure_search_source_docs_index: str = "rag-source-docs"
 
-    # Cohere (alternative embeddings — 1024-dim)
-    cohere_api_key: str = ""
-    cohere_embedding_model: str = "embed-english-v3.0"
 
-    # Azure AI Foundry inference surface (RAG_EMBEDDING_PROVIDER=azure_cohere).
-    # Cohere embed models are served from the Foundry MODELS endpoint
-    # (https://<resource>.services.ai.azure.com/models), NOT the Azure OpenAI
-    # surface. Auth is the Foundry resource key; blank reuses LLM_API_KEY (same
-    # resource). The deployment is the Foundry deployment name, which doubles as
-    # the embedding_model fingerprint stamped on every vector.
-    azure_inference_endpoint: str = ""
-    azure_inference_api_key: str = ""
-    azure_inference_api_version: str = "2024-05-01-preview"
-    azure_cohere_embed_deployment: str = "Cohere-embed-v3-multilingual"
-    # Per-text embedding cache (Priority 4d) — avoids re-embedding repeated chunks.
-    embed_cache_size: int = 2048
+
 
     # Product-doc grounding (2026-06-22) — fact cards (deterministic) + brochure
     # passages (semantic) injected into the analysis prompt. Additive: a no-match
