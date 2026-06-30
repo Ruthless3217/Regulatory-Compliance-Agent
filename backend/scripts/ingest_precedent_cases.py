@@ -36,6 +36,13 @@ def resolve_paths(args) -> Tuple[str, str, str]:
     )
 
 
+try:
+    from langsmith import traceable
+except ImportError:
+    def traceable(*_a, **_kw):
+        return lambda f: f
+
+@traceable(run_type="chain", name="Ingest Precedent Cases")
 async def _run(ledger: str, remediation: str, cache_dir: str, batch_size) -> None:
     svc = get_precedent_ingestion_service()
     summary = await svc.ingest(ledger, remediation, cache_dir, batch_size)

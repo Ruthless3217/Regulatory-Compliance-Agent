@@ -62,6 +62,14 @@ def seed_file(db, path: Path) -> int:
     return inserted
 
 
+try:
+    from langsmith import traceable
+except ImportError:
+    def traceable(*_a, **_kw):
+        return lambda f: f
+
+
+@traceable(run_type="chain", name="Seed Rules")
 def main() -> None:
     db = SessionLocal()
     try:

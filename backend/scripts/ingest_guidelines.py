@@ -141,6 +141,13 @@ async def ingest_file(path: Path, skip_existing: bool) -> dict:
         db.close()
 
 
+try:
+    from langsmith import traceable
+except ImportError:
+    def traceable(*_a, **_kw):
+        return lambda f: f
+
+@traceable(run_type="chain", name="Ingest Guidelines")
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Ingest guideline markdown files into rules + RAG")
     parser.add_argument(

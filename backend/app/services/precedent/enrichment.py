@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-from app.services.llm_service import llm_service
+from app.services.llm_service import critic_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ async def enrich(record: Dict[str, Any], cache_dir: str) -> PrecedentEnrichment:
         with open(path, "r", encoding="utf-8") as f:
             return PrecedentEnrichment(**json.load(f))
 
-    out = await llm_service.generate_structured_response(
+    out = await critic_llm_service.generate_structured_response(
         prompt=_prompt(record),
         output_model=PrecedentEnrichment,
         system_prompt=_SYSTEM,

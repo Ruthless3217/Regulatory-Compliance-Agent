@@ -1,0 +1,1 @@
+{"issue_type": "Incomplete Condition Disclosure", "why_rationale": "The reviewer flagged that the condition is not fully written out and the wording should be aligned with the cited source link.", "guideline_ref": null, "severity": "moderate"}

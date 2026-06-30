@@ -1,4 +1,4 @@
-"""Convert docs/downloads/*.docx into dataset_2.1_rl-shaped JSON precedents.
+"""Convert docs/downloads/*.docx into parsed JSON precedents.
 
 Each ticket family (group of files sharing a numeric prefix) is collapsed to a
 single JSON containing:
@@ -12,7 +12,7 @@ Skips tickets that have no Comments_*.docx — those have nothing to learn from.
 
 Usage:
   docker exec compliance-backend python -m scripts.convert_downloads_to_corpus \\
-      --downloads /app/docs/downloads --out /app/dataset/Dataset/Dataset/dataset_2.1_rl
+      --downloads /app/docs/downloads --out /app/uploads/parsed_precedents
 """
 from __future__ import annotations
 

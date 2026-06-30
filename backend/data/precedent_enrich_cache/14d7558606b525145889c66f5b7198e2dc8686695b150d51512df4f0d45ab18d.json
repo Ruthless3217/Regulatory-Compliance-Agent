@@ -1,0 +1,1 @@
+{"issue_type": "Incomplete Conditional Disclosure", "why_rationale": "The statement incorrectly implies PAN or Aadhaar submission is always required, while the requirement applies only under specified rent-payment conditions and should be stated in full.", "guideline_ref": "tax_and_gst_compliance_guidelines", "severity": "moderate"}

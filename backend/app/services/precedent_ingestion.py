@@ -16,6 +16,7 @@ id and a duplicate DB row. Treat cache_dir persistence as a hard requirement.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -71,9 +72,9 @@ class PrecedentIngestionService:
 
         # canonical_hash -> aggregated row
         agg: Dict[str, Dict[str, Any]] = {}
-        for r in ledger_rows:
-            # Only learn from substantive, anchored, reviewer-authored, non-reply
-            # comments. Replies are folded into their parent's thread instead.
+        filtered_records = []
+        filtered_indices = []
+        for idx, r in enumerate(ledger_rows):
             if r.get("is_reply"):
                 continue
             comment = r.get("comment") or ""
@@ -92,7 +93,32 @@ class PrecedentIngestionService:
                 "reviewer_role": r.get("role"),
                 "_cache_key": canonical_hash(seed, span, comment),
             }
-            enriched = await enrich(record, cache_dir=cache_dir)
+            filtered_records.append(record)
+            filtered_indices.append(idx)
+
+        # Batch enrich concurrently using Semaphore
+        sem = asyncio.Semaphore(20)
+
+        async def enrich_with_sem(rec):
+            async with sem:
+                try:
+                    return await enrich(rec, cache_dir=cache_dir)
+                except Exception as e:
+                    logger.warning("Failed to enrich record %s: %s", rec.get("_cache_key"), e)
+                    from app.services.precedent.enrichment import PrecedentEnrichment
+                    return PrecedentEnrichment(
+                        issue_type="General Compliance",
+                        why_rationale=rec.get("reviewer_comment") or "Compliance reviewer comment needing alignment",
+                        guideline_ref=None,
+                        severity="moderate"
+                    )
+
+        enrichments = await asyncio.gather(*(enrich_with_sem(rec) for rec in filtered_records))
+
+        for r_orig_idx, r_rec, enriched in zip(filtered_indices, filtered_records, enrichments):
+            r = ledger_rows[r_orig_idx]
+            span = r_rec["highlighted_span"]
+            comment = r_rec["reviewer_comment"]
 
             chash = canonical_hash(enriched.issue_type, span, comment)
             before, after = link_remediation(span, rem_by_ticket.get(str(r.get("ticket")), []))
@@ -113,9 +139,9 @@ class PrecedentIngestionService:
                 "id": precedent_id(chash),
                 "canonical_hash": chash,
                 "highlighted_span": span,
-                "span_context": r.get("span_context") or "",
+                "span_context": r_rec["span_context"],
                 "reviewer_comment": comment,
-                "reviewer_role": r.get("role"),
+                "reviewer_role": r_rec["reviewer_role"],
                 "is_reviewer": bool(r.get("is_reviewer", False)),
                 "thread": list(thread),
                 "resolved": bool(r.get("resolved", False)),

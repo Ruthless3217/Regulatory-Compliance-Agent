@@ -126,7 +126,7 @@ docker exec compliance-backend python -m scripts.ingest_knowledge_base --limit 5
 docker exec compliance-backend python -m scripts.ingest_knowledge_base
 
 # Or on the host (Postgres exposed on localhost:5432):
-cd backend && python -m scripts.ingest_knowledge_base --folder ../dataset/Dataset/Dataset/dataset_2.1_rl
+cd backend && python -m scripts.ingest_knowledge_base --folder uploads/parsed_precedents
 ```
 
 ### Operational note
@@ -235,7 +235,7 @@ Frontend env vars (`NEXT_PUBLIC_*`, baked at build time):
 ### Rules Management
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/rules` | Create a rule manually |
+| POST | ` ` | Create a rule manually |
 | GET | `/rules` | List rules (`category`, `is_active`, `skip`, `limit`) |
 | GET | `/rules/{id}` | Get a rule |
 | PATCH | `/rules/{id}` | Update a rule (activate/deactivate, severity, text) |

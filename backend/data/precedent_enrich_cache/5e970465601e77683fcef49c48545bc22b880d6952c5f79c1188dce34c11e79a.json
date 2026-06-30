@@ -1,0 +1,1 @@
+{"issue_type": "Misleading Partial Withdrawal Claim", "why_rationale": "The statement implies partial withdrawal does not affect cover, but in ULIPs it can reduce the nominee benefit and fund value and is subject to additional regulatory conditions.", "guideline_ref": "ulip_compliance_guidelines", "severity": "moderate"}

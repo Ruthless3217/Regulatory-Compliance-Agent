@@ -1,7 +1,7 @@
 """Knowledge-base ingestion — parse _rl JSON reviewer decisions into precedent
 rows and index them into rag_compliance_examples.
 
-Corpus schema (dataset_2.1_rl/*.json):
+Corpus schema (parsed_precedents/*.json):
     task, instruction,
     input.draft_text, input.compliance_comments (str),
     output.final_text,

@@ -1,0 +1,1 @@
+{"issue_type": "Misleading Return Reference", "why_rationale": "The content defines R as the rate of inflation, but the reviewer noted it is presented as the rate of return on investment, creating a misleading inconsistency about returns.", "guideline_ref": null, "severity": "moderate"}

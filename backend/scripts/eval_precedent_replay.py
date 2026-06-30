@@ -7,7 +7,7 @@ precedents can be retrieved (retrieval also excludes same document_id).
 Pure metric helpers are unit-tested; the live run needs DB + LLM + embedder.
 
 Usage:
-  cd backend && python -m scripts.eval_precedent_replay --folder ../dataset/Dataset/Dataset/dataset_2.1_rl --eval-frac 0.1
+  cd backend && python -m scripts.eval_precedent_replay --folder uploads/parsed_precedents --eval-frac 0.1
 """
 from __future__ import annotations
 

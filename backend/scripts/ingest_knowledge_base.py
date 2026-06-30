@@ -1,4 +1,4 @@
-"""Ingest the precedent knowledge base (dataset_2.1_rl JSON) into rag_compliance_examples.
+"""Ingest the precedent knowledge base (parsed JSON) into rag_compliance_examples.
 
 Usage:
   # In the backend container (after the additive ro mount in docker-compose):
@@ -6,7 +6,7 @@ Usage:
   docker exec compliance-backend python -m scripts.ingest_knowledge_base --limit 10 --preview
 
   # On the host (Postgres exposed on localhost:5432; embedder env must be set):
-  cd backend && python -m scripts.ingest_knowledge_base --folder ../dataset/Dataset/Dataset/dataset_2.1_rl
+  cd backend && python -m scripts.ingest_knowledge_base --folder uploads/parsed_precedents
 """
 from __future__ import annotations
 
@@ -29,9 +29,9 @@ logger = logging.getLogger("ingest_knowledge_base")
 
 # Container mount first, then host-relative fallbacks.
 DEFAULT_FOLDERS = [
-    "/app/dataset/Dataset/Dataset/dataset_2.1_rl",
+    "/app/uploads/parsed_precedents",
     os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "dataset", "Dataset", "Dataset", "dataset_2.1_rl")
+        os.path.join(os.path.dirname(__file__), "..", "uploads", "parsed_precedents")
     ),
 ]
 
@@ -43,7 +43,7 @@ def _resolve_folder(arg: str | None) -> str:
         if os.path.isdir(cand):
             return cand
     raise FileNotFoundError(
-        "dataset_2.1_rl not found. Pass --folder. Tried: " + ", ".join(DEFAULT_FOLDERS)
+        "parsed_precedents not found. Pass --folder. Tried: " + ", ".join(DEFAULT_FOLDERS)
     )
 
 
@@ -69,6 +69,13 @@ def _preview(folder: str) -> None:
         pass
 
 
+try:
+    from langsmith import traceable
+except ImportError:
+    def traceable(*_a, **_kw):
+        return lambda f: f
+
+@traceable(run_type="chain", name="Ingest Knowledge Base")
 async def _run(folder: str, limit: int | None) -> None:
     svc = get_kb_ingestion_service()
     logger.info(f"Ingesting from {folder} (limit={limit})")
@@ -79,7 +86,7 @@ async def _run(folder: str, limit: int | None) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Ingest precedent knowledge base")
-    p.add_argument("--folder", help="Path to dataset_2.1_rl (auto-resolved if omitted)")
+    p.add_argument("--folder", help="Path to parsed_precedents (auto-resolved if omitted)")
     p.add_argument("--limit", type=int, default=None, help="Process only the first N files")
     p.add_argument("--preview", action="store_true", help="Parse one file, print pairings, exit")
     args = p.parse_args()

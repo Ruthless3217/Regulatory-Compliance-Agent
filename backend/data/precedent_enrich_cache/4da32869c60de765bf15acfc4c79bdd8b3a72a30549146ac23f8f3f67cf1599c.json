@@ -1,0 +1,1 @@
+{"issue_type": "Product Applicability Clarification", "why_rationale": "The statement implies partial withdrawals are generally available, but this feature applies only to ULIPs and should specify the relevant plan type.", "guideline_ref": "ulip_compliance_guidelines", "severity": "moderate"}
