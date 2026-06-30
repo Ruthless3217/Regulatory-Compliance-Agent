@@ -115,6 +115,17 @@ open_log_tmux() {
 cmd_up() {
   require_shared
   drop_bundled
+
+  # Fix bind-mount ownership before starting containers.
+  # appuser inside the image has UID 10001 (see backend/Dockerfile).
+  # On a fresh checkout or after a git pull these dirs are root-owned,
+  # which causes PermissionError when the backend tries to write uploads.
+  echo "Fixing bind-mount ownership (uploads/logs → appuser UID 10001)…"
+  mkdir -p backend/uploads backend/logs
+  chown -R 10001:10001 backend/uploads backend/logs 2>/dev/null \
+    && echo "  done." \
+    || echo "  chown failed (non-fatal — container entrypoint will retry)."
+
   echo "Bringing up the agent on the shared stack (${COMPOSE_FILE})…"
   compose -f "$COMPOSE_FILE" up -d --build
   # nginx resolves upstreams lazily, but reload so it picks up freshly-(re)created
