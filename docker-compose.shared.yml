@@ -32,6 +32,15 @@ services:
     container_name: compliance-backend
     pull_policy: never
     restart: unless-stopped
+    # Start as root so we can fix the bind-mount ownership, then drop to appuser.
+    # appuser UID=10001 (see Dockerfile). The bind-mount ./backend/uploads is
+    # often root-owned on first run — this chown fixes it without a rebuild.
+    user: root
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        chown -R 10001:10001 /app/uploads /app/logs 2>/dev/null || true
+        exec su -s /bin/sh appuser -c 'alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000'
     # Resource limits so a malformed/large upload can't OOM the host (audit H7).
     # Backend is the memory-hungry service: ~0.5G Python/UMAP/numba import baseline
     # + a transient UMAP projection spike (hundreds of MB) + pdfplumber on a 50MB
