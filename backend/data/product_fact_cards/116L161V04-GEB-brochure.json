@@ -1,86 +1,86 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Group Employee Benefit",
-  "uin": "116L161V04",
-  "rider_uins": [],
-  "source_file": "GEB-brochure.pdf",
-  "product_category": "group",
-  "regulatory_descriptor": "A Unit-Linked, Non-Participating, Group Savings Insurance Plan",
-  "structural_flags": {
-    "is_unit_linked": true,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": true,
-    "offers_guaranteed_benefits": false,
-    "offers_maturity_benefit": false,
-    "offers_loan": false
-  },
-  "variants": ["Option 1 - Pooled Unit Fund", "Option 2 - Individual Unit Fund"],
-  "key_benefits": [
-    "Fund-based group ULIP to manage employer obligations: gratuity, leave encashment, superannuation, employee welfare, post-retirement medical benefits (PRMBS)",
-    "Choice of Pooled Unit Fund or Individual Unit Fund management",
-    "Choice of 11 investment funds with unlimited free switches",
-    "Life cover for employees (mortality charge deducted monthly from the unit fund)",
-    "Additional units added on each policy anniversary based on average fund size",
-    "Investment strategies for superannuation: Self-Managed and Wheel of Life portfolio strategy",
-    "Surrender value equals the unit fund value as on date of surrender"
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_sum_assured": null,
-    "policy_term": "Group employer-employee scheme; governed by scheme rules (no fixed individual policy term)",
-    "premium_payment_term": "Contributions as per scheme funding rules — no minimum contribution, no maximum limit stated",
-    "note": "This is an Employer-Employee group fund-based plan; member-level numeric eligibility is governed by scheme rules, not a fixed table. Partial withdrawal, top-up premium and loans are NOT available."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from receipt of the Policy Document (electronic or otherwise); on cancellation, units are repurchased at NAV on date of cancellation.",
-    "grace_period": "30 days (all modes other than monthly); 15 days (monthly).",
-    "suicide_clause": "On death of an employee due to suicide, the death benefit as defined in the scheme rules is payable — no suicide exclusion applies under this plan.",
-    "maturity_benefit_condition": "There is NO maturity benefit in this plan; benefits are paid per scheme rules by cancelling units. Partial withdrawal, top-up and loans are not allowed.",
-    "fund_charges_note": "Premium Allocation Charge, Mortality Charge (deducted monthly from units) and Fund Management Charge (up to 1.35% p.a.) apply; charges subject to GST and to revision with 3 months' notice and IRDAI approval.",
-    "tax_note": "Tax benefits 'as per applicable tax laws'; GST applicable per prevailing tax laws. Trust setup under Income Tax Act 1961 / Rules 1962 may be required."
-  },
-  "mandatory_disclosures_present": [
-    "Section 38 - Assignment (Not Applicable for this plan)",
-    "Section 39 - Nomination",
-    "Section 41 - Prohibition of Rebate",
-    "Section 45 - Fraud & Misstatement",
-    "Applicability of Goods & Service Tax",
-    "Force Majeure / NAV deferral conditions per IRDAI (ULIP) Regulations 2024",
-    "Grievance Redressal & Insurance Ombudsman details",
-    "Beware-of-spurious-calls warning",
-    "Mandatory ULIP risk statement: 'IN THIS POLICY, THE INVESTMENT RISK IN INVESTMENT PORTFOLIO IS BORNE BY THE POLICYHOLDER'"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "This is a UNIT-LINKED group plan — the investment risk in the investment portfolio is borne by the policyholder; the mandatory market-risk statement must accompany any returns/fund-performance reference.",
-      "Fund values are NAV-driven and depend on market performance — no returns are guaranteed.",
-      "It is an Employer-Employee group plan only (policyholder must be the trustee or employer); benefits are paid per scheme rules.",
-      "Fund Management Charge is capped at 1.35% p.a.; surrender value = unit fund value, with no guaranteed floor."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT use 'guaranteed returns', 'assured returns', 'bonus' or any capital-protection language — it is a non-participating market-linked fund product with no guaranteed benefits.",
-      "Do NOT omit the mandatory ULIP risk disclosure ('investment risk ... borne by the policyholder').",
-      "Do NOT advertise maturity benefit, loans, partial withdrawal or top-up — none are available under this plan.",
-      "Do NOT present past or illustrative fund performance as indicative of future returns."
-    ],
-    "must_state": [
-      "Plan UIN 116L161V04",
-      "Full regulatory descriptor: 'A Unit-Linked, Non-Participating, Group Savings Insurance Plan'",
-      "The mandatory ULIP risk statement: 'In this policy, the investment risk in investment portfolio is borne by the policyholder'",
-      "Linked insurance products are different from traditional products and are subject to risk factors; that this is a group scheme governed by scheme rules",
-      "Standard disclaimer to read the policy document for full terms, conditions and exclusions"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of GEB-brochure.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Fund composition tables, charge tables and eligibility figures are rendered as images/tables in the brochure and were not recovered as text from the parse."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Group Employee Benefit",
+ "uin": "116L161V04",
+ "rider_uins": [],
+ "source_file": "GEB-brochure.pdf",
+ "product_category": "group",
+ "regulatory_descriptor": "A Unit-Linked, Non-Participating, Group Savings Insurance Plan",
+ "structural_flags": {
+ "is_unit_linked": true,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": true,
+ "offers_guaranteed_benefits": false,
+ "offers_maturity_benefit": false,
+ "offers_loan": false
+ },
+ "variants": ["Option 1 - Pooled Unit Fund", "Option 2 - Individual Unit Fund"],
+ "key_benefits": [
+ "Fund-based group ULIP to manage employer obligations: gratuity, leave encashment, superannuation, employee welfare, post-retirement medical benefits (PRMBS)",
+ "Choice of Pooled Unit Fund or Individual Unit Fund management",
+ "Choice of 11 investment funds with unlimited free switches",
+ "Life cover for employees (mortality charge deducted monthly from the unit fund)",
+ "Additional units added on each policy anniversary based on average fund size",
+ "Investment strategies for superannuation: Self-Managed and Wheel of Life portfolio strategy",
+ "Surrender value equals the unit fund value as on date of surrender"
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_sum_assured": null,
+ "policy_term": "Group employer-employee scheme; governed by scheme rules (no fixed individual policy term)",
+ "premium_payment_term": "Contributions as per scheme funding rules — no minimum contribution, no maximum limit stated",
+ "note": "This is an Employer-Employee group fund-based plan; member-level numeric eligibility is governed by scheme rules, not a fixed table. Partial withdrawal, top-up premium and loans are NOT available."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from receipt of the Policy Document (electronic or otherwise); on cancellation, units are repurchased at NAV on date of cancellation.",
+ "grace_period": "30 days (all modes other than monthly); 15 days (monthly).",
+ "suicide_clause": "On death of an employee due to suicide, the death benefit as defined in the scheme rules is payable — no suicide exclusion applies under this plan.",
+ "maturity_benefit_condition": "There is NO maturity benefit in this plan; benefits are paid per scheme rules by cancelling units. Partial withdrawal, top-up and loans are not allowed.",
+ "fund_charges_note": "Premium Allocation Charge, Mortality Charge (deducted monthly from units) and Fund Management Charge (up to 1.35% p.a.) apply; charges subject to GST and to revision with 3 months' notice and IRDAI approval.",
+ "tax_note": "Tax benefits 'as per applicable tax laws'; GST applicable per prevailing tax laws. Trust setup under Income Tax Act 1961 / Rules 1962 may be required."
+ },
+ "mandatory_disclosures_present": [
+ "Section 38 - Assignment (Not Applicable for this plan)",
+ "Section 39 - Nomination",
+ "Section 41 - Prohibition of Rebate",
+ "Section 45 - Fraud & Misstatement",
+ "Applicability of Goods & Service Tax",
+ "Force Majeure / NAV deferral conditions per IRDAI (ULIP) Regulations 2024",
+ "Grievance Redressal & Insurance Ombudsman details",
+ "Beware-of-spurious-calls warning",
+ "Mandatory ULIP risk statement: 'IN THIS POLICY, THE INVESTMENT RISK IN INVESTMENT PORTFOLIO IS BORNE BY THE POLICYHOLDER'"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "This is a UNIT-LINKED group plan — the investment risk in the investment portfolio is borne by the policyholder; the mandatory market-risk statement must accompany any returns/fund-performance reference.",
+ "Fund values are NAV-driven and depend on market performance — no returns are guaranteed.",
+ "It is an Employer-Employee group plan only (policyholder must be the trustee or employer); benefits are paid per scheme rules.",
+ "Fund Management Charge is capped at 1.35% p.a.; surrender value = unit fund value, with no guaranteed floor."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT use 'guaranteed returns', 'assured returns', 'bonus' or any capital-protection language — it is a non-participating market-linked fund product with no guaranteed benefits.",
+ "Do NOT omit the mandatory ULIP risk disclosure ('investment risk ... borne by the policyholder').",
+ "Do NOT advertise maturity benefit, loans, partial withdrawal or top-up — none are available under this plan.",
+ "Do NOT present past or illustrative fund performance as indicative of future returns."
+ ],
+ "must_state": [
+ "Plan UIN 116L161V04",
+ "Full regulatory descriptor: 'A Unit-Linked, Non-Participating, Group Savings Insurance Plan'",
+ "The mandatory ULIP risk statement: 'In this policy, the investment risk in investment portfolio is borne by the policyholder'",
+ "Linked insurance products are different from traditional products and are subject to risk factors; that this is a group scheme governed by scheme rules",
+ "Standard disclaimer to read the policy document for full terms, conditions and exclusions"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of GEB-brochure.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Fund composition tables, charge tables and eligibility figures are rendered as images/tables in the brochure and were not recovered as text from the parse."
+ ]
+ }
 }

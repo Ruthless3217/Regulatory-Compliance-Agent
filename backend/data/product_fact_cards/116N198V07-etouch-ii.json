@@ -1,84 +1,84 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life eTouch II",
-  "uin": "116N198V07",
-  "rider_uins": ["116B056V01", "116B058V01", "116B034V02", "116B036V02", "116B062V01"],
-  "source_file": "etouch-plan-sl.pdf",
-  "product_category": "term",
-  "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual Life Insurance Term Plan",
-  "structural_flags": {
-    "is_unit_linked": false,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": false,
-    "offers_guaranteed_benefits": true,
-    "offers_maturity_benefit": true,
-    "offers_loan": false
-  },
-  "variants": ["Life Shield", "Life Shield ROP", "Life Shield Plus"],
-  "key_benefits": [
-    "Death Benefit (Sum Assured on Death) payable to nominee",
-    "Terminal Illness benefit — acceleration of death benefit, capped at Rs 2 crore",
-    "Waiver of future premiums on Accidental Total Permanent Disability (ATPD) or Terminal Illness",
-    "Return of Total Premiums Paid as Maturity Benefit — ONLY under the Life Shield ROP variant",
-    "Additional Accidental Death Benefit payout — ONLY under the Life Shield Plus variant",
-    "Death benefit payout as lump sum and/or monthly income for 5/10/20/30/40 years",
-    "Early Exit Value (Life Shield & Life Shield Plus variants)",
-    "Premium Holiday option (skip premiums for 1–3 years) and Auto Cover Continuance (defer up to 12 months)"
-  ],
-  "riders_available": [
-    "Accidental Death Benefit Rider",
-    "Accidental Permanent Total/Partial Disability Benefit Rider",
-    "New Critical Illness Benefit Rider",
-    "Waiver of Premium Rider"
-  ],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": 85,
-    "min_sum_assured": null,
-    "policy_term": "Up to age 85 (limited/regular/till-retirement premium options)",
-    "premium_payment_term": "Single, Limited, Regular, or till Age 60",
-    "note": "Exact age/sum-assured boundary table not fully captured from this brochure parse — verify against policy document before asserting numeric limits."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from receipt of the Policy Document.",
-    "grace_period": "30 days (non-monthly frequencies); 15 days (monthly).",
-    "suicide_clause": "On death by suicide within 12 months of commencement of risk or latest revival (whichever is later), nominee receives higher of 80% of Total Premiums Paid or Surrender/Termination Value; no other benefit. Policy must be in force.",
-    "maturity_benefit_condition": "Return of premiums at maturity applies ONLY to the Life Shield ROP variant; the base Life Shield variant has NO maturity benefit (pure term).",
-    "tax_note": "Tax benefits 'as per prevailing tax laws' — subject to change; GST applicable per prevailing tax laws."
-  },
-  "mandatory_disclosures_present": [
-    "Section 41 — Prohibition of Rebate",
-    "Section 38 — Assignment",
-    "Section 39 — Nomination",
-    "Section 45 — Fraud & Misstatement",
-    "Applicability of Goods & Service Tax",
-    "Grievance Redressal & Insurance Ombudsman details",
-    "Beware-of-spurious-calls warning"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "Any 'get your premiums back' / 'return of premium' / 'maturity benefit' claim is valid ONLY for the Life Shield ROP variant — must be variant-qualified.",
-      "Any accidental-death-payout claim is valid ONLY for the Life Shield Plus variant.",
-      "Terminal Illness benefit is an acceleration of (not additional to) the death benefit, capped at Rs 2 crore."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT position as an investment, savings, or wealth-creation product — it is non-linked, non-participating pure protection.",
-      "Do NOT use 'guaranteed returns' / 'bonus' language — the only money-back is return-of-premium on the ROP variant; there are no bonuses (non-par).",
-      "Do NOT present the base term cover as paying a maturity amount.",
-      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
-    ],
-    "must_state": [
-      "Plan UIN 116N198V07 (eTouch II; variant UINs 116N198V05/V06 also exist per variant)",
-      "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Individual Life Insurance Term Plan'",
-      "Standard disclaimer to read the policy document / benefit illustration for full terms and exclusions"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8",
-    "curated_from": "brochure structural parse (pdfplumber sections) of etouch-plan-sl.pdf",
-    "confidence": "high",
-    "gaps": ["numeric entry/maturity age and minimum sum-assured boundary table not fully recovered from parse", "plan UIN corrected from parser's first-UIN (116B056V01, a rider) to the brochure-footer plan UIN 116N198V07"]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life eTouch II",
+ "uin": "116N198V07",
+ "rider_uins": ["116B056V01", "116B058V01", "116B034V02", "116B036V02", "116B062V01"],
+ "source_file": "etouch-plan-sl.pdf",
+ "product_category": "term",
+ "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual Life Insurance Term Plan",
+ "structural_flags": {
+ "is_unit_linked": false,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": false,
+ "offers_guaranteed_benefits": true,
+ "offers_maturity_benefit": true,
+ "offers_loan": false
+ },
+ "variants": ["Life Shield", "Life Shield ROP", "Life Shield Plus"],
+ "key_benefits": [
+ "Death Benefit (Sum Assured on Death) payable to nominee",
+ "Terminal Illness benefit — acceleration of death benefit, capped at Rs 2 crore",
+ "Waiver of future premiums on Accidental Total Permanent Disability (ATPD) or Terminal Illness",
+ "Return of Total Premiums Paid as Maturity Benefit — ONLY under the Life Shield ROP variant",
+ "Additional Accidental Death Benefit payout — ONLY under the Life Shield Plus variant",
+ "Death benefit payout as lump sum and/or monthly income for 5/10/20/30/40 years",
+ "Early Exit Value (Life Shield & Life Shield Plus variants)",
+ "Premium Holiday option (skip premiums for 1–3 years) and Auto Cover Continuance (defer up to 12 months)"
+ ],
+ "riders_available": [
+ "Accidental Death Benefit Rider",
+ "Accidental Permanent Total/Partial Disability Benefit Rider",
+ "New Critical Illness Benefit Rider",
+ "Waiver of Premium Rider"
+ ],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": 85,
+ "min_sum_assured": null,
+ "policy_term": "Up to age 85 (limited/regular/till-retirement premium options)",
+ "premium_payment_term": "Single, Limited, Regular, or till Age 60",
+ "note": "Exact age/sum-assured boundary table not fully captured from this brochure parse — verify against policy document before asserting numeric limits."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from receipt of the Policy Document.",
+ "grace_period": "30 days (non-monthly frequencies); 15 days (monthly).",
+ "suicide_clause": "On death by suicide within 12 months of commencement of risk or latest revival (whichever is later), nominee receives higher of 80% of Total Premiums Paid or Surrender/Termination Value; no other benefit. Policy must be in force.",
+ "maturity_benefit_condition": "Return of premiums at maturity applies ONLY to the Life Shield ROP variant; the base Life Shield variant has NO maturity benefit (pure term).",
+ "tax_note": "Tax benefits 'as per prevailing tax laws' — subject to change; GST applicable per prevailing tax laws."
+ },
+ "mandatory_disclosures_present": [
+ "Section 41 — Prohibition of Rebate",
+ "Section 38 — Assignment",
+ "Section 39 — Nomination",
+ "Section 45 — Fraud & Misstatement",
+ "Applicability of Goods & Service Tax",
+ "Grievance Redressal & Insurance Ombudsman details",
+ "Beware-of-spurious-calls warning"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "Any 'get your premiums back' / 'return of premium' / 'maturity benefit' claim is valid ONLY for the Life Shield ROP variant — must be variant-qualified.",
+ "Any accidental-death-payout claim is valid ONLY for the Life Shield Plus variant.",
+ "Terminal Illness benefit is an acceleration of (not additional to) the death benefit, capped at Rs 2 crore."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT position as an investment, savings, or wealth-creation product — it is non-linked, non-participating pure protection.",
+ "Do NOT use 'guaranteed returns' / 'bonus' language — the only money-back is return-of-premium on the ROP variant; there are no bonuses (non-par).",
+ "Do NOT present the base term cover as paying a maturity amount.",
+ "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+ ],
+ "must_state": [
+ "Plan UIN 116N198V07 (eTouch II; variant UINs 116N198V05/V06 also exist per variant)",
+ "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Individual Life Insurance Term Plan'",
+ "Standard disclaimer to read the policy document / benefit illustration for full terms and exclusions"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8",
+ "curated_from": "brochure structural parse (pdfplumber sections) of etouch-plan-sl.pdf",
+ "confidence": "high",
+ "gaps": ["numeric entry/maturity age and minimum sum-assured boundary table not fully recovered from parse", "plan UIN corrected from parser's first-UIN (116B056V01, a rider) to the brochure-footer plan UIN 116N198V07"]
+ }
 }

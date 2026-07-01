@@ -1,85 +1,85 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Accidental Permanent Total/Partial Disability Benefit Rider II",
-  "uin": "116B064V01",
-  "rider_uins": [],
-  "source_file": "trad-APTPDB-brochure.pdf",
-  "product_category": "rider",
-  "regulatory_descriptor": "A Non-Linked, Non-Participating Individual Accidental Permanent Total/Partial Disability Benefit Rider",
-  "structural_flags": {
-    "is_unit_linked": false,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": false,
-    "offers_guaranteed_benefits": true,
-    "offers_maturity_benefit": false,
-    "offers_loan": false
-  },
-  "variants": [],
-  "key_benefits": [
-    "Accidental Permanent Partial Disability: 50% of Rider Sum Assured payable (one-time; no further partial-disability benefit thereafter; rider continues to cover total disability)",
-    "Accidental Permanent Total Disability (no prior partial benefit): higher of Rider Sum Assured or Guaranteed Benefit; rider terminates thereafter",
-    "Accidental Permanent Total Disability after a partial-disability benefit (within 1 year): 50% of Rider Sum Assured; rider terminates",
-    "Accidental Permanent Total Disability after a partial-disability benefit (at least 1 year later): higher of Rider Sum Assured or Guaranteed Benefit; rider terminates",
-    "Disability must arise within 180 days from the date of the accident",
-    "Optional Health Management Services (medical second opinion, case management, consultation) at no additional cost",
-    "Rider can be surrendered at any time; Rider Termination Value (if any) paid on surrender"
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_sum_assured": null,
-    "policy_term": "Rider term and premium-payment term align with the remaining term of the base policy, subject to the Board Approved Underwriting Policy",
-    "premium_payment_term": "Rider premium collected over and above the base policy premium; based on Rider Sum Assured, rider term and rider premium-payment term",
-    "note": "This is a rider attachable to allowed base products; standalone numeric eligibility (entry/maturity ages, sum assured) not present in this parse and is governed by the base policy / underwriting."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from the date of receipt of the rider policy document.",
-    "grace_period": "As per the base policy.",
-    "suicide_clause": "Not separately applicable — this is an accident-only disability rider with no death benefit; benefits are triggered only by accidental permanent disability arising within 180 days of the accident.",
-    "maturity_benefit_condition": "There is NO death benefit and NO maturity benefit under this rider.",
-    "guaranteed_benefit_note": "On Accidental Permanent Total Disability (in eligible scenarios), the higher of Rider Sum Assured or the Guaranteed Benefit is payable; partial-disability payout is fixed at 50% of Rider Sum Assured (one-time).",
-    "disability_window_note": "The disability must occur within 180 days from the date of the accident, solely and directly resulting from it, to be payable.",
-    "tax_note": "GST applicable as per prevailing Tax Laws, subject to amendment."
-  },
-  "mandatory_disclosures_present": [
-    "Section 39 — Nomination",
-    "Section 41 — Prohibition of Rebate",
-    "Applicability of Goods & Service Tax",
-    "Free-look period disclosure",
-    "'This brochure should be read in conjunction with the Benefit Illustration and Policy Exclusions' statement"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "This is a RIDER attachable to a base policy — it cannot be marketed as a standalone plan or as life cover.",
-      "Benefit triggers ONLY on Accidental Permanent Total/Partial Disability arising within 180 days of the accident — any claim must reflect the accident-only, 180-day condition.",
-      "Partial Disability pays a fixed 50% of Rider Sum Assured and is one-time only; subsequent partial-disability events are not paid again.",
-      "On Total Disability the rider terminates; the exact payout depends on whether a prior partial-disability benefit was paid and the time elapsed.",
-      "Health Management Services are optional, third-party provided, and may be discontinued/changed by the Company — not a guaranteed contractual benefit."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT position this rider as an investment, savings, maturity, money-back or life-cover product — there is no death benefit and no maturity benefit.",
-      "Do NOT use 'guaranteed returns' / 'bonus' language — it is a non-linked, non-participating pure-protection rider.",
-      "Do NOT imply cover for disability due to illness — only ACCIDENTAL permanent disability (within 180 days of the accident) is covered.",
-      "Do NOT imply the full Sum Assured is paid for partial disability — partial disability pays 50% only.",
-      "Do NOT market it independently of a base policy."
-    ],
-    "must_state": [
-      "Rider UIN 116B064V01",
-      "That this is an Accidental Permanent Total/Partial Disability Benefit Rider II attached to a base policy (not a standalone plan)",
-      "The accident-only / 180-day disability trigger condition and the 50% partial-disability payout",
-      "Standard disclaimer to read the policy document / benefit illustration for full terms and exclusions"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of trad-APTPDB-brochure.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Verbatim one-line IRDAI descriptor not isolated by the parser; reconstructed from product type (non-linked, non-participating individual accidental disability rider) — verify exact wording against the policy document. Distinct from the group APTPD rider (116B010V04).",
-      "Numeric eligibility (entry/maturity ages, sum-assured limits) and grace-period days not present in this parse (governed by base policy)."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Accidental Permanent Total/Partial Disability Benefit Rider II",
+ "uin": "116B064V01",
+ "rider_uins": [],
+ "source_file": "trad-APTPDB-brochure.pdf",
+ "product_category": "rider",
+ "regulatory_descriptor": "A Non-Linked, Non-Participating Individual Accidental Permanent Total/Partial Disability Benefit Rider",
+ "structural_flags": {
+ "is_unit_linked": false,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": false,
+ "offers_guaranteed_benefits": true,
+ "offers_maturity_benefit": false,
+ "offers_loan": false
+ },
+ "variants": [],
+ "key_benefits": [
+ "Accidental Permanent Partial Disability: 50% of Rider Sum Assured payable (one-time; no further partial-disability benefit thereafter; rider continues to cover total disability)",
+ "Accidental Permanent Total Disability (no prior partial benefit): higher of Rider Sum Assured or Guaranteed Benefit; rider terminates thereafter",
+ "Accidental Permanent Total Disability after a partial-disability benefit (within 1 year): 50% of Rider Sum Assured; rider terminates",
+ "Accidental Permanent Total Disability after a partial-disability benefit (at least 1 year later): higher of Rider Sum Assured or Guaranteed Benefit; rider terminates",
+ "Disability must arise within 180 days from the date of the accident",
+ "Optional Health Management Services (medical second opinion, case management, consultation) at no additional cost",
+ "Rider can be surrendered at any time; Rider Termination Value (if any) paid on surrender"
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_sum_assured": null,
+ "policy_term": "Rider term and premium-payment term align with the remaining term of the base policy, subject to the Board Approved Underwriting Policy",
+ "premium_payment_term": "Rider premium collected over and above the base policy premium; based on Rider Sum Assured, rider term and rider premium-payment term",
+ "note": "This is a rider attachable to allowed base products; standalone numeric eligibility (entry/maturity ages, sum assured) not present in this parse and is governed by the base policy / underwriting."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from the date of receipt of the rider policy document.",
+ "grace_period": "As per the base policy.",
+ "suicide_clause": "Not separately applicable — this is an accident-only disability rider with no death benefit; benefits are triggered only by accidental permanent disability arising within 180 days of the accident.",
+ "maturity_benefit_condition": "There is NO death benefit and NO maturity benefit under this rider.",
+ "guaranteed_benefit_note": "On Accidental Permanent Total Disability (in eligible scenarios), the higher of Rider Sum Assured or the Guaranteed Benefit is payable; partial-disability payout is fixed at 50% of Rider Sum Assured (one-time).",
+ "disability_window_note": "The disability must occur within 180 days from the date of the accident, solely and directly resulting from it, to be payable.",
+ "tax_note": "GST applicable as per prevailing Tax Laws, subject to amendment."
+ },
+ "mandatory_disclosures_present": [
+ "Section 39 — Nomination",
+ "Section 41 — Prohibition of Rebate",
+ "Applicability of Goods & Service Tax",
+ "Free-look period disclosure",
+ "'This brochure should be read in conjunction with the Benefit Illustration and Policy Exclusions' statement"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "This is a RIDER attachable to a base policy — it cannot be marketed as a standalone plan or as life cover.",
+ "Benefit triggers ONLY on Accidental Permanent Total/Partial Disability arising within 180 days of the accident — any claim must reflect the accident-only, 180-day condition.",
+ "Partial Disability pays a fixed 50% of Rider Sum Assured and is one-time only; subsequent partial-disability events are not paid again.",
+ "On Total Disability the rider terminates; the exact payout depends on whether a prior partial-disability benefit was paid and the time elapsed.",
+ "Health Management Services are optional, third-party provided, and may be discontinued/changed by the Company — not a guaranteed contractual benefit."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT position this rider as an investment, savings, maturity, money-back or life-cover product — there is no death benefit and no maturity benefit.",
+ "Do NOT use 'guaranteed returns' / 'bonus' language — it is a non-linked, non-participating pure-protection rider.",
+ "Do NOT imply cover for disability due to illness — only ACCIDENTAL permanent disability (within 180 days of the accident) is covered.",
+ "Do NOT imply the full Sum Assured is paid for partial disability — partial disability pays 50% only.",
+ "Do NOT market it independently of a base policy."
+ ],
+ "must_state": [
+ "Rider UIN 116B064V01",
+ "That this is an Accidental Permanent Total/Partial Disability Benefit Rider II attached to a base policy (not a standalone plan)",
+ "The accident-only / 180-day disability trigger condition and the 50% partial-disability payout",
+ "Standard disclaimer to read the policy document / benefit illustration for full terms and exclusions"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of trad-APTPDB-brochure.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Verbatim one-line IRDAI descriptor not isolated by the parser; reconstructed from product type (non-linked, non-participating individual accidental disability rider) — verify exact wording against the policy document. Distinct from the group APTPD rider (116B010V04).",
+ "Numeric eligibility (entry/maturity ages, sum-assured limits) and grace-period days not present in this parse (governed by base policy)."
+ ]
+ }
 }

@@ -1,86 +1,86 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Smart Secure ROP",
-  "uin": "116L215V01",
-  "rider_uins": ["116N216V01"],
-  "source_file": "smart-secure-leaflet.pdf",
-  "product_category": "ulip",
-  "regulatory_descriptor": "A Unit-Linked Non-Participating Individual Life Savings Insurance Plan",
-  "structural_flags": {
-    "is_unit_linked": true,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": true,
-    "offers_guaranteed_benefits": true,
-    "offers_maturity_benefit": true,
-    "offers_loan": false
-  },
-  "variants": ["Bajaj Life Invest Protect Goal Plus - Elite Variant (ULIP base, UIN 116L215V01)", "Bajaj Life Secure Plus - Shield with ROP Variant (health component, UIN 116N216V01)"],
-  "key_benefits": [
-    "Death Benefit — higher of Prevailing Sum Assured or Regular Premium Fund Value, plus Top-up component, plus Terminal Illness with Term Booster cover; not less than 105% of Total Premiums Paid (Guaranteed Benefit)",
-    "Accidental Death Benefit (ADB) — additional payout (higher of ADB Sum Assured or 105% of premiums for that cover) on accidental death",
-    "Accidental Total Permanent Disability (ATPD) benefit — lump sum on accidental TPD",
-    "Terminal Illness with Term Booster — accelerated cover (paid on TI diagnosis, then cover terminates)",
-    "Return of Premiums (ROP) at maturity — premiums paid towards ADB, ATPD and TI-with-Term-Booster are returned at maturity (under Secure Plus - Shield with ROP variant)",
-    "Maturity Benefit — Fund Value at maturity plus the returned protection premiums",
-    "Loyalty Advantages — Guaranteed Wealth Booster (premium allocation charges accrued at 7% p.a. added at end of 15th year), Return of Mortality Charge (ROMC), Loyalty Additions (from 10th year), Benefit Enhancer (PT >= 25 years)"
-  ],
-  "riders_available": [
-    "Bajaj Life Secure Plus - Shield with ROP Variant (Non-Participating, Non-Linked, Individual Health Plan, UIN 116N216V01) — the ROP/protection component bundled in this leaflet"
-  ],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_sum_assured": null,
-    "policy_term": "Illustration uses a 30-year policy term with 10-year PPT; full PT range not captured in this parse",
-    "premium_payment_term": "Single / Limited / Regular (illustration uses 10-year limited pay); full range not captured in this parse",
-    "note": "This is a packaged offering: a ULIP base (Invest Protect Goal Plus - Elite, 116L215V01) combined with a health component (Secure Plus - Shield with ROP, 116N216V01). Eligibility boundary table not recovered from this leaflet parse — verify against both policy documents."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from receipt of the policy document; on cancellation, units are repurchased at the unit price on the date of cancellation and refund is subject to proportionate risk premium, expenses and stamp duty. Processed within 7 days.",
-    "grace_period": "Not explicitly captured in this leaflet parse — verify against policy document.",
-    "suicide_clause": "Not explicitly captured in this leaflet parse — verify against policy document.",
-    "lock_in_note": "Unit-Linked products offer NO liquidity during the first 5 years — no full or partial surrender/withdrawal permitted until the end of the fifth year.",
-    "tax_note": "Tax benefits subject to prevailing tax laws; GST and cess apply to all charges. Returns shown at 4% and 8% are illustrative and not guaranteed."
-  },
-  "mandatory_disclosures_present": [
-    "Section 41 — Prohibition of Rebate",
-    "Section 45 — Fraud & Misstatement",
-    "Free Look Period (30 days)",
-    "Applicability of Goods & Service Tax",
-    "ULIP market-risk statement ('ULIPs are different from traditional insurance products and are subject to risk factors; premium is subject to investment risks; NAV may go up or down; insured is responsible for his/her decisions')",
-    "Risk Factors & Warning Statements (product name does not indicate quality/future prospects/returns)",
-    "Beware-of-spurious-calls warning"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "Any 'return of premium / get back all premiums' claim is bounded — ONLY the premiums paid towards Accidental Death, ATPD and Terminal-Illness-with-Term-Booster are returned at maturity (under the Secure Plus - Shield with ROP variant); the ULIP fund itself is market-linked, not a guaranteed return.",
-      "Any 'guaranteed' wording (Guaranteed Wealth Booster 7% p.a., Guaranteed Benefit 105% of premiums, Return of Mortality Charge) is condition-bound: applies only while the policy is in force and NOT if surrendered, discontinued or paid-up.",
-      "Death Benefit '105% of Total Premiums Paid' is a floor (Guaranteed Benefit), not a projected return.",
-      "Terminal Illness with Term Booster is an accelerated (not additional) cover — paying it terminates that cover."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT advertise 'guaranteed returns' or 'assured market growth' — the fund value is subject to investment/market risk borne entirely by the policyholder; NAV may go up or down.",
-      "Do NOT show only the 8% (or any single) illustrative return as if it were promised — must present both 4% and 8% as illustrative and not guaranteed, and state they are not upper/lower limits.",
-      "Do NOT imply liquidity in the first 5 years — there is a mandatory 5-year lock-in with no surrender/withdrawal.",
-      "Do NOT state 'tax-free' without the prevailing-tax-law caveat."
-    ],
-    "must_state": [
-      "Plan (ULIP) UIN 116L215V01 and, where the ROP/protection component is referenced, health-component UIN 116N216V01",
-      "Full regulatory descriptor: 'A Unit-Linked Non-Participating Individual Life Savings Insurance Plan'",
-      "Mandatory ULIP market-risk disclosure (premium subject to investment risk; NAV may go up or down; policyholder bears the risk)",
-      "5-year lock-in / no-liquidity statement for the first five years",
-      "Standard disclaimer to read the sales brochure and policy document of both products before concluding a sale"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of smart-secure-leaflet.pdf",
-    "confidence": "medium",
-    "gaps": [
-      "This leaflet markets a packaged combo (ULIP base Invest Protect Goal Plus - Elite 116L215V01 + health component Secure Plus - Shield with ROP 116N216V01) under the marketing name 'Smart Secure ROP'; the consolidated product name/descriptor should be verified against the IRDAI-approved filing.",
-      "Numeric entry/maturity age, sum-assured, grace-period and suicide-clause specifics not recovered from this leaflet parse."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Smart Secure ROP",
+ "uin": "116L215V01",
+ "rider_uins": ["116N216V01"],
+ "source_file": "smart-secure-leaflet.pdf",
+ "product_category": "ulip",
+ "regulatory_descriptor": "A Unit-Linked Non-Participating Individual Life Savings Insurance Plan",
+ "structural_flags": {
+ "is_unit_linked": true,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": true,
+ "offers_guaranteed_benefits": true,
+ "offers_maturity_benefit": true,
+ "offers_loan": false
+ },
+ "variants": ["Bajaj Life Invest Protect Goal Plus - Elite Variant (ULIP base, UIN 116L215V01)", "Bajaj Life Secure Plus - Shield with ROP Variant (health component, UIN 116N216V01)"],
+ "key_benefits": [
+ "Death Benefit — higher of Prevailing Sum Assured or Regular Premium Fund Value, plus Top-up component, plus Terminal Illness with Term Booster cover; not less than 105% of Total Premiums Paid (Guaranteed Benefit)",
+ "Accidental Death Benefit (ADB) — additional payout (higher of ADB Sum Assured or 105% of premiums for that cover) on accidental death",
+ "Accidental Total Permanent Disability (ATPD) benefit — lump sum on accidental TPD",
+ "Terminal Illness with Term Booster — accelerated cover (paid on TI diagnosis, then cover terminates)",
+ "Return of Premiums (ROP) at maturity — premiums paid towards ADB, ATPD and TI-with-Term-Booster are returned at maturity (under Secure Plus - Shield with ROP variant)",
+ "Maturity Benefit — Fund Value at maturity plus the returned protection premiums",
+ "Loyalty Advantages — Guaranteed Wealth Booster (premium allocation charges accrued at 7% p.a. added at end of 15th year), Return of Mortality Charge (ROMC), Loyalty Additions (from 10th year), Benefit Enhancer (PT >= 25 years)"
+ ],
+ "riders_available": [
+ "Bajaj Life Secure Plus - Shield with ROP Variant (Non-Participating, Non-Linked, Individual Health Plan, UIN 116N216V01) — the ROP/protection component bundled in this leaflet"
+ ],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_sum_assured": null,
+ "policy_term": "Illustration uses a 30-year policy term with 10-year PPT; full PT range not captured in this parse",
+ "premium_payment_term": "Single / Limited / Regular (illustration uses 10-year limited pay); full range not captured in this parse",
+ "note": "This is a packaged offering: a ULIP base (Invest Protect Goal Plus - Elite, 116L215V01) combined with a health component (Secure Plus - Shield with ROP, 116N216V01). Eligibility boundary table not recovered from this leaflet parse — verify against both policy documents."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from receipt of the policy document; on cancellation, units are repurchased at the unit price on the date of cancellation and refund is subject to proportionate risk premium, expenses and stamp duty. Processed within 7 days.",
+ "grace_period": "Not explicitly captured in this leaflet parse — verify against policy document.",
+ "suicide_clause": "Not explicitly captured in this leaflet parse — verify against policy document.",
+ "lock_in_note": "Unit-Linked products offer NO liquidity during the first 5 years — no full or partial surrender/withdrawal permitted until the end of the fifth year.",
+ "tax_note": "Tax benefits subject to prevailing tax laws; GST and cess apply to all charges. Returns shown at 4% and 8% are illustrative and not guaranteed."
+ },
+ "mandatory_disclosures_present": [
+ "Section 41 — Prohibition of Rebate",
+ "Section 45 — Fraud & Misstatement",
+ "Free Look Period (30 days)",
+ "Applicability of Goods & Service Tax",
+ "ULIP market-risk statement ('ULIPs are different from traditional insurance products and are subject to risk factors; premium is subject to investment risks; NAV may go up or down; insured is responsible for his/her decisions')",
+ "Risk Factors & Warning Statements (product name does not indicate quality/future prospects/returns)",
+ "Beware-of-spurious-calls warning"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "Any 'return of premium / get back all premiums' claim is bounded — ONLY the premiums paid towards Accidental Death, ATPD and Terminal-Illness-with-Term-Booster are returned at maturity (under the Secure Plus - Shield with ROP variant); the ULIP fund itself is market-linked, not a guaranteed return.",
+ "Any 'guaranteed' wording (Guaranteed Wealth Booster 7% p.a., Guaranteed Benefit 105% of premiums, Return of Mortality Charge) is condition-bound: applies only while the policy is in force and NOT if surrendered, discontinued or paid-up.",
+ "Death Benefit '105% of Total Premiums Paid' is a floor (Guaranteed Benefit), not a projected return.",
+ "Terminal Illness with Term Booster is an accelerated (not additional) cover — paying it terminates that cover."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT advertise 'guaranteed returns' or 'assured market growth' — the fund value is subject to investment/market risk borne entirely by the policyholder; NAV may go up or down.",
+ "Do NOT show only the 8% (or any single) illustrative return as if it were promised — must present both 4% and 8% as illustrative and not guaranteed, and state they are not upper/lower limits.",
+ "Do NOT imply liquidity in the first 5 years — there is a mandatory 5-year lock-in with no surrender/withdrawal.",
+ "Do NOT state 'tax-free' without the prevailing-tax-law caveat."
+ ],
+ "must_state": [
+ "Plan (ULIP) UIN 116L215V01 and, where the ROP/protection component is referenced, health-component UIN 116N216V01",
+ "Full regulatory descriptor: 'A Unit-Linked Non-Participating Individual Life Savings Insurance Plan'",
+ "Mandatory ULIP market-risk disclosure (premium subject to investment risk; NAV may go up or down; policyholder bears the risk)",
+ "5-year lock-in / no-liquidity statement for the first five years",
+ "Standard disclaimer to read the sales brochure and policy document of both products before concluding a sale"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of smart-secure-leaflet.pdf",
+ "confidence": "medium",
+ "gaps": [
+ "This leaflet markets a packaged combo (ULIP base Invest Protect Goal Plus - Elite 116L215V01 + health component Secure Plus - Shield with ROP 116N216V01) under the marketing name 'Smart Secure ROP'; the consolidated product name/descriptor should be verified against the IRDAI-approved filing.",
+ "Numeric entry/maturity age, sum-assured, grace-period and suicide-clause specifics not recovered from this leaflet parse."
+ ]
+ }
 }

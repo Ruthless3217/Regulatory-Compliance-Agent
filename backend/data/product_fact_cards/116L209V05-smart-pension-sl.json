@@ -1,89 +1,89 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Smart Pension",
-  "uin": "116L209V05",
-  "rider_uins": [],
-  "source_file": "smart-pension-sl.pdf",
-  "product_category": "pension_annuity",
-  "regulatory_descriptor": "A Unit-Linked, Non-Participating, Individual Pension Plan",
-  "structural_flags": {
-    "is_unit_linked": true,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": true,
-    "offers_guaranteed_benefits": true,
-    "offers_maturity_benefit": true,
-    "offers_loan": false
-  },
-  "variants": ["Variant 1: Classic", "Variant 2: Assure"],
-  "key_benefits": [
-    "Vesting Benefit: on survival to vesting, Fund Value on the vesting date is payable (used to buy annuity or partly commuted)",
-    "Options at vesting: utilise the Vesting Benefit to buy immediate/deferred annuity, or commute/withdraw up to 60% and annuitise the balance",
-    "Death Benefit (Classic): higher of Fund Value or Guaranteed Death Benefit paid to nominee",
-    "Death Benefit (Assure): Guaranteed Death Benefit paid as lump sum immediately on death AND future premiums funded by the Company, with Fund Value paid to nominee at end of term (Waiver of Premium)",
-    "Guaranteed Death Benefit = 105% of Total Premiums Paid including top-up premiums",
-    "Return of Allocation Charges, Loyalty Addition and Vesting Booster added to the fund",
-    "Market-linked growth across a wide range of funds with unlimited free fund switches",
-    "Liquidity: partial withdrawal allowed on major life event or critical illness"
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_vesting_age_years": null,
-    "max_vesting_age_years": null,
-    "min_sum_assured": null,
-    "policy_term": null,
-    "premium_payment_term": "Single / Limited / Regular premium payment (Product Eligibility section present but numeric ranges not recovered from parse)",
-    "note": "Product Eligibility table is present in the brochure but the numeric entry/vesting-age, policy-term and premium ranges were not recovered from this structural parse. For QROPS purchases (UK tax-relieved asset transfer), minimum entry age for annuity payment is restricted to age 55 or vesting age."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from the date of receipt of the policy document. For QROPS purchases, free-look cancellation proceeds are only transferred back per the applicable rules.",
-    "grace_period": "30 days for yearly, half-yearly and quarterly premium frequencies; 15 days for monthly frequency.",
-    "suicide_clause": "On death due to suicide within 12 months from the date of commencement or latest revival (whichever is later), the nominee/beneficiary is entitled to the Fund Value available on the date of intimation of death; any charges other than FMC recovered after the date of death are added back to the Fund Value.",
-    "lock_in_note": "Five-year lock-in: on surrender or discontinuance before the end of the 5-year lock-in period, only the Discontinuance Value is payable as surrender value at the end of the lock-in period.",
-    "guaranteed_benefit_note": "Guaranteed Death Benefit is 105% of Total Premiums Paid (including top-ups); top-up death benefit is 105% of top-up premium paid. This is the only guaranteed element; vesting/maturity proceeds are market-linked Fund Value.",
-    "annuity_note": "Vesting proceeds must be used to purchase an annuity at the THEN-PREVAILING annuity rate (immediate or deferred); only up to 60% may be commuted; not more than 50% of post-commutation proceeds may be used to buy annuity from another insurer.",
-    "tax_note": "Tax benefits may be applicable on premiums paid and benefits received as per the prevailing tax laws; subject to amendment."
-  },
-  "mandatory_disclosures_present": [
-    "Section 41 — Prohibition of Rebate (mandatory disclosures section present)",
-    "Five-year lock-in / surrender-value disclosure",
-    "Grievance Redressal & insurer grievance-portal details",
-    "Free-look period disclosure",
-    "QROPS-specific restrictions disclosure"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "Benefits differ by variant — Waiver of Premium / future-premium funding applies ONLY to Variant 2 (Assure); any such claim must be variant-qualified.",
-      "Any '105% guaranteed' claim is bounded ONLY to the Guaranteed Death Benefit (105% of Total Premiums Paid) — it does not guarantee the vesting corpus or returns.",
-      "The vesting/retirement corpus is the market-linked Fund Value, not a guaranteed amount.",
-      "Annuity income at vesting is purchased at the THEN-PREVAILING annuity rate — future annuity rates are not fixed or guaranteed today."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT use 'guaranteed pension' / 'assured returns' / 'guaranteed corpus' language — this is a Unit-Linked pension plan and investment risk is borne by the policyholder.",
-      "Do NOT use 'bonus' language — the plan is non-participating; Loyalty Addition, Vesting Booster and Return of Allocation Charges are not bonuses.",
-      "Do NOT present illustrative market-linked return figures as guaranteed or as upper/lower limits of returns.",
-      "Do NOT state or imply a specific guaranteed annuity rate or pension amount — annuity is bought at the prevailing rate at vesting.",
-      "Do NOT imply liquidity in the first five years beyond the permitted partial-withdrawal events; funds are subject to a five-year lock-in.",
-      "Do NOT describe the commutation limit incorrectly — only up to 60% of the vesting benefit may be commuted."
-    ],
-    "must_state": [
-      "Plan UIN 116L209V05",
-      "Full regulatory descriptor: 'A Unit-Linked, Non-Participating, Individual Pension Plan'",
-      "ULIP / market-risk disclosure — investment is subject to capital-market risks borne by the policyholder",
-      "Annuity-rate caveat: annuity at vesting is at the then-prevailing rate",
-      "Five-year lock-in statement",
-      "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of smart-pension-sl.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Numeric entry/vesting age, policy term, premium and sum-assured boundaries not recovered from the Product Eligibility parse (likely a table/image)."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Smart Pension",
+ "uin": "116L209V05",
+ "rider_uins": [],
+ "source_file": "smart-pension-sl.pdf",
+ "product_category": "pension_annuity",
+ "regulatory_descriptor": "A Unit-Linked, Non-Participating, Individual Pension Plan",
+ "structural_flags": {
+ "is_unit_linked": true,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": true,
+ "offers_guaranteed_benefits": true,
+ "offers_maturity_benefit": true,
+ "offers_loan": false
+ },
+ "variants": ["Variant 1: Classic", "Variant 2: Assure"],
+ "key_benefits": [
+ "Vesting Benefit: on survival to vesting, Fund Value on the vesting date is payable (used to buy annuity or partly commuted)",
+ "Options at vesting: utilise the Vesting Benefit to buy immediate/deferred annuity, or commute/withdraw up to 60% and annuitise the balance",
+ "Death Benefit (Classic): higher of Fund Value or Guaranteed Death Benefit paid to nominee",
+ "Death Benefit (Assure): Guaranteed Death Benefit paid as lump sum immediately on death AND future premiums funded by the Company, with Fund Value paid to nominee at end of term (Waiver of Premium)",
+ "Guaranteed Death Benefit = 105% of Total Premiums Paid including top-up premiums",
+ "Return of Allocation Charges, Loyalty Addition and Vesting Booster added to the fund",
+ "Market-linked growth across a wide range of funds with unlimited free fund switches",
+ "Liquidity: partial withdrawal allowed on major life event or critical illness"
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_vesting_age_years": null,
+ "max_vesting_age_years": null,
+ "min_sum_assured": null,
+ "policy_term": null,
+ "premium_payment_term": "Single / Limited / Regular premium payment (Product Eligibility section present but numeric ranges not recovered from parse)",
+ "note": "Product Eligibility table is present in the brochure but the numeric entry/vesting-age, policy-term and premium ranges were not recovered from this structural parse. For QROPS purchases (UK tax-relieved asset transfer), minimum entry age for annuity payment is restricted to age 55 or vesting age."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from the date of receipt of the policy document. For QROPS purchases, free-look cancellation proceeds are only transferred back per the applicable rules.",
+ "grace_period": "30 days for yearly, half-yearly and quarterly premium frequencies; 15 days for monthly frequency.",
+ "suicide_clause": "On death due to suicide within 12 months from the date of commencement or latest revival (whichever is later), the nominee/beneficiary is entitled to the Fund Value available on the date of intimation of death; any charges other than FMC recovered after the date of death are added back to the Fund Value.",
+ "lock_in_note": "Five-year lock-in: on surrender or discontinuance before the end of the 5-year lock-in period, only the Discontinuance Value is payable as surrender value at the end of the lock-in period.",
+ "guaranteed_benefit_note": "Guaranteed Death Benefit is 105% of Total Premiums Paid (including top-ups); top-up death benefit is 105% of top-up premium paid. This is the only guaranteed element; vesting/maturity proceeds are market-linked Fund Value.",
+ "annuity_note": "Vesting proceeds must be used to purchase an annuity at the THEN-PREVAILING annuity rate (immediate or deferred); only up to 60% may be commuted; not more than 50% of post-commutation proceeds may be used to buy annuity from another insurer.",
+ "tax_note": "Tax benefits may be applicable on premiums paid and benefits received as per the prevailing tax laws; subject to amendment."
+ },
+ "mandatory_disclosures_present": [
+ "Section 41 — Prohibition of Rebate (mandatory disclosures section present)",
+ "Five-year lock-in / surrender-value disclosure",
+ "Grievance Redressal & insurer grievance-portal details",
+ "Free-look period disclosure",
+ "QROPS-specific restrictions disclosure"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "Benefits differ by variant — Waiver of Premium / future-premium funding applies ONLY to Variant 2 (Assure); any such claim must be variant-qualified.",
+ "Any '105% guaranteed' claim is bounded ONLY to the Guaranteed Death Benefit (105% of Total Premiums Paid) — it does not guarantee the vesting corpus or returns.",
+ "The vesting/retirement corpus is the market-linked Fund Value, not a guaranteed amount.",
+ "Annuity income at vesting is purchased at the THEN-PREVAILING annuity rate — future annuity rates are not fixed or guaranteed today."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT use 'guaranteed pension' / 'assured returns' / 'guaranteed corpus' language — this is a Unit-Linked pension plan and investment risk is borne by the policyholder.",
+ "Do NOT use 'bonus' language — the plan is non-participating; Loyalty Addition, Vesting Booster and Return of Allocation Charges are not bonuses.",
+ "Do NOT present illustrative market-linked return figures as guaranteed or as upper/lower limits of returns.",
+ "Do NOT state or imply a specific guaranteed annuity rate or pension amount — annuity is bought at the prevailing rate at vesting.",
+ "Do NOT imply liquidity in the first five years beyond the permitted partial-withdrawal events; funds are subject to a five-year lock-in.",
+ "Do NOT describe the commutation limit incorrectly — only up to 60% of the vesting benefit may be commuted."
+ ],
+ "must_state": [
+ "Plan UIN 116L209V05",
+ "Full regulatory descriptor: 'A Unit-Linked, Non-Participating, Individual Pension Plan'",
+ "ULIP / market-risk disclosure — investment is subject to capital-market risks borne by the policyholder",
+ "Annuity-rate caveat: annuity at vesting is at the then-prevailing rate",
+ "Five-year lock-in statement",
+ "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of smart-pension-sl.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Numeric entry/vesting age, policy term, premium and sum-assured boundaries not recovered from the Product Eligibility parse (likely a table/image)."
+ ]
+ }
 }

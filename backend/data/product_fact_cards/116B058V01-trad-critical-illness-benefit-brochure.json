@@ -1,84 +1,84 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life New Critical Illness Benefit Rider",
-  "uin": "116B058V01",
-  "rider_uins": [],
-  "source_file": "trad-critical-illness-benefit-brochure.pdf",
-  "product_category": "rider",
-  "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual, Pure Risk Health Rider",
-  "structural_flags": {
-    "is_unit_linked": false,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": false,
-    "offers_guaranteed_benefits": false,
-    "offers_maturity_benefit": false,
-    "offers_loan": false
-  },
-  "variants": ["Critical (10 major CIs)", "Enhanced (25 major CIs)", "Comprehensive (60 major CIs)"],
-  "key_benefits": [
-    "Lump-sum Rider Sum Assured on first diagnosis of a covered Critical Illness, subject to surviving 14 days from confirmed diagnosis",
-    "Protection against up to 60 major Critical Illnesses across three options: Critical (10), Enhanced (25), Comprehensive (60)",
-    "Coverage of women-specific cancers (breast, corpus uteri, cervix uteri, ovary, vulva, vagina) under each option",
-    "Limited-pay or regular-pay aligned to the base plan; addable at inception or any policy anniversary subject to underwriting",
-    "Optional Health Management Services (medical second opinion, case management, consultation) at no additional cost",
-    "Rider Termination Value payable post completion of PPT under limited-pay, or anytime under single-pay"
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_sum_assured": null,
-    "policy_term": "Aligned to the base Policy Term",
-    "premium_payment_term": "Limited pay or Regular pay, aligned to base plan (Single pay also referenced)",
-    "note": "Numeric eligibility table (entry/maturity ages, sum-assured) not recovered from this brochure parse. Verify against policy document before asserting numeric limits."
-  },
-  "key_terms": {
-    "free_look_period_days": null,
-    "free_look_note": "Free look period is as per the base policy.",
-    "grace_period": "As per the base policy.",
-    "survival_period": "14 days — Rider Sum Assured paid only if the Life Assured survives 14 days from the date of confirmed diagnosis.",
-    "maturity_benefit_condition": "No maturity benefit; this is a pure-risk health rider. Rider Termination Value (SSV factor x Total Premiums Paid) payable only under limited-pay (post-PPT) or single-pay; none under regular-pay.",
-    "tax_note": "Tax benefits 'as per applicable tax laws as amended from time to time'; consult a tax consultant. GST and cess collected over and above premium."
-  },
-  "mandatory_disclosures_present": [
-    "Section 41 — Prohibition of Rebate",
-    "Section 45 — Fraud & Misstatement / non-disclosure",
-    "Applicability of Goods & Service Tax",
-    "Detailed Critical Illness definitions, conditions and exclusions",
-    "Grievance Redressal & Insurance Ombudsman details",
-    "Beware-of-spurious-calls warning"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "This is a RIDER, not a standalone policy — every claim must reference that it attaches to and depends on a base policy.",
-      "The number of conditions covered is option-specific: Critical = 10 CIs, Enhanced = 25 CIs, Comprehensive = 60 CIs; '60 critical illnesses' applies ONLY to the Comprehensive option and must be qualified.",
-      "Each Critical Illness pays only if its strict policy definition / severity threshold is met (e.g. specified NYHA class, imaging/histology, 6-week permanence, 3-of-6 ADL failure); not in plain-language terms.",
-      "Benefit is payable on FIRST diagnosis only and only if the Life Assured survives the 14-day Survival Period.",
-      "Rider Termination Value availability is pay-mode-bound (none under regular-pay)."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT market as a standalone health/insurance plan — it cannot be sold without a base policy.",
-      "Do NOT imply maturity, savings, surrender or loan value — there is no maturity benefit; termination value is limited and pay-mode dependent.",
-      "Do NOT state a flat '60 critical illnesses' without naming the Comprehensive option; the Critical and Enhanced options cover fewer.",
-      "Do NOT omit the 14-day Survival Period and the per-illness definitions/exclusions when describing the benefit.",
-      "Do NOT present Health Management Services as guaranteed — they are optional, third-party, and may be discontinued.",
-      "Tax benefits must not be stated as assured — always carry the 'as per applicable tax laws' caveat."
-    ],
-    "must_state": [
-      "Rider UIN 116B058V01",
-      "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Individual, Pure Risk Health Rider'",
-      "That the rider attaches to a base policy and that CI definitions, the 14-day Survival Period and exclusions apply",
-      "Standard disclaimer to read the rider sales literature and policy document before concluding a sale"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of trad-critical-illness-benefit-brochure.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Descriptor line not emitted in parser header; taken verbatim from the brochure body/running header.",
-      "Numeric eligibility table (entry/maturity age, sum-assured) not recovered from this parse — left null."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life New Critical Illness Benefit Rider",
+ "uin": "116B058V01",
+ "rider_uins": [],
+ "source_file": "trad-critical-illness-benefit-brochure.pdf",
+ "product_category": "rider",
+ "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual, Pure Risk Health Rider",
+ "structural_flags": {
+ "is_unit_linked": false,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": false,
+ "offers_guaranteed_benefits": false,
+ "offers_maturity_benefit": false,
+ "offers_loan": false
+ },
+ "variants": ["Critical (10 major CIs)", "Enhanced (25 major CIs)", "Comprehensive (60 major CIs)"],
+ "key_benefits": [
+ "Lump-sum Rider Sum Assured on first diagnosis of a covered Critical Illness, subject to surviving 14 days from confirmed diagnosis",
+ "Protection against up to 60 major Critical Illnesses across three options: Critical (10), Enhanced (25), Comprehensive (60)",
+ "Coverage of women-specific cancers (breast, corpus uteri, cervix uteri, ovary, vulva, vagina) under each option",
+ "Limited-pay or regular-pay aligned to the base plan; addable at inception or any policy anniversary subject to underwriting",
+ "Optional Health Management Services (medical second opinion, case management, consultation) at no additional cost",
+ "Rider Termination Value payable post completion of PPT under limited-pay, or anytime under single-pay"
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_sum_assured": null,
+ "policy_term": "Aligned to the base Policy Term",
+ "premium_payment_term": "Limited pay or Regular pay, aligned to base plan (Single pay also referenced)",
+ "note": "Numeric eligibility table (entry/maturity ages, sum-assured) not recovered from this brochure parse. Verify against policy document before asserting numeric limits."
+ },
+ "key_terms": {
+ "free_look_period_days": null,
+ "free_look_note": "Free look period is as per the base policy.",
+ "grace_period": "As per the base policy.",
+ "survival_period": "14 days — Rider Sum Assured paid only if the Life Assured survives 14 days from the date of confirmed diagnosis.",
+ "maturity_benefit_condition": "No maturity benefit; this is a pure-risk health rider. Rider Termination Value (SSV factor x Total Premiums Paid) payable only under limited-pay (post-PPT) or single-pay; none under regular-pay.",
+ "tax_note": "Tax benefits 'as per applicable tax laws as amended from time to time'; consult a tax consultant. GST and cess collected over and above premium."
+ },
+ "mandatory_disclosures_present": [
+ "Section 41 — Prohibition of Rebate",
+ "Section 45 — Fraud & Misstatement / non-disclosure",
+ "Applicability of Goods & Service Tax",
+ "Detailed Critical Illness definitions, conditions and exclusions",
+ "Grievance Redressal & Insurance Ombudsman details",
+ "Beware-of-spurious-calls warning"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "This is a RIDER, not a standalone policy — every claim must reference that it attaches to and depends on a base policy.",
+ "The number of conditions covered is option-specific: Critical = 10 CIs, Enhanced = 25 CIs, Comprehensive = 60 CIs; '60 critical illnesses' applies ONLY to the Comprehensive option and must be qualified.",
+ "Each Critical Illness pays only if its strict policy definition / severity threshold is met (e.g. specified NYHA class, imaging/histology, 6-week permanence, 3-of-6 ADL failure); not in plain-language terms.",
+ "Benefit is payable on FIRST diagnosis only and only if the Life Assured survives the 14-day Survival Period.",
+ "Rider Termination Value availability is pay-mode-bound (none under regular-pay)."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT market as a standalone health/insurance plan — it cannot be sold without a base policy.",
+ "Do NOT imply maturity, savings, surrender or loan value — there is no maturity benefit; termination value is limited and pay-mode dependent.",
+ "Do NOT state a flat '60 critical illnesses' without naming the Comprehensive option; the Critical and Enhanced options cover fewer.",
+ "Do NOT omit the 14-day Survival Period and the per-illness definitions/exclusions when describing the benefit.",
+ "Do NOT present Health Management Services as guaranteed — they are optional, third-party, and may be discontinued.",
+ "Tax benefits must not be stated as assured — always carry the 'as per applicable tax laws' caveat."
+ ],
+ "must_state": [
+ "Rider UIN 116B058V01",
+ "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Individual, Pure Risk Health Rider'",
+ "That the rider attaches to a base policy and that CI definitions, the 14-day Survival Period and exclusions apply",
+ "Standard disclaimer to read the rider sales literature and policy document before concluding a sale"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of trad-critical-illness-benefit-brochure.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Descriptor line not emitted in parser header; taken verbatim from the brochure body/running header.",
+ "Numeric eligibility table (entry/maturity age, sum-assured) not recovered from this parse — left null."
+ ]
+ }
 }

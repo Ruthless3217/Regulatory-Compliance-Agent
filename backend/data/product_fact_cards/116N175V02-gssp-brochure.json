@@ -1,80 +1,80 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Group Superannuation Secure Plus",
-  "uin": "116N175V02",
-  "rider_uins": [],
-  "source_file": "gssp-brochure.pdf",
-  "product_category": "group",
-  "regulatory_descriptor": "A Non-linked Non-Participating Life Group Superannuation Savings Plan",
-  "structural_flags": {
-    "is_unit_linked": false,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": false,
-    "offers_guaranteed_benefits": true,
-    "offers_maturity_benefit": true,
-    "offers_loan": false
-  },
-  "variants": [],
-  "key_benefits": [
-    "Employer-run Group Superannuation Scheme to manage and build a pension fund for employees, set up at Pooled-level policy account",
-    "On death or vesting, a minimum benefit of 101% of the member's contribution is payable",
-    "Annual investment return credited to the policy account; crediting rate = Max[x% * Gross Return, 1%] with a 1% minimum guaranteed crediting rate per financial year",
-    "Optional additional allocation on first-year contributions (with defined recovery %/period)",
-    "Funds earmarked under Group Non-Participating Controlled Fund"
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_sum_assured": null,
-    "policy_term": null,
-    "premium_payment_term": "Employer contributions per scheme rules",
-    "note": "Member entry/maturity age boundaries not recovered from this parse (brochure references an 'Important Details' table not captured). Verify against policy document before asserting numeric limits."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from receipt of the Policy Document (except where policy tenure is less than a year); refund less proportionate risk premium and medical/stamp-duty expenses; processed within 7 days.",
-    "grace_period": null,
-    "suicide_clause": "No suicide exclusion — on death of the member due to suicide, the death benefit (minimum 101% of member's contribution) is payable. No exclusions apply.",
-    "maturity_benefit_condition": "On death or vesting, minimum benefit of 101% of the member's contribution; bulk exits are subject to Market Value Adjustment (MVA).",
-    "mva_note": "Market Value Adjustment may apply to bulk exits (exits exceeding 25% of opening policy-account balance in a policy year) and on complete surrender.",
-    "loan_note": "No loans and no top-up contributions available under the scheme.",
-    "tax_note": "Premium and benefits 'may be eligible' for tax benefits per extant Income Tax Act; scheme approval under Part B of Fourth Schedule of Income Tax Act 1961; consult a tax consultant. GST per prevailing tax laws."
-  },
-  "mandatory_disclosures_present": [
-    "Section 39 — Nomination",
-    "Applicability of Goods & Service Tax",
-    "Grievance Redressal & Insurance Ombudsman details"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "The only guaranteed figures are the 1% minimum guaranteed crediting rate per financial year and the 101%-of-contribution minimum death/vesting benefit — any 'guaranteed' claim must be bounded to these.",
-      "The crediting rate is Max[x% * Gross Return, 1%] where x% is a board-set figure (95%-100%); returns above 1% are NOT guaranteed and depend on the backing fund's gross return.",
-      "Bulk exits and surrender are subject to Market Value Adjustment — any 'full value on exit' claim must be MVA-qualified.",
-      "This is an employer/trustee group superannuation product, not a retail individual pension."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT promise 'guaranteed returns' beyond the 1% minimum crediting rate — investment return above that is not guaranteed.",
-      "Do NOT omit Market Value Adjustment when describing exit/surrender values.",
-      "Do NOT market to individuals as a retail pension/annuity — it is a group superannuation scheme set up via trust/employer.",
-      "Do NOT imply loans or top-up contributions are available — they are not.",
-      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
-    ],
-    "must_state": [
-      "Plan UIN 116N175V02",
-      "Full regulatory descriptor: 'A Non-linked Non-Participating Life Group Superannuation Savings Plan'",
-      "That investment return above the 1% minimum guaranteed crediting rate is not guaranteed and that Market Value Adjustment may apply",
-      "Standard disclaimer to read the policy document / scheme rules for full terms"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of gssp-brochure.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Parser NAME field was generic ('Bajaj Life'); real product name 'Bajaj Life Group Superannuation Secure Plus' taken from descriptor/body and confirmed in Contact Details footer.",
-      "Member numeric eligibility table not recovered from this parse — left null; grace period not stated in captured text."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Group Superannuation Secure Plus",
+ "uin": "116N175V02",
+ "rider_uins": [],
+ "source_file": "gssp-brochure.pdf",
+ "product_category": "group",
+ "regulatory_descriptor": "A Non-linked Non-Participating Life Group Superannuation Savings Plan",
+ "structural_flags": {
+ "is_unit_linked": false,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": false,
+ "offers_guaranteed_benefits": true,
+ "offers_maturity_benefit": true,
+ "offers_loan": false
+ },
+ "variants": [],
+ "key_benefits": [
+ "Employer-run Group Superannuation Scheme to manage and build a pension fund for employees, set up at Pooled-level policy account",
+ "On death or vesting, a minimum benefit of 101% of the member's contribution is payable",
+ "Annual investment return credited to the policy account; crediting rate = Max[x% * Gross Return, 1%] with a 1% minimum guaranteed crediting rate per financial year",
+ "Optional additional allocation on first-year contributions (with defined recovery %/period)",
+ "Funds earmarked under Group Non-Participating Controlled Fund"
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_sum_assured": null,
+ "policy_term": null,
+ "premium_payment_term": "Employer contributions per scheme rules",
+ "note": "Member entry/maturity age boundaries not recovered from this parse (brochure references an 'Important Details' table not captured). Verify against policy document before asserting numeric limits."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from receipt of the Policy Document (except where policy tenure is less than a year); refund less proportionate risk premium and medical/stamp-duty expenses; processed within 7 days.",
+ "grace_period": null,
+ "suicide_clause": "No suicide exclusion — on death of the member due to suicide, the death benefit (minimum 101% of member's contribution) is payable. No exclusions apply.",
+ "maturity_benefit_condition": "On death or vesting, minimum benefit of 101% of the member's contribution; bulk exits are subject to Market Value Adjustment (MVA).",
+ "mva_note": "Market Value Adjustment may apply to bulk exits (exits exceeding 25% of opening policy-account balance in a policy year) and on complete surrender.",
+ "loan_note": "No loans and no top-up contributions available under the scheme.",
+ "tax_note": "Premium and benefits 'may be eligible' for tax benefits per extant Income Tax Act; scheme approval under Part B of Fourth Schedule of Income Tax Act 1961; consult a tax consultant. GST per prevailing tax laws."
+ },
+ "mandatory_disclosures_present": [
+ "Section 39 — Nomination",
+ "Applicability of Goods & Service Tax",
+ "Grievance Redressal & Insurance Ombudsman details"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "The only guaranteed figures are the 1% minimum guaranteed crediting rate per financial year and the 101%-of-contribution minimum death/vesting benefit — any 'guaranteed' claim must be bounded to these.",
+ "The crediting rate is Max[x% * Gross Return, 1%] where x% is a board-set figure (95%-100%); returns above 1% are NOT guaranteed and depend on the backing fund's gross return.",
+ "Bulk exits and surrender are subject to Market Value Adjustment — any 'full value on exit' claim must be MVA-qualified.",
+ "This is an employer/trustee group superannuation product, not a retail individual pension."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT promise 'guaranteed returns' beyond the 1% minimum crediting rate — investment return above that is not guaranteed.",
+ "Do NOT omit Market Value Adjustment when describing exit/surrender values.",
+ "Do NOT market to individuals as a retail pension/annuity — it is a group superannuation scheme set up via trust/employer.",
+ "Do NOT imply loans or top-up contributions are available — they are not.",
+ "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+ ],
+ "must_state": [
+ "Plan UIN 116N175V02",
+ "Full regulatory descriptor: 'A Non-linked Non-Participating Life Group Superannuation Savings Plan'",
+ "That investment return above the 1% minimum guaranteed crediting rate is not guaranteed and that Market Value Adjustment may apply",
+ "Standard disclaimer to read the policy document / scheme rules for full terms"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of gssp-brochure.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Parser NAME field was generic ('Bajaj Life'); real product name 'Bajaj Life Group Superannuation Secure Plus' taken from descriptor/body and confirmed in Contact Details footer.",
+ "Member numeric eligibility table not recovered from this parse — left null; grace period not stated in captured text."
+ ]
+ }
 }

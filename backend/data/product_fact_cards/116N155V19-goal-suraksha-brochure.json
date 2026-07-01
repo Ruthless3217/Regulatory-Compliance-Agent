@@ -1,82 +1,82 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Goal Suraksha",
-  "uin": "116N155V19",
-  "rider_uins": [],
-  "source_file": "goal-suraksha-brochure.pdf",
-  "product_category": "savings_endowment",
-  "regulatory_descriptor": "A Non linked, Non Participating, Individual, Life Insurance Savings Plan",
-  "structural_flags": {
-    "is_unit_linked": false,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": false,
-    "offers_guaranteed_benefits": true,
-    "offers_maturity_benefit": true,
-    "offers_loan": true
-  },
-  "variants": [],
-  "key_benefits": [
-    "Guaranteed Sum Assured on Maturity (110% x PPT x Annualized Premium) plus Guaranteed Additions paid at maturity, if all premiums paid",
-    "Guaranteed Additions as a multiple of one Annualized Premium (not payable on lapsed/paid-up policy)",
-    "Death Benefit = higher of (Sum Assured Multiple x Annual Premium) or Sum Assured, subject to Guaranteed Death Benefit of 105% of Total Premiums Paid",
-    "'Low Cover Mark-up' (extra Guaranteed Additions) if a sum-assured multiple of 7x or 5x Annual Premium is chosen",
-    "Limited premium payment term; non-medical savings plan",
-    "Option to take policy loan and to alter premium payment mode",
-    "Settlement Option to receive maturity benefit in instalments (5–15 years)"
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_sum_assured": null,
-    "policy_term": null,
-    "premium_payment_term": "Limited premium payment (options not recovered from parse)",
-    "note": "Numeric eligibility table (entry/maturity ages, sum-assured multiples beyond 5x/7x note, PT/PPT options) not recovered from this brochure parse. A 90-day waiting period applies for non-accidental death. Verify against policy document before asserting numeric limits."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from receipt of the Policy Document; refund of premium less proportionate risk premium and medical/stamp-duty expenses; processed within 7 days.",
-    "grace_period": "30 days (yearly/half-yearly/quarterly frequencies); 15 days (monthly frequency).",
-    "suicide_clause": "On death by suicide within 12 months from commencement of risk or latest revival (whichever is later), nominee receives higher of 80% of Total Premiums Paid or surrender benefit as on date of death, provided the policy is in force.",
-    "waiting_period": "First 90 days from commencement of risk; on non-accidental death during the waiting period only 100% of premiums paid (excluding extra premium/taxes) is payable. Not applicable on revival.",
-    "loan_note": "Loan up to 80% of surrender benefit; current interest 9% p.a. compounded half-yearly, benchmarked to 10-year G-Sec + 2%.",
-    "tax_note": "Tax benefits 'as per applicable tax laws as amended from time to time'; consult a tax consultant. GST per prevailing tax laws."
-  },
-  "mandatory_disclosures_present": [
-    "Section 38 — Assignment",
-    "Section 39 — Nomination",
-    "Section 41 — Prohibition of Rebate",
-    "Section 45 — Fraud & Misstatement",
-    "Applicability of Goods & Service Tax",
-    "Grievance Redressal & Insurance Ombudsman details",
-    "Beware-of-spurious-calls warning"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "'Guaranteed' is supportable here — the plan provides a Guaranteed Sum Assured on Maturity and Guaranteed Additions; but Guaranteed Additions are payable ONLY if all due premiums are paid (not on a lapsed/paid-up policy) and must be so qualified.",
-      "Any 'Low Cover Mark-up' / enhanced-addition claim is condition-bound on choosing a 7x or 5x Annual Premium sum-assured multiple.",
-      "Death benefit floor is 105% of Total Premiums Paid; during the first 90-day waiting period only 100% of premiums is paid for non-accidental death — any death-cover claim must reflect the waiting period."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT use 'bonus' language — this is a non-participating plan; there are no bonuses, only Guaranteed Additions.",
-      "Do NOT position as a market-linked or investment product — it is non-linked.",
-      "Do NOT omit the 90-day waiting period when describing death cover.",
-      "Do NOT imply Guaranteed Additions accrue on a lapsed/paid-up policy.",
-      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
-    ],
-    "must_state": [
-      "Plan UIN 116N155V19",
-      "Full regulatory descriptor: 'A Non linked, Non Participating, Individual, Life Insurance Savings Plan'",
-      "Standard disclaimer to read the policy document / benefit illustration for full terms and exclusions"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of goal-suraksha-brochure.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Numeric eligibility table (entry/maturity age, sum-assured multiples table, PT/PPT options) not recovered from this parse — left null."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Goal Suraksha",
+ "uin": "116N155V19",
+ "rider_uins": [],
+ "source_file": "goal-suraksha-brochure.pdf",
+ "product_category": "savings_endowment",
+ "regulatory_descriptor": "A Non linked, Non Participating, Individual, Life Insurance Savings Plan",
+ "structural_flags": {
+ "is_unit_linked": false,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": false,
+ "offers_guaranteed_benefits": true,
+ "offers_maturity_benefit": true,
+ "offers_loan": true
+ },
+ "variants": [],
+ "key_benefits": [
+ "Guaranteed Sum Assured on Maturity (110% x PPT x Annualized Premium) plus Guaranteed Additions paid at maturity, if all premiums paid",
+ "Guaranteed Additions as a multiple of one Annualized Premium (not payable on lapsed/paid-up policy)",
+ "Death Benefit = higher of (Sum Assured Multiple x Annual Premium) or Sum Assured, subject to Guaranteed Death Benefit of 105% of Total Premiums Paid",
+ "'Low Cover Mark-up' (extra Guaranteed Additions) if a sum-assured multiple of 7x or 5x Annual Premium is chosen",
+ "Limited premium payment term; non-medical savings plan",
+ "Option to take policy loan and to alter premium payment mode",
+ "Settlement Option to receive maturity benefit in instalments (5–15 years)"
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_sum_assured": null,
+ "policy_term": null,
+ "premium_payment_term": "Limited premium payment (options not recovered from parse)",
+ "note": "Numeric eligibility table (entry/maturity ages, sum-assured multiples beyond 5x/7x note, PT/PPT options) not recovered from this brochure parse. A 90-day waiting period applies for non-accidental death. Verify against policy document before asserting numeric limits."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from receipt of the Policy Document; refund of premium less proportionate risk premium and medical/stamp-duty expenses; processed within 7 days.",
+ "grace_period": "30 days (yearly/half-yearly/quarterly frequencies); 15 days (monthly frequency).",
+ "suicide_clause": "On death by suicide within 12 months from commencement of risk or latest revival (whichever is later), nominee receives higher of 80% of Total Premiums Paid or surrender benefit as on date of death, provided the policy is in force.",
+ "waiting_period": "First 90 days from commencement of risk; on non-accidental death during the waiting period only 100% of premiums paid (excluding extra premium/taxes) is payable. Not applicable on revival.",
+ "loan_note": "Loan up to 80% of surrender benefit; current interest 9% p.a. compounded half-yearly, benchmarked to 10-year G-Sec + 2%.",
+ "tax_note": "Tax benefits 'as per applicable tax laws as amended from time to time'; consult a tax consultant. GST per prevailing tax laws."
+ },
+ "mandatory_disclosures_present": [
+ "Section 38 — Assignment",
+ "Section 39 — Nomination",
+ "Section 41 — Prohibition of Rebate",
+ "Section 45 — Fraud & Misstatement",
+ "Applicability of Goods & Service Tax",
+ "Grievance Redressal & Insurance Ombudsman details",
+ "Beware-of-spurious-calls warning"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "'Guaranteed' is supportable here — the plan provides a Guaranteed Sum Assured on Maturity and Guaranteed Additions; but Guaranteed Additions are payable ONLY if all due premiums are paid (not on a lapsed/paid-up policy) and must be so qualified.",
+ "Any 'Low Cover Mark-up' / enhanced-addition claim is condition-bound on choosing a 7x or 5x Annual Premium sum-assured multiple.",
+ "Death benefit floor is 105% of Total Premiums Paid; during the first 90-day waiting period only 100% of premiums is paid for non-accidental death — any death-cover claim must reflect the waiting period."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT use 'bonus' language — this is a non-participating plan; there are no bonuses, only Guaranteed Additions.",
+ "Do NOT position as a market-linked or investment product — it is non-linked.",
+ "Do NOT omit the 90-day waiting period when describing death cover.",
+ "Do NOT imply Guaranteed Additions accrue on a lapsed/paid-up policy.",
+ "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+ ],
+ "must_state": [
+ "Plan UIN 116N155V19",
+ "Full regulatory descriptor: 'A Non linked, Non Participating, Individual, Life Insurance Savings Plan'",
+ "Standard disclaimer to read the policy document / benefit illustration for full terms and exclusions"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of goal-suraksha-brochure.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Numeric eligibility table (entry/maturity age, sum-assured multiples table, PT/PPT options) not recovered from this parse — left null."
+ ]
+ }
 }

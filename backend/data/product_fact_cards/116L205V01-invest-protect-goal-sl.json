@@ -1,92 +1,92 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Invest Protect Goal III",
-  "uin": "116L205V01",
-  "rider_uins": ["116A057V02", "116A059V01", "116A060V01"],
-  "source_file": "invest-protect-goal-sl.pdf",
-  "product_category": "ulip",
-  "regulatory_descriptor": "A Unit-Linked, Non-Participating, Individual Life Insurance Savings Plan",
-  "structural_flags": {
-    "is_unit_linked": true,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": true,
-    "offers_guaranteed_benefits": true,
-    "offers_maturity_benefit": true,
-    "offers_loan": false
-  },
-  "variants": [],
-  "key_benefits": [
-    "Death Benefit: higher of Prevailing Sum Assured or Regular Premium Fund Value, plus higher of Top-up Fund Value or Top-up Sum Assured; subject to a minimum Guaranteed Benefit of 105% of total premiums (incl. top-ups) received to date of death",
-    "Maturity Benefit: Total Fund Value as on the maturity date (market-linked)",
-    "Loyalty Advantage: Return of Premium Allocation Charge (ROAC) at end of 15th year and Return of Mortality Charge (ROMC)",
-    "Loyalty Addition: percentage of average of previous three years' daily Regular Premium Fund Value added to fund",
-    "Fund Maintenance Booster (FMB): from 4th policy year, tops up Fund Value to one Annualized Premium if it falls below that level",
-    "Family Benefit: 1% of average of previous three years' daily Regular Premium Fund Value for existing-customer families, paid at maturity",
-    "Market-linked growth across multiple funds and portfolio strategies; partial withdrawals allowed after the 5-year lock-in",
-    "Riders available for enhanced protection"
-  ],
-  "riders_available": [
-    "Bajaj Life Linked Accident Protection Rider II (UIN 116A057V02)",
-    "Bajaj Life Care Plus Rider (UIN 116A059V01)",
-    "Bajaj Life Linked New Critical Illness Benefit Rider (UIN 116A060V01)"
-  ],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_sum_assured": null,
-    "policy_term": null,
-    "premium_payment_term": "Limited / Regular premium payment (Product at a glance table present but numeric ranges not recovered from parse)",
-    "note": "'Product at a glance' eligibility table is present but numeric age/term ranges were not recovered from this parse; Minimum and Maximum Sum Assured are stated to be subject to the prevailing Board Approved Underwriting Policy (BAUP)."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from the date of receipt of the policy document.",
-    "grace_period": "30 days for yearly, half-yearly and quarterly premium frequencies; 15 days for monthly frequency.",
-    "suicide_clause": "On death due to suicide within 12 months from the Date of Commencement or latest revival (whichever is later), the nominee/beneficiary is entitled to the Total Fund Value available on the date of intimation of death; any charges other than Fund Management Charges recovered after the date of death are added back. No other exclusion applies w.r.t. death.",
-    "lock_in_note": "Five-year lock-in: on surrender during the first 5 policy years only the Discontinuance Value is payable as Surrender Value at the end of the lock-in period; partial withdrawals allowed only from the 6th policy year onward.",
-    "guaranteed_benefit_note": "Total death benefit is subject to a minimum Guaranteed Benefit of 105% of total premiums (including top-ups) received to date of death — this is the only guaranteed element; maturity value is market-linked Fund Value.",
-    "sum_assured_reduction_note": "Sum Assured is reduced to the extent of partial withdrawals made from the Regular Premium Fund during the 2 years immediately preceding the date of death.",
-    "tax_note": "Tax benefit as per applicable laws; GST applicable as per prevailing Tax Laws, subject to amendment."
-  },
-  "mandatory_disclosures_present": [
-    "ULIP market-risk / 'subject to investment risks associated with capital markets' disclosure",
-    "Applicability of Goods & Service Tax",
-    "Five-year lock-in / surrender-value disclosure",
-    "Free-look period disclosure",
-    "'This brochure should be read in conjunction with the Benefit Illustration and Policy Exclusions' statement",
-    "Beware-of-spurious-calls / contact-details footer with plan UIN"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "Any '105% guaranteed' / 'guaranteed benefit' claim is bounded ONLY to the minimum death benefit (105% of total premiums) — it does not guarantee maturity value or returns.",
-      "Maturity Benefit equals the Total Fund Value (market-linked), not a guaranteed maturity amount.",
-      "Any death-benefit claim must reflect that the Sum Assured is reduced by partial withdrawals made in the 2 years before death.",
-      "Loyalty Advantage / ROAC / ROMC / FMB are charge-return and fund-maintenance features, conditional on the policy being in-force and premiums paid up — not unconditional payouts."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT use 'guaranteed returns' / 'assured returns' / 'risk-free' language — this is a Unit-Linked plan and investment risk is borne entirely by the policyholder.",
-      "Do NOT use 'bonus' language — the plan is non-participating; Loyalty Additions and charge-returns are not bonuses.",
-      "Do NOT present illustrative market-linked return figures as guaranteed or as upper/lower limits of returns.",
-      "Do NOT imply liquidity in the first five years — funds are locked in and partial withdrawal is only available from the 6th policy year.",
-      "Do NOT position fund-value growth as guaranteed; only the 105%-of-premiums minimum death benefit is guaranteed."
-    ],
-    "must_state": [
-      "Plan UIN 116L205V01",
-      "Full regulatory descriptor (Unit-Linked, Non-Participating, Individual Life Insurance Savings Plan)",
-      "ULIP market-risk disclosure: investment in ULIPs is subject to capital-market risks and the policyholder is solely responsible for his/her investment decisions",
-      "Five-year lock-in statement",
-      "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of invest-protect-goal-sl.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Verbatim one-line IRDAI descriptor was not isolated by the parser; descriptor reconstructed from body text ('Unit Linked Life Insurance product', non-participating) — verify exact wording against the policy document.",
-      "Numeric entry/maturity age, policy term and sum-assured boundaries not recovered ('Product at a glance' table defers Sum Assured to the BAUP).",
-      "Parser primary UIN (116A057V02) is a rider UIN; plan UIN 116L205V01 taken from the brochure contact-details footer."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Invest Protect Goal III",
+ "uin": "116L205V01",
+ "rider_uins": ["116A057V02", "116A059V01", "116A060V01"],
+ "source_file": "invest-protect-goal-sl.pdf",
+ "product_category": "ulip",
+ "regulatory_descriptor": "A Unit-Linked, Non-Participating, Individual Life Insurance Savings Plan",
+ "structural_flags": {
+ "is_unit_linked": true,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": true,
+ "offers_guaranteed_benefits": true,
+ "offers_maturity_benefit": true,
+ "offers_loan": false
+ },
+ "variants": [],
+ "key_benefits": [
+ "Death Benefit: higher of Prevailing Sum Assured or Regular Premium Fund Value, plus higher of Top-up Fund Value or Top-up Sum Assured; subject to a minimum Guaranteed Benefit of 105% of total premiums (incl. top-ups) received to date of death",
+ "Maturity Benefit: Total Fund Value as on the maturity date (market-linked)",
+ "Loyalty Advantage: Return of Premium Allocation Charge (ROAC) at end of 15th year and Return of Mortality Charge (ROMC)",
+ "Loyalty Addition: percentage of average of previous three years' daily Regular Premium Fund Value added to fund",
+ "Fund Maintenance Booster (FMB): from 4th policy year, tops up Fund Value to one Annualized Premium if it falls below that level",
+ "Family Benefit: 1% of average of previous three years' daily Regular Premium Fund Value for existing-customer families, paid at maturity",
+ "Market-linked growth across multiple funds and portfolio strategies; partial withdrawals allowed after the 5-year lock-in",
+ "Riders available for enhanced protection"
+ ],
+ "riders_available": [
+ "Bajaj Life Linked Accident Protection Rider II (UIN 116A057V02)",
+ "Bajaj Life Care Plus Rider (UIN 116A059V01)",
+ "Bajaj Life Linked New Critical Illness Benefit Rider (UIN 116A060V01)"
+ ],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_sum_assured": null,
+ "policy_term": null,
+ "premium_payment_term": "Limited / Regular premium payment (Product at a glance table present but numeric ranges not recovered from parse)",
+ "note": "'Product at a glance' eligibility table is present but numeric age/term ranges were not recovered from this parse; Minimum and Maximum Sum Assured are stated to be subject to the prevailing Board Approved Underwriting Policy (BAUP)."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from the date of receipt of the policy document.",
+ "grace_period": "30 days for yearly, half-yearly and quarterly premium frequencies; 15 days for monthly frequency.",
+ "suicide_clause": "On death due to suicide within 12 months from the Date of Commencement or latest revival (whichever is later), the nominee/beneficiary is entitled to the Total Fund Value available on the date of intimation of death; any charges other than Fund Management Charges recovered after the date of death are added back. No other exclusion applies w.r.t. death.",
+ "lock_in_note": "Five-year lock-in: on surrender during the first 5 policy years only the Discontinuance Value is payable as Surrender Value at the end of the lock-in period; partial withdrawals allowed only from the 6th policy year onward.",
+ "guaranteed_benefit_note": "Total death benefit is subject to a minimum Guaranteed Benefit of 105% of total premiums (including top-ups) received to date of death — this is the only guaranteed element; maturity value is market-linked Fund Value.",
+ "sum_assured_reduction_note": "Sum Assured is reduced to the extent of partial withdrawals made from the Regular Premium Fund during the 2 years immediately preceding the date of death.",
+ "tax_note": "Tax benefit as per applicable laws; GST applicable as per prevailing Tax Laws, subject to amendment."
+ },
+ "mandatory_disclosures_present": [
+ "ULIP market-risk / 'subject to investment risks associated with capital markets' disclosure",
+ "Applicability of Goods & Service Tax",
+ "Five-year lock-in / surrender-value disclosure",
+ "Free-look period disclosure",
+ "'This brochure should be read in conjunction with the Benefit Illustration and Policy Exclusions' statement",
+ "Beware-of-spurious-calls / contact-details footer with plan UIN"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "Any '105% guaranteed' / 'guaranteed benefit' claim is bounded ONLY to the minimum death benefit (105% of total premiums) — it does not guarantee maturity value or returns.",
+ "Maturity Benefit equals the Total Fund Value (market-linked), not a guaranteed maturity amount.",
+ "Any death-benefit claim must reflect that the Sum Assured is reduced by partial withdrawals made in the 2 years before death.",
+ "Loyalty Advantage / ROAC / ROMC / FMB are charge-return and fund-maintenance features, conditional on the policy being in-force and premiums paid up — not unconditional payouts."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT use 'guaranteed returns' / 'assured returns' / 'risk-free' language — this is a Unit-Linked plan and investment risk is borne entirely by the policyholder.",
+ "Do NOT use 'bonus' language — the plan is non-participating; Loyalty Additions and charge-returns are not bonuses.",
+ "Do NOT present illustrative market-linked return figures as guaranteed or as upper/lower limits of returns.",
+ "Do NOT imply liquidity in the first five years — funds are locked in and partial withdrawal is only available from the 6th policy year.",
+ "Do NOT position fund-value growth as guaranteed; only the 105%-of-premiums minimum death benefit is guaranteed."
+ ],
+ "must_state": [
+ "Plan UIN 116L205V01",
+ "Full regulatory descriptor (Unit-Linked, Non-Participating, Individual Life Insurance Savings Plan)",
+ "ULIP market-risk disclosure: investment in ULIPs is subject to capital-market risks and the policyholder is solely responsible for his/her investment decisions",
+ "Five-year lock-in statement",
+ "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of invest-protect-goal-sl.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Verbatim one-line IRDAI descriptor was not isolated by the parser; descriptor reconstructed from body text ('Unit Linked Life Insurance product', non-participating) — verify exact wording against the policy document.",
+ "Numeric entry/maturity age, policy term and sum-assured boundaries not recovered ('Product at a glance' table defers Sum Assured to the BAUP).",
+ "Parser primary UIN (116A057V02) is a rider UIN; plan UIN 116L205V01 taken from the brochure contact-details footer."
+ ]
+ }
 }

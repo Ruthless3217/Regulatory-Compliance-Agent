@@ -11,10 +11,10 @@ import type { Severity, Violation } from "./types";
 import { normalizeSeverity, severityOrder } from "./format";
 
 export interface HighlightSpan {
-  start: number;
-  end: number;
-  severity: string;
-  violationId: string;
+ start: number;
+ end: number;
+ severity: string;
+ violationId: string;
 }
 
 /**
@@ -28,116 +28,116 @@ export interface HighlightSpan {
  * newlines, or extra spaces.
  */
 function normalizeWithMap(text: string): { norm: string; map: number[] } {
-  const normChars: string[] = [];
-  const map: number[] = [];
-  let prevWasSpace = true; // skip leading whitespace
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (/\s/.test(ch)) {
-      if (!prevWasSpace) {
-        normChars.push(" ");
-        map.push(i);
-        prevWasSpace = true;
-      }
-    } else {
-      normChars.push(ch.toLowerCase());
-      map.push(i);
-      prevWasSpace = false;
-    }
-  }
-  return { norm: normChars.join(""), map };
+ const normChars: string[] = [];
+ const map: number[] = [];
+ let prevWasSpace = true; // skip leading whitespace
+ for (let i = 0; i < text.length; i++) {
+ const ch = text[i];
+ if (/\s/.test(ch)) {
+ if (!prevWasSpace) {
+ normChars.push(" ");
+ map.push(i);
+ prevWasSpace = true;
+ }
+ } else {
+ normChars.push(ch.toLowerCase());
+ map.push(i);
+ prevWasSpace = false;
+ }
+ }
+ return { norm: normChars.join(""), map };
 }
 
 function normalizeNeedle(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
+ return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 export function findSpans(text: string, violations: Violation[]): HighlightSpan[] {
-  const spans: HighlightSpan[] = [];
-  const { norm, map } = normalizeWithMap(text);
-  for (const v of violations) {
-    if (!v.current_text) continue;
-    const needle = normalizeNeedle(v.current_text);
-    if (!needle) continue;
-    let from = 0;
-    while (from <= norm.length - needle.length) {
-      const idx = norm.indexOf(needle, from);
-      if (idx === -1) break;
-      // Map normalized match bounds back to original document offsets so the
-      // <mark> wraps the real text (original casing/whitespace preserved).
-      const start = map[idx];
-      const end = map[idx + needle.length - 1] + 1;
-      spans.push({
-        start,
-        end,
-        severity: v.severity,
-        violationId: v.id,
-      });
-      from = idx + needle.length;
-    }
-  }
-  return resolveOverlaps(spans);
+ const spans: HighlightSpan[] = [];
+ const { norm, map } = normalizeWithMap(text);
+ for (const v of violations) {
+ if (!v.current_text) continue;
+ const needle = normalizeNeedle(v.current_text);
+ if (!needle) continue;
+ let from = 0;
+ while (from <= norm.length - needle.length) {
+ const idx = norm.indexOf(needle, from);
+ if (idx === -1) break;
+ // Map normalized match bounds back to original document offsets so the
+ // <mark> wraps the real text (original casing/whitespace preserved).
+ const start = map[idx];
+ const end = map[idx + needle.length - 1] + 1;
+ spans.push({
+ start,
+ end,
+ severity: v.severity,
+ violationId: v.id,
+ });
+ from = idx + needle.length;
+ }
+ }
+ return resolveOverlaps(spans);
 }
 
 /** Resolve overlapping spans: highest-severity wins; tie → longer length. */
 export function resolveOverlaps(spans: HighlightSpan[]): HighlightSpan[] {
-  const sorted = [...spans].sort((a, b) => {
-    if (a.start !== b.start) return a.start - b.start;
-    const sa = severityOrder(a.severity);
-    const sb = severityOrder(b.severity);
-    if (sa !== sb) return sa - sb;
-    return b.end - b.start - (a.end - a.start);
-  });
-  const accepted: HighlightSpan[] = [];
-  for (const s of sorted) {
-    const last = accepted[accepted.length - 1];
-    if (!last || s.start >= last.end) {
-      accepted.push(s);
-      continue;
-    }
-    const cur = severityOrder(s.severity);
-    const prev = severityOrder(last.severity);
-    if (cur < prev || (cur === prev && s.end - s.start > last.end - last.start)) {
-      accepted.pop();
-      accepted.push(s);
-    }
-  }
-  return accepted.sort((a, b) => a.start - b.start);
+ const sorted = [...spans].sort((a, b) => {
+ if (a.start !== b.start) return a.start - b.start;
+ const sa = severityOrder(a.severity);
+ const sb = severityOrder(b.severity);
+ if (sa !== sb) return sa - sb;
+ return b.end - b.start - (a.end - a.start);
+ });
+ const accepted: HighlightSpan[] = [];
+ for (const s of sorted) {
+ const last = accepted[accepted.length - 1];
+ if (!last || s.start >= last.end) {
+ accepted.push(s);
+ continue;
+ }
+ const cur = severityOrder(s.severity);
+ const prev = severityOrder(last.severity);
+ if (cur < prev || (cur === prev && s.end - s.start > last.end - last.start)) {
+ accepted.pop();
+ accepted.push(s);
+ }
+ }
+ return accepted.sort((a, b) => a.start - b.start);
 }
 
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+ return s
+ .replace(/&/g, "&amp;")
+ .replace(/</g, "&lt;")
+ .replace(/>/g, "&gt;")
+ .replace(/"/g, "&quot;")
+ .replace(/'/g, "&#39;");
 }
 
 export function applyHighlights(text: string, violations: Violation[]): string {
-  const spans = findSpans(text, violations);
-  if (spans.length === 0) return escapeHtml(text);
-  const out: string[] = [];
-  let cursor = 0;
-  for (const span of spans) {
-    if (span.start > cursor) out.push(escapeHtml(text.slice(cursor, span.start)));
-    const inner = escapeHtml(text.slice(span.start, span.end));
-    out.push(
-      `<mark data-violation-id="${span.violationId}" data-severity="${normalizeSeverity(span.severity)}">${inner}</mark>`
-    );
-    cursor = span.end;
-  }
-  if (cursor < text.length) out.push(escapeHtml(text.slice(cursor)));
-  return out.join("");
+ const spans = findSpans(text, violations);
+ if (spans.length === 0) return escapeHtml(text);
+ const out: string[] = [];
+ let cursor = 0;
+ for (const span of spans) {
+ if (span.start > cursor) out.push(escapeHtml(text.slice(cursor, span.start)));
+ const inner = escapeHtml(text.slice(span.start, span.end));
+ out.push(
+ `<mark data-violation-id="${span.violationId}" data-severity="${normalizeSeverity(span.severity)}">${inner}</mark>`
+ );
+ cursor = span.end;
+ }
+ if (cursor < text.length) out.push(escapeHtml(text.slice(cursor)));
+ return out.join("");
 }
 
 /** Wrap paragraphs (split on double newlines) into <p> tags for rendering. */
 export function applyHighlightsAsParagraphs(text: string, violations: Violation[]): string {
-  const html = applyHighlights(text, violations);
-  return html
-    .split(/\n\n+/)
-    .map((p) => `<p>${p.replace(/\n/g, "<br/>")}</p>`)
-    .join("");
+ const html = applyHighlights(text, violations);
+ return html
+ .split(/\n\n+/)
+ .map((p) => `<p>${p.replace(/\n/g, "<br/>")}</p>`)
+ .join("");
 }
 
 export type { Severity };

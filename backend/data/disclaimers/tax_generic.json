@@ -1,23 +1,23 @@
 {
-  "id": "tax_generic",
-  "type": "Generic Tax Disclaimer",
-  "text": "Tax benefits as per prevailing Income tax laws shall apply. Please check with your tax consultant for eligibility.",
-  "anchors": [],
-  "severity": "high",
-  "altered_severity": "moderate",
-  "triggers": {
-    "product_lines": [],
-    "keywords_regex": [
-      "\\btax benefit",
-      "\\btax-free\\b",
-      "\\btax saving"
-    ],
-    "llm_obligation_type": "tax_generic"
-  },
-  "match": {
-    "present_threshold": 0.8,
-    "altered_threshold": 0.45
-  },
-  "precedence": 50,
-  "source": "Copy of Disclaimers.xlsx"
+ "id": "tax_generic",
+ "type": "Generic Tax Disclaimer",
+ "text": "Tax benefits as per prevailing Income tax laws shall apply. Please check with your tax consultant for eligibility.",
+ "anchors": [],
+ "severity": "high",
+ "altered_severity": "moderate",
+ "triggers": {
+ "product_lines": [],
+ "keywords_regex": [
+ "\\btax benefit",
+ "\\btax-free\\b",
+ "\\btax saving"
+ ],
+ "llm_obligation_type": "tax_generic"
+ },
+ "match": {
+ "present_threshold": 0.8,
+ "altered_threshold": 0.45
+ },
+ "precedence": 50,
+ "source": "Copy of Disclaimers.xlsx"
 }

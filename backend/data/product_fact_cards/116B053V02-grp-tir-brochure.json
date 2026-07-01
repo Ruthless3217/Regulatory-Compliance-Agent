@@ -1,78 +1,78 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Group Terminal Illness Rider",
-  "uin": "116B053V02",
-  "rider_uins": [],
-  "source_file": "Grp-TIR-brochure.pdf",
-  "product_category": "rider",
-  "regulatory_descriptor": "A Group Terminal Illness Rider (attached to a base group policy)",
-  "structural_flags": {
-    "is_unit_linked": false,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": false,
-    "offers_guaranteed_benefits": false,
-    "offers_maturity_benefit": false,
-    "offers_loan": false
-  },
-  "variants": [],
-  "key_benefits": [
-    "Terminal Illness Benefit: on occurrence of Terminal Illness of the life assured during the base policy term, the Terminal Illness Sum Assured is payable",
-    "Company must be informed within 30 days of diagnosis (late claims considered for valid reasons)",
-    "Rider can be included from inception or any Annual Renewal Date, and excluded at any Annual Renewal Date"
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_sum_assured": null,
-    "policy_term": "As per base group policy; cover ceases at the maximum cover-ceasing age allowed under the rider",
-    "premium_payment_term": "As per base policy; Rider Premium collected additionally with the base policy premium",
-    "note": "This is a group rider with no standalone eligibility table in the brochure; entry/cover-ceasing ages and Sum Assured depend on the base group policy and underwriting. Numeric values not present in this parse."
-  },
-  "key_terms": {
-    "free_look_period_days": null,
-    "free_look_note": "Same as the base product, but applicable from the Date of Commencement of the Rider if different from the base policy's Date of Commencement of Risk.",
-    "grace_period": "As per base policy. On occurrence of Terminal Illness during the grace period, the benefit is payable subject to deduction of due-but-unpaid rider premium.",
-    "suicide_clause": "Not Applicable to this rider.",
-    "maturity_benefit_condition": "There is NO maturity benefit under the rider; on exclusion, no surrender value with respect to the rider is payable.",
-    "terminal_illness_definition": "An advanced or rapidly progressing incurable disease where, in the opinion of two appropriate independent Medical Practitioners, life expectancy is no greater than six (6) months from the date of notification of claim; insured must not be receiving treatment other than palliative medication.",
-    "tax_note": "Tax benefits as per applicable tax laws."
-  },
-  "mandatory_disclosures_present": [
-    "Section 38 — Assignment",
-    "Section 41 — Prohibition of Rebate",
-    "Grievance Redressal & insurer grievance-portal details",
-    "Free-look period disclosure (linked to base policy)"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "This is a RIDER attached to a base group policy — it cannot be marketed as a standalone product or as life cover on its own.",
-      "The Terminal Illness benefit is payable only on a Terminal Illness as strictly defined (incurable disease, life expectancy <= 6 months confirmed by two Medical Practitioners) — any claim must reflect this definition.",
-      "Benefit is conditional on rider premium being paid and the base policy/membership being in force.",
-      "If the accelerated Terminal Illness benefit equals the death benefit, the rider terminates — it is not always additional to the death benefit."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT position this rider as an investment, savings, maturity or money-back benefit — there is no maturity benefit and no surrender value.",
-      "Do NOT use 'guaranteed returns' / 'bonus' language — it is a non-linked, non-participating pure-protection rider.",
-      "Do NOT imply the Terminal Illness benefit pays out for any serious illness — only the strict Terminal Illness definition applies.",
-      "Do NOT market it independently of a base group policy."
-    ],
-    "must_state": [
-      "Rider UIN 116B053V02",
-      "That this is a Group Terminal Illness Rider attached to a base group policy (not a standalone plan)",
-      "The Terminal Illness definition / claim conditions",
-      "Standard disclaimer to read the policy document for full terms and exclusions"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of Grp-TIR-brochure.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Parser product NAME was generic ('Bajaj Life'); full name reconstructed as 'Bajaj Life Group Terminal Illness Rider' from the rider body and group context — verify exact marketing name.",
-      "Verbatim one-line IRDAI descriptor and numeric eligibility (ages, sum assured) not present in the rider brochure parse; these are governed by the base group policy.",
-      "Free-look days not numerically stated (inherits base product)."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Group Terminal Illness Rider",
+ "uin": "116B053V02",
+ "rider_uins": [],
+ "source_file": "Grp-TIR-brochure.pdf",
+ "product_category": "rider",
+ "regulatory_descriptor": "A Group Terminal Illness Rider (attached to a base group policy)",
+ "structural_flags": {
+ "is_unit_linked": false,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": false,
+ "offers_guaranteed_benefits": false,
+ "offers_maturity_benefit": false,
+ "offers_loan": false
+ },
+ "variants": [],
+ "key_benefits": [
+ "Terminal Illness Benefit: on occurrence of Terminal Illness of the life assured during the base policy term, the Terminal Illness Sum Assured is payable",
+ "Company must be informed within 30 days of diagnosis (late claims considered for valid reasons)",
+ "Rider can be included from inception or any Annual Renewal Date, and excluded at any Annual Renewal Date"
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_sum_assured": null,
+ "policy_term": "As per base group policy; cover ceases at the maximum cover-ceasing age allowed under the rider",
+ "premium_payment_term": "As per base policy; Rider Premium collected additionally with the base policy premium",
+ "note": "This is a group rider with no standalone eligibility table in the brochure; entry/cover-ceasing ages and Sum Assured depend on the base group policy and underwriting. Numeric values not present in this parse."
+ },
+ "key_terms": {
+ "free_look_period_days": null,
+ "free_look_note": "Same as the base product, but applicable from the Date of Commencement of the Rider if different from the base policy's Date of Commencement of Risk.",
+ "grace_period": "As per base policy. On occurrence of Terminal Illness during the grace period, the benefit is payable subject to deduction of due-but-unpaid rider premium.",
+ "suicide_clause": "Not Applicable to this rider.",
+ "maturity_benefit_condition": "There is NO maturity benefit under the rider; on exclusion, no surrender value with respect to the rider is payable.",
+ "terminal_illness_definition": "An advanced or rapidly progressing incurable disease where, in the opinion of two appropriate independent Medical Practitioners, life expectancy is no greater than six (6) months from the date of notification of claim; insured must not be receiving treatment other than palliative medication.",
+ "tax_note": "Tax benefits as per applicable tax laws."
+ },
+ "mandatory_disclosures_present": [
+ "Section 38 — Assignment",
+ "Section 41 — Prohibition of Rebate",
+ "Grievance Redressal & insurer grievance-portal details",
+ "Free-look period disclosure (linked to base policy)"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "This is a RIDER attached to a base group policy — it cannot be marketed as a standalone product or as life cover on its own.",
+ "The Terminal Illness benefit is payable only on a Terminal Illness as strictly defined (incurable disease, life expectancy <= 6 months confirmed by two Medical Practitioners) — any claim must reflect this definition.",
+ "Benefit is conditional on rider premium being paid and the base policy/membership being in force.",
+ "If the accelerated Terminal Illness benefit equals the death benefit, the rider terminates — it is not always additional to the death benefit."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT position this rider as an investment, savings, maturity or money-back benefit — there is no maturity benefit and no surrender value.",
+ "Do NOT use 'guaranteed returns' / 'bonus' language — it is a non-linked, non-participating pure-protection rider.",
+ "Do NOT imply the Terminal Illness benefit pays out for any serious illness — only the strict Terminal Illness definition applies.",
+ "Do NOT market it independently of a base group policy."
+ ],
+ "must_state": [
+ "Rider UIN 116B053V02",
+ "That this is a Group Terminal Illness Rider attached to a base group policy (not a standalone plan)",
+ "The Terminal Illness definition / claim conditions",
+ "Standard disclaimer to read the policy document for full terms and exclusions"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of Grp-TIR-brochure.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Parser product NAME was generic ('Bajaj Life'); full name reconstructed as 'Bajaj Life Group Terminal Illness Rider' from the rider body and group context — verify exact marketing name.",
+ "Verbatim one-line IRDAI descriptor and numeric eligibility (ages, sum assured) not present in the rider brochure parse; these are governed by the base group policy.",
+ "Free-look days not numerically stated (inherits base product)."
+ ]
+ }
 }

@@ -1,26 +1,26 @@
 {
-  "id": "participating",
-  "type": "Participating Plans",
-  "text": "The risk factors of the bonuses projected under the product are not guaranteed. \nPast performance of the Company doesn't construe any indication of future bonuses\nThe product is subject to the overall performance of the Company in terms of investments, management of expenses, mortality and lapses",
-  "anchors": [],
-  "severity": "high",
-  "altered_severity": "moderate",
-  "triggers": {
-    "product_lines": [
-      "par"
-    ],
-    "keywords_regex": [
-      "\\bparticipating\\b",
-      "\\bpar plan\\b",
-      "\\bwith[- ]profits?\\b",
-      "\\b(reversionary|terminal|interim|simple|compound|cash)\\s+bonus(es)?\\b"
-    ],
-    "llm_obligation_type": "participating_plan"
-  },
-  "match": {
-    "present_threshold": 0.85,
-    "altered_threshold": 0.45
-  },
-  "precedence": 80,
-  "source": "Copy of Disclaimers.xlsx"
+ "id": "participating",
+ "type": "Participating Plans",
+ "text": "The risk factors of the bonuses projected under the product are not guaranteed. \nPast performance of the Company doesn't construe any indication of future bonuses\nThe product is subject to the overall performance of the Company in terms of investments, management of expenses, mortality and lapses",
+ "anchors": [],
+ "severity": "high",
+ "altered_severity": "moderate",
+ "triggers": {
+ "product_lines": [
+ "par"
+ ],
+ "keywords_regex": [
+ "\\bparticipating\\b",
+ "\\bpar plan\\b",
+ "\\bwith[- ]profits?\\b",
+ "\\b(reversionary|terminal|interim|simple|compound|cash)\\s+bonus(es)?\\b"
+ ],
+ "llm_obligation_type": "participating_plan"
+ },
+ "match": {
+ "present_threshold": 0.85,
+ "altered_threshold": 0.45
+ },
+ "precedence": 80,
+ "source": "Copy of Disclaimers.xlsx"
 }

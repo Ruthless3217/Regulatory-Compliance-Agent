@@ -22,27 +22,27 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "violations",
-        sa.Column(
-            "confidence",
-            sa.Float(),
-            nullable=False,
-            server_default="0.85",
-        ),
-    )
-    op.add_column(
-        "violations",
-        sa.Column("regulator_quote", sa.Text(), nullable=True),
-    )
+ op.add_column(
+ "violations",
+ sa.Column(
+ "confidence",
+ sa.Float(),
+ nullable=False,
+ server_default="0.85",
+ ),
+ )
+ op.add_column(
+ "violations",
+ sa.Column("regulator_quote", sa.Text(), nullable=True),
+ )
 
-    # Backfill: normalize severity + category casing so aggregations stop
-    # splitting "CRITICAL" vs "critical" into separate rows.
-    op.execute("UPDATE violations SET severity = lower(severity) WHERE severity IS NOT NULL")
-    op.execute("UPDATE violations SET category = lower(category) WHERE category IS NOT NULL")
-    op.execute("UPDATE violations SET auto_fixable = lower(auto_fixable) WHERE auto_fixable IS NOT NULL")
+ # Backfill: normalize severity + category casing so aggregations stop
+ # splitting "CRITICAL" vs "critical" into separate rows.
+ op.execute("UPDATE violations SET severity = lower(severity) WHERE severity IS NOT NULL")
+ op.execute("UPDATE violations SET category = lower(category) WHERE category IS NOT NULL")
+ op.execute("UPDATE violations SET auto_fixable = lower(auto_fixable) WHERE auto_fixable IS NOT NULL")
 
 
 def downgrade() -> None:
-    op.drop_column("violations", "regulator_quote")
-    op.drop_column("violations", "confidence")
+ op.drop_column("violations", "regulator_quote")
+ op.drop_column("violations", "confidence")

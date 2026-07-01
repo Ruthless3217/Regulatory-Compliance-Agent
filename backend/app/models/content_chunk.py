@@ -7,15 +7,15 @@ from ..database import Base
 
 
 class ContentChunk(Base):
-    __tablename__ = "content_chunks"
+ __tablename__ = "content_chunks"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    submission_id = Column(UUID(as_uuid=True), ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False, index=True)
-    chunk_index = Column(Integer, nullable=False)
-    text = Column(Text, nullable=False)
-    token_count = Column(Integer, nullable=True)
-    chunk_metadata = Column(JSONB, nullable=True)  # page_number, section, etc.
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+ id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+ submission_id = Column(UUID(as_uuid=True), ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False, index=True)
+ chunk_index = Column(Integer, nullable=False)
+ text = Column(Text, nullable=False)
+ token_count = Column(Integer, nullable=True)
+ chunk_metadata = Column(JSONB, nullable=True) # page_number, section, etc.
+ created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
-    submission = relationship("Submission", back_populates="chunks")
+ # Relationships
+ submission = relationship("Submission", back_populates="chunks")

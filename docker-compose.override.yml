@@ -2,26 +2,26 @@
 # .env via env_file in docker-compose.yml; this only remaps the frontend to
 # 3001 (3000 is taken by another local Next.js dev).
 services:
-  backend:
-    environment:
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/}
-      LLM_MODEL: ${LLM_MODEL:-gemini-2.0-flash}
-      # TLS verification stays ON. The corporate Bajaj/Cisco-Umbrella CAs are
-      # baked into certifi at image build time (see backend/Dockerfile), so the
-      # SSL-inspection chain validates without disabling verification. Disabling
-      # it would expose LLM traffic (submission text + verdicts) to MITM.
-      LLM_INSECURE_TLS: ${LLM_INSECURE_TLS:-false}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      COHERE_API_KEY: ${COHERE_API_KEY:-}
-      # Embeddings default to Cohere-via-Azure-Foundry (azure_cohere) to match the
-      # indexed KB. AZURE_INFERENCE_* / RAG_EMBEDDING_* are forwarded by the base
-      # docker-compose.yml; these lines just keep the local defaults aligned.
-      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-azure_cohere}
-      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-Cohere-embed-v3-multilingual}
-      RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1024}
-  frontend:
-    # `!override` REPLACES the base ports list instead of appending to it.
-    # Without it, compose merges sequences and the frontend keeps publishing
-    # host 3000 (taken by another local Next.js dev), so the bind fails.
-    ports: !override
-      - "3001:3000"
+ backend:
+ environment:
+ LLM_BASE_URL: ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/}
+ LLM_MODEL: ${LLM_MODEL:-gemini-2.0-flash}
+ # TLS verification stays ON. The corporate Bajaj/Cisco-Umbrella CAs are
+ # baked into certifi at image build time (see backend/Dockerfile), so the
+ # SSL-inspection chain validates without disabling verification. Disabling
+ # it would expose LLM traffic (submission text + verdicts) to MITM.
+ LLM_INSECURE_TLS: ${LLM_INSECURE_TLS:-false}
+ OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+ COHERE_API_KEY: ${COHERE_API_KEY:-}
+ # Embeddings default to Cohere-via-Azure-Foundry (azure_cohere) to match the
+ # indexed KB. AZURE_INFERENCE_* / RAG_EMBEDDING_* are forwarded by the base
+ # docker-compose.yml; these lines just keep the local defaults aligned.
+ RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-azure_cohere}
+ RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-Cohere-embed-v3-multilingual}
+ RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1024}
+ frontend:
+ # `!override` REPLACES the base ports list instead of appending to it.
+ # Without it, compose merges sequences and the frontend keeps publishing
+ # host 3000 (taken by another local Next.js dev), so the bind fails.
+ ports: !override
+ - "3001:3000"

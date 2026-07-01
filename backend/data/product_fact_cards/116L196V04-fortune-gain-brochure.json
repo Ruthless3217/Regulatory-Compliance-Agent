@@ -1,88 +1,88 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Fortune Gain II",
-  "uin": "116L196V04",
-  "rider_uins": ["116A059V01", "116A060V01"],
-  "source_file": "Fortune-Gain-Brochure.pdf",
-  "product_category": "ulip",
-  "regulatory_descriptor": "A Unit-linked Non Participating Individual Life Savings Insurance Plan",
-  "structural_flags": {
-    "is_unit_linked": true,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": true,
-    "offers_guaranteed_benefits": false,
-    "offers_maturity_benefit": true,
-    "offers_loan": false
-  },
-  "variants": [],
-  "key_benefits": [
-    "Single Premium Unit-Linked savings plan with up to 99.5% Premium allocation (Single Premium of Rs 10 lacs and above)",
-    "Loyalty Additions (up to 5.6% of Single Premium) added to the Single Premium Fund Value at maturity, depending on Single Premium amount and policy term",
-    "Maturity Benefit = Single Premium Fund Value plus Top-Up Premium Fund Value, if any, payable on survival to maturity",
-    "Death Benefit (subject to Guaranteed Death Benefit of 105% of Total Premiums Paid) payable as lump sum to nominee",
-    "Choice of multiple investment funds under an Investor Selectable Portfolio Strategy",
-    "Partial withdrawals (after 5-year lock-in), Systematic Partial Withdrawal, fund switching, top-up premiums and Systematic Switching Option",
-    "Option to take death and maturity benefit in instalments (Settlement Option, up to 5 years)"
-  ],
-  "riders_available": [
-    "Bajaj Life Care Plus Rider (UIN 116A059V01)",
-    "Bajaj Life Linked New Critical Illness Benefit Rider (UIN 116A060V01)"
-  ],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_sum_assured": null,
-    "policy_term": null,
-    "premium_payment_term": "Single Premium",
-    "note": "Eligibility table (entry/maturity ages, sum-assured and term ranges) not recovered from this brochure parse; brochure states minimum/maximum premium and maximum Sum Assured are per Board Approved Underwriting Policy. Verify against policy document before asserting numeric limits."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from receipt of the Policy Document (except policies with tenure of less than a year); unit repurchase at price on cancellation date plus proportionate risk premium / medical / stamp duty deductions apply.",
-    "grace_period": "Not specified in brochure for this single-premium ULIP (single premium has no recurring premium due).",
-    "suicide_clause": "On death due to suicide within 12 months from date of commencement of policy, nominee receives the Single Premium Fund Value plus Top-Up Premium Fund Value as on date of intimation of death; any charges other than FMC/guarantee charge recovered after death are added back. No other death exclusion.",
-    "lock_in_period": "5-year lock-in; surrender during lock-in moves value (less discontinuance charge) to the Discontinued Life Policy Fund, available as surrender value at end of lock-in.",
-    "tax_note": "Tax benefits 'as per applicable tax laws as amended from time to time'; consult a tax consultant. GST per prevailing tax laws."
-  },
-  "mandatory_disclosures_present": [
-    "Section 38 — Assignment",
-    "Section 39 — Nomination",
-    "Section 41 — Prohibition of Rebate",
-    "Section 45 — Fraud & Misstatement",
-    "Applicability of Goods & Service Tax",
-    "Risks of Investment in the Units (ULIP market-risk statement: funds do not offer guaranteed/assured return; name of plan/funds does not indicate quality, future prospects or returns)",
-    "Grievance Redressal & Insurance Ombudsman details",
-    "Beware-of-spurious-calls warning"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "Any 'up to 99.5% premium allocation' claim is condition-bound — applies only to Single Premium of Rs 10 lacs and above; must be qualified.",
-      "Loyalty Additions (up to 5.6% of Single Premium) depend on the Single Premium amount and policy term chosen, are added only at maturity, and are NOT payable on any Top-up premium — must be qualified, not stated as a flat guaranteed bonus.",
-      "Any maturity-value figure is the Fund Value (market-linked, non-guaranteed); only the 105% Guaranteed Death Benefit floor on death is guaranteed.",
-      "Partial withdrawals are allowed only after the 5-year lock-in and subject to stated limits."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT use 'guaranteed returns' / 'assured returns' / 'bonus' language — this is a non-participating unit-linked plan; returns are market-linked and not guaranteed (only the 105%-of-premiums death-benefit floor is guaranteed).",
-      "Do NOT present illustrative 4%/8% returns as expected or guaranteed — they are illustrative only and do not indicate upper/lower limits.",
-      "Do NOT omit the ULIP market-risk disclosure or the 5-year lock-in when positioning this as an investment/wealth product.",
-      "Do NOT imply the plan name or fund names indicate quality, future prospects or returns.",
-      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
-    ],
-    "must_state": [
-      "Plan UIN 116L196V04",
-      "Full regulatory descriptor: 'A Unit-linked Non Participating Individual Life Savings Insurance Plan'",
-      "ULIP market-risk disclosure: 'Investment in ULIPs is subject to risks associated with the capital markets; the policyholder is solely responsible for his/her decisions; the unit price may go up or down based on fund performance'",
-      "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of Fortune-Gain-Brochure.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Parser primary UIN (116A059V01) was a rider UIN; real plan UIN 116L196V04 taken from the Contact Details footer.",
-      "Numeric eligibility table (entry/maturity age, sum-assured, policy-term ranges) not recovered from this parse — left null."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Fortune Gain II",
+ "uin": "116L196V04",
+ "rider_uins": ["116A059V01", "116A060V01"],
+ "source_file": "Fortune-Gain-Brochure.pdf",
+ "product_category": "ulip",
+ "regulatory_descriptor": "A Unit-linked Non Participating Individual Life Savings Insurance Plan",
+ "structural_flags": {
+ "is_unit_linked": true,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": true,
+ "offers_guaranteed_benefits": false,
+ "offers_maturity_benefit": true,
+ "offers_loan": false
+ },
+ "variants": [],
+ "key_benefits": [
+ "Single Premium Unit-Linked savings plan with up to 99.5% Premium allocation (Single Premium of Rs 10 lacs and above)",
+ "Loyalty Additions (up to 5.6% of Single Premium) added to the Single Premium Fund Value at maturity, depending on Single Premium amount and policy term",
+ "Maturity Benefit = Single Premium Fund Value plus Top-Up Premium Fund Value, if any, payable on survival to maturity",
+ "Death Benefit (subject to Guaranteed Death Benefit of 105% of Total Premiums Paid) payable as lump sum to nominee",
+ "Choice of multiple investment funds under an Investor Selectable Portfolio Strategy",
+ "Partial withdrawals (after 5-year lock-in), Systematic Partial Withdrawal, fund switching, top-up premiums and Systematic Switching Option",
+ "Option to take death and maturity benefit in instalments (Settlement Option, up to 5 years)"
+ ],
+ "riders_available": [
+ "Bajaj Life Care Plus Rider (UIN 116A059V01)",
+ "Bajaj Life Linked New Critical Illness Benefit Rider (UIN 116A060V01)"
+ ],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_sum_assured": null,
+ "policy_term": null,
+ "premium_payment_term": "Single Premium",
+ "note": "Eligibility table (entry/maturity ages, sum-assured and term ranges) not recovered from this brochure parse; brochure states minimum/maximum premium and maximum Sum Assured are per Board Approved Underwriting Policy. Verify against policy document before asserting numeric limits."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from receipt of the Policy Document (except policies with tenure of less than a year); unit repurchase at price on cancellation date plus proportionate risk premium / medical / stamp duty deductions apply.",
+ "grace_period": "Not specified in brochure for this single-premium ULIP (single premium has no recurring premium due).",
+ "suicide_clause": "On death due to suicide within 12 months from date of commencement of policy, nominee receives the Single Premium Fund Value plus Top-Up Premium Fund Value as on date of intimation of death; any charges other than FMC/guarantee charge recovered after death are added back. No other death exclusion.",
+ "lock_in_period": "5-year lock-in; surrender during lock-in moves value (less discontinuance charge) to the Discontinued Life Policy Fund, available as surrender value at end of lock-in.",
+ "tax_note": "Tax benefits 'as per applicable tax laws as amended from time to time'; consult a tax consultant. GST per prevailing tax laws."
+ },
+ "mandatory_disclosures_present": [
+ "Section 38 — Assignment",
+ "Section 39 — Nomination",
+ "Section 41 — Prohibition of Rebate",
+ "Section 45 — Fraud & Misstatement",
+ "Applicability of Goods & Service Tax",
+ "Risks of Investment in the Units (ULIP market-risk statement: funds do not offer guaranteed/assured return; name of plan/funds does not indicate quality, future prospects or returns)",
+ "Grievance Redressal & Insurance Ombudsman details",
+ "Beware-of-spurious-calls warning"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "Any 'up to 99.5% premium allocation' claim is condition-bound — applies only to Single Premium of Rs 10 lacs and above; must be qualified.",
+ "Loyalty Additions (up to 5.6% of Single Premium) depend on the Single Premium amount and policy term chosen, are added only at maturity, and are NOT payable on any Top-up premium — must be qualified, not stated as a flat guaranteed bonus.",
+ "Any maturity-value figure is the Fund Value (market-linked, non-guaranteed); only the 105% Guaranteed Death Benefit floor on death is guaranteed.",
+ "Partial withdrawals are allowed only after the 5-year lock-in and subject to stated limits."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT use 'guaranteed returns' / 'assured returns' / 'bonus' language — this is a non-participating unit-linked plan; returns are market-linked and not guaranteed (only the 105%-of-premiums death-benefit floor is guaranteed).",
+ "Do NOT present illustrative 4%/8% returns as expected or guaranteed — they are illustrative only and do not indicate upper/lower limits.",
+ "Do NOT omit the ULIP market-risk disclosure or the 5-year lock-in when positioning this as an investment/wealth product.",
+ "Do NOT imply the plan name or fund names indicate quality, future prospects or returns.",
+ "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+ ],
+ "must_state": [
+ "Plan UIN 116L196V04",
+ "Full regulatory descriptor: 'A Unit-linked Non Participating Individual Life Savings Insurance Plan'",
+ "ULIP market-risk disclosure: 'Investment in ULIPs is subject to risks associated with the capital markets; the policyholder is solely responsible for his/her decisions; the unit price may go up or down based on fund performance'",
+ "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of Fortune-Gain-Brochure.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Parser primary UIN (116A059V01) was a rider UIN; real plan UIN 116L196V04 taken from the Contact Details footer.",
+ "Numeric eligibility table (entry/maturity age, sum-assured, policy-term ranges) not recovered from this parse — left null."
+ ]
+ }
 }

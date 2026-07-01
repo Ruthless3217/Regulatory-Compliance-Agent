@@ -1,87 +1,87 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Accidental Death Benefit Rider II",
-  "uin": "116B063V01",
-  "rider_uins": [],
-  "source_file": "trad-ADB-brochure.pdf",
-  "product_category": "rider",
-  "regulatory_descriptor": "Bajaj Life Accidental Death Benefit (ADB) Rider II (an individual life-insurance rider attached to a base policy)",
-  "structural_flags": {
-    "is_unit_linked": false,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": false,
-    "offers_guaranteed_benefits": true,
-    "offers_maturity_benefit": false,
-    "offers_loan": false
-  },
-  "variants": [],
-  "key_benefits": [
-    "Additional accidental-death cover attached to a base policy; on accidental death the higher of the Rider Sum Assured or the Guaranteed Benefit (105% of Total Premiums Paid) is paid in addition to the base-policy death benefit.",
-    "Accidental death defined as death caused solely/directly by bodily injury from an accident, occurring within 180 days of the accident.",
-    "Optional Health Management Services (medical second opinion, case management, consultation) at no additional cost, subject to availability.",
-    "Rider Termination Value: payable immediately for Single Premium; not available for Regular Premium; for Limited Premium, available only after the premium-paying term. Termination Value = termination factor x Total Premiums Paid (factors not guaranteed).",
-    "No maturity benefit under the rider.",
-    "Option to add, surrender and re-add the rider subject to board-approved underwriting."
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_sum_assured": null,
-    "policy_term": "Aligned with the remaining term of the base policy",
-    "premium_payment_term": "Single, Regular or Limited (aligned with base policy)",
-    "note": "An 'Important Details' eligibility table is referenced but its numeric age/sum-assured/term values are not captured in the parse. Verify against the policy document."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from receipt of the rider policy document (electronic or otherwise); not applicable to rider policies with tenure of less than a year. Refund subject to proportionate risk premium and medical/stamp-duty expenses.",
-    "grace_period": "As per the base policy; on non-payment the rider cover lapses on expiry of grace.",
-    "suicide_clause": "Suicide is an excluded cause of the accidental-death benefit (death as a result of suicide is not paid under this rider).",
-    "guaranteed_benefit": "Guaranteed Benefit = 105% of Total Premiums Paid under the rider (floor for the accidental-death payout).",
-    "revival_note": "Revival within the base-policy revival period; current revival interest 10.00% p.a. compounded half-yearly (benchmarked to 10-year G-Sec + 2%).",
-    "tax_note": "GST applicable per prevailing tax laws (subject to amendment); tax benefits subject to prevailing tax laws."
-  },
-  "mandatory_disclosures_present": [
-    "Section 41 — Prohibition of Rebate",
-    "Section 38 — Assignment",
-    "Section 39 — Nomination",
-    "Section 45 — Fraud & Misstatement / Misrepresentation",
-    "Applicability of Goods & Service Tax",
-    "Exclusions list (accidental-death rider)",
-    "Grievance Redressal & Insurance Ombudsman details",
-    "Beware-of-spurious-calls warning"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "This is a rider attached to a base policy — it cannot be marketed as a standalone plan; any claim must reference the base policy it augments.",
-      "The benefit pays ONLY on accidental death (death caused solely/directly by accidental bodily injury within 180 days) — must not be presented as covering death from any cause.",
-      "Payout is the higher of Rider Sum Assured or the Guaranteed Benefit (105% of premiums paid), in addition to the base-policy death benefit — state it accurately.",
-      "Rider Termination Value availability is premium-mode-specific (none for Regular Pay; only after PPT for Limited Pay) and factors are not guaranteed — must be stated with those conditions.",
-      "Health Management Services are optional, no-cost, third-party services subject to availability — not a guaranteed medical benefit or company liability."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT position as a savings/investment or maturity product — there is no maturity benefit; it is a pure protection rider.",
-      "Do NOT use 'guaranteed returns' / 'bonus' language — the only 'guaranteed' element is the 105%-of-premiums accidental-death floor.",
-      "Do NOT imply the rider pays on natural death or on death from any cause — a long list of exclusions (suicide, criminal acts, intoxication, hazardous sports, aviation, war, disease/infection, nuclear) applies.",
-      "Do NOT present the rider as a standalone policy.",
-      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
-    ],
-    "must_state": [
-      "Rider UIN 116B063V01",
-      "That it is the Bajaj Life Accidental Death Benefit Rider II, attached to a base policy, paying only on accidental death.",
-      "That there is no maturity benefit under the rider.",
-      "Standard disclaimer to read the policy document / benefit illustration for full conditions and exclusions."
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of trad-ADB-brochure.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Parser NAME was partial ('Bajaj Life Accidental Death'); full name 'Bajaj Life Accidental Death Benefit Rider II' taken from the brochure body.",
-      "The brochure does not print a single verbatim one-line IRDAI descriptor; the descriptor field summarises the rider's nature from the body text.",
-      "Numeric eligibility (entry/maturity age, rider sum-assured range) not captured in the parse."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Accidental Death Benefit Rider II",
+ "uin": "116B063V01",
+ "rider_uins": [],
+ "source_file": "trad-ADB-brochure.pdf",
+ "product_category": "rider",
+ "regulatory_descriptor": "Bajaj Life Accidental Death Benefit (ADB) Rider II (an individual life-insurance rider attached to a base policy)",
+ "structural_flags": {
+ "is_unit_linked": false,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": false,
+ "offers_guaranteed_benefits": true,
+ "offers_maturity_benefit": false,
+ "offers_loan": false
+ },
+ "variants": [],
+ "key_benefits": [
+ "Additional accidental-death cover attached to a base policy; on accidental death the higher of the Rider Sum Assured or the Guaranteed Benefit (105% of Total Premiums Paid) is paid in addition to the base-policy death benefit.",
+ "Accidental death defined as death caused solely/directly by bodily injury from an accident, occurring within 180 days of the accident.",
+ "Optional Health Management Services (medical second opinion, case management, consultation) at no additional cost, subject to availability.",
+ "Rider Termination Value: payable immediately for Single Premium; not available for Regular Premium; for Limited Premium, available only after the premium-paying term. Termination Value = termination factor x Total Premiums Paid (factors not guaranteed).",
+ "No maturity benefit under the rider.",
+ "Option to add, surrender and re-add the rider subject to board-approved underwriting."
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_sum_assured": null,
+ "policy_term": "Aligned with the remaining term of the base policy",
+ "premium_payment_term": "Single, Regular or Limited (aligned with base policy)",
+ "note": "An 'Important Details' eligibility table is referenced but its numeric age/sum-assured/term values are not captured in the parse. Verify against the policy document."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from receipt of the rider policy document (electronic or otherwise); not applicable to rider policies with tenure of less than a year. Refund subject to proportionate risk premium and medical/stamp-duty expenses.",
+ "grace_period": "As per the base policy; on non-payment the rider cover lapses on expiry of grace.",
+ "suicide_clause": "Suicide is an excluded cause of the accidental-death benefit (death as a result of suicide is not paid under this rider).",
+ "guaranteed_benefit": "Guaranteed Benefit = 105% of Total Premiums Paid under the rider (floor for the accidental-death payout).",
+ "revival_note": "Revival within the base-policy revival period; current revival interest 10.00% p.a. compounded half-yearly (benchmarked to 10-year G-Sec + 2%).",
+ "tax_note": "GST applicable per prevailing tax laws (subject to amendment); tax benefits subject to prevailing tax laws."
+ },
+ "mandatory_disclosures_present": [
+ "Section 41 — Prohibition of Rebate",
+ "Section 38 — Assignment",
+ "Section 39 — Nomination",
+ "Section 45 — Fraud & Misstatement / Misrepresentation",
+ "Applicability of Goods & Service Tax",
+ "Exclusions list (accidental-death rider)",
+ "Grievance Redressal & Insurance Ombudsman details",
+ "Beware-of-spurious-calls warning"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "This is a rider attached to a base policy — it cannot be marketed as a standalone plan; any claim must reference the base policy it augments.",
+ "The benefit pays ONLY on accidental death (death caused solely/directly by accidental bodily injury within 180 days) — must not be presented as covering death from any cause.",
+ "Payout is the higher of Rider Sum Assured or the Guaranteed Benefit (105% of premiums paid), in addition to the base-policy death benefit — state it accurately.",
+ "Rider Termination Value availability is premium-mode-specific (none for Regular Pay; only after PPT for Limited Pay) and factors are not guaranteed — must be stated with those conditions.",
+ "Health Management Services are optional, no-cost, third-party services subject to availability — not a guaranteed medical benefit or company liability."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT position as a savings/investment or maturity product — there is no maturity benefit; it is a pure protection rider.",
+ "Do NOT use 'guaranteed returns' / 'bonus' language — the only 'guaranteed' element is the 105%-of-premiums accidental-death floor.",
+ "Do NOT imply the rider pays on natural death or on death from any cause — a long list of exclusions (suicide, criminal acts, intoxication, hazardous sports, aviation, war, disease/infection, nuclear) applies.",
+ "Do NOT present the rider as a standalone policy.",
+ "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+ ],
+ "must_state": [
+ "Rider UIN 116B063V01",
+ "That it is the Bajaj Life Accidental Death Benefit Rider II, attached to a base policy, paying only on accidental death.",
+ "That there is no maturity benefit under the rider.",
+ "Standard disclaimer to read the policy document / benefit illustration for full conditions and exclusions."
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of trad-ADB-brochure.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Parser NAME was partial ('Bajaj Life Accidental Death'); full name 'Bajaj Life Accidental Death Benefit Rider II' taken from the brochure body.",
+ "The brochure does not print a single verbatim one-line IRDAI descriptor; the descriptor field summarises the rider's nature from the body text.",
+ "Numeric eligibility (entry/maturity age, rider sum-assured range) not captured in the parse."
+ ]
+ }
 }

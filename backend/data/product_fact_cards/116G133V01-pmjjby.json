@@ -1,80 +1,80 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Pradhan Mantri Jeevan Jyoti Bima Yojana (PMJJBY)",
-  "uin": "116G133V01",
-  "rider_uins": [],
-  "source_file": "PMJJBY-brochure.pdf",
-  "product_category": "group",
-  "regulatory_descriptor": "A Non-Linked Non-Participating Group Term Insurance Plan",
-  "structural_flags": {
-    "is_unit_linked": false,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": false,
-    "offers_guaranteed_benefits": false,
-    "offers_maturity_benefit": false,
-    "offers_loan": false
-  },
-  "variants": [],
-  "key_benefits": [
-    "One-year renewable government-scheme group term life cover (under the Govt. of India PMJJBY scheme) for savings-bank account holders, with the Bank as Master Policyholder",
-    "Death Benefit (Sum Assured) on death of the insured member from any cause after the lien period",
-    "Enrolment through a simple proposal form with NO medical underwriting",
-    "Affordable, auto-debit annual premium"
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": 18,
-    "max_entry_age_years": 50,
-    "max_maturity_age_years": 55,
-    "min_sum_assured": null,
-    "policy_term": "One-year cover from 1st June to 31st May, renewable on 1st June each year.",
-    "premium_payment_term": "Annual; premium auto-debited from the member's savings bank account in one instalment (pro-rata if joining mid-year).",
-    "note": "Entry 18-50 years (savings-bank account holders); cover terminates on attaining age 55. Premium stated in the brochure as Rs. 436 plus applicable tax (inclusive of Rs.30 acquisition + Rs.11 administrative cost to participating banks); renewal premium is revisable on annual renewal. Sum Assured per the PMJJBY scheme (commonly Rs. 2,00,000) — capped to Rs. 2,00,000 if duplicated across accounts/insurers."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from receipt of the policy document, except where the policy tenure is less than a year. Refund of premium less proportionate risk premium and expenses; processed within 7 days.",
-    "grace_period": "30 days from the Annual Renewal date; cover continues in-force during the grace period and lapses if premium is unpaid at the end of it.",
-    "waiting_period": "Lien/waiting period of 30 days for new members enrolling on or after 1.06.2022: on death due to accident the Sum Assured is paid; on death due to any non-accidental cause during the lien period, NO benefit is payable.",
-    "suicide_clause": "Not separately stated in the brochure; the brochure states there are no exclusions (subject to the 30-day lien period for non-accidental death).",
-    "maturity_benefit": "No maturity benefit under this plan.",
-    "loan": "No loan facility (not applicable to this scheme plan).",
-    "tax_note": "Premium, benefits and Death Benefit 'may be eligible' for tax benefits as per extant Income Tax Act, subject to provisions therein and as amended; consult a tax consultant. GST per prevailing tax laws."
-  },
-  "mandatory_disclosures_present": [
-    "Section 38 — Assignment",
-    "Section 39 — Nomination",
-    "Section 41 — Prohibition of Rebate",
-    "Section 45 — Fraud & Misstatement",
-    "Applicability of Goods & Service Tax",
-    "Grievance Redressal & Insurance Ombudsman details",
-    "Beware-of-spurious-calls warning"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "This is a one-year renewable PURE-RISK government-scheme group term plan — cover runs 1 June to 31 May and must be renewed annually; there is NO maturity benefit.",
-      "A 30-day lien period applies to new members: during it, non-accidental death pays NO benefit and only accidental death is covered — any 'cover from day one' claim must be lien-qualified.",
-      "Eligibility is restricted to savings-bank account holders aged 18-50; cover ceases at age 55.",
-      "If a member is covered under PMJJBY through more than one account/insurer, cover is restricted to Rs. 2,00,000 and duplicate premiums are forfeited."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT position as a savings, investment or money-back product — there is NO maturity or survival benefit; it is pure-risk term cover.",
-      "Do NOT use 'guaranteed returns' or 'bonus' language — non-linked, non-participating.",
-      "Do NOT imply unconditional day-one cover for all causes — non-accidental death is excluded during the 30-day lien period for new members.",
-      "Do NOT misstate the premium as fixed forever — the renewal premium is revisable on annual renewal dates.",
-      "Tax benefits must not be stated as assured — carry the 'may be eligible / as per applicable tax laws' caveat."
-    ],
-    "must_state": [
-      "Plan UIN 116G133V01",
-      "Full regulatory descriptor: 'A Non-Linked Non-Participating Group Term Insurance Plan' (Govt. of India PMJJBY scheme)",
-      "The 30-day lien-period condition for new members (non-accidental death not covered during the lien period)",
-      "Standard disclaimer to read the policy document for full terms and exclusions"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of PMJJBY-brochure.pdf",
-    "confidence": "high",
-    "gaps": ["Sum Assured amount not printed as a number in the parsed body (the duplicate-cover cap of Rs.2,00,000 implies the scheme SA; verify the exact Sum Assured against the policy document / current PMJJBY scheme rules).", "No explicit standalone suicide clause in the brochure (brochure states 'There are no exclusions' subject to the lien period)."]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Pradhan Mantri Jeevan Jyoti Bima Yojana (PMJJBY)",
+ "uin": "116G133V01",
+ "rider_uins": [],
+ "source_file": "PMJJBY-brochure.pdf",
+ "product_category": "group",
+ "regulatory_descriptor": "A Non-Linked Non-Participating Group Term Insurance Plan",
+ "structural_flags": {
+ "is_unit_linked": false,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": false,
+ "offers_guaranteed_benefits": false,
+ "offers_maturity_benefit": false,
+ "offers_loan": false
+ },
+ "variants": [],
+ "key_benefits": [
+ "One-year renewable government-scheme group term life cover (under the Govt. of India PMJJBY scheme) for savings-bank account holders, with the Bank as Master Policyholder",
+ "Death Benefit (Sum Assured) on death of the insured member from any cause after the lien period",
+ "Enrolment through a simple proposal form with NO medical underwriting",
+ "Affordable, auto-debit annual premium"
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": 18,
+ "max_entry_age_years": 50,
+ "max_maturity_age_years": 55,
+ "min_sum_assured": null,
+ "policy_term": "One-year cover from 1st June to 31st May, renewable on 1st June each year.",
+ "premium_payment_term": "Annual; premium auto-debited from the member's savings bank account in one instalment (pro-rata if joining mid-year).",
+ "note": "Entry 18-50 years (savings-bank account holders); cover terminates on attaining age 55. Premium stated in the brochure as Rs. 436 plus applicable tax (inclusive of Rs.30 acquisition + Rs.11 administrative cost to participating banks); renewal premium is revisable on annual renewal. Sum Assured per the PMJJBY scheme (commonly Rs. 2,00,000) — capped to Rs. 2,00,000 if duplicated across accounts/insurers."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from receipt of the policy document, except where the policy tenure is less than a year. Refund of premium less proportionate risk premium and expenses; processed within 7 days.",
+ "grace_period": "30 days from the Annual Renewal date; cover continues in-force during the grace period and lapses if premium is unpaid at the end of it.",
+ "waiting_period": "Lien/waiting period of 30 days for new members enrolling on or after 1.06.2022: on death due to accident the Sum Assured is paid; on death due to any non-accidental cause during the lien period, NO benefit is payable.",
+ "suicide_clause": "Not separately stated in the brochure; the brochure states there are no exclusions (subject to the 30-day lien period for non-accidental death).",
+ "maturity_benefit": "No maturity benefit under this plan.",
+ "loan": "No loan facility (not applicable to this scheme plan).",
+ "tax_note": "Premium, benefits and Death Benefit 'may be eligible' for tax benefits as per extant Income Tax Act, subject to provisions therein and as amended; consult a tax consultant. GST per prevailing tax laws."
+ },
+ "mandatory_disclosures_present": [
+ "Section 38 — Assignment",
+ "Section 39 — Nomination",
+ "Section 41 — Prohibition of Rebate",
+ "Section 45 — Fraud & Misstatement",
+ "Applicability of Goods & Service Tax",
+ "Grievance Redressal & Insurance Ombudsman details",
+ "Beware-of-spurious-calls warning"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "This is a one-year renewable PURE-RISK government-scheme group term plan — cover runs 1 June to 31 May and must be renewed annually; there is NO maturity benefit.",
+ "A 30-day lien period applies to new members: during it, non-accidental death pays NO benefit and only accidental death is covered — any 'cover from day one' claim must be lien-qualified.",
+ "Eligibility is restricted to savings-bank account holders aged 18-50; cover ceases at age 55.",
+ "If a member is covered under PMJJBY through more than one account/insurer, cover is restricted to Rs. 2,00,000 and duplicate premiums are forfeited."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT position as a savings, investment or money-back product — there is NO maturity or survival benefit; it is pure-risk term cover.",
+ "Do NOT use 'guaranteed returns' or 'bonus' language — non-linked, non-participating.",
+ "Do NOT imply unconditional day-one cover for all causes — non-accidental death is excluded during the 30-day lien period for new members.",
+ "Do NOT misstate the premium as fixed forever — the renewal premium is revisable on annual renewal dates.",
+ "Tax benefits must not be stated as assured — carry the 'may be eligible / as per applicable tax laws' caveat."
+ ],
+ "must_state": [
+ "Plan UIN 116G133V01",
+ "Full regulatory descriptor: 'A Non-Linked Non-Participating Group Term Insurance Plan' (Govt. of India PMJJBY scheme)",
+ "The 30-day lien-period condition for new members (non-accidental death not covered during the lien period)",
+ "Standard disclaimer to read the policy document for full terms and exclusions"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of PMJJBY-brochure.pdf",
+ "confidence": "high",
+ "gaps": ["Sum Assured amount not printed as a number in the parsed body (the duplicate-cover cap of Rs.2,00,000 implies the scheme SA; verify the exact Sum Assured against the policy document / current PMJJBY scheme rules).", "No explicit standalone suicide clause in the brochure (brochure states 'There are no exclusions' subject to the lien period)."]
+ }
 }

@@ -8,124 +8,124 @@ import { PageHeader } from "@/components/ui/page-header";
 import { health } from "@/lib/api";
 
 function Section({
-  icon,
-  title,
-  description,
-  children,
+ icon,
+ title,
+ description,
+ children,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  description?: string;
-  children: React.ReactNode;
+ icon: React.ReactNode;
+ title: string;
+ description?: string;
+ children: React.ReactNode;
 }) {
-  return (
-    <section className="rounded-lg border border-border bg-background shadow-card">
-      <div className="flex items-start gap-3 border-b border-border px-5 py-4">
-        <span className="mt-0.5 text-muted-foreground">{icon}</span>
-        <div>
-          <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-          {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
-        </div>
-      </div>
-      <div className="px-5 py-4">{children}</div>
-    </section>
-  );
+ return (
+ <section className="rounded-lg border border-border bg-background shadow-card">
+ <div className="flex items-start gap-3 border-b border-border px-5 py-4">
+ <span className="mt-0.5 text-muted-foreground">{icon}</span>
+ <div>
+ <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+ {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+ </div>
+ </div>
+ <div className="px-5 py-4">{children}</div>
+ </section>
+ );
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-2 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <div className="text-right">{children}</div>
-    </div>
-  );
+ return (
+ <div className="flex items-center justify-between gap-4 py-2 text-sm">
+ <span className="text-muted-foreground">{label}</span>
+ <div className="text-right">{children}</div>
+ </div>
+ );
 }
 
 const GRADE_BANDS = [
-  { grade: "A", range: "85–100", tone: "text-success" },
-  { grade: "B", range: "70–84", tone: "text-primary" },
-  { grade: "C", range: "55–69", tone: "text-sev-medium" },
-  { grade: "D", range: "40–54", tone: "text-sev-high" },
-  { grade: "F", range: "0–39", tone: "text-sev-critical" },
+ { grade: "A", range: "85–100", tone: "text-success" },
+ { grade: "B", range: "70–84", tone: "text-primary" },
+ { grade: "C", range: "55–69", tone: "text-sev-medium" },
+ { grade: "D", range: "40–54", tone: "text-sev-high" },
+ { grade: "F", range: "0–39", tone: "text-sev-critical" },
 ];
 
 export default function SettingsPage() {
-  const [pinging, setPinging] = React.useState(false);
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
-  const buildSha = process.env.NEXT_PUBLIC_BUILD_SHA || "dev";
+ const [pinging, setPinging] = React.useState(false);
+ const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+ const buildSha = process.env.NEXT_PUBLIC_BUILD_SHA || "dev";
 
-  const ping = async () => {
-    setPinging(true);
-    try {
-      const h = await health();
-      toast.success(`API healthy · LLM ${h.llm_available ? "available" : "unavailable"}`);
-    } catch (e) {
-      toast.error(`API unreachable: ${(e as Error).message}`);
-    } finally {
-      setPinging(false);
-    }
-  };
+ const ping = async () => {
+ setPinging(true);
+ try {
+ const h = await health();
+ toast.success(`API healthy · LLM ${h.llm_available ? "available" : "unavailable"}`);
+ } catch (e) {
+ toast.error(`API unreachable: ${(e as Error).message}`);
+ } finally {
+ setPinging(false);
+ }
+ };
 
-  return (
-    <div className="mx-auto max-w-4xl px-8 py-8">
-      <PageHeader
-        title="Project settings"
-        description="Visual preferences, pipeline configuration, and backend connection. Most behaviour is governed by the team admin."
-      />
+ return (
+ <div className="mx-auto max-w-4xl px-8 py-8">
+ <PageHeader
+ title="Project settings"
+ description="Visual preferences, pipeline configuration, and backend connection. Most behaviour is governed by the team admin."
+ />
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Section icon={<Palette className="h-4 w-4" />} title="Appearance" description="Tune list and card density to fit your screen.">
-          <Row label="Density">
-            <DensityToggle />
-          </Row>
-        </Section>
+ <div className="grid gap-5 lg:grid-cols-2">
+ <Section icon={<Palette className="h-4 w-4" />} title="Appearance" description="Tune list and card density to fit your screen.">
+ <Row label="Density">
+ <DensityToggle />
+ </Row>
+ </Section>
 
-        <Section icon={<Cpu className="h-4 w-4" />} title="Pipeline & model" description="The compliance engine configuration.">
-          <Row label="Workflow">
-            <span className="font-mono text-xs">LangGraph · 5-node</span>
-          </Row>
-          <Row label="Model">
-            <span className="font-mono text-xs">llama-3.3-70b</span>
-          </Row>
-          <Row label="RAG backend">
-            <span className="font-mono text-xs">pgvector</span>
-          </Row>
-        </Section>
+ <Section icon={<Cpu className="h-4 w-4" />} title="Pipeline & model" description="The compliance engine configuration.">
+ <Row label="Workflow">
+ <span className="font-mono text-xs">LangGraph · 5-node</span>
+ </Row>
+ <Row label="Model">
+ <span className="font-mono text-xs">llama-3.3-70b</span>
+ </Row>
+ <Row label="RAG backend">
+ <span className="font-mono text-xs">pgvector</span>
+ </Row>
+ </Section>
 
-        <Section icon={<Database className="h-4 w-4" />} title="Rule corpus" description="Active rules the pipeline evaluates against.">
-          <Row label="IRDAI"><span className="font-mono text-xs">~30</span></Row>
-          <Row label="Brand"><span className="font-mono text-xs">~20</span></Row>
-          <Row label="SEBI"><span className="font-mono text-xs">~15</span></Row>
-        </Section>
+ <Section icon={<Database className="h-4 w-4" />} title="Rule corpus" description="Active rules the pipeline evaluates against.">
+ <Row label="IRDAI"><span className="font-mono text-xs">~30</span></Row>
+ <Row label="Brand"><span className="font-mono text-xs">~20</span></Row>
+ <Row label="SEBI"><span className="font-mono text-xs">~15</span></Row>
+ </Section>
 
-        <Section icon={<Gauge className="h-4 w-4" />} title="Scoring" description="Letter-grade bands applied to the 0–100 compliance score.">
-          <ul className="space-y-1.5">
-            {GRADE_BANDS.map((b) => (
-              <li key={b.grade} className="flex items-center justify-between text-sm">
-                <span className={`font-semibold ${b.tone}`}>{b.grade}</span>
-                <span className="font-mono text-xs text-muted-foreground">{b.range}</span>
-              </li>
-            ))}
-          </ul>
-        </Section>
+ <Section icon={<Gauge className="h-4 w-4" />} title="Scoring" description="Letter-grade bands applied to the 0–100 compliance score.">
+ <ul className="space-y-1.5">
+ {GRADE_BANDS.map((b) => (
+ <li key={b.grade} className="flex items-center justify-between text-sm">
+ <span className={`font-semibold ${b.tone}`}>{b.grade}</span>
+ <span className="font-mono text-xs text-muted-foreground">{b.range}</span>
+ </li>
+ ))}
+ </ul>
+ </Section>
 
-        <Section icon={<Plug className="h-4 w-4" />} title="API connection" description="Compliance backend connection details.">
-          <Row label="Base URL">
-            <span className="font-mono text-xs">{apiBase}</span>
-          </Row>
-          <Row label="Health check">
-            <Button variant="outline" size="sm" disabled={pinging} onClick={ping}>
-              {pinging ? "Pinging…" : "Ping API"}
-            </Button>
-          </Row>
-        </Section>
+ <Section icon={<Plug className="h-4 w-4" />} title="API connection" description="Compliance backend connection details.">
+ <Row label="Base URL">
+ <span className="font-mono text-xs">{apiBase}</span>
+ </Row>
+ <Row label="Health check">
+ <Button variant="outline" size="sm" disabled={pinging} onClick={ping}>
+ {pinging ? "Pinging…" : "Ping API"}
+ </Button>
+ </Row>
+ </Section>
 
-        <Section icon={<Info className="h-4 w-4" />} title="About">
-          <Row label="Version"><span className="font-mono text-xs">1.0.0</span></Row>
-          <Row label="Build"><span className="font-mono text-xs">{buildSha}</span></Row>
-          <Row label="Owner"><span className="text-xs">Bajaj Allianz Life · Marketing</span></Row>
-        </Section>
-      </div>
-    </div>
-  );
+ <Section icon={<Info className="h-4 w-4" />} title="About">
+ <Row label="Version"><span className="font-mono text-xs">1.0.0</span></Row>
+ <Row label="Build"><span className="font-mono text-xs">{buildSha}</span></Row>
+ <Row label="Owner"><span className="text-xs">Bajaj Life Insurance · Marketing</span></Row>
+ </Section>
+ </div>
+ </div>
+ );
 }

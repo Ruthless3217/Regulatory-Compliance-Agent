@@ -1,22 +1,22 @@
 {
-  "id": "tax_123_80c",
-  "type": "Tax Disclaimer for Section 123 [ 80C ]",
-  "text": "Tax benefits as per prevailing Section 123 (under old tax regime) of the Income Tax Act shall apply. You are requested to consult your tax consultant and obtain independent advice for eligibility before claiming any benefit under the policy.",
-  "anchors": [],
-  "severity": "high",
-  "altered_severity": "moderate",
-  "triggers": {
-    "product_lines": [],
-    "keywords_regex": [
-      "\\bsection\\s*123\\b",
-      "\\b80\\s*c\\b"
-    ],
-    "llm_obligation_type": "tax_80c"
-  },
-  "match": {
-    "present_threshold": 0.8,
-    "altered_threshold": 0.45
-  },
-  "precedence": 90,
-  "source": "Copy of Disclaimers.xlsx"
+ "id": "tax_123_80c",
+ "type": "Tax Disclaimer for Section 123 [ 80C ]",
+ "text": "Tax benefits as per prevailing Section 123 (under old tax regime) of the Income Tax Act shall apply. You are requested to consult your tax consultant and obtain independent advice for eligibility before claiming any benefit under the policy.",
+ "anchors": [],
+ "severity": "high",
+ "altered_severity": "moderate",
+ "triggers": {
+ "product_lines": [],
+ "keywords_regex": [
+ "\\bsection\\s*123\\b",
+ "\\b80\\s*c\\b"
+ ],
+ "llm_obligation_type": "tax_80c"
+ },
+ "match": {
+ "present_threshold": 0.8,
+ "altered_threshold": 0.45
+ },
+ "precedence": 90,
+ "source": "Copy of Disclaimers.xlsx"
 }

@@ -1,81 +1,81 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Group Secure Return",
-  "uin": "116N184V02",
-  "rider_uins": [],
-  "source_file": "gsr-brochure.pdf",
-  "product_category": "group",
-  "regulatory_descriptor": "A Non-Linked, Non-Participating Group Life Savings Plan",
-  "structural_flags": {
-    "is_unit_linked": false,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": false,
-    "offers_guaranteed_benefits": true,
-    "offers_maturity_benefit": true,
-    "offers_loan": false
-  },
-  "variants": [],
-  "key_benefits": [
-    "Designed for trusts and employers to manage employee-benefit schemes (Group Leave Encashment, Post-Retirement Medical Benefits, Employee Welfare Funds, superannuation, etc.)",
-    "Guaranteed rate of interest declared upfront on contributions for a specified duration chosen by the Master Policyholder; interest credited daily on a compounding basis",
-    "Optional Life Cover for members (mortality charge deducted from the pooled policy account if opted)",
-    "Assured benefit of 101% of contribution (net of withdrawals) on the entire fund; assured benefit also available on death of every member as per Scheme Rules",
-    "Pooled policy account; option to transfer self-managed funds or an ongoing scheme into the plan"
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_group_size": null,
-    "min_sum_assured": null,
-    "policy_term": "Specified-duration based; chosen at the time of each contribution and cannot be changed subsequently",
-    "premium_payment_term": "Contributions determined by independent actuarial valuation; maintained in a pooled policy account",
-    "note": "Group product covering employer-employee groups and trusts; member-level age and minimum group-size numeric ranges not present in this parse."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from the date of receipt of the policy document.",
-    "grace_period": "Grace period applies; if the life-cover premium is not paid within the grace period, the life cover ceases and no Sum Assured is payable on death (exact days not isolated from parse).",
-    "suicide_clause": "No suicide exclusion is applicable — on death of an employee due to suicide, the full death benefit as stated is payable.",
-    "guaranteed_benefit_note": "Interest rate is guaranteed for the specified duration opted at the time of contribution; declared monthly by the company per Board-approved policy. Assured benefit floor is 101% of contribution net of withdrawals. Bulk exits (>25% of pooled account in a policy year) may attract a Market Value Adjustment (MVA).",
-    "surrender_note": "Complete surrender requires 3 months' advance notice; a Surrender Fee/Penalty may apply; bulk-exit Market Value Adjustment may apply on large exits.",
-    "tax_note": "Premium paid, other benefits and Death Benefit may be eligible for tax benefits as per the extant Income Tax Act; GST as per prevailing tax laws."
-  },
-  "mandatory_disclosures_present": [
-    "Section 41 — Prohibition of Rebate",
-    "Free-look period disclosure",
-    "Surrender / Surrender Fee disclosure",
-    "Market Value Adjustment (bulk-exit) disclosure",
-    "'This brochure should be read in conjunction with the Benefit Illustration' statement"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "Any 'guaranteed interest rate' claim must reflect that the rate is declared upfront only for the specified duration chosen at the time of contribution, may differ by duration, and is declared monthly for new monies.",
-      "The '101%' assured benefit is a floor on the contribution net of withdrawals — not a guaranteed return on the whole fund over time.",
-      "Life Cover is OPTIONAL (opted by the Master Policyholder under scheme rules) — any death-cover claim must reflect that it applies only if Life Cover is opted.",
-      "This is a GROUP plan for employer-employee groups and trusts, not an individual retail product."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT market to individual retail customers — it is a group/employer scheme product.",
-      "Do NOT use 'bonus' language — the plan is non-participating.",
-      "Do NOT imply a fixed long-term guaranteed return on the whole fund — guarantees apply per-contribution for the chosen specified duration, and bulk exits may attract a Market Value Adjustment.",
-      "Do NOT omit the Market Value Adjustment risk on bulk exits / large surrenders."
-    ],
-    "must_state": [
-      "Plan UIN 116N184V02",
-      "Full regulatory descriptor: 'A Non-Linked, Non-Participating Group Life Savings Plan'",
-      "That guaranteed interest applies for the specified duration chosen at contribution (declared by the company)",
-      "Standard disclaimer to read the policy document / benefit illustration for full terms and exclusions"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of gsr-brochure.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Member-level eligibility numerics (ages, minimum group size, minimum contribution) and grace-period days not present in this parse.",
-      "Verbatim one-line IRDAI descriptor taken from the brochure body ('Non-Linked, Non-Participating Group Life Savings plan')."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Group Secure Return",
+ "uin": "116N184V02",
+ "rider_uins": [],
+ "source_file": "gsr-brochure.pdf",
+ "product_category": "group",
+ "regulatory_descriptor": "A Non-Linked, Non-Participating Group Life Savings Plan",
+ "structural_flags": {
+ "is_unit_linked": false,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": false,
+ "offers_guaranteed_benefits": true,
+ "offers_maturity_benefit": true,
+ "offers_loan": false
+ },
+ "variants": [],
+ "key_benefits": [
+ "Designed for trusts and employers to manage employee-benefit schemes (Group Leave Encashment, Post-Retirement Medical Benefits, Employee Welfare Funds, superannuation, etc.)",
+ "Guaranteed rate of interest declared upfront on contributions for a specified duration chosen by the Master Policyholder; interest credited daily on a compounding basis",
+ "Optional Life Cover for members (mortality charge deducted from the pooled policy account if opted)",
+ "Assured benefit of 101% of contribution (net of withdrawals) on the entire fund; assured benefit also available on death of every member as per Scheme Rules",
+ "Pooled policy account; option to transfer self-managed funds or an ongoing scheme into the plan"
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_group_size": null,
+ "min_sum_assured": null,
+ "policy_term": "Specified-duration based; chosen at the time of each contribution and cannot be changed subsequently",
+ "premium_payment_term": "Contributions determined by independent actuarial valuation; maintained in a pooled policy account",
+ "note": "Group product covering employer-employee groups and trusts; member-level age and minimum group-size numeric ranges not present in this parse."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from the date of receipt of the policy document.",
+ "grace_period": "Grace period applies; if the life-cover premium is not paid within the grace period, the life cover ceases and no Sum Assured is payable on death (exact days not isolated from parse).",
+ "suicide_clause": "No suicide exclusion is applicable — on death of an employee due to suicide, the full death benefit as stated is payable.",
+ "guaranteed_benefit_note": "Interest rate is guaranteed for the specified duration opted at the time of contribution; declared monthly by the company per Board-approved policy. Assured benefit floor is 101% of contribution net of withdrawals. Bulk exits (>25% of pooled account in a policy year) may attract a Market Value Adjustment (MVA).",
+ "surrender_note": "Complete surrender requires 3 months' advance notice; a Surrender Fee/Penalty may apply; bulk-exit Market Value Adjustment may apply on large exits.",
+ "tax_note": "Premium paid, other benefits and Death Benefit may be eligible for tax benefits as per the extant Income Tax Act; GST as per prevailing tax laws."
+ },
+ "mandatory_disclosures_present": [
+ "Section 41 — Prohibition of Rebate",
+ "Free-look period disclosure",
+ "Surrender / Surrender Fee disclosure",
+ "Market Value Adjustment (bulk-exit) disclosure",
+ "'This brochure should be read in conjunction with the Benefit Illustration' statement"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "Any 'guaranteed interest rate' claim must reflect that the rate is declared upfront only for the specified duration chosen at the time of contribution, may differ by duration, and is declared monthly for new monies.",
+ "The '101%' assured benefit is a floor on the contribution net of withdrawals — not a guaranteed return on the whole fund over time.",
+ "Life Cover is OPTIONAL (opted by the Master Policyholder under scheme rules) — any death-cover claim must reflect that it applies only if Life Cover is opted.",
+ "This is a GROUP plan for employer-employee groups and trusts, not an individual retail product."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT market to individual retail customers — it is a group/employer scheme product.",
+ "Do NOT use 'bonus' language — the plan is non-participating.",
+ "Do NOT imply a fixed long-term guaranteed return on the whole fund — guarantees apply per-contribution for the chosen specified duration, and bulk exits may attract a Market Value Adjustment.",
+ "Do NOT omit the Market Value Adjustment risk on bulk exits / large surrenders."
+ ],
+ "must_state": [
+ "Plan UIN 116N184V02",
+ "Full regulatory descriptor: 'A Non-Linked, Non-Participating Group Life Savings Plan'",
+ "That guaranteed interest applies for the specified duration chosen at contribution (declared by the company)",
+ "Standard disclaimer to read the policy document / benefit illustration for full terms and exclusions"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of gsr-brochure.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Member-level eligibility numerics (ages, minimum group size, minimum contribution) and grace-period days not present in this parse.",
+ "Verbatim one-line IRDAI descriptor taken from the brochure body ('Non-Linked, Non-Participating Group Life Savings plan')."
+ ]
+ }
 }

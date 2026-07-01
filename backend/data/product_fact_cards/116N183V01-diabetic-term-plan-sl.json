@@ -1,84 +1,84 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Diabetic Term Plan II Sub 8 HbA1c",
-  "uin": "116N183V01",
-  "rider_uins": [],
-  "source_file": "diabetic-term-plan-sl.pdf",
-  "product_category": "term",
-  "regulatory_descriptor": "A Non-linked, Non-Participating, Individual, Pure Risk Premium Life Insurance Plan",
-  "structural_flags": {
-    "is_unit_linked": false,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": false,
-    "offers_guaranteed_benefits": false,
-    "offers_maturity_benefit": false,
-    "offers_loan": false
-  },
-  "variants": [],
-  "key_benefits": [
-    "Term life cover designed for Type-2 diabetics (HbA1c <= 8) and pre-diabetics.",
-    "Death Benefit (Sum Assured on Death) = higher of (a) 10x Annualised Premium, (b) 105% of Total Premiums Paid till date of death, or (c) Sum Assured.",
-    "No Maturity Benefit — pure term; no benefit on survival to maturity.",
-    "Health Management Services (medical second opinion, consultations, webinars) to help manage diabetes/general health.",
-    "Premium rebates/discounts: High Sum Assured Rebate (SA > Rs 1 crore), 5% salary rebate, 5% online/web-aggregator/ISNP rebate, 4% staff rebate, preferential rates for non-tobacco users.",
-    "Multiple premium-payment frequencies; policy term equals premium payment term."
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_sum_assured": null,
-    "sum_assured_increment": "Sum assured chosen in multiples of Rs 1,00,000",
-    "policy_term": "Policy Term equals Premium Payment Term (regular pay)",
-    "premium_payment_term": "Regular (equal to policy term)",
-    "note": "Eligibility-criteria table is referenced but the numeric entry/maturity-age, policy-term and min/max sum-assured boundaries are not captured in the parse (only that SA is in multiples of Rs 1,00,000). Verify against the policy document before asserting numeric limits."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from receipt of the policy document (electronic or otherwise). Refund subject to proportionate risk premium and medical/stamp-duty expenses.",
-    "grace_period": "30 days for premium frequencies other than monthly; 15 days for monthly. Cover continues during grace; on death in grace the due-but-unpaid premium is deducted from the benefit.",
-    "suicide_clause": "On death by suicide within 12 months from commencement of risk or latest revival (whichever later), the nominee/beneficiary receives 80% of Total Premiums Paid as on date of death, provided the policy is in force. No other death exclusion.",
-    "surrender_value": "No surrender value under this policy; the policy terminates on the date of surrender.",
-    "revival_note": "Revival within 5 years of first unpaid premium; current revival interest 10% p.a. compounded half-yearly (benchmarked to 10-year G-Sec + 2%).",
-    "tax_note": "Premium paid and Death Benefit 'may be eligible for tax benefits as per extant Income Tax Act, subject to the provisions stated therein' — consult a tax consultant; GST charged over and above premium."
-  },
-  "mandatory_disclosures_present": [
-    "Section 41 — Prohibition of Rebate",
-    "Section 38 — Assignment",
-    "Section 39 — Nomination",
-    "Section 45 — Fraud & Misstatement",
-    "Applicability of Goods & Service Tax",
-    "Grievance Redressal & Insurance Ombudsman details",
-    "Beware-of-spurious-calls warning"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "Eligibility is condition-bound: cover is for Type-2 diabetics with HbA1c <= 8 and pre-diabetics — any 'guaranteed acceptance' or 'all diabetics covered' framing is unsupported; underwriting and health questionnaire apply.",
-      "Death Benefit is the higher-of formula (10x annualised premium / 105% of premiums paid / Sum Assured) — must not be reduced to a single simplistic figure.",
-      "Health Management Services are optional third-party services at no extra cost and are subject to availability — must be described as such, not as a guaranteed medical benefit.",
-      "Premium rebates (HSAR, salary, online, staff) are condition-specific and must be stated with their qualifying conditions."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT position as an investment, savings or wealth-creation product — it is a non-linked, non-participating pure risk term plan with NO maturity benefit and NO surrender value.",
-      "Do NOT use 'guaranteed returns', 'maturity amount', 'money back' or 'bonus' language — none apply.",
-      "Do NOT imply guaranteed/automatic issuance to diabetics — acceptance depends on HbA1c level, health status and underwriting.",
-      "Do NOT present Health Management Services as a treatment guarantee or as the company's medical liability.",
-      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
-    ],
-    "must_state": [
-      "Plan UIN 116N183V01",
-      "Full regulatory descriptor: 'A Non-linked, Non-Participating, Individual, Pure Risk Premium Life Insurance Plan'",
-      "That it is a pure protection term plan with no maturity benefit and no surrender value.",
-      "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions."
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of diabetic-term-plan-sl.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Numeric entry/maturity age, policy-term range and min/max sum assured not recovered from the parse (only SA-in-multiples-of-Rs-1,00,000 captured)."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Diabetic Term Plan II Sub 8 HbA1c",
+ "uin": "116N183V01",
+ "rider_uins": [],
+ "source_file": "diabetic-term-plan-sl.pdf",
+ "product_category": "term",
+ "regulatory_descriptor": "A Non-linked, Non-Participating, Individual, Pure Risk Premium Life Insurance Plan",
+ "structural_flags": {
+ "is_unit_linked": false,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": false,
+ "offers_guaranteed_benefits": false,
+ "offers_maturity_benefit": false,
+ "offers_loan": false
+ },
+ "variants": [],
+ "key_benefits": [
+ "Term life cover designed for Type-2 diabetics (HbA1c <= 8) and pre-diabetics.",
+ "Death Benefit (Sum Assured on Death) = higher of (a) 10x Annualised Premium, (b) 105% of Total Premiums Paid till date of death, or (c) Sum Assured.",
+ "No Maturity Benefit — pure term; no benefit on survival to maturity.",
+ "Health Management Services (medical second opinion, consultations, webinars) to help manage diabetes/general health.",
+ "Premium rebates/discounts: High Sum Assured Rebate (SA > Rs 1 crore), 5% salary rebate, 5% online/web-aggregator/ISNP rebate, 4% staff rebate, preferential rates for non-tobacco users.",
+ "Multiple premium-payment frequencies; policy term equals premium payment term."
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_sum_assured": null,
+ "sum_assured_increment": "Sum assured chosen in multiples of Rs 1,00,000",
+ "policy_term": "Policy Term equals Premium Payment Term (regular pay)",
+ "premium_payment_term": "Regular (equal to policy term)",
+ "note": "Eligibility-criteria table is referenced but the numeric entry/maturity-age, policy-term and min/max sum-assured boundaries are not captured in the parse (only that SA is in multiples of Rs 1,00,000). Verify against the policy document before asserting numeric limits."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from receipt of the policy document (electronic or otherwise). Refund subject to proportionate risk premium and medical/stamp-duty expenses.",
+ "grace_period": "30 days for premium frequencies other than monthly; 15 days for monthly. Cover continues during grace; on death in grace the due-but-unpaid premium is deducted from the benefit.",
+ "suicide_clause": "On death by suicide within 12 months from commencement of risk or latest revival (whichever later), the nominee/beneficiary receives 80% of Total Premiums Paid as on date of death, provided the policy is in force. No other death exclusion.",
+ "surrender_value": "No surrender value under this policy; the policy terminates on the date of surrender.",
+ "revival_note": "Revival within 5 years of first unpaid premium; current revival interest 10% p.a. compounded half-yearly (benchmarked to 10-year G-Sec + 2%).",
+ "tax_note": "Premium paid and Death Benefit 'may be eligible for tax benefits as per extant Income Tax Act, subject to the provisions stated therein' — consult a tax consultant; GST charged over and above premium."
+ },
+ "mandatory_disclosures_present": [
+ "Section 41 — Prohibition of Rebate",
+ "Section 38 — Assignment",
+ "Section 39 — Nomination",
+ "Section 45 — Fraud & Misstatement",
+ "Applicability of Goods & Service Tax",
+ "Grievance Redressal & Insurance Ombudsman details",
+ "Beware-of-spurious-calls warning"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "Eligibility is condition-bound: cover is for Type-2 diabetics with HbA1c <= 8 and pre-diabetics — any 'guaranteed acceptance' or 'all diabetics covered' framing is unsupported; underwriting and health questionnaire apply.",
+ "Death Benefit is the higher-of formula (10x annualised premium / 105% of premiums paid / Sum Assured) — must not be reduced to a single simplistic figure.",
+ "Health Management Services are optional third-party services at no extra cost and are subject to availability — must be described as such, not as a guaranteed medical benefit.",
+ "Premium rebates (HSAR, salary, online, staff) are condition-specific and must be stated with their qualifying conditions."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT position as an investment, savings or wealth-creation product — it is a non-linked, non-participating pure risk term plan with NO maturity benefit and NO surrender value.",
+ "Do NOT use 'guaranteed returns', 'maturity amount', 'money back' or 'bonus' language — none apply.",
+ "Do NOT imply guaranteed/automatic issuance to diabetics — acceptance depends on HbA1c level, health status and underwriting.",
+ "Do NOT present Health Management Services as a treatment guarantee or as the company's medical liability.",
+ "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+ ],
+ "must_state": [
+ "Plan UIN 116N183V01",
+ "Full regulatory descriptor: 'A Non-linked, Non-Participating, Individual, Pure Risk Premium Life Insurance Plan'",
+ "That it is a pure protection term plan with no maturity benefit and no surrender value.",
+ "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions."
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of diabetic-term-plan-sl.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Numeric entry/maturity age, policy-term range and min/max sum assured not recovered from the parse (only SA-in-multiples-of-Rs-1,00,000 captured)."
+ ]
+ }
 }

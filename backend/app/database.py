@@ -8,12 +8,12 @@ from .config import settings
 # without forcing connections to queue. max_overflow gives a small burst margin
 # during periodic Cohere/Groq retries that block sessions for a few seconds.
 engine = create_engine(
-    settings.database_url,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=5,
-    pool_recycle=1800,
-    echo=settings.environment == "development",
+ settings.database_url,
+ pool_pre_ping=True,
+ pool_size=10,
+ max_overflow=5,
+ pool_recycle=1800,
+ echo=settings.environment == "development",
 )
 
 # Session factory
@@ -25,8 +25,8 @@ Base = declarative_base()
 
 # Dependency for API routes
 def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+ db = SessionLocal()
+ try:
+ yield db
+ finally:
+ db.close()

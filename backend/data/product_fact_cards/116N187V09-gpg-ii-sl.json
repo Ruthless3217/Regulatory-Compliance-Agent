@@ -1,86 +1,86 @@
 {
-  "schema_version": "1.0",
-  "product_name": "Bajaj Life Guaranteed Pension Goal II",
-  "uin": "116N187V09",
-  "rider_uins": [],
-  "source_file": "gpg-ii-sl.pdf",
-  "product_category": "pension_annuity",
-  "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual/Group General Annuity Plan",
-  "structural_flags": {
-    "is_unit_linked": false,
-    "is_participating": false,
-    "market_risk_borne_by_policyholder": false,
-    "offers_guaranteed_benefits": true,
-    "offers_maturity_benefit": false,
-    "offers_loan": true
-  },
-  "variants": ["Immediate Annuity", "Deferred Annuity"],
-  "key_benefits": [
-    "Guaranteed lifelong annuity income; annuity amount is guaranteed at policy inception and paid at the chosen frequency (Yearly/Half-yearly/Quarterly/Monthly)",
-    "Immediate Annuity: annuity payable in arrears from inception; Deferred Annuity: annuity payable from the end of the chosen deferment period",
-    "Option A: Life Annuity (throughout life)",
-    "Option B: Life Annuity with Return of Purchase Price (ROP, 50%-100% chosen at inception) on death",
-    "Option C: Annuity certain (5/10/15/20 years) and life thereafter",
-    "Option D/E: Joint Life Last Survivor with 50% or 100% annuity to spouse",
-    "Option F: Joint Life Last Survivor with 100% annuity to spouse and ROP on death of last survivor",
-    "Option G: Life Annuity with Return of Purchase Price on death or survival",
-    "Policy loan available (up to 80% of Surrender Value once acquired)"
-  ],
-  "riders_available": [],
-  "eligibility": {
-    "min_entry_age_years": null,
-    "max_entry_age_years": null,
-    "max_maturity_age_years": null,
-    "min_purchase_price": null,
-    "policy_term": "Whole-life annuity (immediate) / deferment period chosen at inception (deferred)",
-    "premium_payment_term": "Single Premium, or Regular/Limited Premium (deferred annuity); annuity option once chosen at inception cannot be changed",
-    "note": "Entry-age and minimum/maximum purchase-price ranges are referenced in the brochure but specific numeric values were not recovered from this parse. For QROPS / NPS-corpus / HMRC-governed purchases, entry-age rules differ."
-  },
-  "key_terms": {
-    "free_look_period_days": 30,
-    "free_look_note": "30 days from the date of receipt of the policy document. For QROPS purchases, free-look cancellation proceeds are only transferred back per the applicable rules.",
-    "grace_period": "Grace period applies; on non-payment within the grace period a deferred annuity is converted to paid-up (exact days not isolated from parse).",
-    "suicide_clause": "On death of the Annuitant (or last survivor in a joint-life policy) due to suicide within 12 months from commencement/revival (whichever is later), the higher of 80% of Total Premiums Paid or the Surrender Value as on the date of death is payable. Under a deferred annuity during the annuity period or an immediate annuity, the suicide clause does not apply. No exclusions other than the suicide clause.",
-    "guaranteed_benefit_note": "The annuity amount is guaranteed at inception and depends on the purchase price and the annuity option chosen ('Conditions Apply'). Return of Purchase Price proportion (50%-100%) is chosen at inception and cannot be changed.",
-    "surrender_note": "Surrender Value applies to certain options (e.g. ROP / Annuity-Certain options). Immediate Annuity: Special Surrender Value; Deferred: higher of GSV or SSV during deferment, SSV after.",
-    "loan_note": "Policy loan available once a Surrender Value is acquired; maximum loan up to 80% of Surrender Value; outstanding loan plus interest deducted from death/surrender value.",
-    "tax_note": "GST / tax as per prevailing tax laws, subject to amendment."
-  },
-  "mandatory_disclosures_present": [
-    "Free-look period disclosure",
-    "Surrender Value (GSV / SSV) disclosure",
-    "Suicide-clause disclosure",
-    "QROPS / NPS-corpus annuity disclosure",
-    "'Conditions Apply' caveat on the guaranteed-income headline"
-  ],
-  "compliance_guardrails": {
-    "claims_marketing_must_support": [
-      "Any 'guaranteed income for life' claim must carry the 'Conditions Apply — depends on purchase price and annuity option chosen' caveat present in the brochure.",
-      "Return of Purchase Price (ROP) is variant/option-specific (Options B, F, G) and the percentage (50%-100%) is chosen at inception — any 'get your money back' claim must be option-qualified.",
-      "Joint-life / spouse-continuation benefits apply ONLY to the joint-life options (D, E, F).",
-      "Annuity-certain payout (Option C) is for the chosen 5/10/15/20-year guaranteed period."
-    ],
-    "claims_marketing_must_avoid": [
-      "Do NOT present this as a market-linked / wealth-creation or growth product — it is a non-linked, non-participating annuity that pays a fixed guaranteed income.",
-      "Do NOT use 'bonus' language — the plan is non-participating.",
-      "Do NOT imply the annuity rate is the same for everyone — the annuity amount varies by option, purchase price, age and frequency.",
-      "Do NOT promise return of the full purchase price unconditionally — ROP only applies under specific options and at the chosen percentage.",
-      "Do NOT omit that the annuity option, once chosen at inception, cannot be changed during the policy term."
-    ],
-    "must_state": [
-      "Plan UIN 116N187V09",
-      "Full regulatory descriptor (Non-Linked, Non-Participating Annuity Plan)",
-      "'Conditions Apply' caveat for the guaranteed-income claim (dependent on purchase price and annuity option)",
-      "Standard disclaimer to read the policy document / benefit illustration for full terms and exclusions"
-    ]
-  },
-  "curation": {
-    "curated_by": "claude-opus-4-8 (subagent)",
-    "curated_from": "brochure structural parse of gpg-ii-sl.pdf",
-    "confidence": "high",
-    "gaps": [
-      "Verbatim one-line IRDAI descriptor not isolated by the parser; reconstructed from product type (non-linked, non-participating annuity; available on both individual and group basis) — verify exact wording against the policy document.",
-      "Numeric entry-age, purchase-price and grace-period (days) values not recovered from this parse."
-    ]
-  }
+ "schema_version": "1.0",
+ "product_name": "Bajaj Life Guaranteed Pension Goal II",
+ "uin": "116N187V09",
+ "rider_uins": [],
+ "source_file": "gpg-ii-sl.pdf",
+ "product_category": "pension_annuity",
+ "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual/Group General Annuity Plan",
+ "structural_flags": {
+ "is_unit_linked": false,
+ "is_participating": false,
+ "market_risk_borne_by_policyholder": false,
+ "offers_guaranteed_benefits": true,
+ "offers_maturity_benefit": false,
+ "offers_loan": true
+ },
+ "variants": ["Immediate Annuity", "Deferred Annuity"],
+ "key_benefits": [
+ "Guaranteed lifelong annuity income; annuity amount is guaranteed at policy inception and paid at the chosen frequency (Yearly/Half-yearly/Quarterly/Monthly)",
+ "Immediate Annuity: annuity payable in arrears from inception; Deferred Annuity: annuity payable from the end of the chosen deferment period",
+ "Option A: Life Annuity (throughout life)",
+ "Option B: Life Annuity with Return of Purchase Price (ROP, 50%-100% chosen at inception) on death",
+ "Option C: Annuity certain (5/10/15/20 years) and life thereafter",
+ "Option D/E: Joint Life Last Survivor with 50% or 100% annuity to spouse",
+ "Option F: Joint Life Last Survivor with 100% annuity to spouse and ROP on death of last survivor",
+ "Option G: Life Annuity with Return of Purchase Price on death or survival",
+ "Policy loan available (up to 80% of Surrender Value once acquired)"
+ ],
+ "riders_available": [],
+ "eligibility": {
+ "min_entry_age_years": null,
+ "max_entry_age_years": null,
+ "max_maturity_age_years": null,
+ "min_purchase_price": null,
+ "policy_term": "Whole-life annuity (immediate) / deferment period chosen at inception (deferred)",
+ "premium_payment_term": "Single Premium, or Regular/Limited Premium (deferred annuity); annuity option once chosen at inception cannot be changed",
+ "note": "Entry-age and minimum/maximum purchase-price ranges are referenced in the brochure but specific numeric values were not recovered from this parse. For QROPS / NPS-corpus / HMRC-governed purchases, entry-age rules differ."
+ },
+ "key_terms": {
+ "free_look_period_days": 30,
+ "free_look_note": "30 days from the date of receipt of the policy document. For QROPS purchases, free-look cancellation proceeds are only transferred back per the applicable rules.",
+ "grace_period": "Grace period applies; on non-payment within the grace period a deferred annuity is converted to paid-up (exact days not isolated from parse).",
+ "suicide_clause": "On death of the Annuitant (or last survivor in a joint-life policy) due to suicide within 12 months from commencement/revival (whichever is later), the higher of 80% of Total Premiums Paid or the Surrender Value as on the date of death is payable. Under a deferred annuity during the annuity period or an immediate annuity, the suicide clause does not apply. No exclusions other than the suicide clause.",
+ "guaranteed_benefit_note": "The annuity amount is guaranteed at inception and depends on the purchase price and the annuity option chosen ('Conditions Apply'). Return of Purchase Price proportion (50%-100%) is chosen at inception and cannot be changed.",
+ "surrender_note": "Surrender Value applies to certain options (e.g. ROP / Annuity-Certain options). Immediate Annuity: Special Surrender Value; Deferred: higher of GSV or SSV during deferment, SSV after.",
+ "loan_note": "Policy loan available once a Surrender Value is acquired; maximum loan up to 80% of Surrender Value; outstanding loan plus interest deducted from death/surrender value.",
+ "tax_note": "GST / tax as per prevailing tax laws, subject to amendment."
+ },
+ "mandatory_disclosures_present": [
+ "Free-look period disclosure",
+ "Surrender Value (GSV / SSV) disclosure",
+ "Suicide-clause disclosure",
+ "QROPS / NPS-corpus annuity disclosure",
+ "'Conditions Apply' caveat on the guaranteed-income headline"
+ ],
+ "compliance_guardrails": {
+ "claims_marketing_must_support": [
+ "Any 'guaranteed income for life' claim must carry the 'Conditions Apply — depends on purchase price and annuity option chosen' caveat present in the brochure.",
+ "Return of Purchase Price (ROP) is variant/option-specific (Options B, F, G) and the percentage (50%-100%) is chosen at inception — any 'get your money back' claim must be option-qualified.",
+ "Joint-life / spouse-continuation benefits apply ONLY to the joint-life options (D, E, F).",
+ "Annuity-certain payout (Option C) is for the chosen 5/10/15/20-year guaranteed period."
+ ],
+ "claims_marketing_must_avoid": [
+ "Do NOT present this as a market-linked / wealth-creation or growth product — it is a non-linked, non-participating annuity that pays a fixed guaranteed income.",
+ "Do NOT use 'bonus' language — the plan is non-participating.",
+ "Do NOT imply the annuity rate is the same for everyone — the annuity amount varies by option, purchase price, age and frequency.",
+ "Do NOT promise return of the full purchase price unconditionally — ROP only applies under specific options and at the chosen percentage.",
+ "Do NOT omit that the annuity option, once chosen at inception, cannot be changed during the policy term."
+ ],
+ "must_state": [
+ "Plan UIN 116N187V09",
+ "Full regulatory descriptor (Non-Linked, Non-Participating Annuity Plan)",
+ "'Conditions Apply' caveat for the guaranteed-income claim (dependent on purchase price and annuity option)",
+ "Standard disclaimer to read the policy document / benefit illustration for full terms and exclusions"
+ ]
+ },
+ "curation": {
+ "curated_by": "claude-opus-4-8 (subagent)",
+ "curated_from": "brochure structural parse of gpg-ii-sl.pdf",
+ "confidence": "high",
+ "gaps": [
+ "Verbatim one-line IRDAI descriptor not isolated by the parser; reconstructed from product type (non-linked, non-participating annuity; available on both individual and group basis) — verify exact wording against the policy document.",
+ "Numeric entry-age, purchase-price and grace-period (days) values not recovered from this parse."
+ ]
+ }
 }
