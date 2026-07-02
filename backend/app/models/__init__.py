@@ -10,6 +10,7 @@ from .tool_invocation import ToolInvocation
 from .compliance_state import ComplianceState
 from .rule_feedback import RuleFeedback
 from .product_document import ProductDocument, ProductTable
+from .document_comparison import DocumentComparison
 
 __all__ = [
     "User",
@@ -25,4 +26,5 @@ __all__ = [
     "RuleFeedback",
     "ProductDocument",
     "ProductTable",
+    "DocumentComparison",
 ]
