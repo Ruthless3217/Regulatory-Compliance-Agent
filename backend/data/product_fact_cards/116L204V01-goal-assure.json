@@ -1,89 +1,89 @@
 {
- "schema_version": "1.0",
- "product_name": "Bajaj Life Goal Assure IV",
- "uin": "116L204V01",
- "rider_uins": ["116A057V02", "116A059V01", "116A060V01"],
- "source_file": "goal-assure-brochure.pdf",
- "product_category": "ulip",
- "regulatory_descriptor": "A Unit-Linked Non-Participating Individual Life Savings Insurance Plan",
- "structural_flags": {
- "is_unit_linked": true,
- "is_participating": false,
- "market_risk_borne_by_policyholder": true,
- "offers_guaranteed_benefits": false,
- "offers_maturity_benefit": true,
- "offers_loan": false
- },
- "variants": [],
- "key_benefits": [
- "Maturity Benefit equal to the Fund Value as on the maturity date (market-linked, not guaranteed)",
- "Death Benefit — higher of (Prevailing Sum Assured or Regular Premium Fund Value) plus higher of (Top-up Sum Assured or Top-up Premium Fund Value), subject to a minimum Guaranteed Death Benefit of 105% of Total Premiums Paid till date of death",
- "Return of Mortality Charge (ROMC) added to the fund value at maturity (in-force, all due premiums paid; excludes surrendered/discontinued/paid-up)",
- "Fund Booster at maturity (2% of average daily Regular Premium Fund Value over previous 3 years) for policy term 10 years or greater",
- "Loyalty Additions at the end of the 10th, 15th and 20th policy years (all premiums paid up to date)",
- "Family Benefit at maturity if a family member is an existing Bajaj Life policyholder",
- "Choice of 4 investment portfolio strategies and a wide fund menu",
- "Settlement Option — take Maturity or Death Benefit in instalments over up to 5 years with a 0.5% Return Enhancer (investment risk borne by policyholder/claimant during settlement)"
- ],
- "riders_available": [
- "Bajaj Life Linked Accident Protection Rider II",
- "Bajaj Life Care Plus Rider",
- "Bajaj Life Linked New Critical Illness Benefit Rider"
- ],
- "eligibility": {
- "min_entry_age_years": null,
- "max_entry_age_years": null,
- "max_maturity_age_years": null,
- "min_sum_assured": null,
- "policy_term": "Not captured numerically from this brochure parse (eligibility table not recovered as text).",
- "premium_payment_term": "Regular / Limited premium payment (non-participating, individual, unit-linked savings plan).",
- "note": "Eligibility table did not survive the structural parse; numeric entry/maturity age and sum-assured limits are stated as 'per Board Approved Underwriting Policy (BAUP)'. Verify against the policy document."
- },
- "key_terms": {
- "free_look_period_days": 30,
- "free_look_note": "30 days from receipt of the policy document (electronic or otherwise), except for policies with tenure under a year. Company may additionally repurchase units at the unit price on the date of cancellation; refund within 7 days.",
- "grace_period": "30 days for yearly/half-yearly/quarterly frequency; 15 days for monthly.",
- "suicide_clause": "On death by suicide within 12 months of commencement or revival (whichever is later), nominee/beneficiary is entitled to the Fund Value as on the date of intimation of death; charges other than FMC/guarantee charge recovered after death are added back to the Fund Value. No other death exclusion.",
- "foreclosure_note": "After 3 policy years, if Fund Value is lower than one Annualized Premium the policy is foreclosed and the Discontinuance/Surrender Value is paid.",
- "loan": "No loan facility available under this plan.",
- "tax_note": "Premium, Maturity Benefit, Death Benefit and Surrender Value eligible for tax benefits 'as per extant Income Tax Act, subject to provisions therein'; GST per prevailing tax laws — subject to change."
- },
- "mandatory_disclosures_present": [
- "ULIP market-risk statement (investment subject to capital-market risk; policyholder solely responsible; NAV may go up or down; plan/fund name does not indicate quality or future returns)",
- "Funds 'do not offer a guaranteed or assured return' disclosure",
- "Section 38 — Assignment",
- "Section 39 — Nomination",
- "Section 41 — Prohibition of Rebate",
- "Section 45 — Fraud & Misstatement",
- "Applicability of Goods & Service Tax",
- "Force Majeure (NAV deferment) clause",
- "Grievance Redressal & Insurance Ombudsman details",
- "Beware-of-spurious-calls warning"
- ],
- "compliance_guardrails": {
- "claims_marketing_must_support": [
- "Maturity Benefit is the Fund Value — a market-linked, non-guaranteed amount; any return figure must be shown as illustrative at 4% and 8% and labelled 'not guaranteed'.",
- "The ONLY guaranteed element is the 105%-of-Total-Premiums-Paid floor on the Death Benefit; ROMC, Fund Booster and Loyalty Additions are conditional on the policy being in-force with all due premiums paid and are forfeited on surrender/discontinuance/paid-up.",
- "Fund Booster at maturity is available ONLY for policy term of 10 years or greater — must be term-qualified."
- ],
- "claims_marketing_must_avoid": [
- "Do NOT describe fund value, returns or maturity proceeds as 'guaranteed', 'assured' or 'fixed' — this is a unit-linked plan and the policyholder bears all investment/market risk.",
- "Do NOT use 'bonus' language — the plan is non-participating; there are no bonuses.",
- "Do NOT imply liquidity in the first 5 years — ULIP lock-in applies.",
- "Do NOT present ROMC / Fund Booster / Loyalty Additions as unconditional — they require all due premiums paid and an in-force policy and are not paid on Top-up premiums.",
- "Do NOT state tax benefits as assured — always carry the 'subject to prevailing tax laws' caveat."
- ],
- "must_state": [
- "Plan UIN 116L204V01",
- "Full regulatory descriptor: 'A Unit-Linked Non-Participating Individual Life Savings Insurance Plan'",
- "ULIP market-risk disclosure: investment in ULIPs is subject to risks associated with the capital markets; the policyholder is solely responsible for his/her investment decisions",
- "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions"
- ]
- },
- "curation": {
- "curated_by": "claude-opus-4-8 (subagent)",
- "curated_from": "brochure structural parse of goal-assure-brochure.pdf",
- "confidence": "high",
- "gaps": ["Numeric eligibility table (entry/maturity age, min/max sum assured, policy/premium-payment term ranges) not recovered from the parse — brochure defers limits to BAUP."]
- }
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Goal Assure IV",
+  "uin": "116L204V01",
+  "rider_uins": ["116A057V02", "116A059V01", "116A060V01"],
+  "source_file": "goal-assure-brochure.pdf",
+  "product_category": "ulip",
+  "regulatory_descriptor": "A Unit-Linked Non-Participating Individual Life Savings Insurance Plan",
+  "structural_flags": {
+    "is_unit_linked": true,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": true,
+    "offers_guaranteed_benefits": false,
+    "offers_maturity_benefit": true,
+    "offers_loan": false
+  },
+  "variants": [],
+  "key_benefits": [
+    "Maturity Benefit equal to the Fund Value as on the maturity date (market-linked, not guaranteed)",
+    "Death Benefit — higher of (Prevailing Sum Assured or Regular Premium Fund Value) plus higher of (Top-up Sum Assured or Top-up Premium Fund Value), subject to a minimum Guaranteed Death Benefit of 105% of Total Premiums Paid till date of death",
+    "Return of Mortality Charge (ROMC) added to the fund value at maturity (in-force, all due premiums paid; excludes surrendered/discontinued/paid-up)",
+    "Fund Booster at maturity (2% of average daily Regular Premium Fund Value over previous 3 years) for policy term 10 years or greater",
+    "Loyalty Additions at the end of the 10th, 15th and 20th policy years (all premiums paid up to date)",
+    "Family Benefit at maturity if a family member is an existing Bajaj Life policyholder",
+    "Choice of 4 investment portfolio strategies and a wide fund menu",
+    "Settlement Option — take Maturity or Death Benefit in instalments over up to 5 years with a 0.5% Return Enhancer (investment risk borne by policyholder/claimant during settlement)"
+  ],
+  "riders_available": [
+    "Bajaj Life Linked Accident Protection Rider II",
+    "Bajaj Life Care Plus Rider",
+    "Bajaj Life Linked New Critical Illness Benefit Rider"
+  ],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Not captured numerically from this brochure parse (eligibility table not recovered as text).",
+    "premium_payment_term": "Regular / Limited premium payment (non-participating, individual, unit-linked savings plan).",
+    "note": "Eligibility table did not survive the structural parse; numeric entry/maturity age and sum-assured limits are stated as 'per Board Approved Underwriting Policy (BAUP)'. Verify against the policy document."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the policy document (electronic or otherwise), except for policies with tenure under a year. Company may additionally repurchase units at the unit price on the date of cancellation; refund within 7 days.",
+    "grace_period": "30 days for yearly/half-yearly/quarterly frequency; 15 days for monthly.",
+    "suicide_clause": "On death by suicide within 12 months of commencement or revival (whichever is later), nominee/beneficiary is entitled to the Fund Value as on the date of intimation of death; charges other than FMC/guarantee charge recovered after death are added back to the Fund Value. No other death exclusion.",
+    "foreclosure_note": "After 3 policy years, if Fund Value is lower than one Annualized Premium the policy is foreclosed and the Discontinuance/Surrender Value is paid.",
+    "loan": "No loan facility available under this plan.",
+    "tax_note": "Premium, Maturity Benefit, Death Benefit and Surrender Value eligible for tax benefits 'as per extant Income Tax Act, subject to provisions therein'; GST per prevailing tax laws — subject to change."
+  },
+  "mandatory_disclosures_present": [
+    "ULIP market-risk statement (investment subject to capital-market risk; policyholder solely responsible; NAV may go up or down; plan/fund name does not indicate quality or future returns)",
+    "Funds 'do not offer a guaranteed or assured return' disclosure",
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 41 — Prohibition of Rebate",
+    "Section 45 — Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "Force Majeure (NAV deferment) clause",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Maturity Benefit is the Fund Value — a market-linked, non-guaranteed amount; any return figure must be shown as illustrative at 4% and 8% and labelled 'not guaranteed'.",
+      "The ONLY guaranteed element is the 105%-of-Total-Premiums-Paid floor on the Death Benefit; ROMC, Fund Booster and Loyalty Additions are conditional on the policy being in-force with all due premiums paid and are forfeited on surrender/discontinuance/paid-up.",
+      "Fund Booster at maturity is available ONLY for policy term of 10 years or greater — must be term-qualified."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT describe fund value, returns or maturity proceeds as 'guaranteed', 'assured' or 'fixed' — this is a unit-linked plan and the policyholder bears all investment/market risk.",
+      "Do NOT use 'bonus' language — the plan is non-participating; there are no bonuses.",
+      "Do NOT imply liquidity in the first 5 years — ULIP lock-in applies.",
+      "Do NOT present ROMC / Fund Booster / Loyalty Additions as unconditional — they require all due premiums paid and an in-force policy and are not paid on Top-up premiums.",
+      "Do NOT state tax benefits as assured — always carry the 'subject to prevailing tax laws' caveat."
+    ],
+    "must_state": [
+      "Plan UIN 116L204V01",
+      "Full regulatory descriptor: 'A Unit-Linked Non-Participating Individual Life Savings Insurance Plan'",
+      "ULIP market-risk disclosure: investment in ULIPs is subject to risks associated with the capital markets; the policyholder is solely responsible for his/her investment decisions",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of goal-assure-brochure.pdf",
+    "confidence": "high",
+    "gaps": ["Numeric eligibility table (entry/maturity age, min/max sum assured, policy/premium-payment term ranges) not recovered from the parse — brochure defers limits to BAUP."]
+  }
 }

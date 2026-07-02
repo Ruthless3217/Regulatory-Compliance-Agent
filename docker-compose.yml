@@ -1,174 +1,174 @@
 services:
- postgres:
- image: pgvector/pgvector:pg15
- container_name: compliance-postgres
- environment:
- POSTGRES_USER: compliance_user
- POSTGRES_PASSWORD: compliance_pass
- POSTGRES_DB: compliance_db
- ports:
- - "5432:5432"
- volumes:
- - postgres_data:/var/lib/postgresql/data
- healthcheck:
- test: ["CMD-SHELL", "pg_isready -U compliance_user -d compliance_db"]
- interval: 10s
- timeout: 5s
- retries: 5
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: compliance-postgres
+    environment:
+      POSTGRES_USER: compliance_user
+      POSTGRES_PASSWORD: compliance_pass
+      POSTGRES_DB: compliance_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U compliance_user -d compliance_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
- redis:
- image: redis:7-alpine
- container_name: compliance-redis
- ports:
- - "6379:6379"
- volumes:
- - redis_data:/data
- healthcheck:
- test: ["CMD", "redis-cli", "ping"]
- interval: 10s
- timeout: 3s
- retries: 3
+  redis:
+    image: redis:7-alpine
+    container_name: compliance-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
- backend:
- build:
- context: ./backend
- dockerfile: Dockerfile
- container_name: compliance-backend
- restart: unless-stopped
- # Resource limits so a malformed/large upload can't OOM the host (audit H7).
- mem_limit: 2g
- cpus: 2.0
- ports:
- - "8000:8000"
- environment:
- DATABASE_URL: postgresql://compliance_user:compliance_pass@postgres:5432/compliance_db
- REDIS_URL: redis://redis:6379
- # --- Main LLM provider (analysis/grading) — Azure OpenAI by default ---
- # LLM_PROVIDER=azure routes via AsyncAzureOpenAI (api-key header +
- # api-version + deployment). For azure, LLM_BASE_URL is the resource root
- # and LLM_MODEL is the deployment name. LLM_API_KEY may be a comma-list
- # for key failover (OpenAI-compatible providers only).
- LLM_PROVIDER: ${LLM_PROVIDER:-azure}
- LLM_API_KEY: ${LLM_API_KEY}
- LLM_BASE_URL: ${LLM_BASE_URL}
- LLM_MODEL: ${LLM_MODEL}
- LLM_AZURE_API_VERSION: ${LLM_AZURE_API_VERSION:-2025-04-01-preview}
- # gpt-5 / o-series reasoning models reject max_tokens — use max_completion_tokens.
- LLM_USE_MAX_COMPLETION_TOKENS: ${LLM_USE_MAX_COMPLETION_TOKENS:-true}
- # gpt-5.4 reasoning mode rejects custom temperature → omit (default false).
- LLM_SUPPORTS_TEMPERATURE: ${LLM_SUPPORTS_TEMPERATURE:-false}
- # Reasoning effort = the main cost lever on reasoning models (high ≈ 5x the
- # output tokens of low). Default low; empty for non-reasoning providers.
- LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-low}
- # Safety ceiling only (billed on actual tokens). 8000 is ample at low effort.
- LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-8000}
- LLM_CONTEXT_WINDOW: ${LLM_CONTEXT_WINDOW:-128000}
- # Bypass TLS verify for the LLM call. Required when reaching an external
- # HTTPS provider from behind corporate SSL inspection (Cisco), which
- # presents a re-signed cert httpx rejects. Harmless for localhost Ollama.
- LLM_INSECURE_TLS: ${LLM_INSECURE_TLS:-false}
- # --- Chat assistant LLM (streaming Q&A) — separate provider (Groq) ---
- # Any CHAT_LLM_* left empty inherits the main LLM_* config above.
- CHAT_LLM_PROVIDER: ${CHAT_LLM_PROVIDER:-}
- CHAT_LLM_BASE_URL: ${CHAT_LLM_BASE_URL:-}
- CHAT_LLM_MODEL: ${CHAT_LLM_MODEL:-}
- CHAT_LLM_API_KEY: ${CHAT_LLM_API_KEY:-}
- CHAT_LLM_MAX_TOKENS: ${CHAT_LLM_MAX_TOKENS:-0}
- CHAT_LLM_INSECURE_TLS: ${CHAT_LLM_INSECURE_TLS:-false}
- CHAT_LLM_REASONING_EFFORT: ${CHAT_LLM_REASONING_EFFORT:-}
- # Critic LLM (dual-model generator/critic). Any CRITIC_LLM_* left empty
- # inherits the main LLM_* config above; only CRITIC_LLM_MODEL (the nano
- # deployment name) typically differs.
- CRITIC_LLM_PROVIDER: ${CRITIC_LLM_PROVIDER:-}
- CRITIC_LLM_BASE_URL: ${CRITIC_LLM_BASE_URL:-}
- CRITIC_LLM_MODEL: ${CRITIC_LLM_MODEL:-}
- CRITIC_LLM_API_KEY: ${CRITIC_LLM_API_KEY:-}
- CRITIC_LLM_MAX_TOKENS: ${CRITIC_LLM_MAX_TOKENS:-0}
- CRITIC_LLM_INSECURE_TLS: ${CRITIC_LLM_INSECURE_TLS:-false}
- CRITIC_LLM_USE_MAX_COMPLETION_TOKENS: ${CRITIC_LLM_USE_MAX_COMPLETION_TOKENS:-}
- CRITIC_LLM_SUPPORTS_TEMPERATURE: ${CRITIC_LLM_SUPPORTS_TEMPERATURE:-}
- CRITIC_LLM_AZURE_API_VERSION: ${CRITIC_LLM_AZURE_API_VERSION:-}
- CRITIC_LLM_REASONING_EFFORT: ${CRITIC_LLM_REASONING_EFFORT:-}
- LLM_CRITIC_ENABLED: ${LLM_CRITIC_ENABLED:-true}
- GROQ_CITATION_MODEL: ${GROQ_CITATION_MODEL:-}
- GROQ_CITATION_TPM: ${GROQ_CITATION_TPM:-12000}
- LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
- LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
- LANGCHAIN_PROJECT: "${LANGCHAIN_PROJECT:-Regulatory Compliance Agent}"
- CRITIC_ENABLED: ${CRITIC_ENABLED:-true}
- CROSS_CHUNK_CONTEXT_ENABLED: ${CROSS_CHUNK_CONTEXT_ENABLED:-true}
- CROSS_CHUNK_CONTEXT_TOKEN_BUDGET: ${CROSS_CHUNK_CONTEXT_TOKEN_BUDGET:-8000}
- # --- RAG embeddings ---
- # azure_cohere = Cohere embed served via the Azure AI Foundry /models
- # inference surface (AZURE_INFERENCE_*). cohere/openai/azure_openai also
- # supported — see backend/app/services/rag/factory.py.
- RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-azure_cohere}
- RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-Cohere-embed-v3-multilingual}
- RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1024}
- AZURE_INFERENCE_ENDPOINT: ${AZURE_INFERENCE_ENDPOINT:-}
- # Blank reuses LLM_API_KEY (same Foundry resource).
- AZURE_INFERENCE_API_KEY: ${AZURE_INFERENCE_API_KEY:-}
- AZURE_INFERENCE_API_VERSION: ${AZURE_INFERENCE_API_VERSION:-2024-05-01-preview}
- AZURE_COHERE_EMBED_DEPLOYMENT: ${AZURE_COHERE_EMBED_DEPLOYMENT:-Cohere-embed-v3-multilingual}
- # Public-Cohere / OpenAI keys — only used when RAG_EMBEDDING_PROVIDER is
- # cohere / openai respectively. Harmless when azure_cohere is active.
- COHERE_API_KEY: ${COHERE_API_KEY:-}
- OPENAI_API_KEY: ${OPENAI_API_KEY:-}
- ENVIRONMENT: production
- depends_on:
- postgres:
- condition: service_healthy
- redis:
- condition: service_healthy
- volumes:
- - ./backend/uploads:/app/uploads
- - ./backend/logs:/app/logs
- - ./docs:/app/docs:ro
- - ./dataset:/app/dataset:ro
- - ./ingestion_dataset:/app/ingestion_dataset
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: compliance-backend
+    restart: unless-stopped
+    # Resource limits so a malformed/large upload can't OOM the host (audit H7).
+    mem_limit: 2g
+    cpus: 2.0
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://compliance_user:compliance_pass@postgres:5432/compliance_db
+      REDIS_URL: redis://redis:6379
+      # --- Main LLM provider (analysis/grading) — Azure OpenAI by default ---
+      # LLM_PROVIDER=azure routes via AsyncAzureOpenAI (api-key header +
+      # api-version + deployment). For azure, LLM_BASE_URL is the resource root
+      # and LLM_MODEL is the deployment name. LLM_API_KEY may be a comma-list
+      # for key failover (OpenAI-compatible providers only).
+      LLM_PROVIDER: ${LLM_PROVIDER:-azure}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_MODEL: ${LLM_MODEL}
+      LLM_AZURE_API_VERSION: ${LLM_AZURE_API_VERSION:-2025-04-01-preview}
+      # gpt-5 / o-series reasoning models reject max_tokens — use max_completion_tokens.
+      LLM_USE_MAX_COMPLETION_TOKENS: ${LLM_USE_MAX_COMPLETION_TOKENS:-true}
+      # gpt-5.4 reasoning mode rejects custom temperature → omit (default false).
+      LLM_SUPPORTS_TEMPERATURE: ${LLM_SUPPORTS_TEMPERATURE:-false}
+      # Reasoning effort = the main cost lever on reasoning models (high ≈ 5x the
+      # output tokens of low). Default low; empty for non-reasoning providers.
+      LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-low}
+      # Safety ceiling only (billed on actual tokens). 8000 is ample at low effort.
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-8000}
+      LLM_CONTEXT_WINDOW: ${LLM_CONTEXT_WINDOW:-128000}
+      # Bypass TLS verify for the LLM call. Required when reaching an external
+      # HTTPS provider from behind corporate SSL inspection (Cisco), which
+      # presents a re-signed cert httpx rejects. Harmless for localhost Ollama.
+      LLM_INSECURE_TLS: ${LLM_INSECURE_TLS:-false}
+      # --- Chat assistant LLM (streaming Q&A) — separate provider (Groq) ---
+      # Any CHAT_LLM_* left empty inherits the main LLM_* config above.
+      CHAT_LLM_PROVIDER: ${CHAT_LLM_PROVIDER:-}
+      CHAT_LLM_BASE_URL: ${CHAT_LLM_BASE_URL:-}
+      CHAT_LLM_MODEL: ${CHAT_LLM_MODEL:-}
+      CHAT_LLM_API_KEY: ${CHAT_LLM_API_KEY:-}
+      CHAT_LLM_MAX_TOKENS: ${CHAT_LLM_MAX_TOKENS:-0}
+      CHAT_LLM_INSECURE_TLS: ${CHAT_LLM_INSECURE_TLS:-false}
+      CHAT_LLM_REASONING_EFFORT: ${CHAT_LLM_REASONING_EFFORT:-}
+      # Critic LLM (dual-model generator/critic). Any CRITIC_LLM_* left empty
+      # inherits the main LLM_* config above; only CRITIC_LLM_MODEL (the nano
+      # deployment name) typically differs.
+      CRITIC_LLM_PROVIDER: ${CRITIC_LLM_PROVIDER:-}
+      CRITIC_LLM_BASE_URL: ${CRITIC_LLM_BASE_URL:-}
+      CRITIC_LLM_MODEL: ${CRITIC_LLM_MODEL:-}
+      CRITIC_LLM_API_KEY: ${CRITIC_LLM_API_KEY:-}
+      CRITIC_LLM_MAX_TOKENS: ${CRITIC_LLM_MAX_TOKENS:-0}
+      CRITIC_LLM_INSECURE_TLS: ${CRITIC_LLM_INSECURE_TLS:-false}
+      CRITIC_LLM_USE_MAX_COMPLETION_TOKENS: ${CRITIC_LLM_USE_MAX_COMPLETION_TOKENS:-}
+      CRITIC_LLM_SUPPORTS_TEMPERATURE: ${CRITIC_LLM_SUPPORTS_TEMPERATURE:-}
+      CRITIC_LLM_AZURE_API_VERSION: ${CRITIC_LLM_AZURE_API_VERSION:-}
+      CRITIC_LLM_REASONING_EFFORT: ${CRITIC_LLM_REASONING_EFFORT:-}
+      LLM_CRITIC_ENABLED: ${LLM_CRITIC_ENABLED:-true}
+      GROQ_CITATION_MODEL: ${GROQ_CITATION_MODEL:-}
+      GROQ_CITATION_TPM: ${GROQ_CITATION_TPM:-12000}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_PROJECT: "${LANGCHAIN_PROJECT:-Regulatory Compliance Agent}"
+      CRITIC_ENABLED: ${CRITIC_ENABLED:-true}
+      CROSS_CHUNK_CONTEXT_ENABLED: ${CROSS_CHUNK_CONTEXT_ENABLED:-true}
+      CROSS_CHUNK_CONTEXT_TOKEN_BUDGET: ${CROSS_CHUNK_CONTEXT_TOKEN_BUDGET:-8000}
+      # --- RAG embeddings ---
+      # azure_cohere = Cohere embed served via the Azure AI Foundry /models
+      # inference surface (AZURE_INFERENCE_*). cohere/openai/azure_openai also
+      # supported — see backend/app/services/rag/factory.py.
+      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-azure_cohere}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-Cohere-embed-v3-multilingual}
+      RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1024}
+      AZURE_INFERENCE_ENDPOINT: ${AZURE_INFERENCE_ENDPOINT:-}
+      # Blank reuses LLM_API_KEY (same Foundry resource).
+      AZURE_INFERENCE_API_KEY: ${AZURE_INFERENCE_API_KEY:-}
+      AZURE_INFERENCE_API_VERSION: ${AZURE_INFERENCE_API_VERSION:-2024-05-01-preview}
+      AZURE_COHERE_EMBED_DEPLOYMENT: ${AZURE_COHERE_EMBED_DEPLOYMENT:-Cohere-embed-v3-multilingual}
+      # Public-Cohere / OpenAI keys — only used when RAG_EMBEDDING_PROVIDER is
+      # cohere / openai respectively. Harmless when azure_cohere is active.
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
+      - ./docs:/app/docs:ro
+      - ./dataset:/app/dataset:ro
+      - ./ingestion_dataset:/app/ingestion_dataset
 
- # Daily Postgres backup sidecar — sleeps 24h between dumps, retains 14 days.
- # Manual trigger: `docker exec compliance-backup /scripts/db_backup.sh`
- db-backup:
- image: postgres:15-alpine
- container_name: compliance-backup
- restart: unless-stopped
- depends_on:
- postgres:
- condition: service_healthy
- environment:
- PGHOST: postgres
- PGPORT: "5432"
- PGUSER: compliance_user
- PGPASSWORD: compliance_pass
- PGDATABASE: compliance_db
- BACKUP_DIR: /backups
- RETAIN_DAYS: "14"
- volumes:
- - ./backend/scripts:/scripts:ro # db_backup.sh + db_restore.sh
- - ./backend/backups:/backups
- entrypoint: [ "sh", "-c" ]
- command: [ "while true; do /scripts/db_backup.sh || true; sleep 86400; done" ]
+  # Daily Postgres backup sidecar — sleeps 24h between dumps, retains 14 days.
+  # Manual trigger: `docker exec compliance-backup /scripts/db_backup.sh`
+  db-backup:
+    image: postgres:15-alpine
+    container_name: compliance-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: compliance_user
+      PGPASSWORD: compliance_pass
+      PGDATABASE: compliance_db
+      BACKUP_DIR: /backups
+      RETAIN_DAYS: "14"
+    volumes:
+      - ./backend/scripts:/scripts:ro   # db_backup.sh + db_restore.sh
+      - ./backend/backups:/backups
+    entrypoint: [ "sh", "-c" ]
+    command: [ "while true; do /scripts/db_backup.sh || true; sleep 86400; done" ]
 
- frontend:
- build:
- context: ./frontend
- dockerfile: Dockerfile
- args:
- # Build-time so Next.js bakes the rewrites destination correctly.
- NEXT_PUBLIC_API_BASE: http://localhost:8000
- INTERNAL_API_BASE: http://backend:8000
- container_name: compliance-frontend
- ports:
- - "3000:3000"
- environment:
- # Runtime so lib/api.ts can pick INTERNAL_API_BASE for SSR fetches.
- NEXT_PUBLIC_API_BASE: http://localhost:8000
- INTERNAL_API_BASE: http://backend:8000
- NEXT_PUBLIC_BUILD_SHA: ${BUILD_SHA:-dev}
- depends_on:
- - backend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Build-time so Next.js bakes the rewrites destination correctly.
+        NEXT_PUBLIC_API_BASE: http://localhost:8000
+        INTERNAL_API_BASE: http://backend:8000
+    container_name: compliance-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # Runtime so lib/api.ts can pick INTERNAL_API_BASE for SSR fetches.
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+      INTERNAL_API_BASE: http://backend:8000
+      NEXT_PUBLIC_BUILD_SHA: ${BUILD_SHA:-dev}
+    depends_on:
+      - backend
 
 volumes:
- postgres_data:
- redis_data:
+  postgres_data:
+  redis_data:

@@ -4,16 +4,16 @@ import { CommandPaletteProvider } from "@/components/workspace/CommandPalettePro
 import { CommandPalette } from "@/components/workspace/CommandPalette";
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
- return (
- <CommandPaletteProvider>
- <div className="min-h-screen">
- <Sidebar />
- <div className="pl-60">
- <TopBar />
- <main className="min-h-[calc(100vh-3rem)]">{children}</main>
- </div>
- </div>
- <CommandPalette />
- </CommandPaletteProvider>
- );
+  return (
+    <CommandPaletteProvider>
+      <div className="min-h-screen">
+        <Sidebar />
+        <div className="pl-60">
+          <TopBar />
+          <main className="min-h-[calc(100vh-3rem)]">{children}</main>
+        </div>
+      </div>
+      <CommandPalette />
+    </CommandPaletteProvider>
+  );
 }

@@ -1,89 +1,89 @@
 {
- "schema_version": "1.0",
- "product_name": "Bajaj Life Smart Wealth Goal VI",
- "uin": "116L214V01",
- "rider_uins": ["116A059V01", "116A060V01"],
- "source_file": "swg-child-wealth-brochure.pdf",
- "product_category": "ulip",
- "regulatory_descriptor": "A Unit-Linked Non-Participating Individual Life Savings Insurance Plan",
- "structural_flags": {
- "is_unit_linked": true,
- "is_participating": false,
- "market_risk_borne_by_policyholder": true,
- "offers_guaranteed_benefits": true,
- "offers_maturity_benefit": true,
- "offers_loan": false
- },
- "variants": ["Wealth", "Child Wealth", "Joint Life Wealth"],
- "key_benefits": [
- "Maturity Benefit equal to the Fund Value on the date of maturity; payable even on death/ATPD during the term (Child Wealth variant)",
- "Death or Accidental Total Permanent Disability (ATPD) Benefit: Prevailing Sum Assured plus prevailing Top-up Sum Assured, subject to a minimum Guaranteed Benefit of 105% of Total Premiums Paid till date of death",
- "Income Benefit: an additional installment equal to one prevailing Annualized Premium paid each policy year till end of term on death/ATPD (Child Wealth variant)",
- "Waiver of Premium (WOP) Benefit: all future premiums paid by the Company on death/ATPD during the premium paying term",
- "Loyalty Benefits: Return of Premium Allocation Charge (ROAC) and Fund Boosters added to the Regular Premium Fund value",
- "Return of Mortality Charge (ROMC), Return of Income Benefit Charge (ROIBC), Return of Morbidity Charge (ROMBC) and Return of Waiver of Premium Charge (ROWC) added at maturity, subject to conditions",
- "Choice of five investment portfolio strategies and multiple unit-linked funds; Systematic Partial Withdrawal",
- "Option to receive Maturity Benefit in installments with Return Enhancer; Family Benefit for existing-customer families"
- ],
- "riders_available": [
- "Bajaj Life Care Plus Rider (UIN 116A059V01)",
- "Bajaj Life Linked New Critical Illness Benefit Rider (UIN 116A060V01)"
- ],
- "eligibility": {
- "min_entry_age_years": null,
- "max_entry_age_years": null,
- "max_maturity_age_years": null,
- "min_sum_assured": null,
- "policy_term": null,
- "premium_payment_term": "Single (Wealth & Joint Life Wealth variants only) and Limited / Regular premium payment",
- "note": "Eligibility table present in brochure but specific numeric age / term / sum-assured boundaries not recovered from this parse; Maximum Sum Assured and Min/Max Premium stated to be 'as per the Board Approved Underwriting Policy (BAUP)'."
- },
- "key_terms": {
- "free_look_period_days": 30,
- "free_look_note": "30 days from the date of receipt of the policy document.",
- "grace_period": "30 days for yearly, half-yearly and quarterly premium frequencies; 15 days for monthly frequency.",
- "suicide_clause": "On death due to suicide within 12 months from the date of commencement of the Policy or latest revival (whichever is later), the nominee/beneficiary is entitled to the Fund Value as available on the date of intimation of death; any charges (other than FMC or guarantee charge) recovered after the date of death are added back to the Fund Value.",
- "lock_in_note": "Unit Linked Insurance Products do not offer any liquidity during the first five years; the policyholder cannot surrender or withdraw monies completely or partially till the end of the fifth year (five-year lock-in).",
- "guaranteed_benefit_note": "Death/ATPD benefit is subject to a minimum Guaranteed Benefit of 105% of Total Premiums Paid till the date of death; this is the only guaranteed element (the rest is market-linked Fund Value).",
- "tax_note": "Tax benefit may be as per prevailing tax laws; GST applicable as per prevailing tax laws, subject to amendment from time to time."
- },
- "mandatory_disclosures_present": [
- "Section 41 — Prohibition of Rebate",
- "Applicability of Goods & Service Tax",
- "Grievance Redressal & IRDAI Grievance Call Centre (IGCC) details",
- "Five-year lock-in / no-liquidity ULIP disclosure",
- "'Returns at 4% and 8% are illustrative and not guaranteed' disclosure on the benefit illustration",
- "'This brochure should be read in conjunction with the Benefit Illustration and policy document' statement"
- ],
- "compliance_guardrails": {
- "claims_marketing_must_support": [
- "This card is for the CHILD WEALTH variant; benefits such as Income Benefit and WOP described here are variant-specific — any benefit claim must be qualified to the correct variant (Wealth / Child Wealth / Joint Life Wealth).",
- "Any '105% guaranteed' / 'guaranteed benefit' claim is bounded ONLY to the minimum death/ATPD benefit (105% of Total Premiums Paid) — it does not guarantee maturity value or returns.",
- "Maturity Benefit equals the Fund Value (market-linked), not a guaranteed maturity amount.",
- "Single-premium option is available ONLY for the Wealth and Joint Life Wealth variants, not Child Wealth."
- ],
- "claims_marketing_must_avoid": [
- "Do NOT use 'guaranteed returns' / 'assured returns' / 'risk-free' language — this is a Unit-Linked plan and investment risk is borne entirely by the policyholder.",
- "Do NOT use 'bonus' language — the plan is non-participating; 'Loyalty Benefits', ROAC, ROMC etc. are charge-return features, not bonuses.",
- "Do NOT present illustrative 4% / 8% return figures as expected, guaranteed, or upper/lower limits of returns.",
- "Do NOT imply liquidity in the first five years — ULIP funds are locked in and cannot be surrendered or partially withdrawn during the five-year lock-in.",
- "Do NOT position fund-value growth as guaranteed; only the 105%-of-premiums minimum death benefit is guaranteed."
- ],
- "must_state": [
- "Plan UIN 116L214V01",
- "Full regulatory descriptor: 'A Unit-Linked Non-Participating Individual Life Savings Insurance Plan'",
- "ULIP market-risk disclosure: investment in ULIPs is subject to capital-market risks and the policyholder is solely responsible for his/her investment decisions",
- "Five-year lock-in / no-liquidity statement",
- "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions"
- ]
- },
- "curation": {
- "curated_by": "claude-opus-4-8 (subagent)",
- "curated_from": "brochure structural parse of swg-child-wealth-brochure.pdf",
- "confidence": "high",
- "gaps": [
- "Numeric entry/maturity age, policy term and minimum sum-assured boundaries not recovered (brochure defers Sum Assured and premium limits to the Board Approved Underwriting Policy).",
- "Parser primary UIN (116A059V01) is a rider UIN; plan UIN 116L214V01 taken from the brochure body (shared across Smart Wealth Goal VI variants)."
- ]
- }
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Smart Wealth Goal VI",
+  "uin": "116L214V01",
+  "rider_uins": ["116A059V01", "116A060V01"],
+  "source_file": "swg-child-wealth-brochure.pdf",
+  "product_category": "ulip",
+  "regulatory_descriptor": "A Unit-Linked Non-Participating Individual Life Savings Insurance Plan",
+  "structural_flags": {
+    "is_unit_linked": true,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": true,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": true,
+    "offers_loan": false
+  },
+  "variants": ["Wealth", "Child Wealth", "Joint Life Wealth"],
+  "key_benefits": [
+    "Maturity Benefit equal to the Fund Value on the date of maturity; payable even on death/ATPD during the term (Child Wealth variant)",
+    "Death or Accidental Total Permanent Disability (ATPD) Benefit: Prevailing Sum Assured plus prevailing Top-up Sum Assured, subject to a minimum Guaranteed Benefit of 105% of Total Premiums Paid till date of death",
+    "Income Benefit: an additional installment equal to one prevailing Annualized Premium paid each policy year till end of term on death/ATPD (Child Wealth variant)",
+    "Waiver of Premium (WOP) Benefit: all future premiums paid by the Company on death/ATPD during the premium paying term",
+    "Loyalty Benefits: Return of Premium Allocation Charge (ROAC) and Fund Boosters added to the Regular Premium Fund value",
+    "Return of Mortality Charge (ROMC), Return of Income Benefit Charge (ROIBC), Return of Morbidity Charge (ROMBC) and Return of Waiver of Premium Charge (ROWC) added at maturity, subject to conditions",
+    "Choice of five investment portfolio strategies and multiple unit-linked funds; Systematic Partial Withdrawal",
+    "Option to receive Maturity Benefit in installments with Return Enhancer; Family Benefit for existing-customer families"
+  ],
+  "riders_available": [
+    "Bajaj Life Care Plus Rider (UIN 116A059V01)",
+    "Bajaj Life Linked New Critical Illness Benefit Rider (UIN 116A060V01)"
+  ],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": null,
+    "premium_payment_term": "Single (Wealth & Joint Life Wealth variants only) and Limited / Regular premium payment",
+    "note": "Eligibility table present in brochure but specific numeric age / term / sum-assured boundaries not recovered from this parse; Maximum Sum Assured and Min/Max Premium stated to be 'as per the Board Approved Underwriting Policy (BAUP)'."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from the date of receipt of the policy document.",
+    "grace_period": "30 days for yearly, half-yearly and quarterly premium frequencies; 15 days for monthly frequency.",
+    "suicide_clause": "On death due to suicide within 12 months from the date of commencement of the Policy or latest revival (whichever is later), the nominee/beneficiary is entitled to the Fund Value as available on the date of intimation of death; any charges (other than FMC or guarantee charge) recovered after the date of death are added back to the Fund Value.",
+    "lock_in_note": "Unit Linked Insurance Products do not offer any liquidity during the first five years; the policyholder cannot surrender or withdraw monies completely or partially till the end of the fifth year (five-year lock-in).",
+    "guaranteed_benefit_note": "Death/ATPD benefit is subject to a minimum Guaranteed Benefit of 105% of Total Premiums Paid till the date of death; this is the only guaranteed element (the rest is market-linked Fund Value).",
+    "tax_note": "Tax benefit may be as per prevailing tax laws; GST applicable as per prevailing tax laws, subject to amendment from time to time."
+  },
+  "mandatory_disclosures_present": [
+    "Section 41 — Prohibition of Rebate",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & IRDAI Grievance Call Centre (IGCC) details",
+    "Five-year lock-in / no-liquidity ULIP disclosure",
+    "'Returns at 4% and 8% are illustrative and not guaranteed' disclosure on the benefit illustration",
+    "'This brochure should be read in conjunction with the Benefit Illustration and policy document' statement"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "This card is for the CHILD WEALTH variant; benefits such as Income Benefit and WOP described here are variant-specific — any benefit claim must be qualified to the correct variant (Wealth / Child Wealth / Joint Life Wealth).",
+      "Any '105% guaranteed' / 'guaranteed benefit' claim is bounded ONLY to the minimum death/ATPD benefit (105% of Total Premiums Paid) — it does not guarantee maturity value or returns.",
+      "Maturity Benefit equals the Fund Value (market-linked), not a guaranteed maturity amount.",
+      "Single-premium option is available ONLY for the Wealth and Joint Life Wealth variants, not Child Wealth."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT use 'guaranteed returns' / 'assured returns' / 'risk-free' language — this is a Unit-Linked plan and investment risk is borne entirely by the policyholder.",
+      "Do NOT use 'bonus' language — the plan is non-participating; 'Loyalty Benefits', ROAC, ROMC etc. are charge-return features, not bonuses.",
+      "Do NOT present illustrative 4% / 8% return figures as expected, guaranteed, or upper/lower limits of returns.",
+      "Do NOT imply liquidity in the first five years — ULIP funds are locked in and cannot be surrendered or partially withdrawn during the five-year lock-in.",
+      "Do NOT position fund-value growth as guaranteed; only the 105%-of-premiums minimum death benefit is guaranteed."
+    ],
+    "must_state": [
+      "Plan UIN 116L214V01",
+      "Full regulatory descriptor: 'A Unit-Linked Non-Participating Individual Life Savings Insurance Plan'",
+      "ULIP market-risk disclosure: investment in ULIPs is subject to capital-market risks and the policyholder is solely responsible for his/her investment decisions",
+      "Five-year lock-in / no-liquidity statement",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms, charges and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of swg-child-wealth-brochure.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Numeric entry/maturity age, policy term and minimum sum-assured boundaries not recovered (brochure defers Sum Assured and premium limits to the Board Approved Underwriting Policy).",
+      "Parser primary UIN (116A059V01) is a rider UIN; plan UIN 116L214V01 taken from the brochure body (shared across Smart Wealth Goal VI variants)."
+    ]
+  }
 }

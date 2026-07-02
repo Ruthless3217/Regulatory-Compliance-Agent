@@ -1,83 +1,83 @@
 {
- "schema_version": "1.0",
- "product_name": "Bajaj Life Insurance Family Protect Rider - Parental Care",
- "uin": "116B056V01",
- "rider_uins": [],
- "source_file": "trad-fpr-leaflet.pdf",
- "product_category": "rider",
- "regulatory_descriptor": "A Non-linked, Non-participating, Individual, Pure Risk Health Rider",
- "structural_flags": {
- "is_unit_linked": false,
- "is_participating": false,
- "market_risk_borne_by_policyholder": false,
- "offers_guaranteed_benefits": false,
- "offers_maturity_benefit": false,
- "offers_loan": false
- },
- "variants": ["Parental Care (the option covered by this leaflet); Child Care is another option of the same rider"],
- "key_benefits": [
- "Rider benefit triggers on the earliest occurrence of Death or Accidental Total Permanent Disability (ATPD) of the rider Life Assured (who is the base-policy Life Assured)",
- "Parental Care: on trigger, a lump sum equal to 105% of total rider premiums paid till date is paid immediately, PLUS a monthly income (0.1%-0.5% of Rider Sum Assured, chosen at inception) paid to the surviving parent(s) for the rest of their life",
- "Health Management Services (medical second opinion, case management, consultation) at no additional cost while the rider is in force",
- "Rider premium collected over and above the base policy premium"
- ],
- "riders_available": [],
- "eligibility": {
- "min_entry_age_years": null,
- "max_entry_age_years": null,
- "max_maturity_age_years": null,
- "min_sum_assured": null,
- "policy_term": "Rider Policy Term and Rider PPT must align with the base policy term and base PPT; numeric range not captured in this leaflet",
- "premium_payment_term": "Aligned to base policy; single / limited / regular per base; numeric range not captured",
- "note": "This is a RIDER attachable to a base policy (illustration uses Bajaj Life Insurance eTouch II). Eligibility boundary table not recovered; female lives get a 3-year age set-back. Note this leaflet uses the legacy 'Bajaj Life Insurance' branding."
- },
- "key_terms": {
- "free_look_period_days": 30,
- "free_look_note": "30 days from receipt of the Rider Document; refund of rider premiums (excluding taxes) subject to proportionate risk premium, expenses and stamp duty; processed within 7 days.",
- "grace_period": "Same as the base policy.",
- "suicide_clause": "On death of the base-policy Life Assured due to suicide within 12 months from commencement of risk or revival of the rider, nominee is entitled to at least 80% of total rider premiums paid till date (or the termination value if higher), provided the rider is in force.",
- "loan_note": "Loan facility is NOT available in this rider.",
- "tax_note": "Tax benefits as per applicable tax laws as amended — consult a tax advisor. GST/cess collected over and above the premium."
- },
- "mandatory_disclosures_present": [
- "Section 41 — Prohibition of Rebate",
- "Section 38 — Assignment",
- "Section 39 — Nomination",
- "Section 45 — Fraud & Misstatement",
- "Free Look Period (30 days)",
- "Suicide clause",
- "Applicability of Goods & Service Tax",
- "Risk Factors & Warning Statements",
- "Beware-of-spurious-calls warning",
- "Statement that this leaflet gives salient features of the Parental Care option only"
- ],
- "compliance_guardrails": {
- "claims_marketing_must_support": [
- "Rider benefit triggers ONLY on Death or ATPD of the rider Life Assured (the base-policy Life Assured) — not on the parents' death; if the parents predecease the trigger, no benefit is payable.",
- "The lifelong monthly income is a percentage (0.1%-0.5%) of Rider Sum Assured chosen at inception, paid to the surviving parent(s) — must not be overstated.",
- "Benefit amount '105% of total rider premiums paid' is the lump-sum portion, not an investment return.",
- "This leaflet describes the Parental Care option specifically; the Child Care option has different terms."
- ],
- "claims_marketing_must_avoid": [
- "Do NOT market this as a standalone product — it is a rider that MUST reference and be attached to an eligible base policy.",
- "Do NOT position as an investment, savings or maturity/money-back product — it is non-linked, non-participating pure-risk cover with no maturity benefit and no loan.",
- "Do NOT use 'guaranteed returns' / 'bonus' language — there are no bonuses (non-par) and no returns.",
- "Tax benefits must not be stated as assured — carry the 'subject to applicable tax laws' caveat."
- ],
- "must_state": [
- "Rider UIN 116B056V01 and reference to the base policy it is attached to",
- "Full regulatory descriptor: 'A Non-linked, Non-participating, Individual, Pure Risk Health Rider'",
- "That the rider gives salient features only and must be read with the base plan and rider policy document"
- ]
- },
- "curation": {
- "curated_by": "claude-opus-4-8 (subagent)",
- "curated_from": "brochure structural parse of trad-fpr-leaflet.pdf",
- "confidence": "high",
- "gaps": [
- "Parser's primary UIN (116N198V02) is the base plan eTouch II referenced in the illustration; the rider's own UIN 116B056V01 was taken from the brochure footer/disclosure line.",
- "Numeric entry/maturity age, sum-assured and rider-term boundary table not recovered. Leaflet covers the Parental Care option; Child Care option terms differ.",
- "Leaflet uses legacy 'Bajaj Life Insurance' branding (older filing)."
- ]
- }
+  "schema_version": "1.0",
+  "product_name": "Bajaj Allianz Life Family Protect Rider - Parental Care",
+  "uin": "116B056V01",
+  "rider_uins": [],
+  "source_file": "trad-fpr-leaflet.pdf",
+  "product_category": "rider",
+  "regulatory_descriptor": "A Non-linked, Non-participating, Individual, Pure Risk Health Rider",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": false,
+    "offers_maturity_benefit": false,
+    "offers_loan": false
+  },
+  "variants": ["Parental Care (the option covered by this leaflet); Child Care is another option of the same rider"],
+  "key_benefits": [
+    "Rider benefit triggers on the earliest occurrence of Death or Accidental Total Permanent Disability (ATPD) of the rider Life Assured (who is the base-policy Life Assured)",
+    "Parental Care: on trigger, a lump sum equal to 105% of total rider premiums paid till date is paid immediately, PLUS a monthly income (0.1%-0.5% of Rider Sum Assured, chosen at inception) paid to the surviving parent(s) for the rest of their life",
+    "Health Management Services (medical second opinion, case management, consultation) at no additional cost while the rider is in force",
+    "Rider premium collected over and above the base policy premium"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Rider Policy Term and Rider PPT must align with the base policy term and base PPT; numeric range not captured in this leaflet",
+    "premium_payment_term": "Aligned to base policy; single / limited / regular per base; numeric range not captured",
+    "note": "This is a RIDER attachable to a base policy (illustration uses Bajaj Allianz Life eTouch II). Eligibility boundary table not recovered; female lives get a 3-year age set-back. Note this leaflet uses the legacy 'Bajaj Allianz Life' branding."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the Rider Document; refund of rider premiums (excluding taxes) subject to proportionate risk premium, expenses and stamp duty; processed within 7 days.",
+    "grace_period": "Same as the base policy.",
+    "suicide_clause": "On death of the base-policy Life Assured due to suicide within 12 months from commencement of risk or revival of the rider, nominee is entitled to at least 80% of total rider premiums paid till date (or the termination value if higher), provided the rider is in force.",
+    "loan_note": "Loan facility is NOT available in this rider.",
+    "tax_note": "Tax benefits as per applicable tax laws as amended — consult a tax advisor. GST/cess collected over and above the premium."
+  },
+  "mandatory_disclosures_present": [
+    "Section 41 — Prohibition of Rebate",
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 45 — Fraud & Misstatement",
+    "Free Look Period (30 days)",
+    "Suicide clause",
+    "Applicability of Goods & Service Tax",
+    "Risk Factors & Warning Statements",
+    "Beware-of-spurious-calls warning",
+    "Statement that this leaflet gives salient features of the Parental Care option only"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Rider benefit triggers ONLY on Death or ATPD of the rider Life Assured (the base-policy Life Assured) — not on the parents' death; if the parents predecease the trigger, no benefit is payable.",
+      "The lifelong monthly income is a percentage (0.1%-0.5%) of Rider Sum Assured chosen at inception, paid to the surviving parent(s) — must not be overstated.",
+      "Benefit amount '105% of total rider premiums paid' is the lump-sum portion, not an investment return.",
+      "This leaflet describes the Parental Care option specifically; the Child Care option has different terms."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT market this as a standalone product — it is a rider that MUST reference and be attached to an eligible base policy.",
+      "Do NOT position as an investment, savings or maturity/money-back product — it is non-linked, non-participating pure-risk cover with no maturity benefit and no loan.",
+      "Do NOT use 'guaranteed returns' / 'bonus' language — there are no bonuses (non-par) and no returns.",
+      "Tax benefits must not be stated as assured — carry the 'subject to applicable tax laws' caveat."
+    ],
+    "must_state": [
+      "Rider UIN 116B056V01 and reference to the base policy it is attached to",
+      "Full regulatory descriptor: 'A Non-linked, Non-participating, Individual, Pure Risk Health Rider'",
+      "That the rider gives salient features only and must be read with the base plan and rider policy document"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of trad-fpr-leaflet.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Parser's primary UIN (116N198V02) is the base plan eTouch II referenced in the illustration; the rider's own UIN 116B056V01 was taken from the brochure footer/disclosure line.",
+      "Numeric entry/maturity age, sum-assured and rider-term boundary table not recovered. Leaflet covers the Parental Care option; Child Care option terms differ.",
+      "Leaflet uses legacy 'Bajaj Allianz Life' branding (older filing)."
+    ]
+  }
 }

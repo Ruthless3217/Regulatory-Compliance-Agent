@@ -12,17 +12,17 @@ XLSX = Path(__file__).resolve().parents[2] / "docs" / "Copy of Disclaimers.xlsx"
 
 
 def main() -> None:
- sys.stdout.reconfigure(encoding="utf-8")
- wb = openpyxl.load_workbook(XLSX, data_only=True)
- ws = wb.worksheets[0]
- rows = list(ws.iter_rows(values_only=True))
- for type_, text in rows[1:]: # skip header
- if not (type_ and text):
- continue
- print(f"=== {str(type_).strip()} ===")
- print(str(text).strip())
- print()
+    sys.stdout.reconfigure(encoding="utf-8")
+    wb = openpyxl.load_workbook(XLSX, data_only=True)
+    ws = wb.worksheets[0]
+    rows = list(ws.iter_rows(values_only=True))
+    for type_, text in rows[1:]:  # skip header
+        if not (type_ and text):
+            continue
+        print(f"=== {str(type_).strip()} ===")
+        print(str(text).strip())
+        print()
 
 
 if __name__ == "__main__":
- main()
+    main()

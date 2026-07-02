@@ -1,89 +1,89 @@
 {
- "schema_version": "1.0",
- "product_name": "Bajaj Life Assured Wealth Goal Platinum",
- "uin": "116N188V09",
- "rider_uins": ["116B034V02", "116B036V02", "116B056V01", "116B061V01", "116B058V01", "116B062V01"],
- "source_file": "awg-platinum-brochure.pdf",
- "product_category": "savings_endowment",
- "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual Life Insurance Savings Plan",
- "structural_flags": {
- "is_unit_linked": false,
- "is_participating": false,
- "market_risk_borne_by_policyholder": false,
- "offers_guaranteed_benefits": true,
- "offers_maturity_benefit": true,
- "offers_loan": true
- },
- "variants": ["Option 1 - Smart Income", "Option 2 - Regular Income"],
- "key_benefits": [
- "Guaranteed life cover during the Policy Term (Sum Assured on Death payable to nominee)",
- "Early Guaranteed Payouts (Smart Income option) starting as early as the 1st policy year",
- "Regular Guaranteed Payouts during the Income Period (after the Policy Term)",
- "Enhanced Return of Premium (Enhanced ROP) of 110% of Total Premiums Paid at the end of the Income Period",
- "Option to take Regular Guaranteed Payouts and Enhanced ROP as a discounted lumpsum",
- "Accumulation of Early Guaranteed Payouts (AGP) at a declared interest rate",
- "Death benefit not less than 105% of Total Premiums paid; income/maturity benefits continue to nominee through the Income Period"
- ],
- "riders_available": [
- "Bajaj Accidental Death Benefit Rider",
- "Bajaj Accidental Permanent Total/Partial Disability Benefit Rider",
- "Bajaj Life Family Protect Rider",
- "Bajaj Life New Waiver of Premium Rider",
- "Bajaj Life New Critical Illness Benefit Rider",
- "Bajaj Life Care Plus Rider Non-Linked"
- ],
- "eligibility": {
- "min_entry_age_years": null,
- "max_entry_age_years": 55,
- "max_maturity_age_years": 65,
- "min_sum_assured": null,
- "policy_term": "Up to 20 years for POS channel; full PT/PPT/Income Period grid not captured from this parse",
- "premium_payment_term": "Limited / Regular premium options (exact range not captured from this parse)",
- "note": "Age/term limits shown are the POS-channel maxima explicitly stated in the brochure (Max entry 55, Max maturity 65, Max PT 20, Max Sum Assured on Death Rs 25 lacs for POS). The full non-POS eligibility table was not recovered from the parse — verify against policy document before asserting numeric limits."
- },
- "key_terms": {
- "free_look_period_days": 30,
- "free_look_note": "30 days from receipt of the Policy Document (electronic or otherwise).",
- "grace_period": "30 days (non-monthly frequencies); 15 days (monthly).",
- "suicide_clause": "On death by suicide within 12 months of commencement of risk or latest revival (whichever is later), nominee receives higher of [80% of Total Premiums Paid minus EGP paid] or surrender value as on date of death; AGP, if any, also paid. Policy must be in force.",
- "loan_note": "Policy loan available once surrender value is acquired, up to 80% of [surrender value less any AGP]. Current loan interest 10% p.a. compounded half-yearly (benchmarked to G-Sec).",
- "tax_note": "Tax benefits 'as per applicable tax laws as amended from time to time'; GST applicable per prevailing tax laws."
- },
- "mandatory_disclosures_present": [
- "Section 38 - Assignment",
- "Section 39 - Nomination",
- "Section 41 - Prohibition of Rebate",
- "Section 45 - Fraud & Misstatement",
- "Applicability of Goods & Service Tax",
- "Grievance Redressal & Insurance Ombudsman details",
- "Beware-of-spurious-calls warning"
- ],
- "compliance_guardrails": {
- "claims_marketing_must_support": [
- "Guaranteed payouts/income are a percentage of Annualised Premium and depend on the chosen plan option, PT, PPT and income start year — any specific income figure must be option- and parameter-qualified.",
- "Enhanced ROP of 110% of Total Premiums Paid is payable at the END of the Income Period (not at the end of the Policy Term) — timing must be stated correctly.",
- "There is NO life cover during the Income Period (after the Policy Term); only the guaranteed payouts continue. Any 'lifelong cover' claim is false.",
- "Female-life enhancement applies only via a 3-year age set-back; mark-ups (High Premium, Autopay, Loyalty, etc.) are conditional."
- ],
- "claims_marketing_must_avoid": [
- "Do NOT use 'bonus' language — this is a non-participating plan; benefits are guaranteed payouts, not bonuses.",
- "Do NOT position as a market-linked / investment / wealth-creation-via-returns product — it is non-linked and non-participating; returns are fixed guaranteed payouts, not investment growth.",
- "Do NOT imply guaranteed payouts are unconditional — they are guaranteed only if the policy is in force and all due premiums are paid.",
- "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
- ],
- "must_state": [
- "Plan UIN 116N188V09",
- "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Individual Life Insurance Savings Plan'",
- "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions"
- ]
- },
- "curation": {
- "curated_by": "claude-opus-4-8 (subagent)",
- "curated_from": "brochure structural parse of awg-platinum-brochure.pdf",
- "confidence": "high",
- "gaps": [
- "Full non-POS eligibility table (min/max entry age, maturity age, sum-assured, PT/PPT grid) not recovered from parse.",
- "Regulatory descriptor not present as a verbatim line in the parsed text; reconstructed from brochure body ('non-linked, non-participating, individual life insurance, savings plan')."
- ]
- }
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Assured Wealth Goal Platinum",
+  "uin": "116N188V09",
+  "rider_uins": ["116B034V02", "116B036V02", "116B056V01", "116B061V01", "116B058V01", "116B062V01"],
+  "source_file": "awg-platinum-brochure.pdf",
+  "product_category": "savings_endowment",
+  "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual Life Insurance Savings Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": true,
+    "offers_loan": true
+  },
+  "variants": ["Option 1 - Smart Income", "Option 2 - Regular Income"],
+  "key_benefits": [
+    "Guaranteed life cover during the Policy Term (Sum Assured on Death payable to nominee)",
+    "Early Guaranteed Payouts (Smart Income option) starting as early as the 1st policy year",
+    "Regular Guaranteed Payouts during the Income Period (after the Policy Term)",
+    "Enhanced Return of Premium (Enhanced ROP) of 110% of Total Premiums Paid at the end of the Income Period",
+    "Option to take Regular Guaranteed Payouts and Enhanced ROP as a discounted lumpsum",
+    "Accumulation of Early Guaranteed Payouts (AGP) at a declared interest rate",
+    "Death benefit not less than 105% of Total Premiums paid; income/maturity benefits continue to nominee through the Income Period"
+  ],
+  "riders_available": [
+    "Bajaj Accidental Death Benefit Rider",
+    "Bajaj Accidental Permanent Total/Partial Disability Benefit Rider",
+    "Bajaj Life Family Protect Rider",
+    "Bajaj Life New Waiver of Premium Rider",
+    "Bajaj Life New Critical Illness Benefit Rider",
+    "Bajaj Life Care Plus Rider Non-Linked"
+  ],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": 55,
+    "max_maturity_age_years": 65,
+    "min_sum_assured": null,
+    "policy_term": "Up to 20 years for POS channel; full PT/PPT/Income Period grid not captured from this parse",
+    "premium_payment_term": "Limited / Regular premium options (exact range not captured from this parse)",
+    "note": "Age/term limits shown are the POS-channel maxima explicitly stated in the brochure (Max entry 55, Max maturity 65, Max PT 20, Max Sum Assured on Death Rs 25 lacs for POS). The full non-POS eligibility table was not recovered from the parse — verify against policy document before asserting numeric limits."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the Policy Document (electronic or otherwise).",
+    "grace_period": "30 days (non-monthly frequencies); 15 days (monthly).",
+    "suicide_clause": "On death by suicide within 12 months of commencement of risk or latest revival (whichever is later), nominee receives higher of [80% of Total Premiums Paid minus EGP paid] or surrender value as on date of death; AGP, if any, also paid. Policy must be in force.",
+    "loan_note": "Policy loan available once surrender value is acquired, up to 80% of [surrender value less any AGP]. Current loan interest 10% p.a. compounded half-yearly (benchmarked to G-Sec).",
+    "tax_note": "Tax benefits 'as per applicable tax laws as amended from time to time'; GST applicable per prevailing tax laws."
+  },
+  "mandatory_disclosures_present": [
+    "Section 38 - Assignment",
+    "Section 39 - Nomination",
+    "Section 41 - Prohibition of Rebate",
+    "Section 45 - Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Guaranteed payouts/income are a percentage of Annualised Premium and depend on the chosen plan option, PT, PPT and income start year — any specific income figure must be option- and parameter-qualified.",
+      "Enhanced ROP of 110% of Total Premiums Paid is payable at the END of the Income Period (not at the end of the Policy Term) — timing must be stated correctly.",
+      "There is NO life cover during the Income Period (after the Policy Term); only the guaranteed payouts continue. Any 'lifelong cover' claim is false.",
+      "Female-life enhancement applies only via a 3-year age set-back; mark-ups (High Premium, Autopay, Loyalty, etc.) are conditional."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT use 'bonus' language — this is a non-participating plan; benefits are guaranteed payouts, not bonuses.",
+      "Do NOT position as a market-linked / investment / wealth-creation-via-returns product — it is non-linked and non-participating; returns are fixed guaranteed payouts, not investment growth.",
+      "Do NOT imply guaranteed payouts are unconditional — they are guaranteed only if the policy is in force and all due premiums are paid.",
+      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+    ],
+    "must_state": [
+      "Plan UIN 116N188V09",
+      "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Individual Life Insurance Savings Plan'",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of awg-platinum-brochure.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Full non-POS eligibility table (min/max entry age, maturity age, sum-assured, PT/PPT grid) not recovered from parse.",
+      "Regulatory descriptor not present as a verbatim line in the parsed text; reconstructed from brochure body ('non-linked, non-participating, individual life insurance, savings plan')."
+    ]
+  }
 }

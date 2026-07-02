@@ -1,91 +1,91 @@
 {
- "schema_version": "1.0",
- "product_name": "Bajaj Life ACE",
- "uin": "116N186V04",
- "rider_uins": ["116B034V02", "116B036V02", "116B056V01", "116B061V01", "116B058V01", "116B062V01"],
- "source_file": "ace-brochure.pdf",
- "product_category": "savings_endowment",
- "regulatory_descriptor": "A Non-Linked, Participating, Individual, Life Insurance Savings Plan",
- "structural_flags": {
- "is_unit_linked": false,
- "is_participating": true,
- "market_risk_borne_by_policyholder": false,
- "offers_guaranteed_benefits": true,
- "offers_maturity_benefit": true,
- "offers_loan": true
- },
- "variants": ["Deferred Income", "Early Income", "Increasing Income", "Wealth"],
- "key_benefits": [
- "Modular plan: choose Income or Lump Sum or both, with a life cover throughout the policy term (up to age 100)",
- "Income Benefit = Guaranteed Income plus Cash Bonus (if declared) — varies by option",
- "Deferred Income: Guaranteed Income 4% of Benefit Sum Assured plus cash bonus, after PPT plus deferment",
- "Early Income: income from 1st month/year after deferment (cash bonus if declared plus Guaranteed Income)",
- "Increasing Income: Benefit Sum Assured grows 5% p.a. compounding; income is guaranteed plus cash bonus",
- "Wealth: lump sum (Maturity Sum Assured) at end of policy term",
- "Maturity Benefit includes Sum Assured on Maturity, accumulated income benefits, and Terminal Bonus (if declared)",
- "Death Benefit: Sum Assured on Death (11x Annualised Premium) plus accumulated income plus Terminal Bonus (if declared); not less than Guaranteed Death Benefit"
- ],
- "riders_available": [
- "Bajaj Accidental Death Benefit Rider",
- "Bajaj Accidental Permanent Total/Partial Disability Benefit Rider",
- "Bajaj Life Family Protect Rider",
- "Bajaj Life New Waiver of Premium Rider",
- "Bajaj Life New Critical Illness Benefit Rider",
- "Bajaj Life Care Plus Rider Non-Linked"
- ],
- "eligibility": {
- "min_entry_age_years": null,
- "max_entry_age_years": null,
- "max_maturity_age_years": 100,
- "min_sum_assured": "Sum Assured on Death is 11 times Annualised Premium (min and max)",
- "policy_term": "Up to age 100 (income payable up to 100 years of age depending on option)",
- "premium_payment_term": "5, 6, 7, 8, 9, 10 or 12 years",
- "note": "Entry-age and minimum-premium boundary table not fully recovered from this parse; Sum Assured on Death is fixed at 11x Annualised Premium. Verify numeric age/premium limits against policy document."
- },
- "key_terms": {
- "free_look_period_days": 30,
- "free_look_note": "30 days from the date of receipt of the Policy Document.",
- "grace_period": "30 days (non-monthly frequencies); 15 days (monthly).",
- "suicide_clause": "On death by suicide within 12 months from commencement of risk or latest revival (whichever is later), the suicide-clause refund of eligible Regular Premiums / Surrender Value applies; no other benefit. Policy must be in force. (Standard 80%-of-premiums / surrender-value formulation; exact wording not fully captured from parse.)",
- "loan_note": "Policy loan available up to 80% of [Surrender Value less Terminal Bonus on surrender less any Accumulated Income Benefit] plus 50% of Terminal Bonus on surrender. Current loan interest 9% p.a. compounded half-yearly.",
- "tax_note": "Tax benefits on premiums paid and benefits received 'as per prevailing tax laws'; GST and cess collected over and above premium."
- },
- "mandatory_disclosures_present": [
- "Section 38 - Assignment",
- "Section 39 - Nomination",
- "Section 41 - Prohibition of Rebate",
- "Section 45 - Fraud & Misstatement",
- "Applicability of Goods & Service Tax",
- "Grievance Redressal & Insurance Ombudsman details",
- "Beware-of-spurious-calls warning"
- ],
- "compliance_guardrails": {
- "claims_marketing_must_support": [
- "This is a PARTICIPATING plan — Cash Bonus and Terminal Bonus are 'if declared' (non-guaranteed); any income/maturity figure that includes bonus must be clearly marked as not guaranteed.",
- "Guaranteed Income is a fixed factor (e.g. 4%/6% of Benefit Sum Assured depending on option and policy term) and is separate from the non-guaranteed cash bonus.",
- "Sum Assured on Death is fixed at 11 times Annualised Premium; death benefit is never less than the Guaranteed Death Benefit.",
- "Benefit availability (income vs lump sum) depends on the chosen option (Deferred/Early/Increasing Income or Wealth) — claims must be option-qualified."
- ],
- "claims_marketing_must_avoid": [
- "Do NOT present Cash Bonus or Terminal Bonus as guaranteed — they are payable only 'if declared' by the company; bonus rates must never be shown as assured.",
- "Do NOT show total/illustrative returns that bundle bonuses without an explicit 'bonus if declared / not guaranteed' caveat.",
- "Do NOT position as a market-linked / unit-linked product — it is non-linked (participating, traditional).",
- "Tax benefits must not be stated as assured — always carry the 'as per prevailing tax laws' caveat."
- ],
- "must_state": [
- "Plan UIN 116N186V04",
- "Full regulatory descriptor: 'A Non-Linked, Participating, Individual, Life Insurance Savings Plan'",
- "That cash bonus and terminal bonus are non-guaranteed ('if declared')",
- "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions"
- ]
- },
- "curation": {
- "curated_by": "claude-opus-4-8 (subagent)",
- "curated_from": "brochure structural parse of ace-brochure.pdf",
- "confidence": "medium",
- "gaps": [
- "Regulatory descriptor line not captured as verbatim text in the parse; classified as Participating from explicit Cash Bonus / Terminal Bonus ('if declared') language throughout the brochure and reconstructed as the standard descriptor for UIN 116N186V04 — confirm exact wording against the policy document.",
- "Entry-age and minimum-premium eligibility table, and exact suicide-clause wording, not fully recovered from parse."
- ]
- }
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life ACE",
+  "uin": "116N186V04",
+  "rider_uins": ["116B034V02", "116B036V02", "116B056V01", "116B061V01", "116B058V01", "116B062V01"],
+  "source_file": "ace-brochure.pdf",
+  "product_category": "savings_endowment",
+  "regulatory_descriptor": "A Non-Linked, Participating, Individual, Life Insurance Savings Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": true,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": true,
+    "offers_loan": true
+  },
+  "variants": ["Deferred Income", "Early Income", "Increasing Income", "Wealth"],
+  "key_benefits": [
+    "Modular plan: choose Income or Lump Sum or both, with a life cover throughout the policy term (up to age 100)",
+    "Income Benefit = Guaranteed Income plus Cash Bonus (if declared) — varies by option",
+    "Deferred Income: Guaranteed Income 4% of Benefit Sum Assured plus cash bonus, after PPT plus deferment",
+    "Early Income: income from 1st month/year after deferment (cash bonus if declared plus Guaranteed Income)",
+    "Increasing Income: Benefit Sum Assured grows 5% p.a. compounding; income is guaranteed plus cash bonus",
+    "Wealth: lump sum (Maturity Sum Assured) at end of policy term",
+    "Maturity Benefit includes Sum Assured on Maturity, accumulated income benefits, and Terminal Bonus (if declared)",
+    "Death Benefit: Sum Assured on Death (11x Annualised Premium) plus accumulated income plus Terminal Bonus (if declared); not less than Guaranteed Death Benefit"
+  ],
+  "riders_available": [
+    "Bajaj Accidental Death Benefit Rider",
+    "Bajaj Accidental Permanent Total/Partial Disability Benefit Rider",
+    "Bajaj Life Family Protect Rider",
+    "Bajaj Life New Waiver of Premium Rider",
+    "Bajaj Life New Critical Illness Benefit Rider",
+    "Bajaj Life Care Plus Rider Non-Linked"
+  ],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": 100,
+    "min_sum_assured": "Sum Assured on Death is 11 times Annualised Premium (min and max)",
+    "policy_term": "Up to age 100 (income payable up to 100 years of age depending on option)",
+    "premium_payment_term": "5, 6, 7, 8, 9, 10 or 12 years",
+    "note": "Entry-age and minimum-premium boundary table not fully recovered from this parse; Sum Assured on Death is fixed at 11x Annualised Premium. Verify numeric age/premium limits against policy document."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from the date of receipt of the Policy Document.",
+    "grace_period": "30 days (non-monthly frequencies); 15 days (monthly).",
+    "suicide_clause": "On death by suicide within 12 months from commencement of risk or latest revival (whichever is later), the suicide-clause refund of eligible Regular Premiums / Surrender Value applies; no other benefit. Policy must be in force. (Standard 80%-of-premiums / surrender-value formulation; exact wording not fully captured from parse.)",
+    "loan_note": "Policy loan available up to 80% of [Surrender Value less Terminal Bonus on surrender less any Accumulated Income Benefit] plus 50% of Terminal Bonus on surrender. Current loan interest 9% p.a. compounded half-yearly.",
+    "tax_note": "Tax benefits on premiums paid and benefits received 'as per prevailing tax laws'; GST and cess collected over and above premium."
+  },
+  "mandatory_disclosures_present": [
+    "Section 38 - Assignment",
+    "Section 39 - Nomination",
+    "Section 41 - Prohibition of Rebate",
+    "Section 45 - Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "This is a PARTICIPATING plan — Cash Bonus and Terminal Bonus are 'if declared' (non-guaranteed); any income/maturity figure that includes bonus must be clearly marked as not guaranteed.",
+      "Guaranteed Income is a fixed factor (e.g. 4%/6% of Benefit Sum Assured depending on option and policy term) and is separate from the non-guaranteed cash bonus.",
+      "Sum Assured on Death is fixed at 11 times Annualised Premium; death benefit is never less than the Guaranteed Death Benefit.",
+      "Benefit availability (income vs lump sum) depends on the chosen option (Deferred/Early/Increasing Income or Wealth) — claims must be option-qualified."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT present Cash Bonus or Terminal Bonus as guaranteed — they are payable only 'if declared' by the company; bonus rates must never be shown as assured.",
+      "Do NOT show total/illustrative returns that bundle bonuses without an explicit 'bonus if declared / not guaranteed' caveat.",
+      "Do NOT position as a market-linked / unit-linked product — it is non-linked (participating, traditional).",
+      "Tax benefits must not be stated as assured — always carry the 'as per prevailing tax laws' caveat."
+    ],
+    "must_state": [
+      "Plan UIN 116N186V04",
+      "Full regulatory descriptor: 'A Non-Linked, Participating, Individual, Life Insurance Savings Plan'",
+      "That cash bonus and terminal bonus are non-guaranteed ('if declared')",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of ace-brochure.pdf",
+    "confidence": "medium",
+    "gaps": [
+      "Regulatory descriptor line not captured as verbatim text in the parse; classified as Participating from explicit Cash Bonus / Terminal Bonus ('if declared') language throughout the brochure and reconstructed as the standard descriptor for UIN 116N186V04 — confirm exact wording against the policy document.",
+      "Entry-age and minimum-premium eligibility table, and exact suicide-clause wording, not fully recovered from parse."
+    ]
+  }
 }

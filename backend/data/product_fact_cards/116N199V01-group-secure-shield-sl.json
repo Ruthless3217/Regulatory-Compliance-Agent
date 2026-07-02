@@ -1,83 +1,83 @@
 {
- "schema_version": "1.0",
- "product_name": "Bajaj Life Group Secure Shield",
- "uin": "116N199V01",
- "rider_uins": [],
- "source_file": "group-secure-shield-sl.pdf",
- "product_category": "group",
- "regulatory_descriptor": "A Non-linked Non-Participating Group Life Insurance Plan",
- "structural_flags": {
- "is_unit_linked": false,
- "is_participating": false,
- "market_risk_borne_by_policyholder": false,
- "offers_guaranteed_benefits": true,
- "offers_maturity_benefit": false,
- "offers_loan": false
- },
- "variants": ["Level Cover", "Reducing Cover"],
- "key_benefits": [
- "Group pure-risk life cover for borrowers / co-borrowers (lender and non-lender groups), Single or Regular Pay",
- "Level Cover (constant sum assured) or Reducing Cover (reduces with outstanding loan)",
- "Optional in-built covers: Accelerated/Additional Critical Illness (11/17/32 CI), Accelerated Terminal Illness, Accelerated Accidental Total Permanent Disability, Accidental Death Benefit",
- "Single life, Joint life (5% joint-life discount), or up to 3 co-borrowers",
- "Moratorium period 0-8 years (reducing cover, loan-linked)",
- "Benefit Multiplier: cover up to 120% of outstanding loan amount",
- "Death benefit payable in instalments option (up to 10 years); surrender value under specific options only",
- "Optional Health Management Services at no extra cost"
- ],
- "riders_available": [],
- "eligibility": {
- "min_entry_age_years": null,
- "max_entry_age_years": null,
- "max_maturity_age_years": null,
- "min_sum_assured": null,
- "coverage_term": "1 month to 360 months (Single Pay or Regular Pay)",
- "policy_term": "Coverage term 1-360 months; member-level term may equal moratorium plus decreasing-cover term",
- "premium_payment_term": "Single Pay; or Regular Pay (Level Cover PPT=PT, Reducing Cover PPT=2/3 of PT)",
- "note": "Numeric entry-age / sum-assured eligibility table not recovered from this parse — verify against policy document before asserting numeric limits."
- },
- "key_terms": {
- "free_look_period_days": 30,
- "free_look_note": "30 days from receipt of the Policy Document (electronic or otherwise), except where policy tenure is less than a year.",
- "grace_period": "Not applicable under Single Premium. Under Regular Premium: 30 days (all modes except monthly), 15 days (monthly).",
- "suicide_clause": "On death of the Member by suicide within 12 months of commencement of risk or latest revival (whichever is later), nominee receives higher of 80% of Premiums paid till date of death or the surrender value as on date of death; provided the policy/membership is in force. For Joint Life, applies on either member's suicide and terminates both covers.",
- "maturity_benefit_condition": "There is NO maturity benefit in this plan — it is pure-risk credit/group protection.",
- "tax_note": "Premiums and benefits 'may be eligible' for tax benefits per extant Income Tax Act, subject to provisions and as amended; consult a tax advisor."
- },
- "mandatory_disclosures_present": [
- "Section 38 - Assignment",
- "Section 41 - Prohibition of Rebate",
- "Applicability of Goods & Service Tax",
- "Grievance Redressal & Insurance Ombudsman details",
- "Beware-of-spurious-calls warning"
- ],
- "compliance_guardrails": {
- "claims_marketing_must_support": [
- "This is a pure-risk GROUP plan intended to cover borrowers/co-borrowers — marketing must frame it as credit/loan-protection group insurance, not an individual retail product.",
- "Reducing Cover applies only where the Sum Assured is linked to a loan; Benefit Multiplier (100%-120% of outstanding loan) and moratorium (0-8 yrs) are loan-linked features.",
- "Critical Illness / ATPD / ATI / ADB are OPTIONAL in-built covers chosen at inception with their own sum-assured percentages — any such benefit claim must be flagged as optional and condition-bound.",
- "Surrender value is available only under specific options (e.g. Reducing Cover after PPT, or Single Premium with term >1 year); no surrender value under Regular Premium Level Cover."
- ],
- "claims_marketing_must_avoid": [
- "Do NOT position as a savings, investment or maturity/'money-back' product — there is NO maturity benefit; it is pure-risk protection.",
- "Do NOT use 'bonus' or participating-fund language — it is non-participating.",
- "Do NOT imply optional covers (CI/ATPD/ATI/ADB) are automatically included — they are chosen and priced separately.",
- "Tax benefits must not be stated as assured — they 'may be eligible' subject to the Income Tax Act and are subject to change."
- ],
- "must_state": [
- "Plan UIN 116N199V01",
- "Full regulatory descriptor: 'A Non-linked Non-Participating Group Life Insurance Plan'",
- "That benefits/eligibility are governed by the Master Policy and scheme rules",
- "Standard disclaimer to read the policy document for full terms, conditions and exclusions"
- ]
- },
- "curation": {
- "curated_by": "claude-opus-4-8 (subagent)",
- "curated_from": "brochure structural parse of group-secure-shield-sl.pdf",
- "confidence": "high",
- "gaps": [
- "Numeric entry-age and sum-assured eligibility table not recovered from parse.",
- "Detailed GSV/SSV factor tables are referenced to company website, not in the brochure body."
- ]
- }
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Group Secure Shield",
+  "uin": "116N199V01",
+  "rider_uins": [],
+  "source_file": "group-secure-shield-sl.pdf",
+  "product_category": "group",
+  "regulatory_descriptor": "A Non-linked Non-Participating Group Life Insurance Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": false,
+    "offers_loan": false
+  },
+  "variants": ["Level Cover", "Reducing Cover"],
+  "key_benefits": [
+    "Group pure-risk life cover for borrowers / co-borrowers (lender and non-lender groups), Single or Regular Pay",
+    "Level Cover (constant sum assured) or Reducing Cover (reduces with outstanding loan)",
+    "Optional in-built covers: Accelerated/Additional Critical Illness (11/17/32 CI), Accelerated Terminal Illness, Accelerated Accidental Total Permanent Disability, Accidental Death Benefit",
+    "Single life, Joint life (5% joint-life discount), or up to 3 co-borrowers",
+    "Moratorium period 0-8 years (reducing cover, loan-linked)",
+    "Benefit Multiplier: cover up to 120% of outstanding loan amount",
+    "Death benefit payable in instalments option (up to 10 years); surrender value under specific options only",
+    "Optional Health Management Services at no extra cost"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "coverage_term": "1 month to 360 months (Single Pay or Regular Pay)",
+    "policy_term": "Coverage term 1-360 months; member-level term may equal moratorium plus decreasing-cover term",
+    "premium_payment_term": "Single Pay; or Regular Pay (Level Cover PPT=PT, Reducing Cover PPT=2/3 of PT)",
+    "note": "Numeric entry-age / sum-assured eligibility table not recovered from this parse — verify against policy document before asserting numeric limits."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the Policy Document (electronic or otherwise), except where policy tenure is less than a year.",
+    "grace_period": "Not applicable under Single Premium. Under Regular Premium: 30 days (all modes except monthly), 15 days (monthly).",
+    "suicide_clause": "On death of the Member by suicide within 12 months of commencement of risk or latest revival (whichever is later), nominee receives higher of 80% of Premiums paid till date of death or the surrender value as on date of death; provided the policy/membership is in force. For Joint Life, applies on either member's suicide and terminates both covers.",
+    "maturity_benefit_condition": "There is NO maturity benefit in this plan — it is pure-risk credit/group protection.",
+    "tax_note": "Premiums and benefits 'may be eligible' for tax benefits per extant Income Tax Act, subject to provisions and as amended; consult a tax advisor."
+  },
+  "mandatory_disclosures_present": [
+    "Section 38 - Assignment",
+    "Section 41 - Prohibition of Rebate",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "This is a pure-risk GROUP plan intended to cover borrowers/co-borrowers — marketing must frame it as credit/loan-protection group insurance, not an individual retail product.",
+      "Reducing Cover applies only where the Sum Assured is linked to a loan; Benefit Multiplier (100%-120% of outstanding loan) and moratorium (0-8 yrs) are loan-linked features.",
+      "Critical Illness / ATPD / ATI / ADB are OPTIONAL in-built covers chosen at inception with their own sum-assured percentages — any such benefit claim must be flagged as optional and condition-bound.",
+      "Surrender value is available only under specific options (e.g. Reducing Cover after PPT, or Single Premium with term >1 year); no surrender value under Regular Premium Level Cover."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT position as a savings, investment or maturity/'money-back' product — there is NO maturity benefit; it is pure-risk protection.",
+      "Do NOT use 'bonus' or participating-fund language — it is non-participating.",
+      "Do NOT imply optional covers (CI/ATPD/ATI/ADB) are automatically included — they are chosen and priced separately.",
+      "Tax benefits must not be stated as assured — they 'may be eligible' subject to the Income Tax Act and are subject to change."
+    ],
+    "must_state": [
+      "Plan UIN 116N199V01",
+      "Full regulatory descriptor: 'A Non-linked Non-Participating Group Life Insurance Plan'",
+      "That benefits/eligibility are governed by the Master Policy and scheme rules",
+      "Standard disclaimer to read the policy document for full terms, conditions and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of group-secure-shield-sl.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Numeric entry-age and sum-assured eligibility table not recovered from parse.",
+      "Detailed GSV/SSV factor tables are referenced to company website, not in the brochure body."
+    ]
+  }
 }

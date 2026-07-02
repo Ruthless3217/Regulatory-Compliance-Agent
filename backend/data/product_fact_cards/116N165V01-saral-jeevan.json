@@ -1,82 +1,82 @@
 {
- "schema_version": "1.0",
- "product_name": "Bajaj Life Saral Jeevan Bima",
- "uin": "116N165V01",
- "rider_uins": [],
- "source_file": "saral-jeevan-brochure.pdf",
- "product_category": "term",
- "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual Life Insurance Term Plan",
- "structural_flags": {
- "is_unit_linked": false,
- "is_participating": false,
- "market_risk_borne_by_policyholder": false,
- "offers_guaranteed_benefits": false,
- "offers_maturity_benefit": false,
- "offers_loan": false
- },
- "variants": ["Single premium", "Limited premium", "Regular premium"],
- "key_benefits": [
- "Death Benefit (Sum Assured on Death) paid as a lump sum to the nominee on death after the waiting period (or on accidental death during the waiting period); policy then terminates",
- "Life cover for a term of up to 40 years",
- "Flexibility of Single, Limited or Regular premium payment",
- "High Sum Assured Rebate (HSAR), Female Life Rebate, Staff Rebate and Online/Web-aggregator discount on premium",
- "Policy Cancellation Value (Single and Limited premium policies only)"
- ],
- "riders_available": [],
- "eligibility": {
- "min_entry_age_years": null,
- "max_entry_age_years": null,
- "max_maturity_age_years": null,
- "min_sum_assured": null,
- "policy_term": "Up to 40 years (exact min/max not recovered from the parse).",
- "premium_payment_term": "Single, Limited or Regular premium.",
- "note": "Eligibility table did not survive the structural parse; sum assured is allowed only in multiples of Rs. 50,000 and is subject to BAUP (HSAR applies for every additional Rs. 1 lakh over Rs. 5 lakh). Numeric entry/maturity age and min/max sum assured not captured — verify against the policy document."
- },
- "key_terms": {
- "free_look_period_days": 30,
- "free_look_note": "30 days from receipt of the policy document (electronic or otherwise) to review terms. Refund of premium less proportionate risk premium, medical-examination expenses and stamp duty; processed within 7 days.",
- "grace_period": "30 days for yearly/half-yearly frequency; 15 days for monthly. Cover continues during grace; due-but-unpaid premium deducted from any benefit payable.",
- "waiting_period": "45 days from the Date of Commencement of Risk. During the waiting period only ACCIDENTAL death is covered (Sum Assured on Death); death due to any reason is covered after the waiting period. Waiting period does not apply on revival.",
- "suicide_clause": "Regular/Limited premium: policy void on suicide within 12 months of commencement of risk (or revival); 80% of premiums paid (excl. extra/underwriting amounts, taxes and rider premiums) refunded; not applicable to a lapsed policy. Single premium: 90% of the Single Premium refunded on suicide within 12 months of commencement of risk. No other death exclusion.",
- "maturity_benefit": "No maturity benefit is payable under this policy.",
- "surrender_value": "No surrender value. A Policy Cancellation Value is payable for Single and Limited premium policies only (not for Regular premium).",
- "loan": "Policy Loan is not available.",
- "tax_note": "Tax benefits as per applicable tax laws, as amended from time to time; consult a tax consultant. Premiums shown are exclusive of GST/any applicable tax — subject to change."
- },
- "mandatory_disclosures_present": [
- "Section 38 — Assignment",
- "Section 39 — Nomination",
- "Section 41 — Prohibition of Rebate",
- "Section 45 — Fraud & Misrepresentation",
- "Applicability of Goods & Service Tax",
- "Grievance Redressal & Insurance Ombudsman details",
- "Beware-of-spurious-calls warning"
- ],
- "compliance_guardrails": {
- "claims_marketing_must_support": [
- "This is a pure-protection term plan — the only benefit is the Death Benefit; any 'money-back', 'maturity' or 'survival benefit' claim is invalid (no maturity benefit, no surrender value).",
- "A 45-day waiting period applies: during it only accidental death is covered — any 'cover from day one' claim must be waiting-period-qualified (and the waiting period is waived only on revival).",
- "Policy Cancellation Value exists ONLY for Single and Limited premium policies, NOT for Regular premium — must be variant-qualified.",
- "Female Life Rebate (premium of a 3-year-younger male), HSAR, Staff and online discounts are conditional pricing features, not guaranteed benefit enhancements."
- ],
- "claims_marketing_must_avoid": [
- "Do NOT position as a savings, investment or wealth-creation product — it is non-linked, non-participating pure term protection with no maturity value.",
- "Do NOT use 'guaranteed returns', 'bonus', 'money-back' or 'maturity amount' language.",
- "Do NOT imply unconditional day-one cover for all causes — non-accidental death is not covered during the 45-day waiting period.",
- "Do NOT imply a loan or surrender value for Regular premium policies — neither is available.",
- "Tax benefits must not be stated as assured — carry the 'as per applicable tax laws' caveat."
- ],
- "must_state": [
- "Plan UIN 116N165V01",
- "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Individual Life Insurance Term Plan'",
- "The 45-day waiting-period condition (only accidental death covered during the waiting period)",
- "Standard disclaimer to read the benefit illustration and policy document for full terms and exclusions"
- ]
- },
- "curation": {
- "curated_by": "claude-opus-4-8 (subagent)",
- "curated_from": "brochure structural parse of saral-jeevan-brochure.pdf",
- "confidence": "high",
- "gaps": ["Numeric eligibility table (entry/maturity age, min/max sum assured) not recovered from the parse; only 'up to 40 years term', 'SA in multiples of Rs. 50,000', and 'HSAR above Rs. 5 lakh' are explicit. Verify boundaries against the policy document."]
- }
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Saral Jeevan Bima",
+  "uin": "116N165V01",
+  "rider_uins": [],
+  "source_file": "saral-jeevan-brochure.pdf",
+  "product_category": "term",
+  "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual Life Insurance Term Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": false,
+    "offers_maturity_benefit": false,
+    "offers_loan": false
+  },
+  "variants": ["Single premium", "Limited premium", "Regular premium"],
+  "key_benefits": [
+    "Death Benefit (Sum Assured on Death) paid as a lump sum to the nominee on death after the waiting period (or on accidental death during the waiting period); policy then terminates",
+    "Life cover for a term of up to 40 years",
+    "Flexibility of Single, Limited or Regular premium payment",
+    "High Sum Assured Rebate (HSAR), Female Life Rebate, Staff Rebate and Online/Web-aggregator discount on premium",
+    "Policy Cancellation Value (Single and Limited premium policies only)"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Up to 40 years (exact min/max not recovered from the parse).",
+    "premium_payment_term": "Single, Limited or Regular premium.",
+    "note": "Eligibility table did not survive the structural parse; sum assured is allowed only in multiples of Rs. 50,000 and is subject to BAUP (HSAR applies for every additional Rs. 1 lakh over Rs. 5 lakh). Numeric entry/maturity age and min/max sum assured not captured — verify against the policy document."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the policy document (electronic or otherwise) to review terms. Refund of premium less proportionate risk premium, medical-examination expenses and stamp duty; processed within 7 days.",
+    "grace_period": "30 days for yearly/half-yearly frequency; 15 days for monthly. Cover continues during grace; due-but-unpaid premium deducted from any benefit payable.",
+    "waiting_period": "45 days from the Date of Commencement of Risk. During the waiting period only ACCIDENTAL death is covered (Sum Assured on Death); death due to any reason is covered after the waiting period. Waiting period does not apply on revival.",
+    "suicide_clause": "Regular/Limited premium: policy void on suicide within 12 months of commencement of risk (or revival); 80% of premiums paid (excl. extra/underwriting amounts, taxes and rider premiums) refunded; not applicable to a lapsed policy. Single premium: 90% of the Single Premium refunded on suicide within 12 months of commencement of risk. No other death exclusion.",
+    "maturity_benefit": "No maturity benefit is payable under this policy.",
+    "surrender_value": "No surrender value. A Policy Cancellation Value is payable for Single and Limited premium policies only (not for Regular premium).",
+    "loan": "Policy Loan is not available.",
+    "tax_note": "Tax benefits as per applicable tax laws, as amended from time to time; consult a tax consultant. Premiums shown are exclusive of GST/any applicable tax — subject to change."
+  },
+  "mandatory_disclosures_present": [
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 41 — Prohibition of Rebate",
+    "Section 45 — Fraud & Misrepresentation",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "This is a pure-protection term plan — the only benefit is the Death Benefit; any 'money-back', 'maturity' or 'survival benefit' claim is invalid (no maturity benefit, no surrender value).",
+      "A 45-day waiting period applies: during it only accidental death is covered — any 'cover from day one' claim must be waiting-period-qualified (and the waiting period is waived only on revival).",
+      "Policy Cancellation Value exists ONLY for Single and Limited premium policies, NOT for Regular premium — must be variant-qualified.",
+      "Female Life Rebate (premium of a 3-year-younger male), HSAR, Staff and online discounts are conditional pricing features, not guaranteed benefit enhancements."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT position as a savings, investment or wealth-creation product — it is non-linked, non-participating pure term protection with no maturity value.",
+      "Do NOT use 'guaranteed returns', 'bonus', 'money-back' or 'maturity amount' language.",
+      "Do NOT imply unconditional day-one cover for all causes — non-accidental death is not covered during the 45-day waiting period.",
+      "Do NOT imply a loan or surrender value for Regular premium policies — neither is available.",
+      "Tax benefits must not be stated as assured — carry the 'as per applicable tax laws' caveat."
+    ],
+    "must_state": [
+      "Plan UIN 116N165V01",
+      "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Individual Life Insurance Term Plan'",
+      "The 45-day waiting-period condition (only accidental death covered during the waiting period)",
+      "Standard disclaimer to read the benefit illustration and policy document for full terms and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of saral-jeevan-brochure.pdf",
+    "confidence": "high",
+    "gaps": ["Numeric eligibility table (entry/maturity age, min/max sum assured) not recovered from the parse; only 'up to 40 years term', 'SA in multiples of Rs. 50,000', and 'HSAR above Rs. 5 lakh' are explicit. Verify boundaries against the policy document."]
+  }
 }

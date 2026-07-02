@@ -1,91 +1,91 @@
 {
- "schema_version": "1.0",
- "product_name": "Bajaj Life Guaranteed Wealth Goal",
- "uin": "116N200V10",
- "rider_uins": ["116B056V01", "116B036V02", "116B034V02", "116B058V01", "116B061V01", "116B062V01"],
- "source_file": "guaranteed-wealth-goal-sl.pdf",
- "product_category": "savings_endowment",
- "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual Life Insurance Savings Plan",
- "structural_flags": {
- "is_unit_linked": false,
- "is_participating": false,
- "market_risk_borne_by_policyholder": false,
- "offers_guaranteed_benefits": true,
- "offers_maturity_benefit": true,
- "offers_loan": true
- },
- "variants": ["Variant 1 - Wealth Creation", "Variant 2 - Assured Income", "Variant 3 - Second Income"],
- "key_benefits": [
- "Life insurance cover during the entire Policy Term (Sum Assured on Death)",
- "Wealth Creation: Guaranteed Maturity Benefit (GMB) plus accrued Guaranteed Additions at end of Policy Term",
- "Assured Income / Second Income: regular guaranteed income (Base Income plus accrued Income Boosters) during the Income Period",
- "Return of Premium (ROP) benefit of 50% to 300% of Total Premiums Paid (Assured/Second Income variants, where chosen)",
- "Assured Income variant: on death during PT, a guaranteed income stream plus ROP-on-death is initiated",
- "Death benefit not less than Guaranteed Death Benefit of 105% of Total Premiums Paid or surrender value, whichever higher",
- "Tax-free / guaranteed positioning is conditional (see guardrails)"
- ],
- "riders_available": [
- "Bajaj Life Family Protect Rider",
- "Bajaj Accidental Permanent Total/Partial Disability Benefit Rider",
- "Bajaj Accidental Death Benefit Rider",
- "Bajaj Life New Critical Illness Benefit Rider",
- "Bajaj Life New Waiver of Premium Rider",
- "Bajaj Life Care Plus Rider Non-Linked"
- ],
- "eligibility": {
- "min_entry_age_years": null,
- "max_entry_age_years": 55,
- "max_maturity_age_years": 65,
- "min_sum_assured": null,
- "min_premium": "Rs 30,000 (minimum premium when combining variants); Rs 1 lakh threshold for High Premium Mark-up",
- "policy_term": "Wealth Creation offers Maturity Age <100 or =100; full PT/PPT grid not captured from this parse",
- "premium_payment_term": "Limited / Regular options (exact range not captured from this parse)",
- "note": "Age/term values shown are the POS-channel maxima explicitly stated in the brochure (Max entry 55, Max maturity 65, Max PT 20, Max Sum Assured on Death Rs 25 lacs for POS). The full non-POS eligibility table was not recovered from the parse — verify against policy document before asserting numeric limits."
- },
- "key_terms": {
- "free_look_period_days": 30,
- "free_look_note": "30 days from receipt of the Policy Document (electronic or otherwise).",
- "grace_period": "30 days (non-monthly frequencies); 15 days (monthly).",
- "suicide_clause": "On death by suicide within 12 months of commencement of risk or latest revival (whichever is later), nominee receives higher of 80% of Total Premiums Paid or surrender value as on date of death; provided the policy is in force.",
- "loan_note": "Policy loan available once surrender value is acquired, up to 80% of surrender value. Current loan interest 10% p.a. compounded half-yearly (benchmarked to G-Sec).",
- "tax_note": "Brochure headlines 'TAX-FREE' returns referencing Section 11 (read with Schedule II, Sr.No.2) of the Income Tax Act — strictly conditional and subject to prevailing tax laws; consult a tax advisor."
- },
- "mandatory_disclosures_present": [
- "Section 38 - Assignment",
- "Section 39 - Nomination",
- "Section 41 - Prohibition of Rebate",
- "Section 45 - Fraud & Misstatement",
- "Applicability of Goods & Service Tax",
- "Grievance Redressal & Insurance Ombudsman details",
- "Beware-of-spurious-calls warning"
- ],
- "compliance_guardrails": {
- "claims_marketing_must_support": [
- "Maturity / GMB and Guaranteed Additions apply to the Wealth Creation variant; income payouts (Base Income + Income Boosters) apply to Assured Income and Second Income variants — every benefit claim must be variant-qualified.",
- "All benefits are guaranteed ONLY provided the policy is in-force and all due premiums have been paid — this condition must accompany any 'all benefits guaranteed' claim.",
- "ROP benefit is a chosen multiple (50%-300%) of Total Premiums Paid; under Second Income, if ROP is not chosen there is NO maturity benefit.",
- "Guaranteed Addition / Income Booster accrual requires at least two full policy years' premiums paid."
- ],
- "claims_marketing_must_avoid": [
- "Do NOT use 'bonus' language — this is a non-participating plan; the upside is guaranteed additions/income, not declared bonuses.",
- "Do NOT present 'TAX-FREE' returns as unconditional — the brochure's tax-free claim is footnoted to specific Income Tax Act provisions and is subject to eligibility and prevailing tax laws; the conditional footnote must be carried.",
- "Do NOT position as a market-linked / investment product — it is non-linked, non-participating; returns are fixed guaranteed amounts, not market growth.",
- "Do NOT imply guaranteed income figures without stating they depend on variant, PT, PPT, deferment/income period and Sum Assured multiple."
- ],
- "must_state": [
- "Plan UIN 116N200V10",
- "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Individual Life Insurance Savings Plan'",
- "The 'Conditions Apply' / 'subject to prevailing tax laws' caveats accompanying any guaranteed-income or tax-free headline",
- "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions"
- ]
- },
- "curation": {
- "curated_by": "claude-opus-4-8 (subagent)",
- "curated_from": "brochure structural parse of guaranteed-wealth-goal-sl.pdf",
- "confidence": "high",
- "gaps": [
- "Full non-POS eligibility table (min/max entry age, maturity age, sum-assured, PT/PPT grid) not recovered from parse.",
- "Regulatory descriptor reconstructed from brochure body ('Non linked, Non Participating, Individual, Life Insurance Savings Plan')."
- ]
- }
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Guaranteed Wealth Goal",
+  "uin": "116N200V10",
+  "rider_uins": ["116B056V01", "116B036V02", "116B034V02", "116B058V01", "116B061V01", "116B062V01"],
+  "source_file": "guaranteed-wealth-goal-sl.pdf",
+  "product_category": "savings_endowment",
+  "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual Life Insurance Savings Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": true,
+    "offers_loan": true
+  },
+  "variants": ["Variant 1 - Wealth Creation", "Variant 2 - Assured Income", "Variant 3 - Second Income"],
+  "key_benefits": [
+    "Life insurance cover during the entire Policy Term (Sum Assured on Death)",
+    "Wealth Creation: Guaranteed Maturity Benefit (GMB) plus accrued Guaranteed Additions at end of Policy Term",
+    "Assured Income / Second Income: regular guaranteed income (Base Income plus accrued Income Boosters) during the Income Period",
+    "Return of Premium (ROP) benefit of 50% to 300% of Total Premiums Paid (Assured/Second Income variants, where chosen)",
+    "Assured Income variant: on death during PT, a guaranteed income stream plus ROP-on-death is initiated",
+    "Death benefit not less than Guaranteed Death Benefit of 105% of Total Premiums Paid or surrender value, whichever higher",
+    "Tax-free / guaranteed positioning is conditional (see guardrails)"
+  ],
+  "riders_available": [
+    "Bajaj Life Family Protect Rider",
+    "Bajaj Accidental Permanent Total/Partial Disability Benefit Rider",
+    "Bajaj Accidental Death Benefit Rider",
+    "Bajaj Life New Critical Illness Benefit Rider",
+    "Bajaj Life New Waiver of Premium Rider",
+    "Bajaj Life Care Plus Rider Non-Linked"
+  ],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": 55,
+    "max_maturity_age_years": 65,
+    "min_sum_assured": null,
+    "min_premium": "Rs 30,000 (minimum premium when combining variants); Rs 1 lakh threshold for High Premium Mark-up",
+    "policy_term": "Wealth Creation offers Maturity Age <100 or =100; full PT/PPT grid not captured from this parse",
+    "premium_payment_term": "Limited / Regular options (exact range not captured from this parse)",
+    "note": "Age/term values shown are the POS-channel maxima explicitly stated in the brochure (Max entry 55, Max maturity 65, Max PT 20, Max Sum Assured on Death Rs 25 lacs for POS). The full non-POS eligibility table was not recovered from the parse — verify against policy document before asserting numeric limits."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the Policy Document (electronic or otherwise).",
+    "grace_period": "30 days (non-monthly frequencies); 15 days (monthly).",
+    "suicide_clause": "On death by suicide within 12 months of commencement of risk or latest revival (whichever is later), nominee receives higher of 80% of Total Premiums Paid or surrender value as on date of death; provided the policy is in force.",
+    "loan_note": "Policy loan available once surrender value is acquired, up to 80% of surrender value. Current loan interest 10% p.a. compounded half-yearly (benchmarked to G-Sec).",
+    "tax_note": "Brochure headlines 'TAX-FREE' returns referencing Section 11 (read with Schedule II, Sr.No.2) of the Income Tax Act — strictly conditional and subject to prevailing tax laws; consult a tax advisor."
+  },
+  "mandatory_disclosures_present": [
+    "Section 38 - Assignment",
+    "Section 39 - Nomination",
+    "Section 41 - Prohibition of Rebate",
+    "Section 45 - Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Maturity / GMB and Guaranteed Additions apply to the Wealth Creation variant; income payouts (Base Income + Income Boosters) apply to Assured Income and Second Income variants — every benefit claim must be variant-qualified.",
+      "All benefits are guaranteed ONLY provided the policy is in-force and all due premiums have been paid — this condition must accompany any 'all benefits guaranteed' claim.",
+      "ROP benefit is a chosen multiple (50%-300%) of Total Premiums Paid; under Second Income, if ROP is not chosen there is NO maturity benefit.",
+      "Guaranteed Addition / Income Booster accrual requires at least two full policy years' premiums paid."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT use 'bonus' language — this is a non-participating plan; the upside is guaranteed additions/income, not declared bonuses.",
+      "Do NOT present 'TAX-FREE' returns as unconditional — the brochure's tax-free claim is footnoted to specific Income Tax Act provisions and is subject to eligibility and prevailing tax laws; the conditional footnote must be carried.",
+      "Do NOT position as a market-linked / investment product — it is non-linked, non-participating; returns are fixed guaranteed amounts, not market growth.",
+      "Do NOT imply guaranteed income figures without stating they depend on variant, PT, PPT, deferment/income period and Sum Assured multiple."
+    ],
+    "must_state": [
+      "Plan UIN 116N200V10",
+      "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Individual Life Insurance Savings Plan'",
+      "The 'Conditions Apply' / 'subject to prevailing tax laws' caveats accompanying any guaranteed-income or tax-free headline",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of guaranteed-wealth-goal-sl.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Full non-POS eligibility table (min/max entry age, maturity age, sum-assured, PT/PPT grid) not recovered from parse.",
+      "Regulatory descriptor reconstructed from brochure body ('Non linked, Non Participating, Individual, Life Insurance Savings Plan')."
+    ]
+  }
 }

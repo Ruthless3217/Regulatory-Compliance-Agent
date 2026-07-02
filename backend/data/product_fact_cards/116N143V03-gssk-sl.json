@@ -1,96 +1,96 @@
 {
- "schema_version": "1.0",
- "product_name": "Bajaj Life Group Sampoorna Suraksha Kavach",
- "uin": "116N143V03",
- "rider_uins": [],
- "source_file": "GSSK_SL.pdf",
- "product_category": "group",
- "regulatory_descriptor": "A Non-Linked, Non-Participating, Single/Regular Premium Life Group Pure Risk Premium Insurance Plan",
- "structural_flags": {
- "is_unit_linked": false,
- "is_participating": false,
- "market_risk_borne_by_policyholder": false,
- "offers_guaranteed_benefits": false,
- "offers_maturity_benefit": false,
- "offers_loan": false
- },
- "variants": [
- "Variant 1 — Death Benefit",
- "Variant 2 — Death Benefit plus Accelerated Accidental Permanent Total Disability Benefit",
- "Variant 3 — Death Benefit plus Accelerated Critical Illness Benefit",
- "Variant 4 — Death Benefit plus Accelerated APTD plus Accelerated Critical Illness Benefit"
- ],
- "key_benefits": [
- "Group credit-life / micro-loan protection plan: covers the outstanding loan liability of members of a group (Financial Institutions, Small Finance Banks, MFIs, etc.).",
- "Master policyholder is the lending institution; the borrowers are the covered members.",
- "Sum Assured paid on the first covered event (Death, or — per variant — Accidental Permanent Total Disability or first-diagnosed Critical Illness); all risk cover terminates for that member after the claim.",
- "Choice of Level or Reducing cover (reducing follows the loan schedule of insurance).",
- "Single or Regular premium; Joint Life option available (member & spouse — benefit on first event of either life).",
- "Benefit above the outstanding loan balance is paid to the member's nominee.",
- "No maturity benefit. Accelerated CI/APTD benefits are subject to pre-existing-condition (48-month) and other exclusions."
- ],
- "riders_available": [],
- "eligibility": {
- "min_entry_age_years": null,
- "max_entry_age_years": null,
- "max_maturity_age_years": null,
- "min_sum_assured": null,
- "policy_term": "6 months to 120 months (each member's policy term equals the outstanding loan tenure)",
- "premium_payment_term": "Single or Regular premium",
- "note": "An Eligibility-Conditions table exists in the brochure but its numeric age / sum-assured / premium values are not captured in the parse. Verify against the policy document before asserting numeric limits."
- },
- "key_terms": {
- "free_look_period_days": null,
- "free_look_note": "Free-look period is not stated in the captured sections of this group brochure — verify against the policy document.",
- "grace_period": "Grace period applies (member's cover ceases if premium not received within grace); the day-count is not stated numerically in the captured sections.",
- "suicide_clause": "Not separately stated as a 12-month clause in the captured sections; group credit plan. Verify against the policy document.",
- "surrender_value": "Master policyholder may surrender anytime. Member surrender value: NONE under Regular Premium Level Cover; under Regular Premium Reducing Cover, payable only after the premium-paying term (higher of SSV and GSV); under Single Premium, anytime (higher of SSV and GSV). GSV = GSV factor x premium paid.",
- "revival_note": "Member cover revivable within 5 years of first unpaid premium (and before end of PPT), subject to underwriting.",
- "pre_existing_note": "Accelerated Critical Illness and APTD benefits exclude pre-existing conditions (signs/symptoms/diagnosis/treatment within 48 months prior to commencement or latest revival), in line with Health Insurance Regulations, 2016. CI not payable if symptoms occurred within 180 days of commencement/revival.",
- "tax_note": "Premium, other benefits and Death Benefit 'may be eligible for tax benefits as per extant Income Tax Act' — consult a tax consultant; GST per prevailing tax laws."
- },
- "mandatory_disclosures_present": [
- "Section 41 — Prohibition of Rebate",
- "Section 38 — Assignment",
- "Section 39 — Nomination",
- "Section 45 — Fraud & Misstatement",
- "Applicability of Goods & Service Tax",
- "General Exclusions (CI / disability)",
- "Grievance Redressal & Insurance Ombudsman details",
- "Beware-of-spurious-calls warning"
- ],
- "compliance_guardrails": {
- "claims_marketing_must_support": [
- "Coverage scope is variant-bound: APTD cover only under Variants 2 & 4; Critical Illness cover only under Variants 3 & 4 — any 'covers disability / critical illness' claim must name the applicable variant.",
- "It is a credit-protection plan tied to a loan — any 'pays your family' claim must reflect that the benefit first clears the outstanding loan and only the excess goes to the member's nominee.",
- "Sum Assured may be Level or Reducing — a 'full sum assured paid' claim must state the chosen cover type (reducing cover decreases per the loan schedule).",
- "Accelerated CI/APTD benefits are subject to pre-existing-condition (48-month) and CI 180-day waiting exclusions — must be stated, not implied as immediate full cover.",
- "Surrender value availability is option-specific (none for Regular Level cover) and must be stated accurately."
- ],
- "claims_marketing_must_avoid": [
- "Do NOT position as a savings/investment or maturity product — it is a non-linked, non-participating group pure risk plan with NO maturity benefit.",
- "Do NOT use 'guaranteed returns', 'maturity', 'money back' or 'bonus' language.",
- "Do NOT imply the full sum assured is always paid to the family — for reducing cover it tracks the declining loan, and the loan is settled first.",
- "Do NOT present CI/APTD cover as unconditional — pre-existing conditions and waiting periods exclude early claims.",
- "Do NOT market member-level benefits without identifying the variant that provides them.",
- "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
- ],
- "must_state": [
- "Plan UIN 116N143V03",
- "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Single/Regular Premium Life Group Pure Risk Premium Insurance Plan'",
- "That it is a group credit-life plan with no maturity benefit; benefit first covers the outstanding loan.",
- "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions (including pre-existing-condition exclusions)."
- ]
- },
- "curation": {
- "curated_by": "claude-opus-4-8 (subagent)",
- "curated_from": "brochure structural parse of GSSK_SL.pdf",
- "confidence": "medium",
- "gaps": [
- "Parser NAME was generic 'Bajaj Life'; real product name 'Bajaj Life Group Sampoorna Suraksha Kavach' inferred from the brochure body and heading path.",
- "Free-look period, grace-period day-count and any suicide clause are not stated in the captured sections of this group brochure.",
- "Numeric eligibility (age, sum-assured, premium) not recovered from the parse.",
- "The dump script raised a Unicode encoding error printing a special glyph; the text layer itself is clean (CID=0) and remaining sections were recovered via a UTF-8 re-run."
- ]
- }
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Group Sampoorna Suraksha Kavach",
+  "uin": "116N143V03",
+  "rider_uins": [],
+  "source_file": "GSSK_SL.pdf",
+  "product_category": "group",
+  "regulatory_descriptor": "A Non-Linked, Non-Participating, Single/Regular Premium Life Group Pure Risk Premium Insurance Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": false,
+    "offers_maturity_benefit": false,
+    "offers_loan": false
+  },
+  "variants": [
+    "Variant 1 — Death Benefit",
+    "Variant 2 — Death Benefit plus Accelerated Accidental Permanent Total Disability Benefit",
+    "Variant 3 — Death Benefit plus Accelerated Critical Illness Benefit",
+    "Variant 4 — Death Benefit plus Accelerated APTD plus Accelerated Critical Illness Benefit"
+  ],
+  "key_benefits": [
+    "Group credit-life / micro-loan protection plan: covers the outstanding loan liability of members of a group (Financial Institutions, Small Finance Banks, MFIs, etc.).",
+    "Master policyholder is the lending institution; the borrowers are the covered members.",
+    "Sum Assured paid on the first covered event (Death, or — per variant — Accidental Permanent Total Disability or first-diagnosed Critical Illness); all risk cover terminates for that member after the claim.",
+    "Choice of Level or Reducing cover (reducing follows the loan schedule of insurance).",
+    "Single or Regular premium; Joint Life option available (member & spouse — benefit on first event of either life).",
+    "Benefit above the outstanding loan balance is paid to the member's nominee.",
+    "No maturity benefit. Accelerated CI/APTD benefits are subject to pre-existing-condition (48-month) and other exclusions."
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "6 months to 120 months (each member's policy term equals the outstanding loan tenure)",
+    "premium_payment_term": "Single or Regular premium",
+    "note": "An Eligibility-Conditions table exists in the brochure but its numeric age / sum-assured / premium values are not captured in the parse. Verify against the policy document before asserting numeric limits."
+  },
+  "key_terms": {
+    "free_look_period_days": null,
+    "free_look_note": "Free-look period is not stated in the captured sections of this group brochure — verify against the policy document.",
+    "grace_period": "Grace period applies (member's cover ceases if premium not received within grace); the day-count is not stated numerically in the captured sections.",
+    "suicide_clause": "Not separately stated as a 12-month clause in the captured sections; group credit plan. Verify against the policy document.",
+    "surrender_value": "Master policyholder may surrender anytime. Member surrender value: NONE under Regular Premium Level Cover; under Regular Premium Reducing Cover, payable only after the premium-paying term (higher of SSV and GSV); under Single Premium, anytime (higher of SSV and GSV). GSV = GSV factor x premium paid.",
+    "revival_note": "Member cover revivable within 5 years of first unpaid premium (and before end of PPT), subject to underwriting.",
+    "pre_existing_note": "Accelerated Critical Illness and APTD benefits exclude pre-existing conditions (signs/symptoms/diagnosis/treatment within 48 months prior to commencement or latest revival), in line with Health Insurance Regulations, 2016. CI not payable if symptoms occurred within 180 days of commencement/revival.",
+    "tax_note": "Premium, other benefits and Death Benefit 'may be eligible for tax benefits as per extant Income Tax Act' — consult a tax consultant; GST per prevailing tax laws."
+  },
+  "mandatory_disclosures_present": [
+    "Section 41 — Prohibition of Rebate",
+    "Section 38 — Assignment",
+    "Section 39 — Nomination",
+    "Section 45 — Fraud & Misstatement",
+    "Applicability of Goods & Service Tax",
+    "General Exclusions (CI / disability)",
+    "Grievance Redressal & Insurance Ombudsman details",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Coverage scope is variant-bound: APTD cover only under Variants 2 & 4; Critical Illness cover only under Variants 3 & 4 — any 'covers disability / critical illness' claim must name the applicable variant.",
+      "It is a credit-protection plan tied to a loan — any 'pays your family' claim must reflect that the benefit first clears the outstanding loan and only the excess goes to the member's nominee.",
+      "Sum Assured may be Level or Reducing — a 'full sum assured paid' claim must state the chosen cover type (reducing cover decreases per the loan schedule).",
+      "Accelerated CI/APTD benefits are subject to pre-existing-condition (48-month) and CI 180-day waiting exclusions — must be stated, not implied as immediate full cover.",
+      "Surrender value availability is option-specific (none for Regular Level cover) and must be stated accurately."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT position as a savings/investment or maturity product — it is a non-linked, non-participating group pure risk plan with NO maturity benefit.",
+      "Do NOT use 'guaranteed returns', 'maturity', 'money back' or 'bonus' language.",
+      "Do NOT imply the full sum assured is always paid to the family — for reducing cover it tracks the declining loan, and the loan is settled first.",
+      "Do NOT present CI/APTD cover as unconditional — pre-existing conditions and waiting periods exclude early claims.",
+      "Do NOT market member-level benefits without identifying the variant that provides them.",
+      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+    ],
+    "must_state": [
+      "Plan UIN 116N143V03",
+      "Full regulatory descriptor: 'A Non-Linked, Non-Participating, Single/Regular Premium Life Group Pure Risk Premium Insurance Plan'",
+      "That it is a group credit-life plan with no maturity benefit; benefit first covers the outstanding loan.",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms, conditions and exclusions (including pre-existing-condition exclusions)."
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of GSSK_SL.pdf",
+    "confidence": "medium",
+    "gaps": [
+      "Parser NAME was generic 'Bajaj Life'; real product name 'Bajaj Life Group Sampoorna Suraksha Kavach' inferred from the brochure body and heading path.",
+      "Free-look period, grace-period day-count and any suicide clause are not stated in the captured sections of this group brochure.",
+      "Numeric eligibility (age, sum-assured, premium) not recovered from the parse.",
+      "The dump script raised a Unicode encoding error printing a special glyph; the text layer itself is clean (CID=0) and remaining sections were recovered via a UTF-8 re-run."
+    ]
+  }
 }

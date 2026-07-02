@@ -3,88 +3,88 @@
 @tailwind utilities;
 
 @layer base {
- :root {
- /* Base */
- --background: 0 0% 100%;
- --surface: 210 20% 99%;
- --foreground: 222 25% 12%;
- --muted: 210 16% 96%;
- --muted-foreground: 215 12% 42%;
- --border: 214 20% 90%;
+  :root {
+    /* Base */
+    --background: 0 0% 100%;
+    --surface: 210 20% 99%;
+    --foreground: 222 25% 12%;
+    --muted: 210 16% 96%;
+    --muted-foreground: 215 12% 42%;
+    --border: 214 20% 90%;
 
- /* Bajaj blue */
- --primary: 218 100% 29%;
- --primary-fg: 0 0% 100%;
- --primary-50: 218 80% 96%;
- --primary-100: 218 75% 90%;
- --primary-500: 218 100% 29%;
- --primary-600: 218 100% 23%;
+    /* Bajaj blue */
+    --primary: 218 100% 29%;
+    --primary-fg: 0 0% 100%;
+    --primary-50: 218 80% 96%;
+    --primary-100: 218 75% 90%;
+    --primary-500: 218 100% 29%;
+    --primary-600: 218 100% 23%;
 
- /* Severity */
- --sev-critical: 349 80% 50%;
- --sev-high: 24 90% 53%;
- --sev-medium: 38 92% 50%;
- --sev-low: 218 100% 29%;
+    /* Severity */
+    --sev-critical: 349 80% 50%;
+    --sev-high: 24 90% 53%;
+    --sev-medium: 38 92% 50%;
+    --sev-low: 218 100% 29%;
 
- /* Status */
- --success: 152 60% 36%;
- --warning: 38 92% 50%;
- --info: 218 100% 29%;
+    /* Status */
+    --success: 152 60% 36%;
+    --warning: 38 92% 50%;
+    --info: 218 100% 29%;
 
- --radius: 6px;
- --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.04);
- }
+    --radius: 6px;
+    --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.04);
+  }
 
- * {
- border-color: hsl(var(--border));
- }
+  * {
+    border-color: hsl(var(--border));
+  }
 
- html {
- -webkit-font-smoothing: antialiased;
- text-rendering: optimizeLegibility;
- }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
 
- body {
- background: hsl(var(--surface));
- color: hsl(var(--foreground));
- font-family: var(--font-sans), system-ui, sans-serif;
- font-feature-settings: "cv02", "cv03", "cv04", "cv11";
- -webkit-font-smoothing: antialiased;
- }
+  body {
+    background: hsl(var(--surface));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
 
- ::selection {
- background: hsl(var(--primary));
- color: hsl(var(--primary-fg));
- }
+  ::selection {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-fg));
+  }
 
- /* Compact density toggle */
- html[data-density="compact"] .density-pad {
- padding-top: 0.5rem;
- padding-bottom: 0.5rem;
- }
+  /* Compact density toggle */
+  html[data-density="compact"] .density-pad {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
 }
 
 @layer components {
- .micro-label {
- @apply text-[10px] uppercase tracking-[0.03em] text-muted-foreground font-medium;
- }
+  .micro-label {
+    @apply text-[10px] uppercase tracking-[0.03em] text-muted-foreground font-medium;
+  }
 
- mark[data-severity] {
- background-color: transparent;
- border-bottom: 2px solid hsl(var(--sev-medium));
- color: inherit;
- padding: 0 1px;
- cursor: pointer;
- }
- mark[data-severity="critical"] { border-bottom-color: hsl(var(--sev-critical)); }
- mark[data-severity="high"] { border-bottom-color: hsl(var(--sev-high)); }
- mark[data-severity="medium"] { border-bottom-color: hsl(var(--sev-medium)); }
- mark[data-severity="low"] { border-bottom-color: hsl(var(--sev-low)); }
- mark[data-selected="true"] {
- background-color: hsl(var(--primary-50));
- }
+  mark[data-severity] {
+    background-color: transparent;
+    border-bottom: 2px solid hsl(var(--sev-medium));
+    color: inherit;
+    padding: 0 1px;
+    cursor: pointer;
+  }
+  mark[data-severity="critical"] { border-bottom-color: hsl(var(--sev-critical)); }
+  mark[data-severity="high"]     { border-bottom-color: hsl(var(--sev-high)); }
+  mark[data-severity="medium"]   { border-bottom-color: hsl(var(--sev-medium)); }
+  mark[data-severity="low"]      { border-bottom-color: hsl(var(--sev-low)); }
+  mark[data-selected="true"] {
+    background-color: hsl(var(--primary-50));
+  }
 
- [data-pulse="true"] {
- animation: pulse-select 800ms ease-in-out;
- }
+  [data-pulse="true"] {
+    animation: pulse-select 800ms ease-in-out;
+  }
 }

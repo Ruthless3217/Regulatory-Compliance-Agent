@@ -1,83 +1,83 @@
 {
- "schema_version": "1.0",
- "product_name": "Bajaj Life Linked Accident Protection Rider II",
- "uin": "116A057V03",
- "rider_uins": [],
- "source_file": "ULIP-Linked-Accident-Protection-Rider.pdf",
- "product_category": "rider",
- "regulatory_descriptor": "A Non-Participating, Linked, Individual Pure Risk offering Health Cover and Savings Rider",
- "structural_flags": {
- "is_unit_linked": true,
- "is_participating": false,
- "market_risk_borne_by_policyholder": false,
- "offers_guaranteed_benefits": true,
- "offers_maturity_benefit": true,
- "offers_loan": false
- },
- "variants": [
- "Accidental Death Benefit (ADB)",
- "Accidental Death Benefit with Return of Premium (ROP)",
- "Accidental Total Permanent Disability (ATPD) Benefit",
- "Accidental Total Permanent Disability Benefit with Return of Premium (ROP)"
- ],
- "key_benefits": [
- "Linked accident-protection rider attachable to a base policy at inception or any policy anniversary",
- "Accidental Death Benefit cover up to 3 times the base-policy Sum Assured",
- "Accidental Total Permanent Disability cover (defined dismemberment list, documented 6 months)",
- "All rider benefits are guaranteed (higher of chosen Sum Assured or 105% of Total Premiums Paid)",
- "Return of Premium option: Total Premiums Paid returned on survival to rider maturity (ROP options only)",
- "Rider premium collected over and above base-policy premium"
- ],
- "riders_available": [],
- "eligibility": {
- "min_entry_age_years": null,
- "max_entry_age_years": null,
- "max_maturity_age_years": null,
- "min_sum_assured": null,
- "policy_term": "Rider Policy Term aligned to the base Policy Term",
- "premium_payment_term": "Rider Premium Paying Term aligned to base Premium Paying Term (Regular / Limited / Single)",
- "note": "This is a RIDER — it cannot be bought standalone and must be attached to a base policy; rider term and PPT must align to the base policy. Numeric entry-age / sum-assured limits were not recovered from this parse (illustrative SA INR 20 Lakhs ADB / 10 Lakhs ATPD shown only as example)."
- },
- "key_terms": {
- "free_look_period_days": 30,
- "free_look_note": "30 days from receipt of the Rider Document; rider premium refunded within 7 days of a valid cancellation request.",
- "grace_period": "Same as the grace period applicable to the base policy.",
- "suicide_clause": "Not applicable — this is an accident-only rider; death by suicide is an exclusion (no accidental-death benefit for suicide).",
- "maturity_benefit_condition": "Maturity Benefit (Total Premiums Paid) is available ONLY under the 'with ROP' cover options, payable on survival to the Rider Maturity Date; the non-ROP options have NO maturity benefit.",
- "tax_note": "Tax benefits 'as per prevailing tax laws'; GST applicable over and above rider premium."
- },
- "mandatory_disclosures_present": [
- "Section 41 - Prohibition of Rebate",
- "Applicability of Goods & Service Tax",
- "Beware-of-spurious-calls warning"
- ],
- "compliance_guardrails": {
- "claims_marketing_must_support": [
- "This is a RIDER — every claim must reference that it is attached to and dependent on a base policy; it cannot be sold or held standalone.",
- "Benefits pay out only on ACCIDENTAL death or accidental total permanent disability (defined dismemberment list, within 180 days of the accident) — not on any death or illness.",
- "Accidental Death cover is capped at 3x the base-policy Sum Assured.",
- "Return-of-Premium / maturity benefit applies ONLY to the 'with ROP' options and only on survival with no claim paid; the plain ADB/ATPD options have no maturity benefit."
- ],
- "claims_marketing_must_avoid": [
- "Do NOT market it as a standalone or all-cause life/health product — it is an accident-only rider tied to a base policy.",
- "Do NOT imply natural-death or illness cover — only accidental death and accidental total permanent disability are covered (suicide is excluded).",
- "Although the descriptor says 'Linked', do NOT advertise market-linked investment returns or fund value — rider benefits are fixed guaranteed amounts / return of premium, not unit-fund growth.",
- "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
- ],
- "must_state": [
- "Rider UIN 116A057V03",
- "Full regulatory descriptor: 'A Non-Participating, Linked, Individual Pure Risk offering Health Cover and Savings Rider'",
- "That this is a rider that must be taken with a base policy (rider term/PPT aligned to base policy)",
- "Standard disclaimer to read the rider policy document for full terms, conditions and exclusions"
- ]
- },
- "curation": {
- "curated_by": "claude-opus-4-8 (subagent)",
- "curated_from": "brochure structural parse of ULIP-Linked-Accident-Protection-Rider.pdf",
- "confidence": "high",
- "gaps": [
- "Numeric entry-age / sum-assured eligibility table not recovered from parse (only illustrative SA values shown).",
- "Despite the 'Linked' descriptor, the rider benefits described are fixed/guaranteed and return-of-premium based; the linked classification is carried from the verbatim descriptor."
- ]
- }
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Linked Accident Protection Rider II",
+  "uin": "116A057V03",
+  "rider_uins": [],
+  "source_file": "ULIP-Linked-Accident-Protection-Rider.pdf",
+  "product_category": "rider",
+  "regulatory_descriptor": "A Non-Participating, Linked, Individual Pure Risk offering Health Cover and Savings Rider",
+  "structural_flags": {
+    "is_unit_linked": true,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": true,
+    "offers_loan": false
+  },
+  "variants": [
+    "Accidental Death Benefit (ADB)",
+    "Accidental Death Benefit with Return of Premium (ROP)",
+    "Accidental Total Permanent Disability (ATPD) Benefit",
+    "Accidental Total Permanent Disability Benefit with Return of Premium (ROP)"
+  ],
+  "key_benefits": [
+    "Linked accident-protection rider attachable to a base policy at inception or any policy anniversary",
+    "Accidental Death Benefit cover up to 3 times the base-policy Sum Assured",
+    "Accidental Total Permanent Disability cover (defined dismemberment list, documented 6 months)",
+    "All rider benefits are guaranteed (higher of chosen Sum Assured or 105% of Total Premiums Paid)",
+    "Return of Premium option: Total Premiums Paid returned on survival to rider maturity (ROP options only)",
+    "Rider premium collected over and above base-policy premium"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Rider Policy Term aligned to the base Policy Term",
+    "premium_payment_term": "Rider Premium Paying Term aligned to base Premium Paying Term (Regular / Limited / Single)",
+    "note": "This is a RIDER — it cannot be bought standalone and must be attached to a base policy; rider term and PPT must align to the base policy. Numeric entry-age / sum-assured limits were not recovered from this parse (illustrative SA INR 20 Lakhs ADB / 10 Lakhs ATPD shown only as example)."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the Rider Document; rider premium refunded within 7 days of a valid cancellation request.",
+    "grace_period": "Same as the grace period applicable to the base policy.",
+    "suicide_clause": "Not applicable — this is an accident-only rider; death by suicide is an exclusion (no accidental-death benefit for suicide).",
+    "maturity_benefit_condition": "Maturity Benefit (Total Premiums Paid) is available ONLY under the 'with ROP' cover options, payable on survival to the Rider Maturity Date; the non-ROP options have NO maturity benefit.",
+    "tax_note": "Tax benefits 'as per prevailing tax laws'; GST applicable over and above rider premium."
+  },
+  "mandatory_disclosures_present": [
+    "Section 41 - Prohibition of Rebate",
+    "Applicability of Goods & Service Tax",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "This is a RIDER — every claim must reference that it is attached to and dependent on a base policy; it cannot be sold or held standalone.",
+      "Benefits pay out only on ACCIDENTAL death or accidental total permanent disability (defined dismemberment list, within 180 days of the accident) — not on any death or illness.",
+      "Accidental Death cover is capped at 3x the base-policy Sum Assured.",
+      "Return-of-Premium / maturity benefit applies ONLY to the 'with ROP' options and only on survival with no claim paid; the plain ADB/ATPD options have no maturity benefit."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT market it as a standalone or all-cause life/health product — it is an accident-only rider tied to a base policy.",
+      "Do NOT imply natural-death or illness cover — only accidental death and accidental total permanent disability are covered (suicide is excluded).",
+      "Although the descriptor says 'Linked', do NOT advertise market-linked investment returns or fund value — rider benefits are fixed guaranteed amounts / return of premium, not unit-fund growth.",
+      "Tax benefits must not be stated as assured — always carry the 'subject to prevailing tax laws' caveat."
+    ],
+    "must_state": [
+      "Rider UIN 116A057V03",
+      "Full regulatory descriptor: 'A Non-Participating, Linked, Individual Pure Risk offering Health Cover and Savings Rider'",
+      "That this is a rider that must be taken with a base policy (rider term/PPT aligned to base policy)",
+      "Standard disclaimer to read the rider policy document for full terms, conditions and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of ULIP-Linked-Accident-Protection-Rider.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Numeric entry-age / sum-assured eligibility table not recovered from parse (only illustrative SA values shown).",
+      "Despite the 'Linked' descriptor, the rider benefits described are fixed/guaranteed and return-of-premium based; the linked classification is carried from the verbatim descriptor."
+    ]
+  }
 }

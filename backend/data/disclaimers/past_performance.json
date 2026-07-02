@@ -1,21 +1,21 @@
 {
- "id": "past_performance",
- "type": "Past Performance **",
- "text": "**Past performance is not indicative of future performance.",
- "anchors": [],
- "severity": "high",
- "altered_severity": "moderate",
- "triggers": {
- "product_lines": [],
- "keywords_regex": [
- "\\bpast performance\\b"
- ],
- "llm_obligation_type": "past_performance"
- },
- "match": {
- "present_threshold": 0.85,
- "altered_threshold": 0.45
- },
- "precedence": 80,
- "source": "Copy of Disclaimers.xlsx"
+  "id": "past_performance",
+  "type": "Past Performance **",
+  "text": "**Past performance is not indicative of future performance.",
+  "anchors": [],
+  "severity": "high",
+  "altered_severity": "moderate",
+  "triggers": {
+    "product_lines": [],
+    "keywords_regex": [
+      "\\bpast performance\\b"
+    ],
+    "llm_obligation_type": "past_performance"
+  },
+  "match": {
+    "present_threshold": 0.85,
+    "altered_threshold": 0.45
+  },
+  "precedence": 80,
+  "source": "Copy of Disclaimers.xlsx"
 }

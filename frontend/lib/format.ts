@@ -1,40 +1,40 @@
 import type { Severity } from "./types";
 
 export function formatDate(iso?: string | null): string {
- if (!iso) return "—";
- try {
- return new Date(iso).toLocaleString("en-IN", {
- day: "2-digit",
- month: "short",
- year: "numeric",
- hour: "2-digit",
- minute: "2-digit",
- });
- } catch {
- return iso;
- }
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
 }
 
 export function formatScore(score?: number | null): string {
- if (score === null || score === undefined) return "—";
- return score.toFixed(1);
+  if (score === null || score === undefined) return "—";
+  return score.toFixed(1);
 }
 
 export function gradeFromScore(score?: number | null): "A" | "B" | "C" | "D" | "F" {
- if (score === null || score === undefined) return "F";
- if (score >= 85) return "A";
- if (score >= 70) return "B";
- if (score >= 55) return "C";
- if (score >= 40) return "D";
- return "F";
+  if (score === null || score === undefined) return "F";
+  if (score >= 85) return "A";
+  if (score >= 70) return "B";
+  if (score >= 55) return "C";
+  if (score >= 40) return "D";
+  return "F";
 }
 
 export function gradeBand(score?: number | null): "success" | "info" | "warning" | "danger" {
- if (score === null || score === undefined) return "danger";
- if (score >= 85) return "success";
- if (score >= 70) return "info";
- if (score >= 50) return "warning";
- return "danger";
+  if (score === null || score === undefined) return "danger";
+  if (score >= 85) return "success";
+  if (score >= 70) return "info";
+  if (score >= 50) return "warning";
+  return "danger";
 }
 
 /**
@@ -52,82 +52,82 @@ export function gradeBand(score?: number | null): "success" | "info" | "warning"
  * downgraded and hidden.
  */
 export function normalizeSeverity(severity?: Severity | string | null): Severity {
- switch ((severity ?? "").toString().toLowerCase().trim()) {
- case "critical":
- return "critical";
- case "high":
- return "high";
- case "medium":
- case "moderate":
- return "medium";
- case "low":
- case "informational":
- case "info":
- return "low";
- default:
- return "medium";
- }
+  switch ((severity ?? "").toString().toLowerCase().trim()) {
+    case "critical":
+      return "critical";
+    case "high":
+      return "high";
+    case "medium":
+    case "moderate":
+      return "medium";
+    case "low":
+    case "informational":
+    case "info":
+      return "low";
+    default:
+      return "medium";
+  }
 }
 
 /** Re-aggregate backend `{severity, count}` rows into the 4 canonical buckets. */
 export function bucketSeverityRows(
- rows: { severity: string; count: number }[]
+  rows: { severity: string; count: number }[]
 ): Record<Severity, number> {
- const out: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0 };
- for (const r of rows) out[normalizeSeverity(r.severity)] += r.count ?? 0;
- return out;
+  const out: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const r of rows) out[normalizeSeverity(r.severity)] += r.count ?? 0;
+  return out;
 }
 
 export function severityColor(severity: string): string {
- switch (normalizeSeverity(severity)) {
- case "critical":
- return "hsl(var(--sev-critical))";
- case "high":
- return "hsl(var(--sev-high))";
- case "medium":
- return "hsl(var(--sev-medium))";
- default:
- return "hsl(var(--sev-low))";
- }
+  switch (normalizeSeverity(severity)) {
+    case "critical":
+      return "hsl(var(--sev-critical))";
+    case "high":
+      return "hsl(var(--sev-high))";
+    case "medium":
+      return "hsl(var(--sev-medium))";
+    default:
+      return "hsl(var(--sev-low))";
+  }
 }
 
 export function severityClass(severity: string): string {
- switch (normalizeSeverity(severity)) {
- case "critical":
- return "border-l-sev-critical text-sev-critical";
- case "high":
- return "border-l-sev-high text-sev-high";
- case "medium":
- return "border-l-sev-medium text-sev-medium";
- default:
- return "border-l-sev-low text-sev-low";
- }
+  switch (normalizeSeverity(severity)) {
+    case "critical":
+      return "border-l-sev-critical text-sev-critical";
+    case "high":
+      return "border-l-sev-high text-sev-high";
+    case "medium":
+      return "border-l-sev-medium text-sev-medium";
+    default:
+      return "border-l-sev-low text-sev-low";
+  }
 }
 
 export function categoryLabel(c: string): string {
- const k = c.toLowerCase();
- if (k === "irdai") return "IRDAI";
- if (k === "sebi") return "SEBI";
- if (k === "brand") return "Brand";
- if (k === "regulatory") return "Regulatory";
- if (k === "seo") return "SEO";
- return c.charAt(0).toUpperCase() + c.slice(1);
+  const k = c.toLowerCase();
+  if (k === "irdai") return "IRDAI";
+  if (k === "sebi") return "SEBI";
+  if (k === "brand") return "Brand";
+  if (k === "regulatory") return "Regulatory";
+  if (k === "seo") return "SEO";
+  return c.charAt(0).toUpperCase() + c.slice(1);
 }
 
 export function truthyAutoFix(v: string | boolean | undefined): boolean {
- if (typeof v === "boolean") return v;
- return String(v).toLowerCase() === "true";
+  if (typeof v === "boolean") return v;
+  return String(v).toLowerCase() === "true";
 }
 
 export function severityOrder(s: Severity | string): number {
- switch (normalizeSeverity(s)) {
- case "critical":
- return 0;
- case "high":
- return 1;
- case "medium":
- return 2;
- default:
- return 3;
- }
+  switch (normalizeSeverity(s)) {
+    case "critical":
+      return 0;
+    case "high":
+      return 1;
+    case "medium":
+      return 2;
+    default:
+      return 3;
+  }
 }

@@ -1,80 +1,80 @@
 {
- "schema_version": "1.0",
- "product_name": "Bajaj Life Care Plus Rider",
- "uin": "116A059V01",
- "rider_uins": [],
- "source_file": "ULIP-linked-care-plus-rider.pdf",
- "product_category": "rider",
- "regulatory_descriptor": "A Non-Participating, Linked, Individual, Pure Risk Health Rider",
- "structural_flags": {
- "is_unit_linked": true,
- "is_participating": false,
- "market_risk_borne_by_policyholder": false,
- "offers_guaranteed_benefits": false,
- "offers_maturity_benefit": false,
- "offers_loan": false
- },
- "variants": ["Option 1 - Prime", "Option 2 - Pro", "Option 3 - Ultra", "Option 4 - Prestige", "Option 5 - Optima"],
- "key_benefits": [
- "Out-Patient Department (OPD) benefits — tele/in-clinic doctor consultations, lab & radiology, prescribed pharmacy, complimentary gym, nutrition consultation, preventive health check-ups, care management, emotional wellness, dental (Prestige & Optima only)",
- "Accidental Total Permanent Disability (ATPD) benefit — additional lump sum on accidental disability",
- "Waiver of future rider premiums on ATPD — rider premiums waived for the remaining rider PPT",
- "Premium rates guaranteed throughout the rider term",
- "Tax benefit as per prevailing income tax laws"
- ],
- "riders_available": [],
- "eligibility": {
- "min_entry_age_years": null,
- "max_entry_age_years": null,
- "max_maturity_age_years": null,
- "min_sum_assured": null,
- "policy_term": "Rider Policy Term and Rider PPT must align with the base policy term and base PPT; numeric range not captured in this parse",
- "premium_payment_term": "Aligned to base policy; numeric range not captured",
- "note": "This is a LINKED (unit-linked) RIDER attachable to a base policy. One of five options (Prime/Pro/Ultra/Prestige/Optima) chosen at inception; option cannot be changed during the rider term. Eligibility boundary table not recovered from this parse."
- },
- "key_terms": {
- "free_look_period_days": 30,
- "free_look_note": "30 days from receipt of the Rider Document; refund subject to proportionate risk premium, expenses and stamp duty.",
- "grace_period": "Same as the base policy; OPD benefits cease during the grace period (accidental claims during grace handled per policy).",
- "suicide_clause": "Not separately stated for this pure-risk health rider in this parse — handled per base policy; verify against rider policy document.",
- "loan_note": "No loan / no maturity benefit — pure risk health rider.",
- "tax_note": "Tax benefits as per prevailing income tax laws as amended — consult a tax advisor. GST/cess collected over and above the premium."
- },
- "mandatory_disclosures_present": [
- "Section 39 — Nomination",
- "Free Look Period (30 days)",
- "Grace Period",
- "Applicability of Goods & Service Tax",
- "Disclaimer — sales literature gives salient features of the rider only; policy document is conclusive",
- "Beware-of-spurious-calls warning"
- ],
- "compliance_guardrails": {
- "claims_marketing_must_support": [
- "OPD service availability is option-dependent — e.g. dental and prescribed pharmacy are available ONLY with Prestige & Optima; Prime gets only pre-recorded gym sessions. Service benefits must be qualified by the chosen rider option.",
- "ATPD benefit and waiver-of-premium trigger ONLY on Accidental Total Permanent Disability.",
- "OPD/wellness services are delivered by third-party service providers; the Company may commence/discontinue or change providers — services are not an unconditional guarantee.",
- "Premium rates are guaranteed throughout the rider term (this is a valid 'guaranteed' claim about premium, not about returns)."
- ],
- "claims_marketing_must_avoid": [
- "Do NOT market this as a standalone product — it is a rider that MUST reference and be attached to an eligible base policy.",
- "Do NOT position as an investment, savings, maturity or money-back product — it is a pure-risk health rider with no maturity benefit and no loan, despite being a 'Linked' rider.",
- "Do NOT imply the OPD/wellness services are uncapped or permanently guaranteed — they are subject to provider availability and option limits, and the Company may change/discontinue them.",
- "Tax benefits must not be stated as assured — carry the 'as per prevailing income tax laws' caveat."
- ],
- "must_state": [
- "Rider UIN 116A059V01 and reference to the base policy it is attached to",
- "Full regulatory descriptor: 'A Non-Participating, Linked, Individual, Pure Risk Health Rider'",
- "That OPD/wellness benefits are provided by third-party service providers and are subject to the chosen rider option and provider availability",
- "Standard disclaimer to read the rider sales literature with the benefit illustration and policy document"
- ]
- },
- "curation": {
- "curated_by": "claude-opus-4-8 (subagent)",
- "curated_from": "brochure structural parse of ULIP-linked-care-plus-rider.pdf",
- "confidence": "high",
- "gaps": [
- "Numeric entry/maturity age, rider sum-assured and rider-term boundary table not recovered from this parse.",
- "Per-option OPD usage limits/tables not captured (referenced as tables in the source)."
- ]
- }
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Care Plus Rider",
+  "uin": "116A059V01",
+  "rider_uins": [],
+  "source_file": "ULIP-linked-care-plus-rider.pdf",
+  "product_category": "rider",
+  "regulatory_descriptor": "A Non-Participating, Linked, Individual, Pure Risk Health Rider",
+  "structural_flags": {
+    "is_unit_linked": true,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": false,
+    "offers_maturity_benefit": false,
+    "offers_loan": false
+  },
+  "variants": ["Option 1 - Prime", "Option 2 - Pro", "Option 3 - Ultra", "Option 4 - Prestige", "Option 5 - Optima"],
+  "key_benefits": [
+    "Out-Patient Department (OPD) benefits — tele/in-clinic doctor consultations, lab & radiology, prescribed pharmacy, complimentary gym, nutrition consultation, preventive health check-ups, care management, emotional wellness, dental (Prestige & Optima only)",
+    "Accidental Total Permanent Disability (ATPD) benefit — additional lump sum on accidental disability",
+    "Waiver of future rider premiums on ATPD — rider premiums waived for the remaining rider PPT",
+    "Premium rates guaranteed throughout the rider term",
+    "Tax benefit as per prevailing income tax laws"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": null,
+    "max_entry_age_years": null,
+    "max_maturity_age_years": null,
+    "min_sum_assured": null,
+    "policy_term": "Rider Policy Term and Rider PPT must align with the base policy term and base PPT; numeric range not captured in this parse",
+    "premium_payment_term": "Aligned to base policy; numeric range not captured",
+    "note": "This is a LINKED (unit-linked) RIDER attachable to a base policy. One of five options (Prime/Pro/Ultra/Prestige/Optima) chosen at inception; option cannot be changed during the rider term. Eligibility boundary table not recovered from this parse."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the Rider Document; refund subject to proportionate risk premium, expenses and stamp duty.",
+    "grace_period": "Same as the base policy; OPD benefits cease during the grace period (accidental claims during grace handled per policy).",
+    "suicide_clause": "Not separately stated for this pure-risk health rider in this parse — handled per base policy; verify against rider policy document.",
+    "loan_note": "No loan / no maturity benefit — pure risk health rider.",
+    "tax_note": "Tax benefits as per prevailing income tax laws as amended — consult a tax advisor. GST/cess collected over and above the premium."
+  },
+  "mandatory_disclosures_present": [
+    "Section 39 — Nomination",
+    "Free Look Period (30 days)",
+    "Grace Period",
+    "Applicability of Goods & Service Tax",
+    "Disclaimer — sales literature gives salient features of the rider only; policy document is conclusive",
+    "Beware-of-spurious-calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "OPD service availability is option-dependent — e.g. dental and prescribed pharmacy are available ONLY with Prestige & Optima; Prime gets only pre-recorded gym sessions. Service benefits must be qualified by the chosen rider option.",
+      "ATPD benefit and waiver-of-premium trigger ONLY on Accidental Total Permanent Disability.",
+      "OPD/wellness services are delivered by third-party service providers; the Company may commence/discontinue or change providers — services are not an unconditional guarantee.",
+      "Premium rates are guaranteed throughout the rider term (this is a valid 'guaranteed' claim about premium, not about returns)."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT market this as a standalone product — it is a rider that MUST reference and be attached to an eligible base policy.",
+      "Do NOT position as an investment, savings, maturity or money-back product — it is a pure-risk health rider with no maturity benefit and no loan, despite being a 'Linked' rider.",
+      "Do NOT imply the OPD/wellness services are uncapped or permanently guaranteed — they are subject to provider availability and option limits, and the Company may change/discontinue them.",
+      "Tax benefits must not be stated as assured — carry the 'as per prevailing income tax laws' caveat."
+    ],
+    "must_state": [
+      "Rider UIN 116A059V01 and reference to the base policy it is attached to",
+      "Full regulatory descriptor: 'A Non-Participating, Linked, Individual, Pure Risk Health Rider'",
+      "That OPD/wellness benefits are provided by third-party service providers and are subject to the chosen rider option and provider availability",
+      "Standard disclaimer to read the rider sales literature with the benefit illustration and policy document"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-4-8 (subagent)",
+    "curated_from": "brochure structural parse of ULIP-linked-care-plus-rider.pdf",
+    "confidence": "high",
+    "gaps": [
+      "Numeric entry/maturity age, rider sum-assured and rider-term boundary table not recovered from this parse.",
+      "Per-option OPD usage limits/tables not captured (referenced as tables in the source)."
+    ]
+  }
 }

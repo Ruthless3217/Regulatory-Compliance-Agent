@@ -1,86 +1,86 @@
-# Bajaj Life Insurance brand seed rules.
+# Bajaj Allianz Life Insurance brand seed rules.
 # Run with: python -m scripts.seed_rules
 category: brand
 generation_source: seed/bajaj_brand-2024-q1
 confidence_score: 0.9
 rules:
- - rule_text: "The brand name must appear as 'Bajaj Life Insurance' in full at first mention; 'Bajaj Life Insurance' is acceptable thereafter. Never 'BALIC' in customer-facing copy."
- severity: high
- keywords: ["Bajaj Life Insurance", "balic"]
- points_deduction: -7.0
- - rule_text: "Tagline 'Jiyo Befikar' is the registered brand line; use as approved in title case, not all caps."
- severity: medium
- keywords: ["jiyo befikar", "tagline"]
- points_deduction: -5.0
- - rule_text: "Prohibited superlatives without substantiation: 'best', 'No.1', 'leading', 'fastest growing', 'world-class'."
- severity: high
- keywords: ["best", "no 1", "leading", "fastest growing", "world class"]
- points_deduction: -7.0
- - rule_text: "Use 'protection' or 'cover', not 'insurance' alone, when discussing emotional benefit (per brand voice guide)."
- severity: low
- keywords: ["protection", "cover", "emotional benefit"]
- points_deduction: -3.0
- - rule_text: "Tone must be confident-yet-warm; avoid fear-based language ('what if you die', 'leave family stranded')."
- severity: medium
- keywords: ["fear", "die", "stranded", "deathbed"]
- points_deduction: -5.0
- - rule_text: "Reference to parent group: 'Bajaj Finserv' and 'Bajaj' must be spelled correctly; never 'Bajaj group' alone."
- severity: medium
- keywords: ["bajaj finserv", "Bajaj", "parent"]
- points_deduction: -5.0
- - rule_text: "Use ₹ symbol with non-breaking space before amounts; avoid 'Rs.' in digital copy."
- severity: low
- keywords: ["rupee symbol", "rs", "₹"]
- points_deduction: -3.0
- - rule_text: "Customer support number 1800-209-7272 must be displayed correctly with the country code prefix when targeting global Indians."
- severity: medium
- keywords: ["customer support", "1800", "toll free"]
- points_deduction: -5.0
- - rule_text: "Avoid jargon: replace 'IRR', 'CAGR', 'NAV' with plain-language explanations or footnote definitions in retail content."
- severity: low
- keywords: ["irr", "cagr", "nav", "jargon"]
- points_deduction: -3.0
- - rule_text: "Visual identity: use approved Bajaj Life Insurance blue (#003595); never substitute generic blues."
- severity: medium
- keywords: ["brand blue", "#003595", "color"]
- points_deduction: -5.0
- - rule_text: "Logo lockup minimum clear-space rule: 1x logo height on all sides; never crop or stretch."
- severity: medium
- keywords: ["logo", "clear space", "lockup"]
- points_deduction: -5.0
- - rule_text: "Hindi/regional copy: brand name retains English spelling; never transliterated."
- severity: medium
- keywords: ["hindi", "regional", "transliteration"]
- points_deduction: -5.0
- - rule_text: "Comparative comparison with HDFC Life, Max Life, ICICI Prudential must use only public IRDAI data, with citation."
- severity: high
- keywords: ["hdfc life", "max life", "icici prudential", "competitor"]
- points_deduction: -7.0
- - rule_text: "Brand voice avoids 'tension', 'worry', 'problem' as negative anchors; reframe with positive emotional outcomes."
- severity: low
- keywords: ["tension", "worry", "problem"]
- points_deduction: -3.0
- - rule_text: "Use 'family' inclusively — not exclusively heteronormative nuclear family imagery."
- severity: low
- keywords: ["family", "nuclear", "inclusive"]
- points_deduction: -3.0
- - rule_text: "Award claims (e.g., 'BFSI Insurer of the Year') must cite the awarding body and year."
- severity: medium
- keywords: ["award", "winner", "recognized"]
- points_deduction: -5.0
- - rule_text: "Product names use Title Case: 'Bajaj Life Insurance Smart Wealth Goal'; never 'Bajaj Life Insurance SMART WEALTH GOAL'."
- severity: low
- keywords: ["product name", "title case", "capitalization"]
- points_deduction: -3.0
- - rule_text: "Use Indian English spelling (e.g., 'organise', 'colour') unless writing for global digital audience."
- severity: low
- keywords: ["spelling", "british", "american", "indian english"]
- points_deduction: -3.0
- - rule_text: "Numerical examples must use realistic Indian context (e.g., ₹50 lakh cover, ₹10,000 monthly premium)."
- severity: low
- keywords: ["realistic", "example", "lakh", "crore"]
- points_deduction: -3.0
- - rule_text: "Customer testimonials must be from verifiable Bajaj Life Insurance customers; pseudonyms acceptable if disclosed."
- severity: medium
- keywords: ["testimonial", "customer story", "pseudonym"]
- points_deduction: -5.0
+  - rule_text: "The brand name must appear as 'Bajaj Allianz Life Insurance' in full at first mention; 'Bajaj Allianz Life' is acceptable thereafter. Never 'BALIC' in customer-facing copy."
+    severity: high
+    keywords: ["bajaj allianz", "balic"]
+    points_deduction: -7.0
+  - rule_text: "Tagline 'Jiyo Befikar' is the registered brand line; use as approved in title case, not all caps."
+    severity: medium
+    keywords: ["jiyo befikar", "tagline"]
+    points_deduction: -5.0
+  - rule_text: "Prohibited superlatives without substantiation: 'best', 'No.1', 'leading', 'fastest growing', 'world-class'."
+    severity: high
+    keywords: ["best", "no 1", "leading", "fastest growing", "world class"]
+    points_deduction: -7.0
+  - rule_text: "Use 'protection' or 'cover', not 'insurance' alone, when discussing emotional benefit (per brand voice guide)."
+    severity: low
+    keywords: ["protection", "cover", "emotional benefit"]
+    points_deduction: -3.0
+  - rule_text: "Tone must be confident-yet-warm; avoid fear-based language ('what if you die', 'leave family stranded')."
+    severity: medium
+    keywords: ["fear", "die", "stranded", "deathbed"]
+    points_deduction: -5.0
+  - rule_text: "Reference to parent group: 'Bajaj Finserv' and 'Allianz SE' must be spelled correctly; never 'Bajaj group' alone."
+    severity: medium
+    keywords: ["bajaj finserv", "allianz se", "parent"]
+    points_deduction: -5.0
+  - rule_text: "Use ₹ symbol with non-breaking space before amounts; avoid 'Rs.' in digital copy."
+    severity: low
+    keywords: ["rupee symbol", "rs", "₹"]
+    points_deduction: -3.0
+  - rule_text: "Customer support number 1800-209-7272 must be displayed correctly with the country code prefix when targeting global Indians."
+    severity: medium
+    keywords: ["customer support", "1800", "toll free"]
+    points_deduction: -5.0
+  - rule_text: "Avoid jargon: replace 'IRR', 'CAGR', 'NAV' with plain-language explanations or footnote definitions in retail content."
+    severity: low
+    keywords: ["irr", "cagr", "nav", "jargon"]
+    points_deduction: -3.0
+  - rule_text: "Visual identity: use approved Bajaj Allianz Life blue (#003595); never substitute generic blues."
+    severity: medium
+    keywords: ["brand blue", "#003595", "color"]
+    points_deduction: -5.0
+  - rule_text: "Logo lockup minimum clear-space rule: 1x logo height on all sides; never crop or stretch."
+    severity: medium
+    keywords: ["logo", "clear space", "lockup"]
+    points_deduction: -5.0
+  - rule_text: "Hindi/regional copy: brand name retains English spelling; never transliterated."
+    severity: medium
+    keywords: ["hindi", "regional", "transliteration"]
+    points_deduction: -5.0
+  - rule_text: "Comparative comparison with HDFC Life, Max Life, ICICI Prudential must use only public IRDAI data, with citation."
+    severity: high
+    keywords: ["hdfc life", "max life", "icici prudential", "competitor"]
+    points_deduction: -7.0
+  - rule_text: "Brand voice avoids 'tension', 'worry', 'problem' as negative anchors; reframe with positive emotional outcomes."
+    severity: low
+    keywords: ["tension", "worry", "problem"]
+    points_deduction: -3.0
+  - rule_text: "Use 'family' inclusively — not exclusively heteronormative nuclear family imagery."
+    severity: low
+    keywords: ["family", "nuclear", "inclusive"]
+    points_deduction: -3.0
+  - rule_text: "Award claims (e.g., 'BFSI Insurer of the Year') must cite the awarding body and year."
+    severity: medium
+    keywords: ["award", "winner", "recognized"]
+    points_deduction: -5.0
+  - rule_text: "Product names use Title Case: 'Bajaj Allianz Life Smart Wealth Goal'; never 'BAJAJ ALLIANZ LIFE SMART WEALTH GOAL'."
+    severity: low
+    keywords: ["product name", "title case", "capitalization"]
+    points_deduction: -3.0
+  - rule_text: "Use Indian English spelling (e.g., 'organise', 'colour') unless writing for global digital audience."
+    severity: low
+    keywords: ["spelling", "british", "american", "indian english"]
+    points_deduction: -3.0
+  - rule_text: "Numerical examples must use realistic Indian context (e.g., ₹50 lakh cover, ₹10,000 monthly premium)."
+    severity: low
+    keywords: ["realistic", "example", "lakh", "crore"]
+    points_deduction: -3.0
+  - rule_text: "Customer testimonials must be from verifiable Bajaj Allianz Life customers; pseudonyms acceptable if disclosed."
+    severity: medium
+    keywords: ["testimonial", "customer story", "pseudonym"]
+    points_deduction: -5.0

@@ -19,55 +19,55 @@ _UIN_RE = re.compile(r"\b\d{3}[A-Z]\d{3}V\d{2}\b")
 
 
 def resolve_products(
- text: str,
- fact_card_service,
- *,
- max_matches: int,
- min_fuzzy_score: int,
+    text: str,
+    fact_card_service,
+    *,
+    max_matches: int,
+    min_fuzzy_score: int,
 ) -> List[Dict[str, Any]]:
- text = text or ""
- products = fact_card_service.all_products()
- known_uins = {p["uin"] for p in products}
- name_by_uin = {p["uin"]: (p.get("product_name") or "") for p in products}
+    text = text or ""
+    products = fact_card_service.all_products()
+    known_uins = {p["uin"] for p in products}
+    name_by_uin = {p["uin"]: (p.get("product_name") or "") for p in products}
 
- matches: List[Dict[str, Any]] = []
- seen_uins: set = set()
+    matches: List[Dict[str, Any]] = []
+    seen_uins: set = set()
 
- # 1. UIN regex — exact, ranked first. Preserve first-seen order in the text.
- for m in _UIN_RE.finditer(text):
- uin = m.group(0)
- if uin in known_uins and uin not in seen_uins:
- seen_uins.add(uin)
- matches.append({
- "uin": uin,
- "product_name": name_by_uin.get(uin, ""),
- "confidence": 1.0,
- "method": "uin_regex",
- })
+    # 1. UIN regex — exact, ranked first. Preserve first-seen order in the text.
+    for m in _UIN_RE.finditer(text):
+        uin = m.group(0)
+        if uin in known_uins and uin not in seen_uins:
+            seen_uins.add(uin)
+            matches.append({
+                "uin": uin,
+                "product_name": name_by_uin.get(uin, ""),
+                "confidence": 1.0,
+                "method": "uin_regex",
+            })
 
- # 2. Fuzzy product-name match for products not already matched by UIN.
- lowered = text.lower()
- fuzzy: List[Dict[str, Any]] = []
- for p in products:
- if p["uin"] in seen_uins:
- continue
- name = (p.get("product_name") or "").strip()
- if not name:
- continue
- score = fuzz.partial_ratio(name.lower(), lowered)
- if score >= min_fuzzy_score:
- fuzzy.append({
- "uin": p["uin"],
- "product_name": name,
- "confidence": round(score / 100.0, 3),
- "method": "name_fuzzy",
- })
- fuzzy.sort(key=lambda x: x["confidence"], reverse=True)
+    # 2. Fuzzy product-name match for products not already matched by UIN.
+    lowered = text.lower()
+    fuzzy: List[Dict[str, Any]] = []
+    for p in products:
+        if p["uin"] in seen_uins:
+            continue
+        name = (p.get("product_name") or "").strip()
+        if not name:
+            continue
+        score = fuzz.partial_ratio(name.lower(), lowered)
+        if score >= min_fuzzy_score:
+            fuzzy.append({
+                "uin": p["uin"],
+                "product_name": name,
+                "confidence": round(score / 100.0, 3),
+                "method": "name_fuzzy",
+            })
+    fuzzy.sort(key=lambda x: x["confidence"], reverse=True)
 
- ranked = matches + fuzzy
- if len(ranked) > max_matches:
- logger.info(
- "product_resolver: %d products matched; capping to %d (dropped %s)",
- len(ranked), max_matches, [m["uin"] for m in ranked[max_matches:]],
- )
- return ranked[:max_matches]
+    ranked = matches + fuzzy
+    if len(ranked) > max_matches:
+        logger.info(
+            "product_resolver: %d products matched; capping to %d (dropped %s)",
+            len(ranked), max_matches, [m["uin"] for m in ranked[max_matches:]],
+        )
+    return ranked[:max_matches]

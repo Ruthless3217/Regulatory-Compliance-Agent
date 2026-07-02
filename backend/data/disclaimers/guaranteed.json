@@ -1,21 +1,21 @@
 {
- "id": "guaranteed",
- "type": "Guaranteed Disclaimer",
- "text": "*Conditions Apply – The Guaranteed benefits are dependent on policy term, premium payment term availed along with other variable factors. For more details, please refer to sales brochure.",
- "anchors": [],
- "severity": "high",
- "altered_severity": "moderate",
- "triggers": {
- "product_lines": [],
- "keywords_regex": [
- "\\bguarantee"
- ],
- "llm_obligation_type": "guaranteed_benefit"
- },
- "match": {
- "present_threshold": 0.85,
- "altered_threshold": 0.45
- },
- "precedence": 80,
- "source": "Copy of Disclaimers.xlsx"
+  "id": "guaranteed",
+  "type": "Guaranteed Disclaimer",
+  "text": "*Conditions Apply – The Guaranteed benefits are dependent on policy term, premium payment term availed along with other variable factors. For more details, please refer to sales brochure.",
+  "anchors": [],
+  "severity": "high",
+  "altered_severity": "moderate",
+  "triggers": {
+    "product_lines": [],
+    "keywords_regex": [
+      "\\bguarantee"
+    ],
+    "llm_obligation_type": "guaranteed_benefit"
+  },
+  "match": {
+    "present_threshold": 0.85,
+    "altered_threshold": 0.45
+  },
+  "precedence": 80,
+  "source": "Copy of Disclaimers.xlsx"
 }

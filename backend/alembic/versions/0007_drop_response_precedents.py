@@ -29,9 +29,9 @@ depends_on: Union[str, Sequence[str], None] = None
 # a migration artifact — do not import the app constant here, migrations must be
 # self-contained against future refactors.
 RESPONSE_DENYLIST = frozenset({
- "done", "ok", "okay", "yes", "no",
- "noted", "agreed", "agree", "fine", "accepted", "approved", "confirmed",
- "added", "edited", "deleted", "revised", "rephrased", "checked", "check",
+    "done", "ok", "okay", "yes", "no",
+    "noted", "agreed", "agree", "fine", "accepted", "approved", "confirmed",
+    "added", "edited", "deleted", "revised", "rephrased", "checked", "check",
 })
 
 # SQL normalization applied per row before denylist comparison. The Python
@@ -42,36 +42,36 @@ _AUDIT = "_purged_response_precedents"
 
 
 def _is_purged(comment_text: str) -> bool:
- """Python mirror of the SQL purge predicate — used by tests and as the
- canonical reference for what the migration deletes."""
- normalized = re.sub(r"[.!?]+$", "", (comment_text or "").strip()).lower()
- return normalized in RESPONSE_DENYLIST
+    """Python mirror of the SQL purge predicate — used by tests and as the
+    canonical reference for what the migration deletes."""
+    normalized = re.sub(r"[.!?]+$", "", (comment_text or "").strip()).lower()
+    return normalized in RESPONSE_DENYLIST
 
 
 def _denylist_array_sql() -> str:
- # Tokens are simple lowercase words — safe to inline as SQL string literals.
- return "ARRAY[" + ", ".join("'%s'" % t for t in sorted(RESPONSE_DENYLIST)) + "]"
+    # Tokens are simple lowercase words — safe to inline as SQL string literals.
+    return "ARRAY[" + ", ".join("'%s'" % t for t in sorted(RESPONSE_DENYLIST)) + "]"
 
 
 def upgrade() -> None:
- arr = _denylist_array_sql()
- # 1. Snapshot the doomed rows (full row, incl. embedding) into the audit
- # table so downgrade can restore them verbatim.
- op.execute(
- f"CREATE TABLE IF NOT EXISTS {_AUDIT} AS "
- f"SELECT * FROM rag_compliance_examples WHERE {_NORM} = ANY({arr})"
- )
- # 2. Delete them from the live corpus.
- op.execute(
- f"DELETE FROM rag_compliance_examples WHERE {_NORM} = ANY({arr})"
- )
+    arr = _denylist_array_sql()
+    # 1. Snapshot the doomed rows (full row, incl. embedding) into the audit
+    #    table so downgrade can restore them verbatim.
+    op.execute(
+        f"CREATE TABLE IF NOT EXISTS {_AUDIT} AS "
+        f"SELECT * FROM rag_compliance_examples WHERE {_NORM} = ANY({arr})"
+    )
+    # 2. Delete them from the live corpus.
+    op.execute(
+        f"DELETE FROM rag_compliance_examples WHERE {_NORM} = ANY({arr})"
+    )
 
 
 def downgrade() -> None:
- # Restore the purged rows (the tsv trigger regenerates search_tsv on insert)
- # and drop the audit table. ON CONFLICT guards against partial re-runs.
- op.execute(
- f"INSERT INTO rag_compliance_examples "
- f"SELECT * FROM {_AUDIT} ON CONFLICT (id) DO NOTHING"
- )
- op.execute(f"DROP TABLE IF EXISTS {_AUDIT}")
+    # Restore the purged rows (the tsv trigger regenerates search_tsv on insert)
+    # and drop the audit table. ON CONFLICT guards against partial re-runs.
+    op.execute(
+        f"INSERT INTO rag_compliance_examples "
+        f"SELECT * FROM {_AUDIT} ON CONFLICT (id) DO NOTHING"
+    )
+    op.execute(f"DROP TABLE IF EXISTS {_AUDIT}")
