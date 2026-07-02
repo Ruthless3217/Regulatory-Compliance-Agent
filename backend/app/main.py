@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 from .config import settings
-from .api.routes import submissions, compliance, dashboard, rules, chat, similar, rag_health, knowledge_base
+from .api.routes import submissions, compliance, dashboard, rules, chat, similar, rag_health, knowledge_base, comparisons
 
 # Configure logging
 logging.basicConfig(
@@ -27,7 +27,8 @@ async def lifespan(app: FastAPI):
         from .models import (  # noqa: F401
             User, Submission, Rule, ComplianceCheck,
             Violation, ContentChunk, AgentExecution,
-            AgentTrace, ToolInvocation, ComplianceState
+            AgentTrace, ToolInvocation, ComplianceState,
+            DocumentComparison,
         )
         logger.info("✅ Database models registered (schema managed by Alembic)")
     except Exception as e:
@@ -112,6 +113,7 @@ app.include_router(chat.router)
 app.include_router(similar.router)
 app.include_router(rag_health.router)
 app.include_router(knowledge_base.router)
+app.include_router(comparisons.router)
 
 
 @app.get("/health", tags=["Health"])
