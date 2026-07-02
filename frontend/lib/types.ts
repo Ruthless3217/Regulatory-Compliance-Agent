@@ -189,3 +189,27 @@ export interface ProjectionResponse {
   counts: Record<string, number>;
   points: ProjectionPoint[];
 }
+
+export type ComparisonStatus = "processing" | "completed" | "failed";
+
+export interface DiffWord {
+  text: string;
+  changed: boolean;
+}
+
+export type DiffBlock =
+  | { type: "equal"; old_text: string; new_text: string }
+  | { type: "delete"; old_text: string }
+  | { type: "insert"; new_text: string }
+  | { type: "replace"; old_words: DiffWord[]; new_words: DiffWord[] };
+
+export interface DocumentComparison {
+  id: string;
+  title: string;
+  old_content_type: string;
+  new_content_type: string;
+  status: ComparisonStatus;
+  error_message?: string | null;
+  diff_result?: DiffBlock[] | null;
+  created_at: string;
+}
