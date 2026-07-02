@@ -75,3 +75,68 @@ def test_extract_paragraphs_requires_file_path_for_docx_and_pdf():
         extract_paragraphs(None, "docx")
     with pytest.raises(ValueError):
         extract_paragraphs(None, "pdf")
+
+
+from app.services.comparison_service import word_diff, build_diff
+
+
+def test_word_diff_marks_changed_and_unchanged_words():
+    result = word_diff("The quick brown fox", "The slow brown fox")
+    assert result["type"] == "replace"
+    assert result["old_words"] == [
+        {"text": "The", "changed": False},
+        {"text": "quick", "changed": True},
+        {"text": "brown", "changed": False},
+        {"text": "fox", "changed": False},
+    ]
+    assert result["new_words"] == [
+        {"text": "The", "changed": False},
+        {"text": "slow", "changed": True},
+        {"text": "brown", "changed": False},
+        {"text": "fox", "changed": False},
+    ]
+
+
+def test_build_diff_all_equal_when_paragraphs_identical():
+    old = ["First paragraph.", "Second paragraph."]
+    new = ["First paragraph.", "Second paragraph."]
+    assert build_diff(old, new) == [
+        {"type": "equal", "old_text": "First paragraph.", "new_text": "First paragraph."},
+        {"type": "equal", "old_text": "Second paragraph.", "new_text": "Second paragraph."},
+    ]
+
+
+def test_build_diff_pure_insert():
+    assert build_diff([], ["New paragraph."]) == [
+        {"type": "insert", "new_text": "New paragraph."}
+    ]
+
+
+def test_build_diff_pure_delete():
+    assert build_diff(["Old paragraph."], []) == [
+        {"type": "delete", "old_text": "Old paragraph."}
+    ]
+
+
+def test_build_diff_replace_same_count_runs_word_diff():
+    old = ["The quick brown fox."]
+    new = ["The slow brown fox."]
+    blocks = build_diff(old, new)
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "replace"
+    assert blocks[0]["old_words"][1] == {"text": "quick", "changed": True}
+    assert blocks[0]["new_words"][1] == {"text": "slow", "changed": True}
+
+
+def test_build_diff_replace_different_count_falls_back_to_delete_insert():
+    old = ["One paragraph that got split."]
+    new = ["One paragraph.", "That got split."]
+    assert build_diff(old, new) == [
+        {"type": "delete", "old_text": "One paragraph that got split."},
+        {"type": "insert", "new_text": "One paragraph."},
+        {"type": "insert", "new_text": "That got split."},
+    ]
+
+
+def test_build_diff_empty_documents_produce_no_change():
+    assert build_diff([], []) == []
