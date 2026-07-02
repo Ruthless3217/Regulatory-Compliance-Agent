@@ -17,7 +17,7 @@ class DocumentComparison(Base):
     old_original_content = Column(Text, nullable=True)
     new_original_content = Column(Text, nullable=True)
     diff_result = Column(JSONB, nullable=True)
-    status = Column(String(50), default="processing")  # processing, completed, failed
+    status = Column(String(50), nullable=False, default="processing")  # processing, completed, failed
     error_message = Column(Text, nullable=True)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
