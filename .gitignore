@@ -65,3 +65,6 @@ docs/ledger/
 # Runtime logs
 backend/logs/
 logs/
+
+# Git worktrees (superpowers:using-git-worktrees)
+.worktrees/
