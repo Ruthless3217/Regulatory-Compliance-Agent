@@ -7,6 +7,7 @@ requests are handled synchronously.
 """
 import os
 import logging
+import re
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
@@ -27,14 +28,41 @@ ALLOWED_CONTENT_TYPES = {
     "text/plain": "text",
 }
 
+EXTENSION_CONTENT_TYPES = {
+    "docx": "docx",
+    "pdf": "pdf",
+}
+
+
+def _detect_content_type(mime: str, filename: str) -> str:
+    """Determine the logical content type ("pdf" | "docx" | "text") for an upload.
+
+    The browser-supplied MIME type is trusted first, but browsers (notably on
+    Windows without Office installed) often send a generic MIME such as
+    "application/octet-stream" for .docx/.pdf files. In that case, fall back
+    to the file extension so we don't silently read a binary file as text.
+    """
+    recognized = ALLOWED_CONTENT_TYPES.get(mime or "")
+    if recognized:
+        return recognized
+
+    ext = filename.rsplit(".", 1)[-1].lower() if filename and "." in filename else ""
+    return EXTENSION_CONTENT_TYPES.get(ext, "text")
+
+
+def _sanitize_ext(filename: Optional[str]) -> str:
+    """Extract a safe, alphanumeric-only file extension from a raw filename, defaulting to 'txt'."""
+    raw_ext = filename.rsplit(".", 1)[-1] if filename and "." in filename else "txt"
+    ext = re.sub(r"[^A-Za-z0-9]", "", raw_ext)
+    return ext or "txt"
+
 
 async def _persist_upload(file: UploadFile):
     """Save an uploaded file under settings.upload_dir; returns (file_path, content_type)."""
-    mime_type = file.content_type or ""
-    detected_type = ALLOWED_CONTENT_TYPES.get(mime_type, "text")
+    detected_type = _detect_content_type(file.content_type or "", file.filename or "")
     os.makedirs(settings.upload_dir, exist_ok=True)
     file_id = str(uuid.uuid4())
-    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "txt"
+    ext = _sanitize_ext(file.filename)
     file_path = os.path.join(settings.upload_dir, f"{file_id}.{ext}")
 
     file_size = 0
