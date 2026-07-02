@@ -37,7 +37,7 @@ export default async function RulesPage() {
     <div className="mx-auto max-w-6xl px-8 py-8">
       <PageHeader
         title="Rules library"
-        description="The active rule corpus the compliance pipeline evaluates against — curated from IRDAI advertising regulations, SEBI investment-product wording rules, and the Bajaj Allianz Life brand guide."
+        description="The active rule corpus the compliance pipeline evaluates against — curated from IRDAI advertising regulations, SEBI investment-product wording rules, and the Bajaj Life Insurance brand guide."
         actions={
           <Button asChild size="hero">
             <Link href="/rules/generate">Generate from document →</Link>

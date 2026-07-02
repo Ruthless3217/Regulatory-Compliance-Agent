@@ -803,7 +803,7 @@ Constraints:
             if product_passages_block else ""
         )
 
-        prompt = f"""You are a senior Bajaj Allianz Life compliance reviewer (Legal/Compliance/FPU).
+        prompt = f"""You are a senior Bajaj Life Insurance compliance reviewer (Legal/Compliance/FPU).
 Your past colleagues' comments on similar copy are below — they show the
 substance you should be checking for AND the voice you should write in.
 

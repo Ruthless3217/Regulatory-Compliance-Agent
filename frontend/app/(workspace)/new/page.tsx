@@ -238,7 +238,7 @@ export default function NewAnalysisPage() {
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://www.bajajallianzlife.com/…"
+                placeholder="https://www.bajajlifeinsurance.com/…"
                 className="h-10"
               />
               <p className="mt-2 text-xs text-muted-foreground">

@@ -218,7 +218,7 @@ Return at least one rule unless the document genuinely has none.
 
         system_prompt = (
             "You are an expert insurance/financial compliance analyst for Bajaj "
-            "Allianz Life's marketing team. Extract specific, actionable rules "
+            " Life's marketing team. Extract specific, actionable rules "
             "from regulator documents. Be exhaustive — every distinct rule the "
             "document contains must be returned. Return ONLY valid JSON."
         )

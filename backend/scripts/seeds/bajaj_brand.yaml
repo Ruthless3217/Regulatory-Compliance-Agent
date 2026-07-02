@@ -1,12 +1,12 @@
-# Bajaj Allianz Life Insurance brand seed rules.
+# Bajaj Life Insurance brand seed rules.
 # Run with: python -m scripts.seed_rules
 category: brand
 generation_source: seed/bajaj_brand-2024-q1
 confidence_score: 0.9
 rules:
-  - rule_text: "The brand name must appear as 'Bajaj Allianz Life Insurance' in full at first mention; 'Bajaj Allianz Life' is acceptable thereafter. Never 'BALIC' in customer-facing copy."
+  - rule_text: "The brand name must appear as 'Bajaj Life Insurance' in full at first mention; 'Bajaj Life Insurance' is acceptable thereafter. Never 'BALIC' in customer-facing copy."
     severity: high
-    keywords: ["bajaj allianz", "balic"]
+    keywords: ["Bajaj Life Insurance", "balic"]
     points_deduction: -7.0
   - rule_text: "Tagline 'Jiyo Befikar' is the registered brand line; use as approved in title case, not all caps."
     severity: medium
@@ -24,9 +24,9 @@ rules:
     severity: medium
     keywords: ["fear", "die", "stranded", "deathbed"]
     points_deduction: -5.0
-  - rule_text: "Reference to parent group: 'Bajaj Finserv' and 'Allianz SE' must be spelled correctly; never 'Bajaj group' alone."
+  - rule_text: "Reference to parent group: 'Bajaj Finserv' and 'Bajaj' must be spelled correctly; never 'Bajaj group' alone."
     severity: medium
-    keywords: ["bajaj finserv", "allianz se", "parent"]
+    keywords: ["bajaj finserv", "Bajaj", "parent"]
     points_deduction: -5.0
   - rule_text: "Use ₹ symbol with non-breaking space before amounts; avoid 'Rs.' in digital copy."
     severity: low
@@ -40,7 +40,7 @@ rules:
     severity: low
     keywords: ["irr", "cagr", "nav", "jargon"]
     points_deduction: -3.0
-  - rule_text: "Visual identity: use approved Bajaj Allianz Life blue (#003595); never substitute generic blues."
+  - rule_text: "Visual identity: use approved Bajaj Life Insurance blue (#003595); never substitute generic blues."
     severity: medium
     keywords: ["brand blue", "#003595", "color"]
     points_deduction: -5.0
@@ -68,7 +68,7 @@ rules:
     severity: medium
     keywords: ["award", "winner", "recognized"]
     points_deduction: -5.0
-  - rule_text: "Product names use Title Case: 'Bajaj Allianz Life Smart Wealth Goal'; never 'BAJAJ ALLIANZ LIFE SMART WEALTH GOAL'."
+  - rule_text: "Product names use Title Case: 'Bajaj Life Insurance Smart Wealth Goal'; never 'Bajaj Life Insurance SMART WEALTH GOAL'."
     severity: low
     keywords: ["product name", "title case", "capitalization"]
     points_deduction: -3.0
@@ -80,7 +80,7 @@ rules:
     severity: low
     keywords: ["realistic", "example", "lakh", "crore"]
     points_deduction: -3.0
-  - rule_text: "Customer testimonials must be from verifiable Bajaj Allianz Life customers; pseudonyms acceptable if disclosed."
+  - rule_text: "Customer testimonials must be from verifiable Bajaj Life Insurance customers; pseudonyms acceptable if disclosed."
     severity: medium
     keywords: ["testimonial", "customer story", "pseudonym"]
     points_deduction: -5.0

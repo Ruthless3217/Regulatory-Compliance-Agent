@@ -496,7 +496,7 @@ def mark_structural_findings(
 ) -> List[Dict[str, Any]]:
     """Route heading / brand-line false-positives to the suppressed review lane
     rather than dropping them. Section-aware chunking isolates short title lines
-    (e.g. "Bajaj Allianz Life", "Why Smart Wealth Edge?"), which the LLM then
+    (e.g. "Bajaj Life Insurance", "Why Smart Wealth Edge?"), which the LLM then
     over-flags.
 
     A finding is suppressed ONLY when its current_text is an ENTIRE heading-like
@@ -1007,7 +1007,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                     product_facts=product_facts, product_passages=passages,
                 )
                 system_prompt = (
-                    "You are a senior Bajaj Allianz compliance reviewer. Cite "
+                    "You are a senior Bajaj Life Insurance compliance reviewer. Cite "
                     "the historical precedents that apply to the new section. "
                     "Return ONLY valid JSON matching the required schema."
                 )

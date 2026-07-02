@@ -49,15 +49,15 @@ _FULL_PAGE_TABLE_FRACTION = 0.85
 
 _UIN_RE = re.compile(r"UIN[\s:\-]*([0-9]{2,3}[A-Z][0-9]{3}V[0-9]{2})")
 #: The product name in the running-header-less marketing leaflets appears as a
-#: ``Bajaj [Allianz] Life <Name>`` phrase in the body. Capture the lead word
+#: ``Bajaj [] Life <Name>`` phrase in the body. Capture the lead word
 #: plus up to a few following tokens; _trim_product_name keeps only the name.
 _PRODUCT_PHRASE_RE = re.compile(
-    r"Bajaj(?:\s+Allianz)?\s+Life\s+"
+    r"Bajaj(?:\s+)?\s+Life\s+"
     r"([A-Z][A-Za-z0-9][A-Za-z0-9\-]*(?:\s+[A-Za-z0-9][A-Za-z0-9\-]*){0,6})"
 )
 #: The insurer's own legal name — never a product. Used to reject both a
 #: company-name running header and company-name body matches.
-_COMPANY_NAME_RE = re.compile(r"bajaj\s+(?:allianz\s+)?life\s+insurance", re.I)
+_COMPANY_NAME_RE = re.compile(r"bajaj\s+(?:\s+)?life\s+insurance", re.I)
 _DESCRIPTOR_RE = re.compile(
     r"\bAn?\b.{0,80}?(Linked|Participating).{0,80}?Plan\b", re.IGNORECASE
 )
@@ -217,7 +217,7 @@ def _extract_product_name(
 
     1. the most-widespread running header (Phase-1 behaviour) — unless it is
        the insurer's legal name (marketing leaflets repeat 'Bajaj Life ...');
-    2. the most-frequent ``Bajaj [Allianz] Life <Name>`` body phrase, excluding
+    2. the most-frequent ``Bajaj [] Life <Name>`` body phrase, excluding
        company boilerplate and riders — this is how header-less leaflets name
        their product;
     3. the filename, title-cased.

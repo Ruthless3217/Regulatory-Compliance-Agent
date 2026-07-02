@@ -123,7 +123,7 @@ export default function SettingsPage() {
         <Section icon={<Info className="h-4 w-4" />} title="About">
           <Row label="Version"><span className="font-mono text-xs">1.0.0</span></Row>
           <Row label="Build"><span className="font-mono text-xs">{buildSha}</span></Row>
-          <Row label="Owner"><span className="text-xs">Bajaj Allianz Life · Marketing</span></Row>
+          <Row label="Owner"><span className="text-xs">Bajaj Life Insurance · Marketing</span></Row>
         </Section>
       </div>
     </div>

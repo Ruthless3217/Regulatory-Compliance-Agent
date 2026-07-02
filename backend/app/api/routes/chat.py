@@ -226,7 +226,7 @@ def _build_system_prompt(
     rag_status = "degraded — answer from general knowledge if needed" if ctx.degraded else "active"
 
     return (
-        "You are a regulatory-compliance assistant for Bajaj Allianz Life "
+        "You are a regulatory-compliance assistant for Bajaj Life Insurance "
         "Insurance, narrowly scoped to reviewing ONE specific marketing "
         "submission against IRDAI, SEBI, and Bajaj brand rules.\n"
         "\n"

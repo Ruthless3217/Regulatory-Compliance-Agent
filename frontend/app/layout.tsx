@@ -19,7 +19,7 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Bajaj Compliance",
-  description: "Regulatory compliance review tool for Bajaj Allianz Life marketing content",
+  description: "Regulatory compliance review tool for Bajaj Life Insurance marketing content",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

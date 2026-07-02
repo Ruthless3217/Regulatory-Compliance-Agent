@@ -153,7 +153,7 @@ export function Sidebar() {
         </div>
         <div className="mt-2 flex items-baseline justify-between text-[10px] text-muted-foreground">
           <span className="font-mono">v1.0 · 2026</span>
-          <span>Bajaj Allianz Life</span>
+          <span>Bajaj Life Insurance</span>
         </div>
       </div>
     </aside>
