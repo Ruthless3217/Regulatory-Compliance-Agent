@@ -61,6 +61,9 @@ def extract_paragraphs(
         if not file_path:
             raise ValueError("pdf content_type requires file_path")
         return extract_pdf_paragraphs(file_path)
+    if file_path:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            return split_text_paragraphs(f.read())
     return split_text_paragraphs(pasted_text or "")
 
 

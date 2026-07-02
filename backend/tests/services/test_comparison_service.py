@@ -140,3 +140,12 @@ def test_build_diff_replace_different_count_falls_back_to_delete_insert():
 
 def test_build_diff_empty_documents_produce_no_change():
     assert build_diff([], []) == []
+
+
+def test_extract_paragraphs_reads_uploaded_txt_file_from_file_path(tmp_path: Path):
+    file_path = tmp_path / "sample.txt"
+    file_path.write_text("First paragraph.\n\nSecond paragraph.", encoding="utf-8")
+
+    paragraphs = extract_paragraphs(str(file_path), "text")
+
+    assert paragraphs == ["First paragraph.", "Second paragraph."]
