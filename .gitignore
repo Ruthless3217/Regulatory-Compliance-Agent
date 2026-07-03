@@ -65,3 +65,15 @@ docs/ledger/
 # Runtime logs
 backend/logs/
 logs/
+
+# Local git worktrees (isolated feature workspaces)
+.worktrees/
+
+# LibreOffice/Office lock files
+.~lock.*#
+
+# Local scratch / notes files (personal, not part of the project)
+/me.md
+/PROMPT.md
+/whatiwant.txt
+/docs/dead-code-auth-audit-2026-07-01.md
