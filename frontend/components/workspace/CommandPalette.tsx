@@ -5,13 +5,14 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { listSubmissions } from "@/lib/api";
 import { useCommandPalette } from "./CommandPaletteProvider";
 import type { Submission } from "@/lib/types";
-import { FileText, PenSquare, Library, LineChart, Boxes, Settings, Search } from "lucide-react";
+import { FileText, PenSquare, Library, LineChart, Boxes, Settings, Search, GitCompare } from "lucide-react";
 
 type Entry = { id: string; label: string; sublabel?: string; href: string; icon: React.ReactNode };
 
 const NAV: Entry[] = [
   { id: "nav-submissions", label: "Submissions", href: "/", icon: <FileText className="h-4 w-4" /> },
   { id: "nav-new", label: "New analysis", sublabel: "Action", href: "/new", icon: <PenSquare className="h-4 w-4" /> },
+  { id: "nav-compare", label: "Compare", sublabel: "Action", href: "/compare", icon: <GitCompare className="h-4 w-4" /> },
   { id: "nav-rules", label: "Rules", href: "/rules", icon: <Library className="h-4 w-4" /> },
   { id: "nav-dashboard", label: "Dashboard", href: "/dashboard", icon: <LineChart className="h-4 w-4" /> },
   { id: "nav-kb", label: "Knowledge base", href: "/knowledge-base", icon: <Boxes className="h-4 w-4" /> },

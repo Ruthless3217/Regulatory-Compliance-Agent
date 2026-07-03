@@ -189,3 +189,42 @@ export interface ProjectionResponse {
   counts: Record<string, number>;
   points: ProjectionPoint[];
 }
+
+export type ComparisonStatus = "processing" | "completed" | "failed";
+
+export interface DiffWord {
+  text: string;
+  changed: boolean;
+}
+
+export type DiffBlock =
+  | { type: "equal"; old_text: string; new_text: string }
+  | { type: "delete"; old_text: string }
+  | { type: "insert"; new_text: string }
+  | { type: "replace"; old_words: DiffWord[]; new_words: DiffWord[] };
+
+export type ChangeKind = "removed" | "added" | "modified";
+
+/**
+ * A single entry in the Compare "Changes" sidebar, derived from one non-equal
+ * DiffBlock. `id` matches the block's index in the diff so the viewer can scroll
+ * to it. For "modified", removedText/addedText hold only the changed words.
+ */
+export interface ChangeItem {
+  id: string;
+  blockIndex: number;
+  kind: ChangeKind;
+  removedText?: string;
+  addedText?: string;
+}
+
+export interface DocumentComparison {
+  id: string;
+  title: string;
+  old_content_type: string;
+  new_content_type: string;
+  status: ComparisonStatus;
+  error_message?: string | null;
+  diff_result?: DiffBlock[] | null;
+  created_at: string;
+}

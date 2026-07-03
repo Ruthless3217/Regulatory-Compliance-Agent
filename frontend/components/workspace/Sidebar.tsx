@@ -10,6 +10,7 @@ import {
   Settings,
   Search,
   Boxes,
+  GitCompare,
 } from "lucide-react";
 import { DensityToggle } from "./DensityToggle";
 import { ApiHealthDot } from "./ApiHealthDot";
@@ -25,6 +26,7 @@ const SECTIONS: Section[] = [
     items: [
       { label: "Submissions", href: "/", icon: <FileText className="h-3.5 w-3.5" />, kbd: "S" },
       { label: "New analysis", href: "/new", icon: <PenSquare className="h-3.5 w-3.5" />, kbd: "N" },
+      { label: "Compare", href: "/compare", icon: <GitCompare className="h-3.5 w-3.5" />, kbd: "C" },
     ],
   },
   {

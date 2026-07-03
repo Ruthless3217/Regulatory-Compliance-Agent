@@ -6,6 +6,7 @@
 import type {
   ComplianceResults,
   DashboardSummary,
+  DocumentComparison,
   KnowledgeBaseSearchResponse,
   ProjectionResponse,
   Rule,
@@ -223,4 +224,39 @@ export async function searchKnowledgeBase(
 ): Promise<KnowledgeBaseSearchResponse> {
   const qs = new URLSearchParams({ q, k: String(k) });
   return jsonFetch(`${base()}/knowledge-base/search?${qs.toString()}`);
+}
+
+/* ---------- comparisons ---------- */
+export async function listComparisons(): Promise<{ total: number; comparisons: DocumentComparison[] }> {
+  return jsonFetch(`${base()}/comparisons`);
+}
+export async function getComparison(id: string): Promise<DocumentComparison> {
+  return jsonFetch(`${base()}/comparisons/${id}`);
+}
+export async function createComparison(body: {
+  title: string;
+  old_file?: File;
+  new_file?: File;
+  old_content?: string;
+  new_content?: string;
+}): Promise<DocumentComparison> {
+  const form = new FormData();
+  form.append("title", body.title);
+  if (body.old_file) form.append("old_file", body.old_file);
+  if (body.new_file) form.append("new_file", body.new_file);
+  if (body.old_content) form.append("old_content", body.old_content);
+  if (body.new_content) form.append("new_content", body.new_content);
+  const res = await fetch(`${base()}/comparisons`, {
+    method: "POST",
+    body: form,
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return (await res.json()) as DocumentComparison;
+}
+export async function deleteComparison(id: string): Promise<{ message: string }> {
+  return jsonFetch(`${base()}/comparisons/${id}`, { method: "DELETE" });
 }

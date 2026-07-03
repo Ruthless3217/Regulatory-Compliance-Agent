@@ -66,7 +66,7 @@ docs/ledger/
 backend/logs/
 logs/
 
-# Local git worktrees (isolated feature workspaces)
+# Git worktrees (superpowers:using-git-worktrees / isolated feature workspaces)
 .worktrees/
 
 # LibreOffice/Office lock files
@@ -77,3 +77,8 @@ logs/
 /PROMPT.md
 /whatiwant.txt
 /docs/dead-code-auth-audit-2026-07-01.md
+
+# Comparison feature tests — kept local, not deployed to source control/VM
+/backend/tests/services/test_comparison_service.py
+/backend/tests/test_comparisons_router_smoke.py
+/backend/tests/test_document_comparison_model.py
