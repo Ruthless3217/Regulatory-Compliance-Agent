@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { getComparison } from "@/lib/api";
 import { PageHeader, PageHeaderMeta } from "@/components/ui/page-header";
 import { StatusPill } from "@/components/ui/status-pill";
-import { DiffViewer } from "@/components/compare/DiffViewer";
+import { CompareWorkspace } from "@/components/compare/CompareWorkspace";
 import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ export default async function ComparisonDetailPage({
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-8 py-8">
+    <div className="mx-auto max-w-[1400px] px-8 py-8">
       <Link
         href="/compare"
         className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
@@ -59,17 +59,7 @@ export default async function ComparisonDetailPage({
           Comparison failed: {comparison.error_message ?? "Unknown error"}
         </div>
       ) : (
-        <>
-          <div className="mb-3 flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-sm bg-sev-critical/30" /> Removed
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-sm bg-success/30" /> Added
-            </span>
-          </div>
-          <DiffViewer blocks={comparison.diff_result ?? []} />
-        </>
+        <CompareWorkspace blocks={comparison.diff_result ?? []} />
       )}
     </div>
   );

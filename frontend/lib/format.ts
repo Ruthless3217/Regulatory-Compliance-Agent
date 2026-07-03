@@ -1,4 +1,56 @@
-import type { Severity } from "./types";
+import type { ChangeItem, DiffBlock, Severity } from "./types";
+
+/**
+ * Count how many words were removed vs. added across a diff.
+ *
+ * Removed = every word in a deleted paragraph + each `changed` word on the old
+ * side of a replaced paragraph. Added = the same for inserted paragraphs and
+ * the new side of replaced paragraphs. Equal blocks contribute nothing.
+ */
+export function countDiffStats(blocks: DiffBlock[]): { removed: number; added: number } {
+  let removed = 0;
+  let added = 0;
+  for (const b of blocks) {
+    if (b.type === "delete") {
+      removed += b.old_text.trim() ? b.old_text.trim().split(/\s+/).length : 0;
+    } else if (b.type === "insert") {
+      added += b.new_text.trim() ? b.new_text.trim().split(/\s+/).length : 0;
+    } else if (b.type === "replace") {
+      removed += b.old_words.filter((w) => w.changed).length;
+      added += b.new_words.filter((w) => w.changed).length;
+    }
+  }
+  return { removed, added };
+}
+
+export function pluralizeWords(n: number): string {
+  return `${n} ${n === 1 ? "word" : "words"}`;
+}
+
+/**
+ * Flatten a diff into a list of change entries for the Compare sidebar — one per
+ * non-equal block. Each entry's `id`/`blockIndex` maps to the block's position
+ * so the viewer can scroll to it. Equal blocks are skipped.
+ */
+export function deriveChanges(blocks: DiffBlock[]): ChangeItem[] {
+  const items: ChangeItem[] = [];
+  blocks.forEach((b, i) => {
+    if (b.type === "delete") {
+      items.push({ id: String(i), blockIndex: i, kind: "removed", removedText: b.old_text });
+    } else if (b.type === "insert") {
+      items.push({ id: String(i), blockIndex: i, kind: "added", addedText: b.new_text });
+    } else if (b.type === "replace") {
+      items.push({
+        id: String(i),
+        blockIndex: i,
+        kind: "modified",
+        removedText: b.old_words.filter((w) => w.changed).map((w) => w.text).join(" "),
+        addedText: b.new_words.filter((w) => w.changed).map((w) => w.text).join(" "),
+      });
+    }
+  });
+  return items;
+}
 
 export function formatDate(iso?: string | null): string {
   if (!iso) return "—";
