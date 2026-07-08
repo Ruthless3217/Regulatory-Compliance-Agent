@@ -106,9 +106,8 @@ class Settings(BaseSettings):
             return None
         return v
 
-    # Hard daily token ceiling across ALL keys/models/endpoints (wallet guard,
-    # independent of per-key Groq TPM/TPD). 0 = disabled. When exceeded, every
-    # LLM entrypoint fails closed until UTC midnight.
+    # Hard daily token ceiling across ALL keys/models/endpoints (wallet guard).
+    # 0 = disabled. When exceeded, every LLM entrypoint fails closed until UTC midnight.
     llm_global_daily_token_budget: int = 0
     # Context window of the deployed model — used for the pre-call token budget
     # check so the assembled prompt can't silently overflow and truncate the tail.
@@ -177,12 +176,6 @@ class Settings(BaseSettings):
     # that sets XFF — when the app is directly internet-facing this header is
     # client-controlled and trivially spoofed, so leave it False there.
     trust_forwarded_for: bool = False
-    # Global daily ceiling on total LLM tokens (prompt+completion) across ALL
-    # callers — the hard backstop against runaway spend. 0 disables it.
-    # Enforced via a shared Redis counter keyed on the UTC date; when Redis is
-    # unavailable the ceiling cannot be enforced and calls are allowed (the
-    # per-IP limiter still applies). Sized to your provider/Foundry quota.
-    llm_daily_token_budget: int = 0
 
     # Chat input caps (prompt-bloat / cost guard). Bound how much client-supplied
     # text reaches the LLM: the latest message plus a tail of conversation history.
@@ -193,13 +186,16 @@ class Settings(BaseSettings):
     # File Upload
     max_upload_size: int = 52428800  # 50MB
     upload_dir: str = "./uploads"
+    # --- Pixel-faithful comparison rendering ---
+    # Gotenberg sidecar (wraps LibreOffice) used to convert Word -> PDF before
+    # rendering pages. Internal compose DNS name; no API key.
+    gotenberg_url: str = "http://gotenberg:3000"
+    # Max pages rendered per side; surplus is reported as truncated_pages, never
+    # silently dropped.
+    pixel_render_page_cap: int = 60
     # Root that knowledge-base ingest is confined to. Any folder_path outside
     # this tree is rejected (prevents arbitrary server-side file read — audit C8).
     kb_ingest_root: str = "./uploads"
-
-    # Firebase
-    firebase_service_account_path: str = ""
-    firebase_api_key: str = ""
 
     # LangSmith Tracing
     langchain_tracing_v2: str = "false"
@@ -238,11 +234,6 @@ class Settings(BaseSettings):
     kb_min_fuzzy_score: int = 60                  # rapidfuzz partial_ratio threshold
     viz_points_per_index: int = 2000              # projection point cap per index
 
-    # OpenAI (direct API — v1 default for embeddings)
-    openai_api_key: str = ""
-
-
-
     # Azure AI Foundry — model-inference endpoint. Cohere models (embed v3,
     # rerank v4) deployed in the Foundry project are NOT served on the Azure
     # OpenAI surface (.openai.azure.com); they are reached via the
@@ -266,9 +257,6 @@ class Settings(BaseSettings):
     azure_search_chunks_index: str = "rag-chunks"
     azure_search_source_docs_index: str = "rag-source-docs"
 
-
-
-
     # Product-doc grounding (2026-06-22) — fact cards (deterministic) + brochure
     # passages (semantic) injected into the analysis prompt. Additive: a no-match
     # leaves precedent/rule/novel grading unchanged.
@@ -283,22 +271,9 @@ class Settings(BaseSettings):
     product_docs_top_k: int = 3          # brochure passages per chunk (Path B)
     product_match_max: int = 3           # max products grounded per document
 
-    # Groq two-model strategy + token rate limiting (Priority 4).
-    # classify = cheap/fast first pass, citation = stronger generation.
-    groq_classify_model: str = "llama-3.1-8b-instant"
-    groq_citation_model: str = "llama-3.3-70b-versatile"
-    # Token ceilings per model (Groq free-tier defaults; override via env).
-    groq_classify_tpm: int = 6000
-    groq_classify_tpd: int = 500000
-    groq_citation_tpm: int = 12000
-    groq_citation_tpd: int = 100000
-    # Queue a submission once daily usage crosses this fraction of the TPD cap.
-    groq_daily_cap_fraction: float = 0.9
-    # Max chunks graded concurrently. Each grading call is a large (precedents +
-    # rules) prompt (~6-10k tokens); firing many at once bursts past Groq's
-    # per-minute token limit (30k TPM free tier) → 429 → chunk fails → run fails
-    # closed at "waiting_for_review". Keep this low (1-2) on the free tier so
-    # calls fit under TPM; raise it on a paid/Dev tier. Override via env.
+    # Max chunks graded concurrently. Keep low to avoid bursting past the
+    # provider's per-minute token limit — raises to 429 → chunk fails →
+    # run closes at "waiting_for_review". Override via env.
     grade_concurrency: int = 2
 
     # Completeness sweep (recall fix 2026-06-08): run a second per-chunk "what did
@@ -314,13 +289,6 @@ class Settings(BaseSettings):
     # docs/superpowers/specs/2026-06-15-cross-chunk-context-design.md.
     cross_chunk_context_enabled: bool = True
     cross_chunk_context_token_budget: int = 8000
-
-    # Pinecone (alternative v1 vector store)
-    pinecone_api_key: str = ""
-    pinecone_index_name: str = ""
-    pinecone_namespace_rules: str = "rag_rules"
-    pinecone_namespace_chunks: str = "rag_chunks"
-    pinecone_namespace_srcdocs: str = "rag_source_docs"
 
     class Config:
         env_file = ".env"

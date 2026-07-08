@@ -7,7 +7,6 @@ from .content_chunk import ContentChunk
 from .agent_execution import AgentExecution
 from .agent_trace import AgentTrace
 from .tool_invocation import ToolInvocation
-from .compliance_state import ComplianceState
 from .rule_feedback import RuleFeedback
 from .product_document import ProductDocument, ProductTable
 from .document_comparison import DocumentComparison
@@ -22,7 +21,6 @@ __all__ = [
     "AgentExecution",
     "AgentTrace",
     "ToolInvocation",
-    "ComplianceState",
     "RuleFeedback",
     "ProductDocument",
     "ProductTable",

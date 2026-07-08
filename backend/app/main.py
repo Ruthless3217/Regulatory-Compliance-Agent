@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
         from .models import (  # noqa: F401
             User, Submission, Rule, ComplianceCheck,
             Violation, ContentChunk, AgentExecution,
-            AgentTrace, ToolInvocation, ComplianceState,
+            AgentTrace, ToolInvocation,
             DocumentComparison,
         )
         logger.info("✅ Database models registered (schema managed by Alembic)")

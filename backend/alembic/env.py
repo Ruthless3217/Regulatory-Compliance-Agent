@@ -15,7 +15,6 @@ from app.models import (  # noqa: F401
     AgentExecution,
     AgentTrace,
     ToolInvocation,
-    ComplianceState,
 )
 from app.config import settings
 

@@ -31,6 +31,7 @@ openpyxl==3.1.5
 # Token-Based Chunking
 tiktoken==0.13.0
 pdfplumber==0.11.9
+pypdfium2==5.8.0
 
 # YAML for seed data
 PyYAML==6.0.3
@@ -45,34 +46,14 @@ langchain-openai==1.2.1
 langchain-community==0.4.1
 langsmith==0.8.5
 
-# Firebase (Auth)
-firebase-admin==7.4.0
-
-# Gemini
-google-generativeai==0.8.6
-
 # RAG — Azure AI Search (loaded lazily; only required when
 # RAG_VECTOR_BACKEND=azure_search). Safe to keep installed under pgvector
 # default since the import is gated.
 azure-search-documents==12.0.0
 
-# RAG — Pinecone (loaded lazily; only required when
-# RAG_VECTOR_BACKEND=pinecone). Safe to keep installed under any backend
-# since the import is gated.
-pinecone==9.0.1
-
-# RAG — Cohere embeddings (loaded lazily; only required when
-# RAG_EMBEDDING_PROVIDER=cohere).
-cohere>=5.13.0  # NOT INSTALLED — pin manually
 # RAG — Azure AI Foundry model inference (loaded lazily; only required when
 # RAG_EMBEDDING_PROVIDER=azure_cohere). Serves Cohere embed/rerank deployed in
 # the Foundry project. aiohttp backs azure-core's async transport.
-azure-ai-inference>=1.0.0b9
-aiohttp>=3.10.0
-
-# RAG — Cohere via Azure AI Foundry (loaded lazily; only required when
-# RAG_EMBEDDING_PROVIDER=azure_cohere). The async EmbeddingsClient needs an
-# async transport, so aiohttp is required alongside it.
 azure-ai-inference>=1.0.0b9
 aiohttp>=3.10.0
 

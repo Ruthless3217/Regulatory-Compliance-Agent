@@ -97,10 +97,6 @@ export async function getComplianceResults(id: string): Promise<ComplianceResult
 export async function getCheck(checkId: string) {
   return jsonFetch(`${base()}/compliance/check/${checkId}`);
 }
-export async function resumeCheck(id: string, feedback?: string) {
-  const qs = feedback ? `?feedback=${encodeURIComponent(feedback)}` : "";
-  return jsonFetch(`${base()}/compliance/resume/${id}${qs}`, { method: "POST" });
-}
 
 /* ---------- adaptive rule weights (HITL feedback) ---------- */
 export async function submitViolationFeedback(
@@ -259,4 +255,7 @@ export async function createComparison(body: {
 }
 export async function deleteComparison(id: string): Promise<{ message: string }> {
   return jsonFetch(`${base()}/comparisons/${id}`, { method: "DELETE" });
+}
+export function comparisonPageImageUrl(id: string, side: "old" | "new", n: number): string {
+  return `${base()}/comparisons/${id}/pages/${side}/${n}`;
 }

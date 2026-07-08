@@ -7,7 +7,6 @@ Endpoints:
 - POST /compliance/analyze/{submission_id}/stream - SSE-streamed analysis with progress
 - GET  /compliance/results/{submission_id}        - Get analysis results
 - GET  /compliance/check/{check_id}               - Get specific check details
-- POST /compliance/resume/{submission_id}         - Resume HITL workflow
 - POST /compliance/violations/{violation_id}/feedback - Reviewer verdict (adaptive weights)
 - POST /compliance/check/{check_id}/reviewer-score    - Held-out reviewer score (eval only)
 """

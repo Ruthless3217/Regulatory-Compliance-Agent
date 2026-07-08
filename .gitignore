@@ -78,7 +78,18 @@ logs/
 /whatiwant.txt
 /docs/dead-code-auth-audit-2026-07-01.md
 
-# Comparison feature tests — kept local, not deployed to source control/VM
-/backend/tests/services/test_comparison_service.py
-/backend/tests/test_comparisons_router_smoke.py
-/backend/tests/test_document_comparison_model.py
+# Tests — run locally, never deployed to source control/VM
+backend/tests/
+
+# Binary Office documents — cannot be diffed; keep source copies in shared drive
+*.docx
+*.xlsx
+
+# Windows shell crash dumps
+*.stackdump
+
+# Per-developer Claude Code permission allowlist (shared permissions go in .claude/settings.json)
+.claude/settings.local.json
+
+# Generated LLM enrichment cache — regeneratable via ingest_precedent_cases.py
+backend/data/precedent_enrich_cache/

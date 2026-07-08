@@ -1,1 +1,0 @@
-{"issue_type": "Incomplete Condition Disclosure", "why_rationale": "The statement was flagged because it truncates the source condition and omits that revision is allowed before the end of the assessment year or before completion of the assessment, whichever is earlier.", "guideline_ref": "tax_and_gst_compliance_guidelines", "severity": "moderate"}
