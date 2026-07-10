@@ -22,6 +22,24 @@ class Settings(BaseSettings):
         # 2. Fallback to constructed URL
         return f"postgresql://{self.db_user}:{self.db_pass}@{self.db_host}:{self.db_port}/{self.db_name}"
 
+    # --- Auth ---
+    auth_enabled: bool = True
+    auth_ip_binding_mode: str = "strict"          # strict | cidr | list | log_only
+    session_absolute_ttl_seconds: int = 8 * 3600
+    session_idle_ttl_seconds: int = 60 * 60
+    login_max_attempts: int = 5
+    login_lockout_seconds: int = 900
+    session_cookie_secure: bool = True            # requires TLS at nginx
+    
+    # Bootstrap
+    super_admin_username: str = ""
+    super_admin_password: str = ""
+    super_admin_ip: str = ""
+
+    # --- Cost model ---
+    llm_prices: dict = {}
+    llm_price_currency: str = "USD"
+
     # LLM (Gemini via OpenAI-compatible API)
     # LLM_API_KEY may hold a single key OR a comma-separated list. Multiple keys
     # enable failover: when one Groq key hits its TPM/TPD ceiling the LLMService

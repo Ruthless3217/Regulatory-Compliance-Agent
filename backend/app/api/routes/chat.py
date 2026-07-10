@@ -32,6 +32,7 @@ from app.services.rag.retrievers.source_docs_retriever import (
 
 from app.config import settings
 from app.services.llm_budget import llm_budget_guard
+from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -396,7 +397,7 @@ def _resolve_violation(violation_id: Optional[UUID], db: Session) -> Violation:
 
 
 @router.post("", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
-async def chat(req: ChatRequest, request: Request, db: Session = Depends(get_db)):
+async def chat(req: ChatRequest, request: Request, user: dict = Depends(require("chat:use")), db: Session = Depends(get_db)):
     submission = _fetch_submission(req.submission_id, db)
     return StreamingResponse(
         _stream_chat(req.message, req.history, submission, db, request),
@@ -406,7 +407,7 @@ async def chat(req: ChatRequest, request: Request, db: Session = Depends(get_db)
 
 
 @router.post("/quote-violation", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
-async def quote_violation(req: QuickPromptRequest, request: Request, db: Session = Depends(get_db)):
+async def quote_violation(req: QuickPromptRequest, request: Request, user: dict = Depends(require("chat:use")), db: Session = Depends(get_db)):
     submission = _fetch_submission(req.submission_id, db)
     target = _resolve_violation(req.violation_id, db)
 
@@ -437,7 +438,7 @@ async def quote_violation(req: QuickPromptRequest, request: Request, db: Session
 
 
 @router.post("/suggest-rewrite", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
-async def suggest_rewrite(req: QuickPromptRequest, request: Request, db: Session = Depends(get_db)):
+async def suggest_rewrite(req: QuickPromptRequest, request: Request, user: dict = Depends(require("chat:use")), db: Session = Depends(get_db)):
     submission = _fetch_submission(req.submission_id, db)
     target = _resolve_violation(req.violation_id, db)
     message = (

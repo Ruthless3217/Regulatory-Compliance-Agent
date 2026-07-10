@@ -18,6 +18,7 @@ try:  # openai>=1.0 ships RateLimitError; guard so import never hard-fails
 except Exception:  # pragma: no cover
     RateLimitError = None  # type: ignore
 import httpx
+from app.services.observability import usage_recorder
 
 # LangSmith tracing — no-op decorator if the SDK isn't installed.
 try:
@@ -325,6 +326,14 @@ class LLMService:
 
                 self._update_langsmith_usage(input_tokens, output_tokens, total_tokens)
 
+                await usage_recorder.record(
+                    model=self.model,
+                    provider=self.provider,
+                    profile=self.profile,
+                    prompt_tokens=input_tokens,
+                    completion_tokens=output_tokens
+                )
+
                 actual = total_tokens or estimate
                 if limiter is not None:
                     limiter.reconcile(estimate, actual)
@@ -414,6 +423,13 @@ class LLMService:
 
                 if total_tokens > 0:
                     self._update_langsmith_usage(input_tokens, output_tokens, total_tokens)
+                    await usage_recorder.record(
+                        model=self.model,
+                        provider=self.provider,
+                        profile=self.profile,
+                        prompt_tokens=input_tokens,
+                        completion_tokens=output_tokens
+                    )
                 return
             except Exception as e:
                 logger.error(f"LLM streaming failed mid-stream: {e}")
@@ -610,6 +626,15 @@ class LLMService:
                     input_tokens,
                     output_tokens,
                     token_usage or (input_tokens + output_tokens)
+                )
+
+                await usage_recorder.record(
+                    model=model,
+                    provider=self.provider,
+                    profile=self.profile,
+                    prompt_tokens=input_tokens,
+                    completion_tokens=output_tokens,
+                    is_retry=(attempt > 0)
                 )
 
                 await self._log_to_json(prompt, response_text, system_prompt, context)

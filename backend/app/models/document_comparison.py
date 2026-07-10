@@ -19,5 +19,9 @@ class DocumentComparison(Base):
     diff_result = Column(JSONB, nullable=True)
     status = Column(String(50), nullable=False, default="processing")  # processing, completed, failed
     error_message = Column(Text, nullable=True)
+    # --- Pixel-faithful render (2026-07-07) ---
+    render_result = Column(JSONB, nullable=True)          # overlay model: pages+boxes+changes
+    render_status = Column(String(50), nullable=False, default="processing")  # processing|completed|failed|skipped
+    render_error = Column(Text, nullable=True)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

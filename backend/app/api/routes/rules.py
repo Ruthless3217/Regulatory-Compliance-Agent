@@ -20,6 +20,7 @@ from app.services.rag.indexers.rules_indexer import (
     upsert_rule as rag_upsert_rule,
 )
 from app.schemas.rule import RuleCreate, RuleResponse
+from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ async def _safe_rag_delete(rule_id) -> None:
 @router.post("", response_model=dict)
 async def create_rule(
     rule: RuleCreate,
+    user: dict = Depends(require("rules:write")),
     db: Session = Depends(get_db)
 ):
     """Create a new compliance rule manually."""
@@ -86,6 +88,7 @@ async def list_rules(
     is_active: Optional[bool] = True,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=1000),
+    user: dict = Depends(require("rules:read")),
     db: Session = Depends(get_db)
 ):
     """List all compliance rules with optional filtering."""
@@ -116,7 +119,7 @@ async def list_rules(
 
 
 @router.get("/{rule_id}")
-async def get_rule(rule_id: str, db: Session = Depends(get_db)):
+async def get_rule(rule_id: str, user: dict = Depends(require("rules:read")), db: Session = Depends(get_db)):
     """Get a specific rule by ID."""
     rule = db.query(Rule).filter(Rule.id == rule_id).first()
     if not rule:
@@ -141,6 +144,7 @@ async def update_rule(
     is_active: Optional[bool] = None,
     severity: Optional[str] = None,
     rule_text: Optional[str] = None,
+    user: dict = Depends(require("rules:write")),
     db: Session = Depends(get_db)
 ):
     """Update a rule.
@@ -219,7 +223,7 @@ async def update_rule(
 
 
 @router.delete("/{rule_id}")
-async def delete_rule(rule_id: str, db: Session = Depends(get_db)):
+async def delete_rule(rule_id: str, user: dict = Depends(require("rules:write")), db: Session = Depends(get_db)):
     """Delete a rule."""
     rule = db.query(Rule).filter(Rule.id == rule_id).first()
     if not rule:
@@ -239,6 +243,7 @@ async def generate_rules_from_document(
     instructions: Optional[str] = Form(default=None),
     file: Optional[UploadFile] = File(default=None),
     content: Optional[str] = Form(default=None),
+    user: dict = Depends(require("rules:generate")),
     db: Session = Depends(get_db)
 ):
     """

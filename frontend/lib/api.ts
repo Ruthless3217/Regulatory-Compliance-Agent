@@ -4,15 +4,23 @@
  * In the browser, requests proxy through /api/* (see next.config.ts rewrites).
  */
 import type {
+  AuditRow,
   ComplianceResults,
   DashboardSummary,
+  DocUsageRow,
   DocumentComparison,
   KnowledgeBaseSearchResponse,
+  Me,
   ProjectionResponse,
   Rule,
+  RuleAuditRow,
+  RunRow,
+  SessionRow,
   Submission,
   TimeseriesResponse,
   TopRulesResponse,
+  UsageSummary,
+  UserRow,
 } from "./types";
 
 // Server-side fetches run inside the container and need the docker DNS name.
@@ -38,6 +46,7 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
     cache: "no-store",
+    credentials: "include",
     ...init,
   });
   if (!res.ok) {
@@ -70,6 +79,7 @@ export async function createSubmission(body: {
     method: "POST",
     body: form,
     cache: "no-store",
+    credentials: "include",
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -179,6 +189,7 @@ export async function generateRulesFromDocument(form: FormData) {
   const res = await fetch(`${base()}/rules/generate-from-document`, {
     method: "POST",
     body: form,
+    credentials: "include",
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
@@ -246,6 +257,7 @@ export async function createComparison(body: {
     method: "POST",
     body: form,
     cache: "no-store",
+    credentials: "include",
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -259,3 +271,111 @@ export async function deleteComparison(id: string): Promise<{ message: string }>
 export function comparisonPageImageUrl(id: string, side: "old" | "new", n: number): string {
   return `${base()}/comparisons/${id}/pages/${side}/${n}`;
 }
+
+/* ---------- auth ---------- */
+export const login = (b: {username:string; password:string}) => jsonFetch(`${base()}/auth/login`, {method:"POST", body:JSON.stringify(b)});
+export const logout = () => jsonFetch(`${base()}/auth/logout`, {method:"POST"});
+export const getMe = () => jsonFetch<Me>(`${base()}/auth/me`);
+export const heartbeat = () => jsonFetch(`${base()}/auth/heartbeat`, {method:"POST"});
+export const changePassword = (b: any) => jsonFetch(`${base()}/auth/change-password`, {method:"POST", body:JSON.stringify(b)});
+
+/* ---------- super-admin console ----------
+ * The backend (admin_console.py) wraps rows in {users|documents|runs|sessions|events:[...]}
+ * and uses DB-native field names (submission_id, total_cost_usd, prompt_tokens, ...).
+ * These wrappers unwrap + map each response onto the UI's row types so the pages
+ * (typed against ./types) render real values. */
+export const listUsers = async (): Promise<UserRow[]> => {
+  const r = await jsonFetch<{ users: any[] }>(`${base()}/super_admin/users`);
+  return (r.users || []).map((u) => ({
+    username: u.username,
+    role: u.role,
+    registered_ip: u.registered_ip ?? "",
+    status: u.is_active ? "active" : "disabled",
+    last_login: u.last_login_at ?? undefined,
+    run_count: u.runs ?? 0,
+    total_cost: Number(u.total_cost_usd ?? 0),
+  }));
+};
+export const createUser = (b: any) => jsonFetch(`${base()}/super_admin/users`, {method:"POST", body:JSON.stringify(b)});
+export const usageSummary = async (q: string = ""): Promise<UsageSummary> => {
+  const r = await jsonFetch<{ users: any[] }>(`${base()}/super_admin/usage/summary?${q}`);
+  const users = r.users || [];
+  const total_cost = users.reduce((s, u) => s + Number(u.total_cost_usd ?? 0), 0);
+  const total_tokens_in = users.reduce((s, u) => s + (u.input_tokens ?? 0), 0);
+  const total_tokens_out = users.reduce((s, u) => s + (u.output_tokens ?? 0), 0);
+  const runs = users.reduce((s, u) => s + (u.runs ?? 0), 0);
+  return {
+    total_cost,
+    total_tokens_in,
+    total_tokens_out,
+    active_users: users.length,
+    runs,
+    avg_cost_per_run: runs ? total_cost / runs : 0,
+  };
+};
+export const usageByDocument = async (q: string = ""): Promise<DocUsageRow[]> => {
+  const r = await jsonFetch<{ documents: any[] }>(`${base()}/super_admin/usage/by-document?${q}`);
+  return (r.documents || []).map((d) => ({
+    document_id: d.submission_id,
+    title: d.title ?? "",
+    graded_by: d.graded_by ?? "",
+    input_tokens: d.input_tokens ?? 0,
+    output_tokens: d.output_tokens ?? 0,
+    cost: Number(d.total_cost_usd ?? 0),
+    runs: d.total_runs ?? 0,
+    last_run: d.last_run ?? "",
+  }));
+};
+export const listRuns = async (q: string = ""): Promise<RunRow[]> => {
+  const r = await jsonFetch<{ runs: any[] }>(`${base()}/super_admin/runs?${q}`);
+  return (r.runs || []).map((x) => ({
+    id: x.id,
+    document_title: x.submission_id ?? "",
+    user: x.triggered_by ?? "",
+    run_number: x.run_number ?? 0,
+    is_rerun: !!x.is_rerun,
+    trigger: x.trigger_source ?? "",
+    status: x.status ?? "",
+    degraded_reason: x.degraded_reason ?? undefined,
+    duration_ms: x.duration_ms ?? 0,
+    input_tokens: x.prompt_tokens ?? 0,
+    output_tokens: x.completion_tokens ?? 0,
+    cost: Number(x.total_cost_usd ?? 0),
+  }));
+};
+export const listSessions = async (q: string = ""): Promise<SessionRow[]> => {
+  const r = await jsonFetch<{ sessions: any[] }>(`${base()}/super_admin/sessions?${q}`);
+  return (r.sessions || []).map((s) => ({
+    id: s.id,
+    user: s.username ?? s.user_id ?? "",
+    ip: s.ip ?? "",
+    login_time: s.login_at ?? "",
+    last_seen: s.last_seen_at ?? "",
+    duration_seconds: s.duration_seconds ?? 0,
+    status: s.status ?? "",
+  }));
+};
+export const auditFeed = async (q: string = ""): Promise<AuditRow[]> => {
+  const r = await jsonFetch<{ events: any[] }>(`${base()}/super_admin/audit?${q}`);
+  return (r.events || []).map((e) => ({
+    id: e.id,
+    timestamp: e.created_at ?? "",
+    actor: e.actor_role
+      ? `${e.actor_role}${e.actor_user_id ? " (" + String(e.actor_user_id).slice(0, 8) + ")" : ""}`
+      : (e.actor_user_id ?? "system"),
+    event_type: e.event_type,
+    target: e.target_type ? `${e.target_type}:${e.target_id ?? ""}` : undefined,
+    details: e.metadata ?? {},
+  }));
+};
+export const ruleAudit = async (q: string = ""): Promise<RuleAuditRow[]> => {
+  const r = await jsonFetch<{ events: any[] }>(`${base()}/super_admin/rules/audit?${q}`);
+  return (r.events || []).map((e) => ({
+    id: e.id,
+    timestamp: e.created_at ?? "",
+    actor: e.actor_role ?? e.actor_user_id ?? "",
+    rule_id: e.target_id ?? (e.metadata && e.metadata.rule_id) ?? "",
+    before: e.before ?? {},
+    after: e.after ?? {},
+  }));
+};

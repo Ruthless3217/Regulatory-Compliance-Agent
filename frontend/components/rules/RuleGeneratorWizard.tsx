@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/com
 import { SeverityBadge, Badge } from "@/components/ui/badge";
 import { createRule, generateRulesFromDocument } from "@/lib/api";
 import { categoryLabel } from "@/lib/format";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 type Step = "upload" | "review";
 
@@ -24,6 +25,7 @@ interface DraftRule {
 
 export function RuleGeneratorWizard() {
   const router = useRouter();
+  const { me } = useAuth();
   const [step, setStep] = React.useState<Step>("upload");
   const [title, setTitle] = React.useState("");
   const [instructions, setInstructions] = React.useState("");
@@ -111,6 +113,10 @@ export function RuleGeneratorWizard() {
       setSubmitting(false);
     }
   };
+
+  if (me?.role === "user") {
+    return <div className="p-8 text-center text-muted-foreground">You do not have permission to generate rules.</div>;
+  }
 
   if (step === "upload") {
     return (

@@ -15,7 +15,9 @@ import {
 import { DensityToggle } from "./DensityToggle";
 import { ApiHealthDot } from "./ApiHealthDot";
 import { useCommandPalette } from "./CommandPaletteProvider";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { cn } from "@/lib/utils";
+import { LogOut } from "lucide-react";
 
 type Item = { label: string; href: string; icon: React.ReactNode; kbd?: string };
 type Section = { title: string; items: Item[] };
@@ -57,6 +59,19 @@ function isActive(pathname: string, href: string) {
 export function Sidebar() {
   const pathname = usePathname() ?? "/";
   const { setOpen } = useCommandPalette();
+  const { me, logoutHandler } = useAuth();
+  
+  const sections = SECTIONS.map(s => {
+    if (s.title === "Library") {
+      const items = s.items.filter(it => {
+        if (it.label === "Generate rules" && me?.role === "user") return false;
+        return true;
+      });
+      return { ...s, items };
+    }
+    return s;
+  }).filter(s => s.items.length > 0);
+
   return (
     <aside className="fixed inset-y-0 left-0 z-10 flex w-60 flex-col border-r border-border bg-background/95 backdrop-blur-sm">
       {/* Masthead */}
@@ -93,7 +108,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-3">
-        {SECTIONS.map((s) => (
+        {sections.map((s) => (
           <div key={s.title} className="mb-5">
             <div className="mb-1 flex items-center gap-2 px-2">
               <div className="micro-label">{s.title}</div>
@@ -148,12 +163,24 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border px-3 py-2">
+      <div className="border-t border-border px-3 py-2 flex flex-col gap-2">
+        {me && (
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-medium text-foreground">{me.username}</div>
+            <button
+              onClick={logoutHandler}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <LogOut className="h-3 w-3" />
+              Logout
+            </button>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <ApiHealthDot />
           <DensityToggle />
         </div>
-        <div className="mt-2 flex items-baseline justify-between text-[10px] text-muted-foreground">
+        <div className="mt-1 flex items-baseline justify-between text-[10px] text-muted-foreground">
           <span className="font-mono">v1.0 · 2026</span>
           <span>Bajaj Life Insurance</span>
         </div>

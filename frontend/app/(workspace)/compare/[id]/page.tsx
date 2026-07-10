@@ -59,7 +59,7 @@ export default async function ComparisonDetailPage({
           Comparison failed: {comparison.error_message ?? "Unknown error"}
         </div>
       ) : (
-        <CompareWorkspace blocks={comparison.diff_result ?? []} />
+        <CompareWorkspace comparison={comparison} />
       )}
     </div>
   );

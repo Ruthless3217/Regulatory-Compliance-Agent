@@ -203,6 +203,29 @@ export type DiffBlock =
   | { type: "insert"; new_text: string }
   | { type: "replace"; old_words: DiffWord[]; new_words: DiffWord[] };
 
+export type RenderBoxType = "removed" | "added";
+
+export interface RenderBox {
+  x0: number; y0: number; x1: number; y1: number;
+  type: RenderBoxType;
+  change_id: string;
+}
+export interface RenderPage { n: number; w_pt: number; h_pt: number; boxes: RenderBox[]; }
+export interface RenderChangeRef { page: number; bbox: [number, number, number, number]; text: string; }
+export interface RenderChange {
+  id: string;
+  kind: ChangeKind;
+  old?: RenderChangeRef;
+  new?: RenderChangeRef;
+}
+export interface RenderResult {
+  old: { pages: RenderPage[] };
+  new: { pages: RenderPage[] };
+  changes: RenderChange[];
+  truncated_pages: number;
+}
+export type RenderStatus = "processing" | "completed" | "failed" | "skipped";
+
 export type ChangeKind = "removed" | "added" | "modified";
 
 /**
@@ -226,5 +249,86 @@ export interface DocumentComparison {
   status: ComparisonStatus;
   error_message?: string | null;
   diff_result?: DiffBlock[] | null;
+  render_status?: RenderStatus | null;
+  render_result?: RenderResult | null;
   created_at: string;
+}
+
+export interface Me {
+  username: string;
+  role: string;
+  must_change_password?: boolean;
+}
+
+export interface UserRow {
+  username: string;
+  role: string;
+  registered_ip: string;
+  status: string;
+  last_login?: string;
+  run_count: number;
+  total_cost: number;
+}
+
+export interface UsageSummary {
+  total_cost: number;
+  total_tokens_in: number;
+  total_tokens_out: number;
+  active_users: number;
+  runs: number;
+  avg_cost_per_run: number;
+}
+
+export interface DocUsageRow {
+  document_id: string;
+  title: string;
+  graded_by: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost: number;
+  runs: number;
+  last_run: string;
+}
+
+export interface RunRow {
+  id: string;
+  document_title: string;
+  user: string;
+  run_number: number;
+  is_rerun: boolean;
+  trigger: string;
+  status: string;
+  degraded_reason?: string;
+  duration_ms: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost: number;
+}
+
+export interface SessionRow {
+  id: string;
+  user: string;
+  ip: string;
+  login_time: string;
+  last_seen: string;
+  duration_seconds: number;
+  status: string;
+}
+
+export interface AuditRow {
+  id: string;
+  timestamp: string;
+  actor: string;
+  event_type: string;
+  target?: string;
+  details?: Record<string, any>;
+}
+
+export interface RuleAuditRow {
+  id: string;
+  timestamp: string;
+  actor: string;
+  rule_id: string;
+  before: Record<string, any>;
+  after: Record<string, any>;
 }

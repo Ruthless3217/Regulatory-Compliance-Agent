@@ -17,6 +17,7 @@ from app.models.submission import Submission
 from app.services.rag.retrievers.similar_subs_retriever import (
     get_similar_submissions_retriever,
 )
+from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ async def get_similar_submissions(
     submission_id: UUID,
     top_k: int = Query(default=3, ge=1, le=20),
     chunks_per: int = Query(default=2, ge=1, le=10),
+    user: dict = Depends(require("submission:read")),
     db: Session = Depends(get_db),
 ):
     submission = db.query(Submission).filter(Submission.id == submission_id).first()

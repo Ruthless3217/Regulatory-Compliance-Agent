@@ -12,12 +12,13 @@ from app.models.submission import Submission
 from app.models.compliance_check import ComplianceCheck
 from app.models.violation import Violation
 from app.models.rule import Rule
+from app.auth.dependencies import require
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 
 @router.get("/summary")
-async def get_dashboard_summary(db: Session = Depends(get_db)):
+async def get_dashboard_summary(user: dict = Depends(require("dashboard:view")), db: Session = Depends(get_db)):
     """Overall compliance dashboard summary."""
     from datetime import datetime, timedelta, timezone
 
@@ -91,6 +92,7 @@ async def get_dashboard_summary(db: Session = Depends(get_db)):
 @router.get("/timeseries")
 async def get_dashboard_timeseries(
     bucket: str = Query("day", pattern="^(day|week)$"),
+    user: dict = Depends(require("dashboard:view")),
     db: Session = Depends(get_db),
 ):
     """Time-series of submissions, average score, and violations bucketed by
@@ -169,6 +171,7 @@ async def get_dashboard_timeseries(
 @router.get("/top-rules")
 async def get_top_rules(
     limit: int = Query(10, ge=1, le=50),
+    user: dict = Depends(require("dashboard:view")),
     db: Session = Depends(get_db),
 ):
     """Most-frequently-violated rules, joined to Rule metadata."""
@@ -208,7 +211,7 @@ async def get_top_rules(
 
 
 @router.get("/violations-by-category")
-async def get_violations_by_category(db: Session = Depends(get_db)):
+async def get_violations_by_category(user: dict = Depends(require("dashboard:view")), db: Session = Depends(get_db)):
     """Get violation counts grouped by category."""
     result = db.query(
         Violation.category,
@@ -224,7 +227,7 @@ async def get_violations_by_category(db: Session = Depends(get_db)):
 
 
 @router.get("/violations-by-severity")
-async def get_violations_by_severity(db: Session = Depends(get_db)):
+async def get_violations_by_severity(user: dict = Depends(require("dashboard:view")), db: Session = Depends(get_db)):
     """Get violation counts grouped by severity."""
     result = db.query(
         Violation.severity,
@@ -242,6 +245,7 @@ async def get_violations_by_severity(db: Session = Depends(get_db)):
 @router.get("/timeseries")
 async def get_dashboard_timeseries(
     bucket: str = Query("day", pattern="^(day|week)$"),
+    user: dict = Depends(require("dashboard:view")),
     db: Session = Depends(get_db),
 ):
     """Time-bucketed submission / score / violation counts, aggregated on the fly.
@@ -300,6 +304,7 @@ async def get_dashboard_timeseries(
 @router.get("/top-rules")
 async def get_top_rules(
     limit: int = Query(10, ge=1, le=50),
+    user: dict = Depends(require("dashboard:view")),
     db: Session = Depends(get_db),
 ):
     """Most-frequently-violated rules, joined to rule metadata (single query)."""

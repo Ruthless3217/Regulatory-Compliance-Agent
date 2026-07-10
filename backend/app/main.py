@@ -28,11 +28,45 @@ async def lifespan(app: FastAPI):
             User, Submission, Rule, ComplianceCheck,
             Violation, ContentChunk, AgentExecution,
             AgentTrace, ToolInvocation,
-            DocumentComparison,
+            DocumentComparison, UserSession, AnalysisRun,
+            LlmUsageEvent, AuditEvent,
         )
         logger.info("✅ Database models registered (schema managed by Alembic)")
     except Exception as e:
         logger.error(f"❌ Model registration failed: {e}")
+
+    # Seed the super-admin from env (idempotent) so a fresh VM has a way in.
+    # Safe to run every startup; requires schema at head (0019 auth columns).
+    try:
+        if settings.super_admin_username and settings.super_admin_password:
+            from .database import SessionLocal
+            from .models.user import User
+            from .auth.passwords import hash_password
+            db = SessionLocal()
+            try:
+                exists = (
+                    db.query(User)
+                    .filter(User.username == settings.super_admin_username)
+                    .first()
+                )
+                if not exists:
+                    db.add(User(
+                        username=settings.super_admin_username,
+                        password_hash=hash_password(settings.super_admin_password),
+                        role="super_admin",
+                        registered_ip=settings.super_admin_ip or "127.0.0.1",
+                        is_active=True,
+                        must_change_password=True,
+                        display_name="Super Admin",
+                    ))
+                    db.commit()
+                    logger.info("✅ Seeded super-admin '%s'", settings.super_admin_username)
+                else:
+                    logger.info("ℹ️ Super-admin '%s' already present", settings.super_admin_username)
+            finally:
+                db.close()
+    except Exception as e:
+        logger.warning(f"⚠️ Super-admin seed skipped: {e}")
 
     # Initialize Redis (optional - falls back to MemorySaver)
     try:
@@ -104,7 +138,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from .auth.middleware import AuthMiddleware
+app.add_middleware(AuthMiddleware)
+
+from .api.routes import submissions, compliance, dashboard, rules, chat, similar, rag_health, knowledge_base, comparisons, auth, admin_console
+
 # Include routers - Compliance Agent only
+app.include_router(auth.router)
+app.include_router(admin_console.router)
 app.include_router(submissions.router)
 app.include_router(compliance.router)
 app.include_router(dashboard.router)

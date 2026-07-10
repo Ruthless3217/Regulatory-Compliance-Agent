@@ -16,7 +16,8 @@ from typing import Optional
 from app.database import get_db
 from app.models.document_comparison import DocumentComparison
 from app.config import settings
-from app.services.comparison_service import extract_paragraphs, build_diff
+from app.services.comparison_service import extract_segments, build_diff
+from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,7 @@ async def create_comparison(
     new_content: Optional[str] = Form(default=None),
     old_file: Optional[UploadFile] = File(default=None),
     new_file: Optional[UploadFile] = File(default=None),
+    user: dict = Depends(require("comparison:use")),
     db: Session = Depends(get_db),
 ):
     """Create a comparison: saves any uploaded files, computes the diff inline, and persists it."""
@@ -131,9 +133,9 @@ async def create_comparison(
     )
 
     try:
-        old_paragraphs = extract_paragraphs(old_file_path, old_content_type, old_content)
-        new_paragraphs = extract_paragraphs(new_file_path, new_content_type, new_content)
-        comparison.diff_result = build_diff(old_paragraphs, new_paragraphs)
+        old_segments = extract_segments(old_file_path, old_content_type, old_content)
+        new_segments = extract_segments(new_file_path, new_content_type, new_content)
+        comparison.diff_result = build_diff(old_segments, new_segments)
         comparison.status = "completed"
     except Exception as e:
         logger.error(f"Comparison failed for '{title}': {e}")
@@ -151,6 +153,7 @@ async def create_comparison(
 async def list_comparisons(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
+    user: dict = Depends(require("comparison:use")),
     db: Session = Depends(get_db),
 ):
     """List past comparisons, most recent first."""
@@ -164,7 +167,7 @@ async def list_comparisons(
 
 
 @router.get("/{comparison_id}")
-async def get_comparison(comparison_id: str, db: Session = Depends(get_db)):
+async def get_comparison(comparison_id: str, user: dict = Depends(require("comparison:use")), db: Session = Depends(get_db)):
     """Get a comparison, including its full diff result."""
     comparison = db.query(DocumentComparison).filter(DocumentComparison.id == comparison_id).first()
     if not comparison:
@@ -173,7 +176,7 @@ async def get_comparison(comparison_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/{comparison_id}")
-async def delete_comparison(comparison_id: str, db: Session = Depends(get_db)):
+async def delete_comparison(comparison_id: str, user: dict = Depends(require("comparison:use")), db: Session = Depends(get_db)):
     """Delete a comparison and any files it saved to disk."""
     comparison = db.query(DocumentComparison).filter(DocumentComparison.id == comparison_id).first()
     if not comparison:

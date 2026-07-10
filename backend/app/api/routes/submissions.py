@@ -13,6 +13,7 @@ from typing import Optional
 from app.database import get_db
 from app.models.submission import Submission
 from app.config import settings
+from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ async def create_submission(
     content_type: str = Form(default="text"),
     content: Optional[str] = Form(default=None),
     file: Optional[UploadFile] = File(default=None),
+    user: dict = Depends(require("submission:create")),
     db: Session = Depends(get_db)
 ):
     """
@@ -69,11 +71,16 @@ async def create_submission(
         content_type=content_type,
         original_content=content,
         file_path=file_path,
-        status="uploaded"
+        status="uploaded",
+        submitted_by=getattr(user, "id", None),
     )
     db.add(submission)
     db.commit()
     db.refresh(submission)
+
+    import asyncio
+    from app.services.observability import audit
+    asyncio.create_task(audit.record("submission_created", actor=user, target_type="submission", target_id=str(submission.id), metadata={"title": submission.title}))
 
     return {
         "id": str(submission.id),
@@ -88,6 +95,7 @@ async def create_submission(
 async def list_submissions(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
+    user: dict = Depends(require("submission:read")),
     db: Session = Depends(get_db)
 ):
     """List all submissions."""
@@ -113,6 +121,7 @@ async def list_submissions(
 @router.get("/{submission_id}")
 async def get_submission(
     submission_id: str,
+    user: dict = Depends(require("submission:read")),
     db: Session = Depends(get_db)
 ):
     """Get a specific submission by ID."""
@@ -134,6 +143,7 @@ async def get_submission(
 @router.delete("/{submission_id}")
 async def delete_submission(
     submission_id: str,
+    user: dict = Depends(require("submission:delete")),
     db: Session = Depends(get_db)
 ):
     """Delete a submission."""
@@ -147,5 +157,9 @@ async def delete_submission(
 
     db.delete(submission)
     db.commit()
+
+    import asyncio
+    from app.services.observability import audit
+    asyncio.create_task(audit.record("submission_deleted", actor=user, target_type="submission", target_id=submission_id))
 
     return {"message": "Submission deleted", "id": submission_id}

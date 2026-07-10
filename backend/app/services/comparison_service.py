@@ -3,11 +3,26 @@ Document comparison service — paragraph extraction and word-level diffing.
 
 No LLM calls; pure text processing (python-docx / pdfplumber for extraction,
 stdlib difflib for diffing), so comparisons run synchronously in the API layer.
+
+Cross-format normalization
+--------------------------
+Two versions of a document are frequently *different file types* — e.g. a DOCX
+first draft vs. a finalized PDF. Raw paragraph strings from the two extractors
+never match byte-for-byte (PDF collapses paragraphs into page-sized blobs, adds
+running headers/footers, wraps lines, and the DOCX is a template full of
+``<placeholder>`` fields). Diffing those raw chunks marks the whole document as
+removed/added.
+
+To fix this we compare *sentence-level segments* aligned on a *normalized key*
+(whitespace/case/heading-marker-insensitive), and treat a segment whose only
+difference is a filled-in template placeholder as unchanged.
 """
 import logging
 import re
+import string
+from collections import Counter
 from difflib import SequenceMatcher
-from typing import List, Optional
+from typing import List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -67,49 +82,385 @@ def extract_paragraphs(
     return split_text_paragraphs(pasted_text or "")
 
 
-def word_diff(old_text: str, new_text: str) -> dict:
-    """Word-level diff between two paragraphs assumed to be aligned (same position)."""
-    old_words = old_text.split()
-    new_words = new_text.split()
-    matcher = SequenceMatcher(None, old_words, new_words)
-    old_out = []
-    new_out = []
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-        changed = tag != "equal"
-        for w in old_words[i1:i2]:
-            old_out.append({"text": w, "changed": changed})
-        for w in new_words[j1:j2]:
-            new_out.append({"text": w, "changed": changed})
-    return {"type": "replace", "old_words": old_out, "new_words": new_out}
+# ---------------------------------------------------------------------------
+# Cross-format normalization: sentence segmentation, header/footer stripping,
+# placeholder-aware matching keys.
+# ---------------------------------------------------------------------------
+
+# Split on whitespace that follows a sentence terminator. Sentences survive
+# reflowing between formats far better than paragraphs or physical lines.
+_SENTENCE_BOUNDARY = re.compile(r"(?<=[.:;!?])\s+")
+
+# Heading markers we add to DOCX headings (## ), so both sides key the same.
+_HEADING_MARKER = re.compile(r"^#{1,6}\s*")
+
+# A line that is just a page number ("3", "Page 3", "3 of 21", "3/21").
+_PAGE_NUMBER = re.compile(r"^\s*(page\s*)?\d+(\s*(of|/)\s*\d+)?\s*$", re.IGNORECASE)
+
+# Hyphen introduced by a physical line-wrap: "insur-\nance" -> "insurance".
+_HYPHEN_WRAP = re.compile(r"(\w)-\n(\w)")
+
+# Word tokenizer: keep an angle-bracket template field (which may contain spaces,
+# e.g. "<Name of the Policyholder>") as ONE token, absorbing any punctuation that
+# trails it (a terminating "." etc.); otherwise split on whitespace.
+_TOKEN_RE = re.compile(r"<[^>\n]*>[^\s<]*|\S+")
+
+# A whole token that is a template placeholder standing in for a value: an
+# angle-bracket field, a run of underscores, or a run of X's. Filling it in is an
+# expected edit, not a content change.
+_PLACEHOLDER_TOKEN = re.compile(r"<[^>\n]*>|_{2,}|[Xx]{2,}")
+
+
+def split_sentences(text: str) -> List[str]:
+    """Split a block of text into trimmed, non-empty sentence-level segments."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    return [s.strip() for s in _SENTENCE_BOUNDARY.split(text) if s.strip()]
+
+
+def normalize_for_match(text: str) -> str:
+    """Normalized alignment key: drop heading markers, collapse whitespace, lowercase.
+
+    Only used to decide whether two segments are 'the same'; the original text is
+    always what gets displayed.
+    """
+    t = _HEADING_MARKER.sub("", (text or "").strip())
+    t = re.sub(r"\s+", " ", t)
+    return t.strip().lower()
+
+
+def _detect_running_lines(page_lines: List[List[str]]) -> Set[str]:
+    """Find lines that repeat in the top/bottom band of most pages (headers/footers).
+
+    Needs at least 3 pages to distinguish a running header from ordinary content.
+    """
+    if len(page_lines) < 3:
+        return set()
+    band = Counter()
+    for lines in page_lines:
+        for ln in lines[:3] + lines[-3:]:
+            band[ln] += 1
+    threshold = max(3, len(page_lines) // 2)
+    return {ln for ln, count in band.items() if count >= threshold}
+
+
+def extract_pdf_segments(file_path: str) -> List[str]:
+    """Extract sentence-level segments from a PDF, normalized for cross-format diff.
+
+    Strips repeated running headers/footers and page numbers, de-hyphenates
+    line-wraps, unwraps physical lines back into flowing text, then segments into
+    sentences. Raises ValueError if no text is extractable (likely a scanned PDF).
+    """
+    import pdfplumber
+    page_lines: List[List[str]] = []
+    with pdfplumber.open(file_path) as pdf:
+        for page in pdf.pages:
+            txt = page.extract_text() or ""
+            page_lines.append([ln.strip() for ln in txt.split("\n") if ln.strip()])
+
+    if page_lines and not any(page_lines):
+        raise ValueError(
+            "No extractable text found in the PDF — it may be a scanned image. "
+            "Run OCR on it before comparing."
+        )
+
+    running = _detect_running_lines(page_lines)
+    cleaned: List[str] = []
+    for lines in page_lines:
+        body = [ln for ln in lines if ln not in running and not _PAGE_NUMBER.match(ln)]
+        text = "\n".join(body)
+        text = _HYPHEN_WRAP.sub(r"\1\2", text)  # join hyphenated line-wraps
+        text = text.replace("\n", " ")          # unwrap remaining physical lines
+        cleaned.append(text)
+    return split_sentences(" ".join(cleaned))
+
+
+def _iter_docx_block_texts(doc) -> List[str]:
+    """Body text in document order — paragraphs (## for headings) AND table cells.
+
+    `doc.paragraphs` alone silently drops every table cell (policy documents keep
+    the forwarding-letter fields, benefit grids, etc. in tables), so we walk the
+    body element and descend into tables (including nested tables) to capture
+    everything. Merged cells share one underlying <w:tc>, so we de-dupe on it.
+    """
+    from docx.oxml.ns import qn
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+
+    out: List[str] = []
+
+    def emit_paragraph(p) -> None:
+        text = p.text.strip()
+        if not text:
+            return
+        style = getattr(p.style, "name", "") or ""
+        out.append(f"## {text}" if (style.startswith("Heading") or style == "Title") else text)
+
+    def walk_table(tbl) -> None:
+        seen: set = set()
+        for row in tbl.rows:
+            for cell in row.cells:
+                if id(cell._tc) in seen:  # merged cell already visited
+                    continue
+                seen.add(id(cell._tc))
+                for p in cell.paragraphs:
+                    emit_paragraph(p)
+                for nested in cell.tables:
+                    walk_table(nested)
+
+    for child in doc.element.body.iterchildren():
+        if child.tag == qn("w:p"):
+            emit_paragraph(Paragraph(child, doc))
+        elif child.tag == qn("w:tbl"):
+            walk_table(Table(child, doc))
+    return out
+
+
+def extract_docx_segments(file_path: str) -> List[str]:
+    """Extract sentence-level segments from a DOCX (headings kept whole, tables included)."""
+    from docx import Document
+    doc = Document(file_path)
+    segments: List[str] = []
+    for block_text in _iter_docx_block_texts(doc):
+        if block_text.startswith("#"):
+            segments.append(block_text)
+        else:
+            segments.extend(split_sentences(block_text))
+    return segments
+
+
+def extract_segments(
+    file_path: Optional[str], content_type: str, pasted_text: Optional[str] = None
+) -> List[str]:
+    """Dispatch sentence-level extraction by content_type (docx/pdf/text)."""
+    if content_type == "docx":
+        if not file_path:
+            raise ValueError("docx content_type requires file_path")
+        return extract_docx_segments(file_path)
+    if content_type == "pdf":
+        if not file_path:
+            raise ValueError("pdf content_type requires file_path")
+        return extract_pdf_segments(file_path)
+    if file_path:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            raw = f.read()
+    else:
+        raw = pasted_text or ""
+    segments: List[str] = []
+    for para in split_text_paragraphs(raw):
+        segments.extend(split_sentences(para))
+    return segments
+
+
+# ---------------------------------------------------------------------------
+# Word-token alignment
+# ---------------------------------------------------------------------------
+# Cross-format comparison aligns at the *word-token* level over a flat stream
+# rather than sentence-by-sentence, so identical prose stays aligned even when
+# the two extractors chunk it differently — the failure mode that otherwise marks
+# a whole document as removed + re-added. The token opcodes are then re-grouped
+# into sentence-sized rows for a readable two-column display.
+
+_PUNCT = string.punctuation
+_SENTENCE_TERMINATORS = ".:;!?"
+_CLOSERS = "\"')]}"
+# Punctuation that may bracket a placeholder without being part of it, e.g. the
+# terminator in "<dd/mm/yyyy>." or "______." — stripped before detection.
+_PH_TRIM = "\"'([{)]}.,;:!?"
+
+
+def _is_placeholder(tok: str) -> bool:
+    """True if the token (bare of any surrounding punctuation) is a template
+    placeholder: an angle-bracket field, an underscore blank, or a run of X's."""
+    return bool(_PLACEHOLDER_TOKEN.fullmatch(tok.strip(_PH_TRIM)))
+
+
+def _norm_token(tok: str) -> str:
+    """Matching key for one token: template placeholders collapse to a shared
+    wildcard; everything else is lowercased with surrounding punctuation dropped."""
+    if _is_placeholder(tok):
+        return "\x00ph"
+    stripped = tok.strip(_PUNCT).lower()
+    return stripped or tok.lower()
+
+
+def _tokenize(segments: List[str]) -> List[tuple]:
+    """Flatten segments into a flat list of (display_text, match_key) word tokens.
+
+    Heading markers ('## ') are stripped so a heading keys like its own prose.
+    """
+    tokens: List[tuple] = []
+    for seg in segments:
+        seg = _HEADING_MARKER.sub("", seg)
+        for m in _TOKEN_RE.finditer(seg):
+            t = m.group(0)
+            tokens.append((t, _norm_token(t)))
+    return tokens
+
+
+def _ends_sentence(text: str) -> bool:
+    core = text.rstrip(_CLOSERS)
+    return bool(core) and core[-1] in _SENTENCE_TERMINATORS
+
+
+def _join(words: List[dict]) -> str:
+    return " ".join(w["text"] for w in words)
+
+
+def _split_words_into_sentences(words: List[dict]) -> List[List[dict]]:
+    """Break a run of word dicts into sentence-sized chunks for readable rows."""
+    out: List[List[dict]] = []
+    cur: List[dict] = []
+    for w in words:
+        cur.append(w)
+        if _ends_sentence(w["text"]):
+            out.append(cur)
+            cur = []
+    if cur:
+        out.append(cur)
+    return out
+
+
+def _suppress_placeholder_fills(old_words: List[dict], new_words: List[dict]) -> None:
+    """Clear the `changed` flag on spans whose only difference is a filled-in
+    template placeholder (e.g. '<XX>' -> '10'): an expected fill, not a real edit.
+
+    Mutates the word dicts in place.
+    """
+    o_norm = [_norm_token(w["text"]) for w in old_words]
+    n_norm = [_norm_token(w["text"]) for w in new_words]
+    for tag, i1, i2, j1, j2 in SequenceMatcher(None, o_norm, n_norm, autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        o_span, n_span = old_words[i1:i2], new_words[j1:j2]
+        old_is_ph = bool(o_span) and all(_is_placeholder(w["text"]) for w in o_span)
+        new_is_ph = bool(n_span) and all(_is_placeholder(w["text"]) for w in n_span)
+        if old_is_ph or new_is_ph:
+            for w in o_span + n_span:
+                w["changed"] = False
+
+
+def _emit_blocks(old_words: List[dict], new_words: List[dict]) -> List[dict]:
+    """Turn one accumulated row buffer into display block(s)."""
+    if old_words and not new_words:
+        return [{"type": "delete", "old_text": _join(old_words)}]
+    if new_words and not old_words:
+        return [{"type": "insert", "new_text": _join(new_words)}]
+
+    _suppress_placeholder_fills(old_words, new_words)
+
+    if not any(w["changed"] for w in old_words) and not any(w["changed"] for w in new_words):
+        return [{"type": "equal", "old_text": _join(old_words), "new_text": _join(new_words)}]
+
+    # No unchanged tokens on either side => the two runs are unrelated content,
+    # not a modification of one another; show them as separate removals and
+    # additions rather than forcing them to face each other in one row.
+    if all(w["changed"] for w in old_words) and all(w["changed"] for w in new_words):
+        return (
+            [{"type": "delete", "old_text": _join(s)} for s in _split_words_into_sentences(old_words)]
+            + [{"type": "insert", "new_text": _join(s)} for s in _split_words_into_sentences(new_words)]
+        )
+
+    return [{"type": "replace", "old_words": old_words, "new_words": new_words}]
 
 
 def build_diff(old_paragraphs: List[str], new_paragraphs: List[str]) -> List[dict]:
-    """Align two paragraph lists and word-diff replaced pairs. Returns ordered diff blocks."""
-    matcher = SequenceMatcher(None, old_paragraphs, new_paragraphs)
+    """Align two documents at the word-token level and return ordered diff blocks.
+
+    Both sides are flattened to a normalized token stream (placeholder-aware,
+    heading-marker/whitespace/case-insensitive) and aligned with difflib. Because
+    alignment ignores how each extractor chunked the text, identical content stays
+    matched across formats even when segmentation drifts. The resulting token
+    opcodes are re-grouped into sentence-sized rows carrying the existing
+    equal/delete/insert/replace block schema the frontend already renders.
+    """
+    old_tokens = _tokenize(old_paragraphs)
+    new_tokens = _tokenize(new_paragraphs)
+    matcher = SequenceMatcher(
+        None, [t[1] for t in old_tokens], [t[1] for t in new_tokens], autojunk=False
+    )
+
     blocks: List[dict] = []
+    cur_old: List[dict] = []
+    cur_new: List[dict] = []
+
+    def flush() -> None:
+        nonlocal cur_old, cur_new
+        if cur_old or cur_new:
+            blocks.extend(_emit_blocks(cur_old, cur_new))
+            cur_old, cur_new = [], []
+
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag == "equal":
             for k in range(i2 - i1):
-                blocks.append({
-                    "type": "equal",
-                    "old_text": old_paragraphs[i1 + k],
-                    "new_text": new_paragraphs[j1 + k],
-                })
-        elif tag == "delete":
-            for p in old_paragraphs[i1:i2]:
-                blocks.append({"type": "delete", "old_text": p})
-        elif tag == "insert":
-            for p in new_paragraphs[j1:j2]:
-                blocks.append({"type": "insert", "new_text": p})
+                ot, nt = old_tokens[i1 + k], new_tokens[j1 + k]
+                cur_old.append({"text": ot[0], "changed": False})
+                cur_new.append({"text": nt[0], "changed": False})
+                if _ends_sentence(ot[0]) or _ends_sentence(nt[0]):
+                    flush()
         elif tag == "replace":
-            old_slice = old_paragraphs[i1:i2]
-            new_slice = new_paragraphs[j1:j2]
-            if len(old_slice) == len(new_slice):
-                for op, np in zip(old_slice, new_slice):
-                    blocks.append(word_diff(op, np))
-            else:
-                for p in old_slice:
-                    blocks.append({"type": "delete", "old_text": p})
-                for p in new_slice:
-                    blocks.append({"type": "insert", "new_text": p})
+            for ot in old_tokens[i1:i2]:
+                cur_old.append({"text": ot[0], "changed": True})
+            for nt in new_tokens[j1:j2]:
+                cur_new.append({"text": nt[0], "changed": True})
+        elif tag == "delete":
+            for ot in old_tokens[i1:i2]:
+                cur_old.append({"text": ot[0], "changed": True})
+                if not cur_new and _ends_sentence(ot[0]):
+                    flush()
+        elif tag == "insert":
+            for nt in new_tokens[j1:j2]:
+                cur_new.append({"text": nt[0], "changed": True})
+                if not cur_old and _ends_sentence(nt[0]):
+                    flush()
+    flush()
     return blocks
+
+
+def word_level_ops(old_texts: List[str], new_texts: List[str]):
+    """Align two positioned-word streams by normalized text and tag each word.
+
+    Returns (old_marks, new_marks, changes). Placeholder fills (e.g. '<XX>' filled
+    with a value) are treated as equal. Used by the pixel-faithful overlay; shares
+    the token normalizer with `build_diff`.
+    """
+    o_norm = [_norm_token(t) for t in old_texts]
+    n_norm = [_norm_token(t) for t in new_texts]
+    matcher = SequenceMatcher(None, o_norm, n_norm, autojunk=False)
+
+    old_marks: List[dict] = []
+    new_marks: List[dict] = []
+    changes: List[dict] = []
+    counter = 0
+
+    def _all_ph(texts):
+        return bool(texts) and all(_is_placeholder(t) for t in texts)
+
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        old_span = old_texts[i1:i2]
+        new_span = new_texts[j1:j2]
+        # placeholder fill on either side => expected, not an edit
+        if _all_ph(old_span) or _all_ph(new_span):
+            continue
+        cid = f"r{counter}"
+        counter += 1
+        if tag == "delete":
+            kind, otype, ntype = "removed", "removed", None
+        elif tag == "insert":
+            kind, otype, ntype = "added", None, "added"
+        else:  # replace
+            kind, otype, ntype = "modified", "changed", "changed"
+        for k in range(i1, i2):
+            old_marks.append({"index": k, "type": otype, "change_id": cid})
+        for k in range(j1, j2):
+            new_marks.append({"index": k, "type": ntype, "change_id": cid})
+        changes.append({
+            "id": cid,
+            "kind": kind,
+            "old_text": " ".join(old_span),
+            "new_text": " ".join(new_span),
+        })
+    return old_marks, new_marks, changes

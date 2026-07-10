@@ -10,7 +10,7 @@ import os
 from functools import partial
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -18,6 +18,7 @@ from app.services.knowledge_base_ingestion import get_kb_ingestion_service
 from app.services.rag.errors import RAGDegraded, RAGEmbedFailed
 from app.services.rag.factory import get_embedder, get_vector_store
 from app.services.vector_projection import compute_projection
+from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ class IngestRequest(BaseModel):
 
 
 @router.post("/ingest")
-async def ingest_knowledge_base(req: IngestRequest):
+async def ingest_knowledge_base(req: IngestRequest, user: dict = Depends(require("knowledgebase:view"))):
     try:
         safe_path = resolve_ingest_path(req.folder_path, settings.kb_ingest_root)
     except ValueError:
@@ -81,7 +82,7 @@ async def ingest_knowledge_base(req: IngestRequest):
 
 
 @router.get("/stats")
-async def knowledge_base_stats():
+async def knowledge_base_stats(user: dict = Depends(require("knowledgebase:view"))):
     svc = get_kb_ingestion_service()
     try:
         return svc.get_stats()
@@ -94,6 +95,7 @@ async def knowledge_base_stats():
 async def knowledge_base_search(
     q: str = Query(..., min_length=1),
     k: int = Query(8, ge=1, le=50),
+    user: dict = Depends(require("knowledgebase:view"))
 ):
     """Hybrid-search the precedent corpus (rag_compliance_examples).
 
@@ -146,6 +148,7 @@ async def knowledge_base_search(
 async def knowledge_base_projection(
     method: str = Query("umap", pattern="^(umap|pca)$"),
     refresh: bool = False,
+    user: dict = Depends(require("knowledgebase:view"))
 ):
     try:
         loop = asyncio.get_event_loop()

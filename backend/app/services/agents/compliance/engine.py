@@ -72,7 +72,7 @@ class ComplianceEngine:
 
     @staticmethod
     @traceable(run_type="chain", name="ComplianceEngine.analyze_submission")
-    async def analyze_submission(submission_id: str, db: Session) -> Optional[ComplianceCheck]:
+    async def analyze_submission(submission_id: str, db: Session, user=None, session_id: str = None) -> Optional[ComplianceCheck]:
         """
         Entry point for compliance analysis using LangGraph.
         
@@ -112,6 +112,12 @@ class ComplianceEngine:
             #    'analyzing' immediately.
             submission.status = "analyzing"
             db.commit()
+
+            from app.services.run_tracker import open_run, close_run
+            from app.services.observability.usage_context import set_usage_context, reset_usage_context
+            
+            run = await open_run(db, str(submission_id), user, session_id or "local")
+            set_usage_context(user_id=str(user.id) if user else None, session_id=session_id or "local", submission_id=str(submission_id), run_id=str(run.id), feature="compliance_analysis")
 
             # 3. Initialize Graph Context
             from app.services.agents.orchestrator import orchestrator
@@ -168,6 +174,7 @@ class ComplianceEngine:
                         f"Marking submission '{submission.status}' (NOT graded)."
                     )
                     db.commit()
+                    await close_run(db, run, {"status": submission.status, "error": block_reason}, user)
                     return None
 
                 # 6. Persist results. The submission status flip to 'analyzed'
@@ -196,6 +203,7 @@ class ComplianceEngine:
                 except Exception as e:
                     logger.warning(f"RAG mark-analyzed failed (non-fatal): {e}")
 
+                await close_run(db, run, {"status": "completed", "check_id": str(compliance_check.id)}, user)
                 return compliance_check
 
             finally:
@@ -204,6 +212,10 @@ class ComplianceEngine:
                 # context next. Previously this block was dead (`pass`), so the
                 # token was never reset.
                 GraphContext.reset(token)
+                try:
+                    reset_usage_context()
+                except NameError:
+                    pass
 
         except Exception as e:
             traceback.print_exc()
@@ -214,6 +226,9 @@ class ComplianceEngine:
                     submission.status = "failed"
                     db.add(submission)
                     db.commit()
+                    if 'run' in locals():
+                        from app.services.run_tracker import close_run
+                        await close_run(db, locals()['run'], {"status": "failed", "error": str(e)}, user)
                 except Exception:
                     pass
             raise
