@@ -44,12 +44,28 @@ const BROWSER_BASE = PUBLIC_API_BASE.startsWith("/") ? PUBLIC_API_BASE : "/api";
 const isServer = typeof window === "undefined";
 const base = () => (isServer ? SERVER_BASE : BROWSER_BASE);
 
+// On the server the browser's cookies are NOT attached to outgoing fetches, so
+// forward the caller's session cookie to the backend (mirrors the hand-rolled
+// pattern in the workspace/super-admin layouts). Guarded + dynamically imported
+// so next/headers never reaches the client bundle.
+async function serverAuthHeaders(): Promise<Record<string, string>> {
+  if (typeof window !== "undefined") return {};
+  try {
+    const { cookies } = await import("next/headers");
+    const sid = (await cookies()).get("rca_session")?.value;
+    return sid ? { Cookie: `rca_session=${sid}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
+  const authHeaders = await serverAuthHeaders();
   const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
     cache: "no-store",
     credentials: "include",
     ...init,
+    headers: { "Content-Type": "application/json", ...authHeaders, ...(init?.headers || {}) },
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -270,8 +286,11 @@ export async function createComparison(body: {
 export async function deleteComparison(id: string): Promise<{ message: string }> {
   return jsonFetch(`${base()}/comparisons/${id}`, { method: "DELETE" });
 }
+// These URLs are consumed by the browser (<img src>, <a href download>), so they
+// must use the browser base on BOTH server render and client — otherwise the SSR'd
+// markup (SERVER_BASE) mismatches the client (BROWSER_BASE) and React hydration fails.
 export function comparisonPageImageUrl(id: string, side: "old" | "new", n: number): string {
-  return `${base()}/comparisons/${id}/pages/${side}/${n}`;
+  return `${BROWSER_BASE}/comparisons/${id}/pages/${side}/${n}`;
 }
 
 /** On-demand per-side word scan. 409 when that side is not a PDF. */
@@ -311,7 +330,7 @@ export type ExportKind =
 
 /** Same-origin URL for an export artifact (feed to a download anchor / window.open). */
 export function exportComparisonUrl(id: string, kind: ExportKind): string {
-  return `${base()}/comparisons/${id}/export/${kind}`;
+  return `${BROWSER_BASE}/comparisons/${id}/export/${kind}`;
 }
 
 /**

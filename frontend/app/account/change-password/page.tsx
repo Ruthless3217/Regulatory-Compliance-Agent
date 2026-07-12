@@ -18,7 +18,7 @@ export default function ChangePasswordPage() {
     setError("");
     setLoading(true);
     try {
-      await changePassword({ old_password: oldPassword, new_password: newPassword });
+      await changePassword({ current_password: oldPassword, new_password: newPassword });
       router.push("/");
     } catch (err: any) {
       setError(err.message || "Failed to change password.");
