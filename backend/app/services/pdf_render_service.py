@@ -6,7 +6,6 @@ import logging
 from dataclasses import dataclass
 from typing import List, Tuple
 
-from app.services.gotenberg_client import convert_to_pdf
 from app.services.comparison_service import _detect_running_lines, _PAGE_NUMBER
 
 logger = logging.getLogger(__name__)
@@ -33,18 +32,13 @@ class PageMeta:
 def to_pdf(file_path: str, content_type: str, out_dir: str, side: str) -> str:
     """Return a path to a PDF representation of the input.
 
-    pdf -> passthrough; docx -> Gotenberg (written to <out_dir>/<side>-source.pdf).
-    text/other -> ValueError (no layout to render)."""
+    pdf -> passthrough. Everything else raises: pixel rendering is PDF-only until a
+    DOCX->PDF converter (Gotenberg sidecar) is wired back in — ``gotenberg_client``
+    remains on disk as that re-enable seam. Callers map the raise to
+    ``render_status='skipped'`` and fall back to the text redline."""
     if content_type == "pdf":
         return file_path
-    if content_type == "docx":
-        os.makedirs(out_dir, exist_ok=True)
-        pdf_bytes = convert_to_pdf(file_path)
-        dest = os.path.join(out_dir, f"{side}-source.pdf")
-        with open(dest, "wb") as fh:
-            fh.write(pdf_bytes)
-        return dest
-    raise ValueError(f"content_type {content_type!r} has no page layout to render")
+    raise ValueError(f"content_type {content_type!r} has no page layout to render (PDF-only)")
 
 
 def render_pages(pdf_path: str, out_dir: str, cap: int) -> Tuple[List[PageMeta], int]:

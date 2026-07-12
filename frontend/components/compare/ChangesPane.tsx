@@ -19,6 +19,7 @@ const KIND_LABEL: Record<ChangeKind, string> = {
   removed: "Removed",
   added: "Added",
   modified: "Modified",
+  moved: "Moved",
 };
 
 export function ChangesPane({ changes, removed, added, selectedId, onSelect }: Props) {
@@ -31,6 +32,7 @@ export function ChangesPane({ changes, removed, added, selectedId, onSelect }: P
       removed: 0,
       added: 0,
       modified: 0,
+      moved: 0,
     };
     for (const c of changes) base[c.kind] += 1;
     return base;

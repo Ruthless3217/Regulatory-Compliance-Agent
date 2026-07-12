@@ -12,9 +12,14 @@ interface DiffViewerProps {
   selectedId?: string | null;
   /** called with a changed block's id (its index as string) when its row is clicked */
   onSelect?: (id: string) => void;
+  /**
+   * Optional per-row className passthrough (compare-viewer uses it to draw a
+   * violet "moved" left border). Backward-compatible: unused by the old pages.
+   */
+  rowClassName?: (block: DiffBlock, index: number) => string | undefined;
 }
 
-export function DiffViewer({ blocks, selectedId = null, onSelect }: DiffViewerProps) {
+export function DiffViewer({ blocks, selectedId = null, onSelect, rowClassName }: DiffViewerProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // Mirror the review page's DocumentPane: when the selection changes, scroll
@@ -50,6 +55,7 @@ export function DiffViewer({ blocks, selectedId = null, onSelect }: DiffViewerPr
               block={block}
               selected={selectedId === String(idx)}
               onSelect={onSelect}
+              extraClassName={rowClassName?.(block, idx)}
             />
           ))
         )}
@@ -63,11 +69,13 @@ function DiffRow({
   block,
   selected,
   onSelect,
+  extraClassName,
 }: {
   index: number;
   block: DiffBlock;
   selected: boolean;
   onSelect?: (id: string) => void;
+  extraClassName?: string;
 }) {
   const isChange = block.type !== "equal";
   return (
@@ -77,7 +85,8 @@ function DiffRow({
       className={cn(
         "grid grid-cols-2 border-b border-border text-[13px] leading-relaxed last:border-0 scroll-mt-4 transition-colors",
         isChange && onSelect && "cursor-pointer hover:bg-muted/40",
-        selected && "bg-primary-50"
+        selected && "bg-primary-50",
+        extraClassName
       )}
     >
       <div className="border-r border-border px-4 py-2">{renderOld(block)}</div>

@@ -365,6 +365,91 @@ def _emit_blocks(old_words: List[dict], new_words: List[dict]) -> List[dict]:
     return [{"type": "replace", "old_words": old_words, "new_words": new_words}]
 
 
+# ---------------------------------------------------------------------------
+# Move detection (post-pass)
+# ---------------------------------------------------------------------------
+# A run deleted from one place and inserted verbatim elsewhere is a *move*, not
+# an unrelated delete + add. We tag both ends so the UI can link/dim them instead
+# of shouting a removal and an addition. Matching is on the normalized token
+# stream (the same key used for diffing) with a minimum run length so trivial
+# repeated phrases don't pair up.
+
+_MOVE_MIN_TOKENS = 5
+
+
+def _move_key(text: str) -> tuple:
+    """Normalized token tuple for move matching (shares the diff normalizer)."""
+    stripped = _HEADING_MARKER.sub("", text or "")
+    return tuple(_norm_token(m.group(0)) for m in _TOKEN_RE.finditer(stripped))
+
+
+def detect_moves_in_blocks(blocks: List[dict]) -> List[dict]:
+    """Tag delete/insert block pairs with identical normalized text as moves.
+
+    Mutates and returns ``blocks``: each paired delete and insert gains
+    ``moved=True`` and a shared ``move_id`` ("m0", "m1", ...). Only ``delete`` and
+    ``insert`` blocks are candidates (a ``replace`` is an in-place edit, not a
+    move); pairing is 1:1. No pair found => blocks are returned unchanged.
+    """
+    deletes: List[tuple] = []   # (key, block_index)
+    inserts: List[tuple] = []
+    for i, b in enumerate(blocks):
+        if b["type"] == "delete":
+            key = _move_key(b["old_text"])
+            if len(key) >= _MOVE_MIN_TOKENS:
+                deletes.append((key, i))
+        elif b["type"] == "insert":
+            key = _move_key(b["new_text"])
+            if len(key) >= _MOVE_MIN_TOKENS:
+                inserts.append((key, i))
+
+    used_ins: set = set()
+    move_no = 0
+    for dkey, di in deletes:
+        for pos, (ikey, ii) in enumerate(inserts):
+            if pos in used_ins or ikey != dkey:
+                continue
+            used_ins.add(pos)
+            mid = f"m{move_no}"
+            move_no += 1
+            blocks[di]["moved"] = True
+            blocks[di]["move_id"] = mid
+            blocks[ii]["moved"] = True
+            blocks[ii]["move_id"] = mid
+            break
+    return blocks
+
+
+def _detect_moves_in_changes(new_marks: List[dict], changes: List[dict]) -> None:
+    """Merge removed/added change pairs with identical normalized text into one
+    ``moved`` change (kind carries both old_text and new_text).
+
+    Mutates ``changes`` in place and relabels the added side's ``new_marks`` onto
+    the surviving (removed) change id so a downstream renderer can attach BOTH an
+    old-side and new-side box to the single moved change.
+    """
+    removed = [(c, _move_key(c["old_text"])) for c in changes if c["kind"] == "removed"]
+    added = [(c, _move_key(c["new_text"])) for c in changes if c["kind"] == "added"]
+    used_added: set = set()
+    drop_ids: set = set()
+    for rc, rkey in removed:
+        if len(rkey) < _MOVE_MIN_TOKENS:
+            continue
+        for ac, akey in added:
+            if ac["id"] in used_added or akey != rkey:
+                continue
+            used_added.add(ac["id"])
+            for m in new_marks:
+                if m["change_id"] == ac["id"]:
+                    m["change_id"] = rc["id"]
+            rc["kind"] = "moved"
+            rc["new_text"] = ac["new_text"]
+            drop_ids.add(ac["id"])
+            break
+    if drop_ids:
+        changes[:] = [c for c in changes if c["id"] not in drop_ids]
+
+
 def build_diff(old_paragraphs: List[str], new_paragraphs: List[str]) -> List[dict]:
     """Align two documents at the word-token level and return ordered diff blocks.
 
@@ -415,7 +500,47 @@ def build_diff(old_paragraphs: List[str], new_paragraphs: List[str]) -> List[dic
                 if not cur_old and _ends_sentence(nt[0]):
                     flush()
     flush()
-    return blocks
+    return detect_moves_in_blocks(blocks)
+
+
+def match_query_in_words(words: List[dict], query: str, page: int, cap: int = 200) -> List[dict]:
+    """Case-insensitive substring search of ``query`` across a page's word stream.
+
+    ``words`` are pdfplumber-style dicts (``text``/``x0``/``top``/``x1``/``bottom``);
+    they are joined with single spaces and every occurrence of ``query`` maps back
+    to the union bbox of the words it covers. Returns ``[{page, bbox:[x0,y0,x1,y1]}]``
+    (top-left origin, PDF points), at most ``cap`` hits. Pure — no I/O — so it is
+    unit-testable without a real PDF.
+    """
+    ql = (query or "").lower()
+    if not ql:
+        return []
+    text = ""
+    spans: List[tuple] = []  # (start_char, end_char, word)
+    for w in words:
+        start = len(text)
+        text += w["text"]
+        spans.append((start, len(text), w))
+        text += " "
+    tl = text.lower()
+
+    hits: List[dict] = []
+    pos = tl.find(ql)
+    while pos != -1 and len(hits) < cap:
+        end = pos + len(ql)
+        covered = [w for (s, e, w) in spans if s < end and e > pos]
+        if covered:
+            hits.append({
+                "page": page,
+                "bbox": [
+                    min(float(w["x0"]) for w in covered),
+                    min(float(w["top"]) for w in covered),
+                    max(float(w["x1"]) for w in covered),
+                    max(float(w["bottom"]) for w in covered),
+                ],
+            })
+        pos = tl.find(ql, pos + 1)
+    return hits
 
 
 def word_level_ops(old_texts: List[str], new_texts: List[str]):
@@ -463,4 +588,5 @@ def word_level_ops(old_texts: List[str], new_texts: List[str]):
             "old_text": " ".join(old_span),
             "new_text": " ".join(new_span),
         })
+    _detect_moves_in_changes(new_marks, changes)
     return old_marks, new_marks, changes

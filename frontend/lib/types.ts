@@ -199,9 +199,9 @@ export interface DiffWord {
 
 export type DiffBlock =
   | { type: "equal"; old_text: string; new_text: string }
-  | { type: "delete"; old_text: string }
-  | { type: "insert"; new_text: string }
-  | { type: "replace"; old_words: DiffWord[]; new_words: DiffWord[] };
+  | { type: "delete"; old_text: string; moved?: boolean; move_id?: string }
+  | { type: "insert"; new_text: string; moved?: boolean; move_id?: string }
+  | { type: "replace"; old_words: DiffWord[]; new_words: DiffWord[]; moved?: boolean; move_id?: string };
 
 export type RenderBoxType = "removed" | "added";
 
@@ -226,7 +226,21 @@ export interface RenderResult {
 }
 export type RenderStatus = "processing" | "completed" | "failed" | "skipped";
 
-export type ChangeKind = "removed" | "added" | "modified";
+export type ChangeKind = "removed" | "added" | "modified" | "moved";
+
+/** A reviewer annotation attached to one change (keyed by its selection id). */
+export interface Annotation {
+  change_id: string;
+  note: string | null;
+  tags: string[];
+  updated_at: string;
+}
+
+/** One in-document search hit returned by the per-side word scan. */
+export interface SearchHit {
+  page: number;
+  bbox: [number, number, number, number];
+}
 
 /**
  * A single entry in the Compare "Changes" sidebar, derived from one non-equal
@@ -251,6 +265,8 @@ export interface DocumentComparison {
   diff_result?: DiffBlock[] | null;
   render_status?: RenderStatus | null;
   render_result?: RenderResult | null;
+  render_error?: string | null;
+  annotations?: Annotation[];
   created_at: string;
 }
 

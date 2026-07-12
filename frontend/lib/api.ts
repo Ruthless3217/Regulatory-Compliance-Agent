@@ -4,12 +4,14 @@
  * In the browser, requests proxy through /api/* (see next.config.ts rewrites).
  */
 import type {
+  Annotation,
   AuditRow,
   ComplianceResults,
   DashboardSummary,
   DocUsageRow,
   DocumentComparison,
   KnowledgeBaseSearchResponse,
+  SearchHit,
   Me,
   ProjectionResponse,
   Rule,
@@ -270,6 +272,65 @@ export async function deleteComparison(id: string): Promise<{ message: string }>
 }
 export function comparisonPageImageUrl(id: string, side: "old" | "new", n: number): string {
   return `${base()}/comparisons/${id}/pages/${side}/${n}`;
+}
+
+/** On-demand per-side word scan. 409 when that side is not a PDF. */
+export async function searchComparison(
+  id: string,
+  side: "old" | "new",
+  q: string
+): Promise<{ hits: SearchHit[] }> {
+  const qs = new URLSearchParams({ side, q });
+  return jsonFetch(`${base()}/comparisons/${id}/search?${qs.toString()}`);
+}
+
+/** Upsert a reviewer annotation on one change. */
+export async function upsertAnnotation(
+  id: string,
+  body: { change_id: string; note?: string | null; tags?: string[] }
+): Promise<Annotation> {
+  return jsonFetch(`${base()}/comparisons/${id}/annotations`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Remove the annotation for one change. */
+export async function deleteAnnotation(id: string, changeId: string): Promise<{ message: string }> {
+  return jsonFetch(`${base()}/comparisons/${id}/annotations/${encodeURIComponent(changeId)}`, {
+    method: "DELETE",
+  });
+}
+
+export type ExportKind =
+  | "changes-report.docx"
+  | "old-highlighted.pdf"
+  | "new-highlighted.pdf"
+  | "side-by-side.pdf"
+  | "bundle.zip";
+
+/** Same-origin URL for an export artifact (feed to a download anchor / window.open). */
+export function exportComparisonUrl(id: string, kind: ExportKind): string {
+  return `${base()}/comparisons/${id}/export/${kind}`;
+}
+
+/**
+ * Adjust Comparison: re-run in place (same id). Multipart mirrors createComparison
+ * (optional old_file/new_file/old_content/new_content + swap). Deletes all
+ * annotations server-side. 409 while a render is still processing.
+ */
+export async function rerunComparison(id: string, form: FormData): Promise<DocumentComparison> {
+  const res = await fetch(`${base()}/comparisons/${id}/rerun`, {
+    method: "POST",
+    body: form,
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return (await res.json()) as DocumentComparison;
 }
 
 /* ---------- auth ---------- */

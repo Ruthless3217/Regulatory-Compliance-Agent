@@ -194,35 +194,34 @@ Pixel mode adds a **Gotenberg sidecar** (LibreOffice wrapper, internal compose D
 image. Page images are written next to the uploads; the render cap (60 pages/side) reports
 overflow as `truncated_pages` rather than failing.
 
-## 6. ⚠ Known gap: the pixel "Document view" backend is not wired up
+## 6. ✅ Resolved: the pixel "Document view" backend is now wired
 
-Everything for pixel compare exists **except the orchestration**. Verified on `main`
-(`39558d6`):
+As of the compare-viewer clone (2026-07-12), the render orchestration exists and the pixel
+view works — **PDF-only** (both sides must be PDF; DOCX/text fall back to the text redline,
+since the Gotenberg DOCX→PDF sidecar is deferred). `gotenberg_client.py` remains on disk,
+unimported, as the re-enable seam.
 
 | Layer | State |
 |---|---|
-| DB columns `render_result` / `render_status` / `render_error` (migration `0017`) | ✅ exist |
-| `pdf_render_service.py` (to_pdf / render_pages / positioned_words) + `gotenberg_client.py` | ✅ exist, **never imported by any route** |
-| `comparison_service.word_level_ops` (overlay diff) | ✅ exists, **never called** |
-| Frontend (`PixelDiffViewer`, toggle, polling, types, `comparisonPageImageUrl`) | ✅ complete |
-| `POST /comparisons` triggering a render + writing `render_*` | ❌ missing |
-| `_serialize` including `render_status` / `render_result` | ❌ missing — the API never returns them |
-| `GET /comparisons/{id}/pages/{side}/{n}` image endpoint | ❌ missing |
+| DB columns `render_result` / `render_status` / `render_error` (migration `0017`) | ✅ |
+| `pdf_render_service.to_pdf` | ✅ PDF passthrough only (Gotenberg import removed) |
+| `render_orchestrator.run_render` (BackgroundTask) | ✅ new — `render_pages` → `positioned_words` → `word_level_ops` → `RenderResult` |
+| `comparison_service.word_level_ops` (overlay diff) | ✅ now called by the orchestrator |
+| `_serialize` returns `render_status` / `render_result` / `render_error` / `annotations` | ✅ |
+| `GET /comparisons/{id}/pages/{side}/{n}` image endpoint | ✅ |
+| Move detection (`moved` blocks + changes) | ✅ post-pass in `build_diff` / `word_level_ops` |
+| Notes & tags (`comparison_annotations`, migration `0020`) | ✅ upsert/delete endpoints |
+| Search (`GET …/search`) · Exports (`GET …/export/{kind}`) · Rerun (`POST …/rerun`) | ✅ |
 
-Net effect today: the frontend receives `render_status: undefined`, so `hasPixel` is false,
-polling never starts, and the workspace **always falls back to Text view**. The
-"Document view" button is permanently disabled. If the UI rework keeps pixel mode, plan the
-backend wiring as part of it:
+The viewer opens full-screen in a new browser tab from the **`(viewer)` route group**
+(`frontend/app/(viewer)/compare/[id]`); URL is still `/compare/[id]`. The new UI lives in
+`frontend/components/compare-viewer/` (see the clone feature list in
+`docs/COMPARE-TOOL-FEATURE-LIST.md` and the design spec at
+`docs/superpowers/specs/2026-07-10-compare-clone-design.md`).
 
-1. In `create_comparison`, after the text diff: if both sides are pdf/docx, kick a render
-   (background task) — `to_pdf` → `render_pages` (cap from settings) → `positioned_words`
-   per side → `word_level_ops` → assemble `RenderResult` (pages+boxes+changes shape in
-   `frontend/lib/types.ts:206-227`) → write `render_result`/`render_status`. Text/paste
-   sides → `render_status = "skipped"`.
-2. Add `render_status`, `render_result` (and optionally `render_error`) to `_serialize`.
-3. Add the page-image endpoint streaming the stored PNGs (auth-guard it with
-   `comparison:use`; note `<img src>` sends cookies same-origin, which matches the
-   session-cookie auth).
+**Known limitation:** in Text view the heat-strip viewport band is static (the reused
+`DiffViewer` owns its own scroll container); bars, click-to-jump, and selection sync still
+work. Pixel view has the live band.
 
 ## 7. Features elsewhere in the app worth copying into Compare
 

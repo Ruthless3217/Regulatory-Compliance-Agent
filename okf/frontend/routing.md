@@ -24,14 +24,17 @@ Two nested layouts: the root (`app/layout.tsx`, fonts + density cookie + toaster
 | `/dashboard` | KPIs + category radar + severity donut + timeseries |
 | `/knowledge-base` | 2-D vector-space scatter + precedent search |
 | `/settings` | Density toggle, API base URL, health check, version |
-| `/compare`, `/compare/new`, `/compare/[id]` | Standalone document diff (list / upload / viewer) |
+| `/compare`, `/compare/new` | Standalone document diff — list / upload (in the `(workspace)` shell) |
+| `/compare/[id]` | Full-screen **Compare viewer** — in the `(viewer)` route group (no sidebar/topbar); opened in a new browser tab |
 
 ## Feature UIs
 
 - **Review** (`components/review/*`) — `DocumentPane` (highlights) + `ViolationsPane` (cards, suppressed "needs review" lane).
 - **Report** (`components/report/*`) — print-only styles, "analysis incomplete → NOT graded compliant" banner, `ScoreHero`.
 - **Chat** (`components/chat/*`) — streamed tokens, markdown rendering, quick-prompt footer (quote / rewrite / explain).
-- **Compare** (`components/compare/*`) — side-by-side `DiffViewer` + `ChangesPane`.
+- **Compare** — full-screen `components/compare-viewer/*` (`ViewerShell` + `ViewerContext`, `Toolbar`, `PagePane` ×2,
+  `TextRedline`, `HeatStrip`, `ChangesPanel`/`ChangeCard`, `ExportPopover`, `AdjustComparisonPopover`). The old
+  `components/compare/*` (`DiffViewer`, `ChangesPane`) is reused by `TextRedline` / the list page.
 - **Knowledge base** (`components/knowledge-base/*`) — Recharts scatter + precedent search.
 
 ## Related

@@ -118,7 +118,10 @@ export default function NewComparisonPage() {
         new_content: newFile ? undefined : newText,
       });
       toast.success("Comparison created");
-      router.push(`/compare/${comparison.id}`);
+      // Open the full-viewport viewer in its own tab (one tab per comparison),
+      // and return the current tab to the list.
+      window.open(`/compare/${comparison.id}`, "_blank");
+      router.push("/compare");
     } catch (e) {
       toast.error(`Failed: ${(e as Error).message}`);
     } finally {

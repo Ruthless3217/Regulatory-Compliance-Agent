@@ -34,6 +34,12 @@ tiktoken==0.13.0
 pdfplumber==0.11.9
 pypdfium2==5.8.0
 
+# Compare — pixel-faithful export rendering (page PNG overlay burn-in -> PDF).
+# Pillow is otherwise a transitive pdfplumber dep; pinned explicitly because the
+# export service imports it directly.
+Pillow==12.2.0
+img2pdf==0.6.3
+
 # YAML for seed data
 PyYAML==6.0.3
 

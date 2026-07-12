@@ -10,6 +10,7 @@ from .tool_invocation import ToolInvocation
 from .rule_feedback import RuleFeedback
 from .product_document import ProductDocument, ProductTable
 from .document_comparison import DocumentComparison
+from .comparison_annotation import ComparisonAnnotation
 from .user_session import UserSession
 from .analysis_run import AnalysisRun
 from .llm_usage_event import LlmUsageEvent
@@ -29,6 +30,7 @@ __all__ = [
     "ProductDocument",
     "ProductTable",
     "DocumentComparison",
+    "ComparisonAnnotation",
     "UserSession",
     "AnalysisRun",
     "LlmUsageEvent",

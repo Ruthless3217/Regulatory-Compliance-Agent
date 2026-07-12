@@ -25,7 +25,7 @@ FastAPI routers registered in `backend/app/main.py`, under `backend/app/api/rout
 |--------|---------------|
 | **submissions** | `POST /submissions` (text/upload), `GET/DELETE /submissions/{id}`, `GET /submissions/{id}/similar` |
 | **dashboard** | `/dashboard/summary`, `/violations-by-category`, `/violations-by-severity`, `/timeseries`, `/top-rules` |
-| **comparisons** | `POST /comparisons` (diff, no LLM), `GET/DELETE /comparisons/{id}` |
+| **comparisons** | `POST /comparisons` (diff, no LLM; schedules a PDF-only render BackgroundTask), `GET/DELETE /comparisons/{id}`, `GET /comparisons/{id}/pages/{side}/{n}` (page PNG), `GET …/search`, `POST/DELETE …/annotations`, `GET …/export/{kind}`, `POST …/rerun` |
 | **rag_health** | `GET /health/rag`, `POST /debug/rag/search` |
 | app root | `GET /health`, `GET /` |
 

@@ -68,7 +68,12 @@ export default async function ComparePage() {
                   className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors"
                 >
                   <td className="px-3 py-2.5">
-                    <Link href={`/compare/${c.id}`} className="font-medium hover:text-primary">
+                    <Link
+                      href={`/compare/${c.id}`}
+                      target="_blank"
+                      rel="noopener"
+                      className="font-medium hover:text-primary"
+                    >
                       {c.title}
                     </Link>
                   </td>
@@ -81,6 +86,8 @@ export default async function ComparePage() {
                   <td className="px-3 py-2.5 text-right">
                     <Link
                       href={`/compare/${c.id}`}
+                      target="_blank"
+                      rel="noopener"
                       className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
                       <ArrowUpRight className="h-3.5 w-3.5" />

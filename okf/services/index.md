@@ -20,7 +20,8 @@ these services implement its nodes and supporting features.
 - [Context engineering service](context-engineering-service.md) — document extraction, token chunking, prompt construction.
 - [Knowledge base ingestion](knowledge-base-ingestion.md) — parses the reviewer-decision corpus into precedent vectors.
 - [Disclaimer engine](disclaimer-engine.md) — deterministic mandatory-disclosure checker.
-- [Comparison service](comparison-service.md) — standalone document diff (no LLM).
+- [Comparison service](comparison-service.md) — standalone document diff (no LLM); cross-format, placeholder- & move-aware,
+  plus a PDF-only pixel `render_orchestrator` and an `export_service` (report/highlighted-PDF/side-by-side/zip).
 
 ## Related
 
