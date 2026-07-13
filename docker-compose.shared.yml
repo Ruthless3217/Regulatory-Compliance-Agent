@@ -56,6 +56,12 @@ services:
       # auth is proven working over TCP, and can read compliance_user-owned tables.
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@shared-postgres:5432/compliance_db
       REDIS_URL: redis://shared-redis:6379
+      # Drop the Secure flag on the rca_session cookie so it persists over
+      # plain HTTP (browsers silently discard Secure cookies over non-TLS).
+      SESSION_COOKIE_SECURE: "false"
+      # Allow login from any IP (0.0.0.0 wildcard handles most cases, but
+      # log_only avoids mismatches when users connect via proxy/VPN).
+      AUTH_IP_BINDING_MODE: ${AUTH_IP_BINDING_MODE:-log_only}
       # --- Main LLM provider (analysis/grading) — Azure OpenAI by default ---
       # LLM_PROVIDER=azure routes via AsyncAzureOpenAI (api-key header +
       # api-version + deployment). For azure, LLM_BASE_URL is the resource root

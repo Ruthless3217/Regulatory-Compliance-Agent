@@ -18,8 +18,12 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login({ username, password });
-      router.push("/");
+      const res = await login({ username, password });
+      if (res?.must_change_password) {
+        router.push("/account/change-password");
+      } else {
+        router.push("/");
+      }
     } catch (err: any) {
       if (err.message.includes("403")) {
         setError("This device isn't recognised. Contact your compliance admin.");
