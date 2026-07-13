@@ -4,6 +4,17 @@
 services:
   backend:
     environment:
+      # LOCAL DEV ONLY — disable per-account IP binding so login works from any
+      # source IP (e.g. the Docker bridge gateway 172.18.0.1, a LAN device, or a
+      # proxy). Never set log_only in production: it removes the device/IP check
+      # that stops a stolen session cookie from being replayed elsewhere.
+      AUTH_IP_BINDING_MODE: ${AUTH_IP_BINDING_MODE:-log_only}
+      # LOCAL DEV ONLY — drop the Secure flag on the rca_session cookie so it
+      # persists over plain HTTP from a LAN IP (browsers silently discard Secure
+      # cookies over http unless the host is localhost). Without this, login
+      # succeeds but the cookie never stores → middleware loops / → /login.
+      # In production the app runs behind TLS at nginx, so leave this true.
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/}
       LLM_MODEL: ${LLM_MODEL:-gemini-2.0-flash}
       # TLS verification stays ON. The corporate Bajaj/Cisco-Umbrella CAs are
