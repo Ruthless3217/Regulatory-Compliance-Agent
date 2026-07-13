@@ -12,6 +12,14 @@ def ip_allowed(sess_or_user, ip: str) -> bool:
     mode = settings.auth_ip_binding_mode
     if mode == "log_only":
         return True
+
+    # registered_ip "0.0.0.0" is a wildcard — allow from any device.
+    reg_ip = (
+        sess_or_user.get("registered_ip") if isinstance(sess_or_user, dict)
+        else getattr(sess_or_user, "registered_ip", None)
+    )
+    if reg_ip == "0.0.0.0":
+        return True
     
     # Extract allowed settings from user or session payload
     allowed_ips = getattr(sess_or_user, "allowed_ips", None)
