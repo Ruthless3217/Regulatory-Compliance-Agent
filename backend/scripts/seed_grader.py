@@ -3,8 +3,13 @@
 Idempotent: skips any username that already exists.
 
 Run inside the backend container (schema must already be at head):
-    python -m scripts.seed_grader
+    python -m scripts.seed_grader --ip 10.x.x.x
+
+The --ip flag sets registered_ip for ALL graders in this batch.
+AUTH_IP_BINDING_MODE=strict (the default) requires an exact IP match
+at login, so pass the client IP users will connect from.
 """
+import argparse
 import logging
 
 from app.database import SessionLocal
@@ -20,13 +25,17 @@ GRADERS = [
         "username": "grader1",
         "password": "Grader@123",
         "display_name": "Grader One",
-        "registered_ip": "0.0.0.0",
+    },
+    {
+        "username": "grader2",
+        "password": "Grader@456",
+        "display_name": "Grader Two",
     },
 ]
 # ────────────────────────────────────────────────────────────────────
 
 
-def seed() -> None:
+def seed(ip: str) -> None:
     db = SessionLocal()
     try:
         for g in GRADERS:
@@ -43,17 +52,20 @@ def seed() -> None:
                 username=g["username"],
                 password_hash=hash_password(g["password"]),
                 role="user",
-                registered_ip=g.get("registered_ip", "0.0.0.0"),
+                registered_ip=ip,
                 is_active=True,
                 must_change_password=True,
                 display_name=g.get("display_name", g["username"]),
             )
             db.add(user)
             db.commit()
-            logger.info("ADDED %s (id=%s, role=user).", g["username"], user.id)
+            logger.info("ADDED %s (id=%s, role=user, ip=%s).", g["username"], user.id, ip)
     finally:
         db.close()
 
 
 if __name__ == "__main__":
-    seed()
+    parser = argparse.ArgumentParser(description="Seed grader accounts.")
+    parser.add_argument("--ip", default="0.0.0.0", help="registered_ip for all graders (must match client IP when AUTH_IP_BINDING_MODE=strict)")
+    args = parser.parse_args()
+    seed(args.ip)
