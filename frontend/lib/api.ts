@@ -353,7 +353,7 @@ export async function rerunComparison(id: string, form: FormData): Promise<Docum
 }
 
 /* ---------- auth ---------- */
-export const login = (b: {username:string; password:string}) => jsonFetch(`${base()}/auth/login`, {method:"POST", body:JSON.stringify(b)});
+export const login = (b: {username:string; password:string}) => jsonFetch<{ must_change_password?: boolean }>(`${base()}/auth/login`, {method:"POST", body:JSON.stringify(b)});
 export const logout = () => jsonFetch(`${base()}/auth/logout`, {method:"POST"});
 export const getMe = () => jsonFetch<Me>(`${base()}/auth/me`);
 export const heartbeat = () => jsonFetch(`${base()}/auth/heartbeat`, {method:"POST"});

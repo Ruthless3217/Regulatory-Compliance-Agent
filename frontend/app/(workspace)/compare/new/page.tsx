@@ -120,7 +120,8 @@ export default function NewComparisonPage() {
       toast.success("Comparison created");
       // Open the full-viewport viewer in its own tab (one tab per comparison),
       // and return the current tab to the list.
-      window.open(`/compare/${comparison.id}`, "_blank");
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+      window.open(`${basePath}/compare/${comparison.id}`, "_blank");
       router.push("/compare");
     } catch (e) {
       toast.error(`Failed: ${(e as Error).message}`);
