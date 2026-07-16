@@ -137,6 +137,8 @@ def _serialize(
         "title": c.title,
         "old_content_type": c.old_content_type,
         "new_content_type": c.new_content_type,
+        "old_filename": c.old_filename,
+        "new_filename": c.new_filename,
         "status": c.status,
         "error_message": c.error_message,
         "render_status": c.render_status,
@@ -186,13 +188,17 @@ async def create_comparison(
 
     old_file_path = None
     new_file_path = None
+    old_filename = None
+    new_filename = None
     old_content_type = "text"
     new_content_type = "text"
 
     if old_file and old_file.filename:
         old_file_path, old_content_type = await _persist_upload(old_file)
+        old_filename = old_file.filename
     if new_file and new_file.filename:
         new_file_path, new_content_type = await _persist_upload(new_file)
+        new_filename = new_file.filename
 
     comparison = DocumentComparison(
         title=title,
@@ -200,6 +206,8 @@ async def create_comparison(
         new_content_type=new_content_type,
         old_file_path=old_file_path,
         new_file_path=new_file_path,
+        old_filename=old_filename,
+        new_filename=new_filename,
         old_original_content=old_content,
         new_original_content=new_content,
         status="processing",
@@ -433,22 +441,27 @@ async def rerun_comparison(
     if old_file and old_file.filename:
         comparison.old_file_path, comparison.old_content_type = await _persist_upload(old_file)
         comparison.old_original_content = None
+        comparison.old_filename = old_file.filename
     elif old_content is not None and old_content.strip():
         comparison.old_original_content = old_content
         comparison.old_content_type = "text"
         comparison.old_file_path = None
+        comparison.old_filename = None
 
     if new_file and new_file.filename:
         comparison.new_file_path, comparison.new_content_type = await _persist_upload(new_file)
         comparison.new_original_content = None
+        comparison.new_filename = new_file.filename
     elif new_content is not None and new_content.strip():
         comparison.new_original_content = new_content
         comparison.new_content_type = "text"
         comparison.new_file_path = None
+        comparison.new_filename = None
 
     if swap:
         comparison.old_file_path, comparison.new_file_path = comparison.new_file_path, comparison.old_file_path
         comparison.old_content_type, comparison.new_content_type = comparison.new_content_type, comparison.old_content_type
+        comparison.old_filename, comparison.new_filename = comparison.new_filename, comparison.old_filename
         comparison.old_original_content, comparison.new_original_content = (
             comparison.new_original_content,
             comparison.old_original_content,

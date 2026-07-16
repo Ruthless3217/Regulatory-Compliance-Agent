@@ -3,7 +3,7 @@ import * as React from "react";
 import { AlertTriangle } from "lucide-react";
 import type { DocumentComparison } from "@/lib/types";
 import { getComparison } from "@/lib/api";
-import { ViewerProvider, useViewer } from "./ViewerContext";
+import { ViewerProvider, useViewer, deriveViewerChanges } from "./ViewerContext";
 import { Toolbar } from "./Toolbar";
 import { PagePane } from "./PagePane";
 import { TextRedline } from "./TextRedline";
@@ -19,7 +19,51 @@ export function ViewerShell({ comparison }: { comparison: DocumentComparison }) 
 }
 
 function ViewerShellInner() {
-  const { comparison, setComparison, effectiveMode, layoutMode, singleSide } = useViewer();
+  const {
+    comparison,
+    setComparison,
+    effectiveMode,
+    layoutMode,
+    singleSide,
+    showMoves,
+    selectedChangeId,
+    setSelectedChangeId,
+  } = useViewer();
+
+  // Left/Right arrow keys step through changes (same order as the Toolbar's
+  // Prev/Next). Selecting a change scrolls it into view in both panes. We use
+  // horizontal arrows so vertical arrow-scrolling of the document is preserved,
+  // and we ignore keystrokes while a text field (e.g. per-pane search) is focused.
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+      const changes = deriveViewerChanges(comparison, effectiveMode, showMoves);
+      if (changes.length === 0) return;
+      e.preventDefault();
+      const dir = e.key === "ArrowRight" ? 1 : -1;
+      const cur = changes.findIndex((c) => c.id === selectedChangeId);
+      const next =
+        cur < 0
+          ? dir === 1
+            ? 0
+            : changes.length - 1
+          : (cur + dir + changes.length) % changes.length;
+      setSelectedChangeId(changes[next].id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [comparison, effectiveMode, showMoves, selectedChangeId, setSelectedChangeId]);
 
   // Poll while the pixel render is processing: 2 s, backing off to 5 s after
   // 60 s, and stopping on any terminal status.

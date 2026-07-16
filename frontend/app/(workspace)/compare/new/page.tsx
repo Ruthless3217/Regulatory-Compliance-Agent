@@ -3,6 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,7 +12,17 @@ import { PageHeader } from "@/components/ui/page-header";
 import { createComparison } from "@/lib/api";
 
 const ACCEPTED_EXT = ".pdf,.docx,.txt";
+const ALLOWED_EXT = ["pdf", "docx", "txt"];
 const MAX_FILE_MB = 50;
+
+// Cosmetic staged status text shown under the form while a comparison is being
+// created. These are time-based pacing hints, NOT real backend phase signals —
+// creation is a single synchronous POST with no progress to report.
+const SUBMIT_STAGES: { at: number; text: string }[] = [
+  { at: 0, text: "Uploading documents…" },
+  { at: 1500, text: "Extracting text…" },
+  { at: 4000, text: "Comparing changes…" },
+];
 
 function SideInput({
   label,
@@ -27,6 +38,26 @@ function SideInput({
   setFile: (f: File | null) => void;
 }) {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  // Shared validation for both the native picker and drag-and-drop. The `accept`
+  // attribute only constrains the OS picker, so the extension check here is the
+  // only thing guarding dropped files.
+  const handleFile = (f: File | null | undefined) => {
+    if (!f) return;
+    const ext = f.name.includes(".") ? f.name.split(".").pop()!.toLowerCase() : "";
+    if (!ALLOWED_EXT.includes(ext)) {
+      toast.error("Unsupported file type. Use PDF, DOCX, or TXT.");
+      return;
+    }
+    const sizeMb = f.size / (1024 * 1024);
+    if (sizeMb > MAX_FILE_MB) {
+      toast.error(`File too large (${sizeMb.toFixed(1)} MB). Limit is ${MAX_FILE_MB} MB.`);
+      return;
+    }
+    setFile(f);
+  };
+
   return (
     <div>
       <label className="micro-label mb-2 block">{label}</label>
@@ -47,36 +78,58 @@ function SideInput({
         <TabsContent value="upload" className="pt-3">
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="flex min-h-[140px] cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-border bg-surface p-6 text-center hover:border-foreground transition-colors"
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!isDragging) setIsDragging(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+              handleFile(e.dataTransfer.files?.[0]);
+            }}
+            className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed p-6 text-center transition-colors ${
+              isDragging
+                ? "border-foreground bg-muted/40"
+                : "border-border bg-surface hover:border-foreground"
+            }`}
           >
             <input
               ref={fileInputRef}
               type="file"
               accept={ACCEPTED_EXT}
               className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                const sizeMb = f.size / (1024 * 1024);
-                if (sizeMb > MAX_FILE_MB) {
-                  toast.error(`File too large (${sizeMb.toFixed(1)} MB). Limit is ${MAX_FILE_MB} MB.`);
-                  return;
-                }
-                setFile(f);
-              }}
+              onChange={(e) => handleFile(e.target.files?.[0])}
             />
             {file ? (
               <>
-                <div className="text-sm">{file.name}</div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="max-w-[280px] truncate" title={file.name}>{file.name}</span>
+                  <button
+                    type="button"
+                    aria-label="Remove file"
+                    title="Remove file"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFile(null);
+                    }}
+                    className="rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setFile(null);
+                    fileInputRef.current?.click();
                   }}
                   className="text-[11px] text-muted-foreground underline hover:text-foreground"
                 >
-                  Choose a different file
+                  Change file
                 </button>
               </>
             ) : (
@@ -99,6 +152,17 @@ export default function NewComparisonPage() {
   const [oldFile, setOldFile] = React.useState<File | null>(null);
   const [newFile, setNewFile] = React.useState<File | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
+  const [statusText, setStatusText] = React.useState(SUBMIT_STAGES[0].text);
+
+  // Advance the cosmetic status text on timers while submitting; reset on stop.
+  React.useEffect(() => {
+    if (!submitting) return;
+    setStatusText(SUBMIT_STAGES[0].text);
+    const timers = SUBMIT_STAGES.slice(1).map((s) =>
+      setTimeout(() => setStatusText(s.text), s.at)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [submitting]);
 
   const submit = async () => {
     if (submitting) return;
@@ -154,12 +218,28 @@ export default function NewComparisonPage() {
 
       <div className="mt-8 flex items-center gap-3">
         <Button onClick={submit} disabled={submitting} size="hero">
-          {submitting ? "Comparing…" : "Compare →"}
+          {submitting ? (
+            <span className="inline-flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Comparing…
+            </span>
+          ) : (
+            "Compare →"
+          )}
         </Button>
         <Button asChild variant="ghost" size="hero">
           <Link href="/compare">Cancel</Link>
         </Button>
       </div>
+
+      {submitting && (
+        <div className="mt-4 max-w-md">
+          <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-full w-1/4 animate-indeterminate-bar rounded-full bg-primary" />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">{statusText}</p>
+        </div>
+      )}
     </div>
   );
 }

@@ -65,11 +65,18 @@ const config: Config = {
           "50%": { boxShadow: "inset 4px 0 0 hsl(var(--primary))" },
           "100%": { boxShadow: "inset 2px 0 0 hsl(var(--primary))" },
         },
+        // Slim indeterminate progress bar: an inner segment (w-1/4) sweeps
+        // left→right across its container repeatedly. No real percentage.
+        "indeterminate-bar": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(400%)" },
+        },
       },
       animation: {
         "slide-down": "slide-down 140ms ease-out",
         "fade-in": "fade-in 200ms ease-out",
         "pulse-select": "pulse-select 800ms ease-in-out",
+        "indeterminate-bar": "indeterminate-bar 1.3s ease-in-out infinite",
       },
     },
   },

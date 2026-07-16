@@ -3,7 +3,7 @@ import * as React from "react";
 import { DiffViewer } from "./DiffViewer";
 import { PixelDiffViewer } from "./PixelDiffViewer";
 import { ChangesPane } from "./ChangesPane";
-import { countDiffStats, deriveChanges } from "@/lib/format";
+import { countDiffStats, deriveChanges, sideLabel } from "@/lib/format";
 import { getComparison } from "@/lib/api";
 import type { DocumentComparison, ChangeItem } from "@/lib/types";
 
@@ -56,9 +56,11 @@ export function CompareWorkspace({ comparison }: { comparison: DocumentCompariso
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
         {effectiveMode === "pixel" && live.render_result ? (
           <PixelDiffViewer comparisonId={live.id} render={live.render_result}
+            oldLabel={sideLabel(live, "old")} newLabel={sideLabel(live, "new")}
             selectedId={selectedId} onSelect={setSelectedId} />
         ) : (
-          <DiffViewer blocks={blocks} selectedId={selectedId} onSelect={setSelectedId} />
+          <DiffViewer blocks={blocks} oldLabel={sideLabel(live, "old")} newLabel={sideLabel(live, "new")}
+            selectedId={selectedId} onSelect={setSelectedId} />
         )}
         <ChangesPane changes={changes} removed={removed} added={added}
           selectedId={selectedId} onSelect={setSelectedId} />

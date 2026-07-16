@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { ChangeKind, RenderPage, SearchHit } from "@/lib/types";
 import { comparisonPageImageUrl, searchComparison } from "@/lib/api";
+import { sideLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useViewer, type Side } from "./ViewerContext";
 
@@ -36,7 +37,7 @@ export function PagePane({ side, className }: { side: Side; className?: string }
   const pages = side === "old" ? render.old.pages : render.new.pages;
   const contentType = side === "old" ? comparison.old_content_type : comparison.new_content_type;
   const isPdf = contentType === "pdf";
-  const genericName = side === "old" ? "Original" : "Revised";
+  const paneName = sideLabel(comparison, side);
 
   const kindById = React.useMemo(() => {
     const m = new Map<string, ChangeKind>();
@@ -148,10 +149,10 @@ export function PagePane({ side, className }: { side: Side; className?: string }
     <div className={cn("flex min-h-0 min-w-0 flex-col bg-surface", className)}>
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-1.5">
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-medium">
-          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-          {genericName}
-          <span className="micro-label">{(contentType || "").toUpperCase()}</span>
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-[12px] font-medium">
+          <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="max-w-[240px] truncate" title={paneName}>{paneName}</span>
+          <span className="micro-label shrink-0">{(contentType || "").toUpperCase()}</span>
         </span>
 
         {/* Per-pane search */}

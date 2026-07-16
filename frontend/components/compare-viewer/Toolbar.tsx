@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Popover } from "@/components/ui/popover";
+import { sideLabel } from "@/lib/format";
 import { useViewer, deriveViewerChanges } from "./ViewerContext";
 import { ExportPopover } from "./ExportPopover";
 import { AdjustComparisonPopover } from "./AdjustComparisonPopover";
@@ -79,6 +80,9 @@ export function Toolbar() {
     [comparison, effectiveMode, showMoves]
   );
 
+  const oldLabel = sideLabel(comparison, "old");
+  const newLabel = sideLabel(comparison, "new");
+
   const step = (dir: 1 | -1) => {
     if (changes.length === 0) return;
     const cur = changes.findIndex((c) => c.id === selectedChangeId);
@@ -135,16 +139,18 @@ export function Toolbar() {
             <ToolButton
               active={singleSide === "old"}
               onClick={() => setSingleSide("old")}
-              title="Show the Original document"
+              title={`Show ${oldLabel}`}
+              className="max-w-[180px]"
             >
-              Original
+              <span className="truncate">{oldLabel}</span>
             </ToolButton>
             <ToolButton
               active={singleSide === "new"}
               onClick={() => setSingleSide("new")}
-              title="Show the Revised document"
+              title={`Show ${newLabel}`}
+              className="max-w-[180px]"
             >
-              Revised
+              <span className="truncate">{newLabel}</span>
             </ToolButton>
           </>
         )}

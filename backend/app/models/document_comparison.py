@@ -14,6 +14,8 @@ class DocumentComparison(Base):
     new_content_type = Column(String(50), nullable=False)
     old_file_path = Column(String(1000), nullable=True)
     new_file_path = Column(String(1000), nullable=True)
+    old_filename = Column(String(500), nullable=True)  # original uploaded name; NULL for pasted text
+    new_filename = Column(String(500), nullable=True)
     old_original_content = Column(Text, nullable=True)
     new_original_content = Column(Text, nullable=True)
     diff_result = Column(JSONB, nullable=True)
