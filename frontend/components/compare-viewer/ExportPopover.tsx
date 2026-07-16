@@ -51,6 +51,11 @@ export function ExportPopover() {
     >
       <div className="space-y-0.5">
         <div className="px-1.5 pb-1 micro-label">Comparison results</div>
+        {(comparison.annotations?.length ?? 0) > 0 && (
+          <div className="px-1.5 pb-1 text-[10px] leading-snug text-muted-foreground">
+            Your notes &amp; tags are included in every export.
+          </div>
+        )}
         {ROWS.map((r) => {
           const disabled = r.needsRender && !renderReady;
           const busy = spinning[r.kind];

@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -107,6 +107,14 @@ export function Toolbar() {
           className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
         >
           Open
+        </Link>
+        <Link
+          href="/compare/new"
+          title="Start a new comparison — upload or paste two documents"
+          className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+        >
+          <Plus className="h-3 w-3" />
+          New
         </Link>
         <ToolButton title="Print" onClick={() => window.print()}>
           Print

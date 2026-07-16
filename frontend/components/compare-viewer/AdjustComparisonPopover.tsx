@@ -86,6 +86,7 @@ export function AdjustComparisonPopover() {
         <button
           type="button"
           onClick={toggle}
+          title="Switch the documents being compared — replace either side or swap them, then re-run"
           className={cn(
             "inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-[11px] transition-colors",
             open
@@ -93,7 +94,7 @@ export function AdjustComparisonPopover() {
               : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
           )}
         >
-          Adjust
+          Switch docs
         </button>
       )}
     >

@@ -397,11 +397,11 @@ async def export_comparison(
         if kind == "changes-report.docx":
             data = export_service.changes_report_docx(comparison, annotations)
         elif kind == "old-highlighted.pdf":
-            data = export_service.highlighted_pdf(comparison, "old")
+            data = export_service.highlighted_pdf(comparison, "old", annotations)
         elif kind == "new-highlighted.pdf":
-            data = export_service.highlighted_pdf(comparison, "new")
+            data = export_service.highlighted_pdf(comparison, "new", annotations)
         elif kind == "side-by-side.pdf":
-            data = export_service.side_by_side_pdf(comparison)
+            data = export_service.side_by_side_pdf(comparison, annotations)
         else:  # bundle.zip
             data = export_service.bundle_zip(comparison, annotations)
     except ValueError as e:
