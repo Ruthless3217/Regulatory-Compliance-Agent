@@ -218,52 +218,76 @@ def _docx_paragraph_text(p_el) -> str:
     return "".join(parts)
 
 
+def _p_is_heading(p_el, doc) -> bool:
+    """True if a ``<w:p>`` element carries a Heading/Title paragraph style."""
+    from docx.text.paragraph import Paragraph
+    try:
+        name = getattr(Paragraph(p_el, doc).style, "name", "") or ""
+    except Exception:
+        name = ""
+    return name.startswith("Heading") or name == "Title"
+
+
 def _iter_docx_block_texts(doc) -> List[str]:
-    """Body text in document order — paragraphs (## for headings) AND table cells.
+    """Every block of body text in document order — nothing structurally dropped.
 
-    `doc.paragraphs` alone silently drops every table cell (policy documents keep
-    the forwarding-letter fields, benefit grids, etc. in tables), so we walk the
-    body element and descend into tables (including nested tables) to capture
-    everything.
+    A single recursive walk over the XML tree captures text wherever Word can put
+    it, because ``doc.paragraphs`` / ``doc.tables`` only see the top layer:
 
-    De-duping merged cells keys on the cell element's XPath, NOT ``id(cell._tc)``:
-    ``cell._tc`` returns a throwaway lxml proxy each access, and CPython recycles
-    the ``id()`` of the just-freed proxy for the next one, so distinct cells
-    collide and get skipped (dropping real content). The XPath is stable per
-    element for the life of the tree.
+    * **Table cells** — walked by raw ``<w:tc>`` iteration rather than
+      python-docx's ``row.cells``. That both avoids python-docx's grid expansion
+      (which duplicated vertically-merged cells) and sidesteps the ``id(cell._tc)``
+      de-dup trap (ephemeral lxml proxies whose ``id()`` CPython recycles, so
+      distinct cells collided and were skipped, dropping real content). Each
+      ``<w:tc>`` is a distinct element, so merges need no de-duping: a
+      vertically-merged continuation cell is its own (empty) ``<w:tc>``.
+    * **Content controls** (``<w:sdt>``) — descend into ``<w:sdtContent>`` at
+      block level and inside table rows; inline controls are covered by
+      :func:`_docx_paragraph_text`.
+    * **Text boxes** (``<w:txbxContent>``) — emitted as their own blocks, since
+      their text is anchored inside a run's drawing, invisible to a paragraph walk.
+
+    Tracked-change and hyperlink handling lives in :func:`_docx_paragraph_text`.
     """
     from docx.oxml.ns import qn
-    from docx.table import Table
-    from docx.text.paragraph import Paragraph
+
+    P, TBL, SDT, SDTC = qn("w:p"), qn("w:tbl"), qn("w:sdt"), qn("w:sdtContent")
+    TR, TC, TXBX = qn("w:tr"), qn("w:tc"), qn("w:txbxContent")
 
     out: List[str] = []
 
-    def emit_paragraph(p) -> None:
-        text = _docx_paragraph_text(p._p).strip()
-        if not text:
-            return
-        style = getattr(p.style, "name", "") or ""
-        out.append(f"## {text}" if (style.startswith("Heading") or style == "Title") else text)
+    def emit_p(p_el) -> None:
+        text = _docx_paragraph_text(p_el).strip()
+        if text:
+            out.append(f"## {text}" if _p_is_heading(p_el, doc) else text)
+        # Text boxes anchored in this paragraph become their own blocks, in place.
+        for txbx in p_el.iter(TXBX):
+            walk(txbx)
 
-    def walk_table(tbl) -> None:
-        seen: set = set()
-        for row in tbl.rows:
-            for cell in row.cells:
-                tc = cell._tc
-                key = tc.getroottree().getpath(tc)  # stable; id(tc) is not
-                if key in seen:  # merged cell already visited
-                    continue
-                seen.add(key)
-                for p in cell.paragraphs:
-                    emit_paragraph(p)
-                for nested in cell.tables:
-                    walk_table(nested)
+    def walk_table(tbl_el) -> None:
+        for tr in tbl_el.iterchildren(TR):
+            for cellish in tr.iterchildren():
+                if cellish.tag == TC:
+                    walk(cellish)
+                elif cellish.tag == SDT:  # a content-control-wrapped cell
+                    content = cellish.find(SDTC)
+                    if content is not None:
+                        for tc in content.iterchildren(TC):
+                            walk(tc)
 
-    for child in doc.element.body.iterchildren():
-        if child.tag == qn("w:p"):
-            emit_paragraph(Paragraph(child, doc))
-        elif child.tag == qn("w:tbl"):
-            walk_table(Table(child, doc))
+    def walk(container) -> None:
+        for child in container.iterchildren():
+            tag = child.tag
+            if tag == P:
+                emit_p(child)
+            elif tag == TBL:
+                walk_table(child)
+            elif tag == SDT:
+                content = child.find(SDTC)
+                if content is not None:
+                    walk(content)
+
+    walk(doc.element.body)
     return out
 
 
