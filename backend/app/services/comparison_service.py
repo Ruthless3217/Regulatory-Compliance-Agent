@@ -155,11 +155,17 @@ def extract_pdf_segments(file_path: str) -> List[str]:
     import pdfplumber
     page_lines: List[List[str]] = []
     with pdfplumber.open(file_path) as pdf:
-        for page in pdf.pages:
-            txt = page.extract_text() or ""
+        for page_no, page in enumerate(pdf.pages, start=1):
+            # A single malformed page (bad font map, broken content stream) must
+            # not fail the whole comparison — skip it and keep going.
+            try:
+                txt = page.extract_text() or ""
+            except Exception as e:  # noqa: BLE001
+                logger.warning("PDF page %s text extraction failed, skipping: %s", page_no, e)
+                txt = ""
             page_lines.append([ln.strip() for ln in txt.split("\n") if ln.strip()])
 
-    if page_lines and not any(page_lines):
+    if not any(page_lines):
         raise ValueError(
             "No extractable text found in the PDF — it may be a scanned image. "
             "Run OCR on it before comparing."
