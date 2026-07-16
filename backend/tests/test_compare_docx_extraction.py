@@ -13,7 +13,13 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
-from app.services.comparison_service import extract_docx_segments, _iter_docx_block_texts
+import pytest
+
+from app.services.comparison_service import (
+    extract_docx_segments,
+    extract_segments_labeled,
+    _iter_docx_block_texts,
+)
 
 
 def _run(text):
@@ -92,6 +98,40 @@ def test_all_table_cells_captured_no_loss(tmp_path):
     text = _captured(tmp_path, doc)
     missing = [v for v in expected if v not in text]
     assert not missing, f"table cells dropped: {missing}"
+
+
+def test_sdt_wrapped_table_row_captured(tmp_path):
+    # A table row wrapped in a content control (<w:sdt> around <w:tr>) is not a
+    # direct <w:tr> child of the table; it must still be walked.
+    doc = Document()
+    table = doc.add_table(rows=1, cols=1)
+    table.cell(0, 0).text = "BASECELL"
+    sdt = OxmlElement("w:sdt")
+    sdt.append(OxmlElement("w:sdtPr"))
+    content = OxmlElement("w:sdtContent")
+    tr = OxmlElement("w:tr")
+    tc = OxmlElement("w:tc")
+    tc.append(OxmlElement("w:tcPr"))
+    p = OxmlElement("w:p")
+    p.append(_run("SDTROWVALUE"))
+    tc.append(p)
+    tr.append(tc)
+    content.append(tr)
+    sdt.append(content)
+    table._tbl.append(sdt)
+    text = _captured(tmp_path, doc)
+    assert "BASECELL" in text and "SDTROWVALUE" in text
+
+
+def test_unreadable_docx_gives_friendly_error(tmp_path):
+    # A non-OOXML file with a .docx name must fail with an actionable message,
+    # not a raw python-docx PackageNotFoundError.
+    bad = tmp_path / "not-really.docx"
+    bad.write_text("this is plain text, not a zip-based .docx")
+    with pytest.raises(ValueError) as ei:
+        extract_segments_labeled(str(bad), "docx", None, "original")
+    msg = str(ei.value)
+    assert "original document" in msg and ".docx" in msg
 
 
 def test_block_content_control_captured(tmp_path):

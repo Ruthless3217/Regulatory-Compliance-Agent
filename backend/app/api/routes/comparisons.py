@@ -24,7 +24,12 @@ from app.database import get_db
 from app.models.document_comparison import DocumentComparison
 from app.models.comparison_annotation import ComparisonAnnotation
 from app.config import settings
-from app.services.comparison_service import extract_segments, build_diff, match_query_in_words
+from app.services.comparison_service import (
+    extract_segments,
+    extract_segments_labeled,
+    build_diff,
+    match_query_in_words,
+)
 from app.services.render_orchestrator import run_render, renders_dir
 from app.services import export_service
 from app.auth.dependencies import require
@@ -215,12 +220,12 @@ async def create_comparison(
     )
 
     try:
-        old_segments = extract_segments(old_file_path, old_content_type, old_content)
-        new_segments = extract_segments(new_file_path, new_content_type, new_content)
+        old_segments = extract_segments_labeled(old_file_path, old_content_type, old_content, "original")
+        new_segments = extract_segments_labeled(new_file_path, new_content_type, new_content, "revised")
         comparison.diff_result = build_diff(old_segments, new_segments)
         comparison.status = "completed"
     except Exception as e:
-        logger.error(f"Comparison failed for '{title}': {e}")
+        logger.error("Comparison failed for '%s': %s", title, e, exc_info=True)
         comparison.status = "failed"
         comparison.error_message = str(e)
 
@@ -468,17 +473,17 @@ async def rerun_comparison(
         )
 
     try:
-        old_segments = extract_segments(
-            comparison.old_file_path, comparison.old_content_type, comparison.old_original_content
+        old_segments = extract_segments_labeled(
+            comparison.old_file_path, comparison.old_content_type, comparison.old_original_content, "original"
         )
-        new_segments = extract_segments(
-            comparison.new_file_path, comparison.new_content_type, comparison.new_original_content
+        new_segments = extract_segments_labeled(
+            comparison.new_file_path, comparison.new_content_type, comparison.new_original_content, "revised"
         )
         comparison.diff_result = build_diff(old_segments, new_segments)
         comparison.status = "completed"
         comparison.error_message = None
     except Exception as e:
-        logger.error(f"Re-run comparison failed for '{comparison.title}': {e}")
+        logger.error("Re-run comparison failed for '%s': %s", comparison.title, e, exc_info=True)
         comparison.status = "failed"
         comparison.error_message = str(e)
         comparison.diff_result = None

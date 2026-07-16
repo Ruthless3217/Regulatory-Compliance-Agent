@@ -264,16 +264,25 @@ def _iter_docx_block_texts(doc) -> List[str]:
         for txbx in p_el.iter(TXBX):
             walk(txbx)
 
+    def walk_row(tr) -> None:
+        for cellish in tr.iterchildren():
+            if cellish.tag == TC:
+                walk(cellish)
+            elif cellish.tag == SDT:  # a content-control-wrapped cell
+                content = cellish.find(SDTC)
+                if content is not None:
+                    for tc in content.iterchildren(TC):
+                        walk(tc)
+
     def walk_table(tbl_el) -> None:
-        for tr in tbl_el.iterchildren(TR):
-            for cellish in tr.iterchildren():
-                if cellish.tag == TC:
-                    walk(cellish)
-                elif cellish.tag == SDT:  # a content-control-wrapped cell
-                    content = cellish.find(SDTC)
-                    if content is not None:
-                        for tc in content.iterchildren(TC):
-                            walk(tc)
+        for child in tbl_el.iterchildren():
+            if child.tag == TR:
+                walk_row(child)
+            elif child.tag == SDT:  # content-control-wrapped row(s)
+                content = child.find(SDTC)
+                if content is not None:
+                    for tr in content.iterchildren(TR):
+                        walk_row(tr)
 
     def walk(container) -> None:
         for child in container.iterchildren():
@@ -325,6 +334,43 @@ def extract_segments(
     for para in split_text_paragraphs(raw):
         segments.extend(split_sentences(para))
     return segments
+
+
+def _friendly_extract_message(content_type: str, exc: Exception) -> str:
+    """Turn a raw extraction exception into a message a reviewer can act on."""
+    name = type(exc).__name__
+    raw = str(exc).strip()
+    if content_type == "docx":
+        if name in ("PackageNotFoundError", "BadZipFile") or "not a Word file" in raw or "Package not found" in raw:
+            return (
+                "this doesn't open as a .docx. If it's an older .doc file, open it in "
+                "Word and use Save As → Word Document (.docx), then upload again."
+            )
+        return f"the Word file could not be read ({raw or name})."
+    if content_type == "pdf":
+        low = raw.lower()
+        if "password" in low or "encrypt" in low:
+            return "the PDF is password-protected — remove the protection and re-upload."
+        return f"the PDF could not be parsed ({raw or name})."
+    return raw or name
+
+
+def extract_segments_labeled(
+    file_path: Optional[str], content_type: str, pasted_text: Optional[str], side_label: str
+) -> List[str]:
+    """extract_segments with a clear, side-labelled error on failure.
+
+    ValueErrors raised deliberately downstream (e.g. the scanned-PDF hint) are
+    already user-friendly and pass through unchanged; anything else is wrapped so
+    the reviewer sees which side failed and why, instead of a raw library trace.
+    """
+    try:
+        return extract_segments(file_path, content_type, pasted_text)
+    except ValueError:
+        raise
+    except Exception as e:  # noqa: BLE001 — translate to a reviewer-facing message
+        logger.error("Extraction failed for %s side (%s): %s", side_label, content_type, e, exc_info=True)
+        raise ValueError(f"Couldn't read the {side_label} document: {_friendly_extract_message(content_type, e)}")
 
 
 # ---------------------------------------------------------------------------
