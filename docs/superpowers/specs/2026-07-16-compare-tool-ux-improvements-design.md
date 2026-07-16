@@ -9,6 +9,7 @@ Three usability gaps reported in the Compare tool's "New comparison" creation fl
 1. The upload dropzone on `/compare/new` visually looks like a drag-and-drop target ("Drop a file or click to browse…") but only supports click-to-browse — dropping a file does nothing.
 2. Submitting a new comparison shows only a text change ("Compare →" → "Comparing…") on the button, with no spinner or progress indication, even though large PDF diffing can take several seconds.
 3. The comparison viewer always labels the two documents "Original" and "Revised", even when the user uploaded named files (e.g. "brochure-v1.pdf" vs "brochure-v2.pdf") — there's no way to tell which physical file is which at a glance.
+4. Once a file is selected on the upload side of the form, replacing it takes two clicks: "Choose a different file" only clears the selection, then a second click on the now-empty box is needed to actually reopen the file picker.
 
 Scope for this spec: the "New comparison" creation page (`compare/new/page.tsx`) and the read-only viewer components. The "Adjust" (re-run) popover on the viewer (`AdjustComparisonPopover.tsx`) is explicitly out of scope for drag-and-drop and the loader — its upload slots stay click-only, and its "Original"/"Modified" labels stay as-is since they describe *which side to replace*, not a display of an already-known file.
 
@@ -20,6 +21,10 @@ Scope for this spec: the "New comparison" creation page (`compare/new/page.tsx`)
 - Extract the existing validation logic (size limit check + toast) out of the file-input's `onChange` into a single `handleFile(f: File)` function, called from both `onChange` and `onDrop` — no duplicated validation.
 - Add an extension check to `handleFile`: reject files whose extension isn't `.pdf`/`.docx`/`.txt` with a toast error (`"Unsupported file type. Use PDF, DOCX, or TXT."`). The native `accept` attribute only constrains the OS file picker, not drag-and-drop, so this check is currently missing entirely for dropped files.
 - Purely additive to the existing dropzone markup — no layout changes when not dragging.
+
+**Change-file fix (paper cut in the same component):** today, once a file is selected, clicking "Choose a different file" only clears the selection (`setFile(null)`, via `e.stopPropagation()`) — the user then has to click again on the now-empty box to actually open the picker. Fix:
+- The selected-file state's "Choose a different file" link becomes "Change file" and, instead of clearing, directly calls `fileInputRef.current?.click()` to reopen the OS picker in one click; picking a file overwrites the current selection via the existing `onChange` → `handleFile` path.
+- Add a small separate icon-only clear/remove control (e.g. an `X` button, `lucide-react`'s `X`) next to the filename that calls `setFile(null)` — so emptying the slot without immediately picking a replacement is still possible, just via a distinct control from "Change file".
 
 ## 2. Loader / progress bar on submit
 
