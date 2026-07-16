@@ -145,13 +145,8 @@ def _detect_running_lines(page_lines: List[List[str]]) -> Set[str]:
     return {ln for ln, count in band.items() if count >= threshold}
 
 
-def extract_pdf_segments(file_path: str) -> List[str]:
-    """Extract sentence-level segments from a PDF, normalized for cross-format diff.
-
-    Strips repeated running headers/footers and page numbers, de-hyphenates
-    line-wraps, unwraps physical lines back into flowing text, then segments into
-    sentences. Raises ValueError if no text is extractable (likely a scanned PDF).
-    """
+def _pdf_text_layer_lines(file_path: str) -> List[List[str]]:
+    """Per-page non-empty text lines from a PDF's selectable text layer."""
     import pdfplumber
     page_lines: List[List[str]] = []
     with pdfplumber.open(file_path) as pdf:
@@ -164,11 +159,68 @@ def extract_pdf_segments(file_path: str) -> List[str]:
                 logger.warning("PDF page %s text extraction failed, skipping: %s", page_no, e)
                 txt = ""
             page_lines.append([ln.strip() for ln in txt.split("\n") if ln.strip()])
+    return page_lines
+
+
+def _pdf_ocr_lines(file_path: str) -> List[List[str]]:
+    """OCR a scanned/image PDF into per-page text lines.
+
+    Rasterizes each page with pypdfium2 (already a dependency for the pixel view)
+    and runs Tesseract via pytesseract. Returns ``[]`` — never raises — if OCR is
+    disabled or the tooling isn't installed, so the caller can fall back to the
+    clear "run OCR" message. Capped at ``settings.compare_ocr_page_cap`` pages.
+    """
+    from app.config import settings
+    if not settings.compare_ocr_enabled:
+        return []
+    try:
+        import pypdfium2 as pdfium
+        import pytesseract
+    except Exception as e:  # noqa: BLE001 — OCR tooling not present in this image
+        logger.warning("OCR fallback unavailable (%s); scanned PDF will not be read", e)
+        return []
+
+    page_lines: List[List[str]] = []
+    try:
+        pdf = pdfium.PdfDocument(file_path)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("OCR: could not open PDF %s: %s", file_path, e)
+        return []
+    try:
+        cap = min(len(pdf), max(1, settings.compare_ocr_page_cap))
+        for i in range(cap):
+            try:
+                # scale 3.0 ≈ 216 DPI — enough for Tesseract without huge bitmaps.
+                pil = pdf[i].render(scale=3.0).to_pil()
+                txt = pytesseract.image_to_string(pil) or ""
+            except Exception as e:  # noqa: BLE001 — skip a page OCR can't handle
+                logger.warning("OCR failed on page %s: %s", i + 1, e)
+                txt = ""
+            page_lines.append([ln.strip() for ln in txt.split("\n") if ln.strip()])
+    finally:
+        pdf.close()
+    if any(page_lines):
+        logger.info("OCR fallback extracted text from %s (%d pages)", file_path, len(page_lines))
+    return page_lines
+
+
+def extract_pdf_segments(file_path: str) -> List[str]:
+    """Extract sentence-level segments from a PDF, normalized for cross-format diff.
+
+    Strips repeated running headers/footers and page numbers, de-hyphenates
+    line-wraps, unwraps physical lines back into flowing text, then segments into
+    sentences. Falls back to OCR for a scanned/image PDF (no text layer); raises
+    ValueError only if neither the text layer nor OCR yields any text.
+    """
+    page_lines = _pdf_text_layer_lines(file_path)
+
+    if not any(page_lines):  # no selectable text — try OCR before giving up
+        page_lines = _pdf_ocr_lines(file_path)
 
     if not any(page_lines):
         raise ValueError(
-            "No extractable text found in the PDF — it may be a scanned image. "
-            "Run OCR on it before comparing."
+            "No extractable text found in the PDF — it looks like a scanned image "
+            "and OCR could not read it. Provide a text-based PDF or run OCR first."
         )
 
     running = _detect_running_lines(page_lines)
