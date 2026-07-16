@@ -176,13 +176,61 @@ def extract_pdf_segments(file_path: str) -> List[str]:
     return split_sentences(" ".join(cleaned))
 
 
+def _docx_paragraph_text(p_el) -> str:
+    """Full visible text of a ``<w:p>`` element.
+
+    python-docx's ``Paragraph.text`` only concatenates runs that are *direct*
+    ``<w:r>`` children of the paragraph, so it silently drops any run wrapped in
+    another element — most importantly tracked-change insertions (``<w:ins>``),
+    moved-in runs (``<w:moveTo>``) and hyperlinks. In a reviewed document those
+    can be a large share of the body, which is exactly the content that then goes
+    "missing" from a comparison. We instead walk every text node under the
+    paragraph in document order.
+
+    Excluded on purpose: tracked *deletions* (which use ``<w:delText>``, not
+    ``<w:t>``, so they never appear here), the old location of a moved run
+    (``<w:moveFrom>`` — its twin ``<w:moveTo>`` carries the surviving copy), and
+    any text-box content (``<w:txbxContent>``) anchored inside the paragraph.
+    """
+    from docx.oxml.ns import qn
+
+    t_tag, tab_tag = qn("w:t"), qn("w:tab")
+    br_tag, cr_tag = qn("w:br"), qn("w:cr")
+    move_from_tag, txbx_tag = qn("w:moveFrom"), qn("w:txbxContent")
+
+    parts: List[str] = []
+    for node in p_el.iter(t_tag, tab_tag, br_tag, cr_tag):
+        anc = node.getparent()
+        skip = False
+        while anc is not None and anc is not p_el:
+            if anc.tag == move_from_tag or anc.tag == txbx_tag:
+                skip = True
+                break
+            anc = anc.getparent()
+        if skip:
+            continue
+        if node.tag == t_tag:
+            parts.append(node.text or "")
+        elif node.tag == tab_tag:
+            parts.append("\t")
+        else:  # w:br / w:cr
+            parts.append("\n")
+    return "".join(parts)
+
+
 def _iter_docx_block_texts(doc) -> List[str]:
     """Body text in document order — paragraphs (## for headings) AND table cells.
 
     `doc.paragraphs` alone silently drops every table cell (policy documents keep
     the forwarding-letter fields, benefit grids, etc. in tables), so we walk the
     body element and descend into tables (including nested tables) to capture
-    everything. Merged cells share one underlying <w:tc>, so we de-dupe on it.
+    everything.
+
+    De-duping merged cells keys on the cell element's XPath, NOT ``id(cell._tc)``:
+    ``cell._tc`` returns a throwaway lxml proxy each access, and CPython recycles
+    the ``id()`` of the just-freed proxy for the next one, so distinct cells
+    collide and get skipped (dropping real content). The XPath is stable per
+    element for the life of the tree.
     """
     from docx.oxml.ns import qn
     from docx.table import Table
@@ -191,7 +239,7 @@ def _iter_docx_block_texts(doc) -> List[str]:
     out: List[str] = []
 
     def emit_paragraph(p) -> None:
-        text = p.text.strip()
+        text = _docx_paragraph_text(p._p).strip()
         if not text:
             return
         style = getattr(p.style, "name", "") or ""
@@ -201,9 +249,11 @@ def _iter_docx_block_texts(doc) -> List[str]:
         seen: set = set()
         for row in tbl.rows:
             for cell in row.cells:
-                if id(cell._tc) in seen:  # merged cell already visited
+                tc = cell._tc
+                key = tc.getroottree().getpath(tc)  # stable; id(tc) is not
+                if key in seen:  # merged cell already visited
                     continue
-                seen.add(id(cell._tc))
+                seen.add(key)
                 for p in cell.paragraphs:
                     emit_paragraph(p)
                 for nested in cell.tables:
