@@ -20,7 +20,9 @@ import { cn } from "@/lib/utils";
 import { useRole, type Role } from "./RoleContext";
 
 type IconComponent = React.ComponentType<{ className?: string }>;
-type NavItem = { label: string; href: string; icon: IconComponent };
+// `soon` marks a Wave-2 route that has no page yet — rendered disabled, never a
+// live link (it would 404). Only /dashboard and /new are wired in this sandbox.
+type NavItem = { label: string; href: string; icon: IconComponent; soon?: boolean };
 type NavSection = { title: string; items: NavItem[] };
 
 const WORKSPACE_SECTION: NavSection = {
@@ -28,28 +30,28 @@ const WORKSPACE_SECTION: NavSection = {
   items: [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "New", href: "/new", icon: PenSquare },
-    { label: "Submissions", href: "/submissions", icon: FileText },
-    { label: "Rules", href: "/rules", icon: Library },
-    { label: "Knowledge Base", href: "/knowledge-base", icon: Boxes },
-    { label: "Compare", href: "/compare", icon: GitCompare },
-    { label: "Settings", href: "/settings", icon: Settings },
+    { label: "Submissions", href: "/submissions", icon: FileText, soon: true },
+    { label: "Rules", href: "/rules", icon: Library, soon: true },
+    { label: "Knowledge Base", href: "/knowledge-base", icon: Boxes, soon: true },
+    { label: "Compare", href: "/compare", icon: GitCompare, soon: true },
+    { label: "Settings", href: "/settings", icon: Settings, soon: true },
   ],
 };
 
 const SUPER_ADMIN_SECTION: NavSection = {
   title: "Super-admin",
   items: [
-    { label: "Users", href: "/super_admin/users", icon: Users },
-    { label: "Usage", href: "/super_admin/usage", icon: BarChart3 },
-    { label: "Runs", href: "/super_admin/runs", icon: Activity },
-    { label: "Sessions", href: "/super_admin/sessions", icon: MonitorSmartphone },
-    { label: "Audit", href: "/super_admin/audit", icon: ClipboardList },
+    { label: "Users", href: "/super_admin/users", icon: Users, soon: true },
+    { label: "Usage", href: "/super_admin/usage", icon: BarChart3, soon: true },
+    { label: "Runs", href: "/super_admin/runs", icon: Activity, soon: true },
+    { label: "Sessions", href: "/super_admin/sessions", icon: MonitorSmartphone, soon: true },
+    { label: "Audit", href: "/super_admin/audit", icon: ClipboardList, soon: true },
   ],
 };
 
 const VIEWER_SECTION: NavSection = {
   title: "Viewer",
-  items: [{ label: "Compare", href: "/compare", icon: GitCompare }],
+  items: [{ label: "Compare", href: "/compare", icon: GitCompare, soon: true }],
 };
 
 function sectionsForRole(role: Role): NavSection[] {
@@ -97,12 +99,30 @@ export function Sidebar() {
             </div>
             <ul className="space-y-px">
               {section.items.map((item) => {
-                const active = isActive(pathname, item.href);
                 const Icon = item.icon;
+                if (item.soon) {
+                  return (
+                    <li key={item.href}>
+                      <div
+                        aria-disabled="true"
+                        title="Coming soon"
+                        className="group relative flex h-8 cursor-not-allowed items-center gap-2.5 rounded-md pl-4 pr-2 text-[13px] text-muted-foreground/50"
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+                        <span className="flex-1 truncate">{item.label}</span>
+                        <span className="rounded-sm border border-border px-1 py-px text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+                          Soon
+                        </span>
+                      </div>
+                    </li>
+                  );
+                }
+                const active = isActive(pathname, item.href);
                 return (
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      aria-current={active ? "page" : undefined}
                       className={cn(
                         "group relative flex h-8 items-center gap-2.5 rounded-md pl-4 pr-2 text-[13px] transition-colors",
                         active

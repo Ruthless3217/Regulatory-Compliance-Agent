@@ -5,6 +5,7 @@ import { AlertCircle, AlertTriangle, Loader2, Sparkles } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { classifySubmission } from "@/lib/mockApi";
 import type { DocumentType } from "@/lib/types";
 
@@ -16,9 +17,6 @@ export const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "website", label: "Website copy" },
   { value: "other", label: "Other" },
 ];
-
-const selectClass =
-  "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
 /** Product-only obligations (UIN + mandatory descriptor) are gated on the document type. Pure — unit-tested directly. */
 export function requiresProductMandatory(t: DocumentType): boolean {
@@ -93,18 +91,17 @@ export function DocumentTypeGate({ content, onConfirm, onBack }: DocumentTypeGat
             )}
             <div className="space-y-1.5">
               <Label htmlFor="document-type">Document type</Label>
-              <select
+              <Select
                 id="document-type"
                 value={documentType}
                 onChange={(e) => setDocumentType(e.target.value as DocumentType)}
-                className={selectClass}
               >
                 {DOCUMENT_TYPES.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
                 ))}
-              </select>
+              </Select>
               {suggestedLabel && (
                 <p className="text-xs text-muted-foreground">
                   Suggested: <span className="font-medium text-foreground">{suggestedLabel}</span>

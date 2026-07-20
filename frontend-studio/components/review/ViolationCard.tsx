@@ -55,21 +55,22 @@ export function ViolationCard({ group, selected, onSelect }: ViolationCardProps)
 
   return (
     <Card
-      role="button"
-      tabIndex={0}
-      onClick={() => onSelect?.(group.id)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect?.(group.id);
-        }
-      }}
       className={cn(
-        "cursor-pointer text-left transition-colors",
+        "relative text-left transition-colors",
         selected ? "border-primary/50 ring-1 ring-primary/40" : "hover:border-foreground/30",
         decision === "rejected" && "opacity-60"
       )}
     >
+      {/* Visually-hidden selection trigger — a real, focusable button that never
+          wraps the interactive controls below it, avoiding the nested-button
+          a11y anti-pattern. The Accept/Reject/"show more" buttons render after
+          it in the DOM, so they stay ahead in the tab order. */}
+      <button
+        type="button"
+        onClick={() => onSelect?.(group.id)}
+        className="absolute inset-0 sr-only"
+        aria-label={`Select violation ${primary.id}`}
+      />
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
           <StatusPill severity={primary.severity}>{primary.severity}</StatusPill>

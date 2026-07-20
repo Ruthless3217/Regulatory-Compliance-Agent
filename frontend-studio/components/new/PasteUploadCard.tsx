@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 export interface SubmissionDraft {
@@ -21,9 +22,6 @@ const CONTENT_TYPES: { value: string; label: string }[] = [
   { value: "pdf", label: "PDF" },
   { value: "docx", label: "Word (.docx)" },
 ];
-
-const selectClass =
-  "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
 function contentTypeForFile(name: string): string {
   if (name.toLowerCase().endsWith(".pdf")) return "pdf";
@@ -144,18 +142,17 @@ export function PasteUploadCard({ onContinue }: { onContinue: (draft: Submission
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="content-type">Content type</Label>
-            <select
+            <Select
               id="content-type"
               value={contentType}
               onChange={(e) => setContentType(e.target.value)}
-              className={selectClass}
             >
               {CONTENT_TYPES.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 

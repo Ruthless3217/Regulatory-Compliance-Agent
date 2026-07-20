@@ -55,8 +55,10 @@ function Chip({
 
 function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="micro-label w-16 shrink-0">{label}</span>
+    <div role="group" aria-label={label} className="flex flex-wrap items-center gap-1.5">
+      <span className="micro-label w-16 shrink-0" aria-hidden="true">
+        {label}
+      </span>
       {children}
     </div>
   );

@@ -7,8 +7,13 @@ export function ScoreRing({ value, grade, size = 72, className }: { value: numbe
   const pct = Math.max(0, Math.min(100, value));
   const stroke = pct >= 80 ? "hsl(var(--success))" : pct >= 60 ? "hsl(var(--sev-medium))" : "hsl(var(--sev-critical))";
   return (
-    <div className={cn("relative inline-flex items-center justify-center", className)} style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
+    <div
+      role="img"
+      aria-label={`Score ${Math.round(pct)} of 100`}
+      className={cn("relative inline-flex items-center justify-center", className)}
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth={6} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={stroke} strokeWidth={6} strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c - (pct / 100) * c} />

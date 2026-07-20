@@ -34,6 +34,7 @@ export default function SubmissionLayout({ children }: { children: ReactNode }) 
               <Link
                 key={tab.label}
                 href={href}
+                aria-current={active ? "page" : undefined}
                 className={cn(
                   "rounded-sm px-3 py-1 text-sm font-medium transition-colors",
                   active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"

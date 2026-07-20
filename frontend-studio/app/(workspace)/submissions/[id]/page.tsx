@@ -88,18 +88,21 @@ export default function SubmissionReviewPage() {
   }
 
   return (
-    <div className="grid h-full grid-cols-2 divide-x divide-border overflow-hidden">
-      <div className="overflow-y-auto">
-        <DocumentPane
-          content={submission.original_content ?? ""}
-          groups={groups}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-        />
+    <>
+      <h1 className="sr-only">Review</h1>
+      <div className="grid h-full grid-cols-2 divide-x divide-border overflow-hidden">
+        <div className="overflow-y-auto">
+          <DocumentPane
+            content={submission.original_content ?? ""}
+            groups={groups}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        </div>
+        <div className="min-h-0 overflow-hidden">
+          <ViolationsPane groups={groups} suppressed={suppressed} selectedId={selectedId} onSelect={setSelectedId} />
+        </div>
       </div>
-      <div className="min-h-0 overflow-hidden">
-        <ViolationsPane groups={groups} suppressed={suppressed} selectedId={selectedId} onSelect={setSelectedId} />
-      </div>
-    </div>
+    </>
   );
 }

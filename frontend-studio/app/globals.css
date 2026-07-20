@@ -25,11 +25,11 @@
     --destructive-foreground: 0 0% 100%;
 
     --sev-critical: 349 80% 50%;
-    --sev-high: 24 90% 53%;
-    --sev-medium: 38 92% 50%;
+    --sev-high: 24 90% 40%;
+    --sev-medium: 38 92% 38%;
     --sev-low: 218 100% 29%;
     --success: 152 60% 36%;
-    --warning: 38 92% 50%;
+    --warning: 38 92% 38%;
     --info: 218 100% 29%;
 
     --radius: 0.5rem;

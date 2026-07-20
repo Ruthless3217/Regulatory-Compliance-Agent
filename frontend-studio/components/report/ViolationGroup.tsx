@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatusPill } from "@/components/ui/status-pill";
 import { cn } from "@/lib/utils";
 import type { Violation } from "@/lib/types";
+import type { ViolationGroup as ViolationGroupModel } from "@/lib/violationGroups";
 
 const CATEGORY_LABELS: Record<string, string> = {
   irdai: "IRDAI",
@@ -18,35 +19,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const isAutoFixable = (v: Violation) => v.auto_fixable === true || v.auto_fixable === "true";
 
-interface Group {
-  id: string;
-  primary: Violation;
-  members: Violation[];
-}
-
-/** Groups by group_id — overlapping findings that share a span collapse to one
- * card (the strongest is_primary member leads); a violation with no group_id is
- * a standalone finding and gets its own single-member group. */
-function buildGroups(violations: Violation[]): Group[] {
-  const byGroup = new Map<string, Violation[]>();
-  const standalone: Violation[] = [];
-  for (const v of violations) {
-    if (v.group_id) {
-      byGroup.set(v.group_id, [...(byGroup.get(v.group_id) ?? []), v]);
-    } else {
-      standalone.push(v);
-    }
-  }
-  const grouped: Group[] = Array.from(byGroup.entries()).map(([id, members]) => ({
-    id,
-    primary: members.find((m) => m.is_primary) ?? members[0],
-    members,
-  }));
-  const solo: Group[] = standalone.map((v) => ({ id: v.id, primary: v, members: [v] }));
-  return [...grouped, ...solo];
-}
-
-function GroupCard({ group }: { group: Group }) {
+function GroupCard({ group }: { group: ViolationGroupModel }) {
   const [open, setOpen] = React.useState(group.primary.severity === "critical");
   const { primary, members } = group;
   const extra = members.length - 1;
@@ -113,9 +86,7 @@ function GroupCard({ group }: { group: Group }) {
   );
 }
 
-export function ViolationGroup({ violations }: { violations: Violation[] }) {
-  const groups = React.useMemo(() => buildGroups(violations), [violations]);
-
+export function ViolationGroup({ groups }: { groups: ViolationGroupModel[] }) {
   if (groups.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">No violations recorded for this submission.</p>;
   }

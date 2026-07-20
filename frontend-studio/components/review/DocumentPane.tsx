@@ -113,7 +113,16 @@ export function DocumentPane({ content, groups, selectedId, onSelect }: Document
         key={`m-${span.groupId}`}
         data-severity={span.severity}
         data-selected={selectedId === span.groupId}
+        role="button"
+        tabIndex={0}
+        aria-pressed={selectedId === span.groupId}
         onClick={() => onSelect?.(span.groupId)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect?.(span.groupId);
+          }
+        }}
       >
         {content.slice(span.start, span.end)}
       </mark>

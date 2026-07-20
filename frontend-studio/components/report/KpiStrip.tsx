@@ -12,10 +12,11 @@ const SEV_TONE: Record<Severity, string> = {
   low: "text-sev-low",
 };
 
-const TIERS: { key: "precedent" | "rule" | "novel"; label: string }[] = [
+const TIERS: { key: "precedent" | "rule" | "novel" | "product_fact"; label: string }[] = [
   { key: "precedent", label: "Precedent" },
   { key: "rule", label: "Rule" },
   { key: "novel", label: "Novel" },
+  { key: "product_fact", label: "Product fact" },
 ];
 
 /** Counts by severity and by grounding tier, over the violations that count
@@ -56,7 +57,7 @@ export function KpiStrip({ violations }: { violations: Violation[] }) {
         </div>
         <div className="p-5">
           <p className="micro-label mb-3">By grounding tier</p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             {tierCounts.map((c) => (
               <div key={c.key}>
                 <div className="text-xs text-muted-foreground">{c.label}</div>

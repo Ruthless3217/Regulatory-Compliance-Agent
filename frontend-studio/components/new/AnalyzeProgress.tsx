@@ -33,7 +33,9 @@ export function AnalyzeProgress({ submissionId }: { submissionId: string }) {
           setStageIndex(STAGES.findIndex((s) => s.key === ev.stage));
           setProgress(ev.progress);
         } else if ("chunk_index" in ev) {
-          setFindingCount((c) => c + ev.violations.length);
+          // Match the report/KpiStrip scored count — suppressed sub-floor
+          // findings are routed to manual review, not surfaced in this tally.
+          setFindingCount((c) => c + ev.violations.filter((v) => !v.suppressed).length);
         } else if ("done" in ev) {
           setProgress(100);
           setStageIndex(STAGES.length);
@@ -63,7 +65,14 @@ export function AnalyzeProgress({ submissionId }: { submissionId: string }) {
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            role="progressbar"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Analyzing submission"
+            className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+          >
             <div
               className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
               style={{ width: `${progress}%` }}

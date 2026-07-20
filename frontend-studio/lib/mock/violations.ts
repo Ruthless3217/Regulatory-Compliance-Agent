@@ -2,7 +2,7 @@ import type { Violation } from "@/lib/types";
 
 // Fixture coverage (see task-4 brief step 2):
 //  - one violation per severity:      v-001 critical, v-006 high, v-003/005/007/008 medium, v-004 low
-//  - one violation per grounding tier: v-001 precedent, v-002/004/006/008 rule, v-003/005/007 novel
+//  - one violation per grounding tier: v-001 precedent, v-002/006/008 rule, v-003/005/007 novel, v-004 product_fact
 //  - a product-fact-card case:        v-004 (premium figure vs. approved fact card)
 //  - a precedent-cited violation:     v-001 (cited_anchor_text / cited_comment_verbatim / cited_final_text / similarity_score)
 //  - a suppressed finding:            v-005 (suppressed + suppressed_reason)
@@ -105,7 +105,7 @@ export const violations: Violation[] = [
     rule_id: "rule-factcard-003",
     confidence: 0.8,
     violation_metadata: {
-      grounding: "rule",
+      grounding: "product_fact",
       action_type: "rewrite",
       evidence_needed:
         "Reconcile premium figure against Product Fact Card — Smart Wealth Plan v3.2 (approved 2026-04-11).",

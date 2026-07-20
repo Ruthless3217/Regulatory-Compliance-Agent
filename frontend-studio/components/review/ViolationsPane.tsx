@@ -24,7 +24,7 @@ export function ViolationsPane({ groups, suppressed, selectedId, onSelect }: Vio
   const filteredGroups = React.useMemo(() => {
     const active = filters.severities.length > 0 || filters.categories.length > 0 || filters.tiers.length > 0;
     if (!active) return groups;
-    return groups.filter((g) => filterViolations([g.primary], filters).length > 0);
+    return groups.filter((g) => filterViolations(g.members, filters).length > 0);
   }, [groups, filters]);
 
   const virtualizer = useVirtualizer({

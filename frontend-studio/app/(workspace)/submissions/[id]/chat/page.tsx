@@ -22,6 +22,16 @@ export default function ChatPage() {
   const [draft, setDraft] = React.useState("");
   const [isStreaming, setIsStreaming] = React.useState(false);
 
+  // Liveness flag so an in-flight stream (a real SSE fetch later) never calls
+  // setState after the page unmounts mid-response.
+  const alive = React.useRef(true);
+  React.useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
   React.useEffect(() => {
     let active = true;
     setSubmissionError(false);
@@ -53,6 +63,7 @@ export default function ChatPage() {
     setIsStreaming(true);
 
     for await (const chunk of simulateChat(text)) {
+      if (!alive.current) break;
       if ("token" in chunk) {
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk.token } : m))
@@ -62,11 +73,12 @@ export default function ChatPage() {
       }
     }
 
-    setIsStreaming(false);
+    if (alive.current) setIsStreaming(false);
   }, [draft, isStreaming]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <h1 className="sr-only">Chat</h1>
       <PinnedContextBar submission={submission} error={submissionError} />
       <MessageList messages={messages} />
       <QuickActions onSeed={setDraft} />

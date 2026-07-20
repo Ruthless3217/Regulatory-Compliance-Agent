@@ -4,10 +4,12 @@ import * as React from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { getComplianceResults } from "@/lib/mockApi";
 import { complianceResultsDegraded } from "@/lib/mock";
+import { groupViolations } from "@/lib/violationGroups";
 import { ScoreHero } from "@/components/report/ScoreHero";
 import { KpiStrip } from "@/components/report/KpiStrip";
 import { ViolationGroup } from "@/components/report/ViolationGroup";
 import { ExportButton } from "@/components/report/ExportButton";
+import { NeedsReviewLane } from "@/components/review/NeedsReviewLane";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorCard } from "@/components/ui/error-card";
 import type { ComplianceResults } from "@/lib/types";
@@ -68,6 +70,11 @@ function ReportPageBody() {
     };
   }, [id, degraded, retryKey]);
 
+  const { groups, suppressed } = React.useMemo(
+    () => groupViolations(result?.violations ?? []),
+    [result]
+  );
+
   if (error) {
     return <ErrorCard message={error} onRetry={() => setRetryKey((k) => k + 1)} />;
   }
@@ -78,13 +85,19 @@ function ReportPageBody() {
 
   return (
     <div className="space-y-6">
+      <h1 className="sr-only">Report</h1>
       <ScoreHero result={result} />
       <KpiStrip violations={result.violations} />
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Violations</h2>
         <ExportButton />
       </div>
-      <ViolationGroup violations={result.violations} />
+      <ViolationGroup groups={groups} />
+      {suppressed.length > 0 && (
+        <div className="overflow-hidden rounded-lg border border-border">
+          <NeedsReviewLane violations={suppressed} />
+        </div>
+      )}
     </div>
   );
 }

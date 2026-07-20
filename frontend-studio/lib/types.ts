@@ -93,7 +93,8 @@ export type ActionType =
   | "remove";
 
 export interface ViolationMetadata {
-  grounding?: "precedent" | "rule" | "novel";
+  // product_fact: emitted by the backend product-fact-card tier; the current real frontend type omits it — widened here so the sandbox can showcase all four tiers.
+  grounding?: "precedent" | "rule" | "novel" | "product_fact";
   action_type?: ActionType | string;
   evidence_needed?: string | null;
   regulatory_basis?: string | null;

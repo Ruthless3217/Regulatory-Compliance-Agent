@@ -16,6 +16,7 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 /**
  * The palette owns its own open state. Anything outside this module (e.g. the
@@ -30,16 +31,18 @@ export function openCommandPalette() {
 }
 
 type IconComponent = React.ComponentType<{ className?: string }>;
-type NavEntry = { id: string; label: string; href: string; icon: IconComponent };
+// `soon` marks a Wave-2 route with no page yet — surfaced as a disabled entry
+// (never navigates, would 404). Only /dashboard and /new are wired here.
+type NavEntry = { id: string; label: string; href: string; icon: IconComponent; soon?: boolean };
 
 const NAV_ENTRIES: NavEntry[] = [
   { id: "nav-dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { id: "nav-new", label: "New submission", href: "/new", icon: PenSquare },
-  { id: "nav-submissions", label: "Submissions", href: "/submissions", icon: FileText },
-  { id: "nav-rules", label: "Rules", href: "/rules", icon: Library },
-  { id: "nav-kb", label: "Knowledge Base", href: "/knowledge-base", icon: Boxes },
-  { id: "nav-compare", label: "Compare", href: "/compare", icon: GitCompare },
-  { id: "nav-settings", label: "Settings", href: "/settings", icon: Settings },
+  { id: "nav-submissions", label: "Submissions", href: "/submissions", icon: FileText, soon: true },
+  { id: "nav-rules", label: "Rules", href: "/rules", icon: Library, soon: true },
+  { id: "nav-kb", label: "Knowledge Base", href: "/knowledge-base", icon: Boxes, soon: true },
+  { id: "nav-compare", label: "Compare", href: "/compare", icon: GitCompare, soon: true },
+  { id: "nav-settings", label: "Settings", href: "/settings", icon: Settings, soon: true },
 ];
 
 export function CommandPalette() {
@@ -106,15 +109,26 @@ export function CommandPalette() {
               heading="Navigate"
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-muted-foreground"
             >
-              {NAV_ENTRIES.map(({ id, label, href, icon: Icon }) => (
+              {NAV_ENTRIES.map(({ id, label, href, icon: Icon, soon }) => (
                 <Command.Item
                   key={id}
                   value={label}
-                  onSelect={() => go(href)}
-                  className="flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-sm text-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
+                  disabled={soon}
+                  onSelect={soon ? undefined : () => go(href)}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm",
+                    soon
+                      ? "cursor-not-allowed text-muted-foreground/50"
+                      : "cursor-pointer text-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
+                  )}
                 >
                   <Icon className="h-4 w-4 text-muted-foreground" />
                   <span className="flex-1 truncate">{label}</span>
+                  {soon && (
+                    <span className="rounded-sm border border-border px-1 py-px text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+                      Soon
+                    </span>
+                  )}
                 </Command.Item>
               ))}
             </Command.Group>
