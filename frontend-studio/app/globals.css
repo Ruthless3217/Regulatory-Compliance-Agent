@@ -1,3 +1,86 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 25% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 25% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 25% 12%;
+    --primary: 218 100% 29%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 222 25% 20%;
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 14% 42%;
+    --accent: 210 20% 94%;
+    --accent-foreground: 222 25% 16%;
+    --border: 214 20% 90%;
+    --input: 214 20% 88%;
+    --ring: 218 100% 29%;
+    --destructive: 349 80% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --sev-critical: 349 80% 50%;
+    --sev-high: 24 90% 53%;
+    --sev-medium: 38 92% 50%;
+    --sev-low: 218 100% 29%;
+    --success: 152 60% 36%;
+    --warning: 38 92% 50%;
+    --info: 218 100% 29%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 22% 7%;
+    --foreground: 210 20% 96%;
+    --card: 222 20% 9%;
+    --card-foreground: 210 20% 96%;
+    --popover: 222 22% 8%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 218 90% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 16% 14%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 222 16% 13%;
+    --muted-foreground: 215 15% 60%;
+    --accent: 222 16% 16%;
+    --accent-foreground: 210 20% 94%;
+    --border: 222 14% 16%;
+    --input: 222 14% 18%;
+    --ring: 218 90% 62%;
+    --destructive: 349 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --sev-critical: 349 75% 60%;
+    --sev-high: 24 85% 60%;
+    --sev-medium: 38 90% 58%;
+    --sev-low: 218 85% 65%;
+    --success: 152 50% 48%;
+    --warning: 38 90% 58%;
+    --info: 218 85% 65%;
+  }
+
+  * { border-color: hsl(var(--border)); }
+  body {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+}
+
+@layer components {
+  .micro-label { @apply text-[10px] uppercase tracking-[0.06em] text-muted-foreground font-medium; }
+  mark[data-severity] { background-color: transparent; border-bottom: 2px solid hsl(var(--sev-medium)); color: inherit; padding: 0 1px; cursor: pointer; }
+  mark[data-severity="critical"] { border-bottom-color: hsl(var(--sev-critical)); }
+  mark[data-severity="high"]     { border-bottom-color: hsl(var(--sev-high)); }
+  mark[data-severity="medium"]   { border-bottom-color: hsl(var(--sev-medium)); }
+  mark[data-severity="low"]      { border-bottom-color: hsl(var(--sev-low)); }
+  mark[data-selected="true"] { background-color: hsl(var(--primary) / 0.10); }
+}
