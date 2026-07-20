@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type Swatch = { name: string; bg: string; fg: string };
 
@@ -117,6 +119,16 @@ function SeverityChips() {
           {s.name}
         </span>
       ))}
+    </div>
+  );
+}
+
+function SeparatorExample() {
+  return (
+    <div className="max-w-sm space-y-3">
+      <p className="text-sm text-muted-foreground">Above</p>
+      <Separator />
+      <p className="text-sm text-muted-foreground">Below</p>
     </div>
   );
 }
@@ -283,6 +295,36 @@ function TooltipExample() {
   );
 }
 
+function PopoverExample() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline">Open popover</Button>
+      </PopoverTrigger>
+      <PopoverContent>
+        <p className="text-sm text-muted-foreground">
+          Quick context or actions can surface here without navigating away from the page.
+        </p>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ScrollAreaExample() {
+  const rows = Array.from({ length: 15 }, (_, i) => `Clause ${i + 1} — IRDAI advertisement guideline reference`);
+  return (
+    <ScrollArea className="h-48 max-w-sm rounded-md border border-border">
+      <div className="space-y-2 p-3">
+        {rows.map((row) => (
+          <p key={row} className="text-sm text-muted-foreground">
+            {row}
+          </p>
+        ))}
+      </div>
+    </ScrollArea>
+  );
+}
+
 function TableExample() {
   const rows = [
     { id: "UIN-104N090V02", severity: "critical", status: "Open" },
@@ -376,6 +418,11 @@ function Palette({ label }: { label: string }) {
       <Separator />
 
       <div className="space-y-3">
+        <p className="micro-label">Separator</p>
+        <SeparatorExample />
+      </div>
+
+      <div className="space-y-3">
         <p className="micro-label">Buttons</p>
         <ButtonGallery />
       </div>
@@ -416,12 +463,18 @@ function Palette({ label }: { label: string }) {
           <DialogExample />
           <DropdownExample />
           <TooltipExample />
+          <PopoverExample />
         </div>
       </div>
 
       <div className="space-y-3">
         <p className="micro-label">Table</p>
         <TableExample />
+      </div>
+
+      <div className="space-y-3">
+        <p className="micro-label">Scroll area</p>
+        <ScrollAreaExample />
       </div>
 
       <div className="space-y-3">
