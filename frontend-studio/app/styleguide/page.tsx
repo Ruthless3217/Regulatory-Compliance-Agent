@@ -143,7 +143,9 @@ export default function StyleguidePage() {
         </p>
       </div>
 
-      <Palette label="Light" />
+      <div className="light">
+        <Palette label="Light" />
+      </div>
       <div className="dark">
         <Palette label="Dark" />
       </div>
