@@ -20,6 +20,20 @@ export const complianceResults: ComplianceResults = {
   status: "analyzed",
 };
 
+// Degraded/needs-review demo path (task-11): no overall_score/grade, so
+// ScoreHero's `degraded` branch renders its "Needs review" banner instead of
+// a fabricated score. Reached via the report screen's `?state=degraded`.
+export const complianceResultsDegraded: ComplianceResults = {
+  submission_id: "sub-002",
+  check_id: "check-9002",
+  checked_at: "2026-07-19T11:05:00Z",
+  status: "waiting_for_review",
+  violations: violations.filter((v) => v.suppressed),
+  violation_count: 0,
+  message:
+    "Automated scoring couldn't reach a confidence-qualified result for this submission. The findings below are unconfirmed — route to manual review before acting on them.",
+};
+
 // Kept to 2 chunks — simulateAnalyze sleeps 500ms per chunk on top of the 4
 // staged 600ms sleeps, and mockApi.test.ts drains the whole generator.
 export const streamChunks: SSEAnalyzeChunk[] = [

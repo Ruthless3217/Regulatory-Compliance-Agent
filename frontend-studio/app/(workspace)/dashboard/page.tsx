@@ -16,6 +16,7 @@ import { CategoryBars } from "@/components/dashboard/CategoryBars";
 import { TopRulesList } from "@/components/dashboard/TopRulesList";
 import { RecentSubmissions } from "@/components/dashboard/RecentSubmissions";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorCard } from "@/components/ui/error-card";
 
 type NameValue = { name: string; value: number };
 
@@ -30,9 +31,12 @@ interface DashboardData {
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setError(null);
     Promise.all([
       getDashboardSummary(),
       getViolationsBySeverity(),
@@ -40,21 +44,33 @@ export default function DashboardPage() {
       getDashboardTimeseries("day"),
       getTopRules(10),
       listSubmissions(),
-    ]).then(([summary, severity, category, timeseries, topRules, submissionsRes]) => {
-      if (cancelled) return;
-      setData({
-        summary,
-        severity,
-        category,
-        points: timeseries.points,
-        rules: topRules.top_rules,
-        submissions: submissionsRes.submissions,
+    ])
+      .then(([summary, severity, category, timeseries, topRules, submissionsRes]) => {
+        if (cancelled) return;
+        setData({
+          summary,
+          severity,
+          category,
+          points: timeseries.points,
+          rules: topRules.top_rules,
+          submissions: submissionsRes.submissions,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setError("Couldn't load dashboard data. Please try again.");
       });
-    });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [retryKey]);
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <ErrorCard message={error} onRetry={() => setRetryKey((k) => k + 1)} />
+      </div>
+    );
+  }
 
   if (!data) {
     return <DashboardSkeleton />;

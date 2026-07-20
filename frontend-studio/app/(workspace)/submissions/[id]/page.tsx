@@ -8,6 +8,7 @@ import type { ComplianceResults, Submission } from "@/lib/types";
 import { DocumentPane } from "@/components/review/DocumentPane";
 import { ViolationsPane } from "@/components/review/ViolationsPane";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorCard } from "@/components/ui/error-card";
 
 // Review tab body — rendered inside the sibling-owned submissions/[id] tab
 // layout. Loads the submission + its compliance results and splits findings
@@ -20,26 +21,43 @@ export default function SubmissionReviewPage() {
   const [submission, setSubmission] = React.useState<Submission | null>(null);
   const [results, setResults] = React.useState<ComplianceResults | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [retryKey, setRetryKey] = React.useState(0);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([getSubmission(id), getComplianceResults(id)]).then(([s, r]) => {
-      if (cancelled) return;
-      setSubmission(s);
-      setResults(r);
-      setLoading(false);
-    });
+    setError(null);
+    Promise.all([getSubmission(id), getComplianceResults(id)])
+      .then(([s, r]) => {
+        if (cancelled) return;
+        setSubmission(s);
+        setResults(r);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError("Couldn't load this submission. Please try again.");
+        setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, retryKey]);
 
   const { groups, suppressed } = React.useMemo(
     () => groupViolations(results?.violations ?? []),
     [results]
   );
+
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <ErrorCard message={error} onRetry={() => setRetryKey((k) => k + 1)} className="max-w-md" />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

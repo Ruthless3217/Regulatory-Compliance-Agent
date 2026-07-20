@@ -17,15 +17,21 @@ export default function ChatPage() {
   const submissionId = params?.id ?? "";
 
   const [submission, setSubmission] = React.useState<Submission | null>(null);
+  const [submissionError, setSubmissionError] = React.useState(false);
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [draft, setDraft] = React.useState("");
   const [isStreaming, setIsStreaming] = React.useState(false);
 
   React.useEffect(() => {
     let active = true;
-    getSubmission(submissionId).then((result) => {
-      if (active) setSubmission(result);
-    });
+    setSubmissionError(false);
+    getSubmission(submissionId)
+      .then((result) => {
+        if (active) setSubmission(result);
+      })
+      .catch(() => {
+        if (active) setSubmissionError(true);
+      });
     return () => {
       active = false;
     };
@@ -61,7 +67,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PinnedContextBar submission={submission} />
+      <PinnedContextBar submission={submission} error={submissionError} />
       <MessageList messages={messages} />
       <QuickActions onSeed={setDraft} />
       <Composer value={draft} onChange={setDraft} onSend={handleSend} disabled={isStreaming} />

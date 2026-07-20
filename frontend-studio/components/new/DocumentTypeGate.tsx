@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, AlertTriangle, Loader2, Sparkles } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -33,23 +33,32 @@ interface DocumentTypeGateProps {
 
 export function DocumentTypeGate({ content, onConfirm, onBack }: DocumentTypeGateProps) {
   const [loading, setLoading] = React.useState(true);
+  const [classifyError, setClassifyError] = React.useState(false);
   const [documentType, setDocumentType] = React.useState<DocumentType>("other");
   const [suggested, setSuggested] = React.useState<DocumentType | null>(null);
+  const [retryKey, setRetryKey] = React.useState(0);
 
   React.useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    classifySubmission(content).then((res) => {
-      if (cancelled) return;
-      const dt = (res.document_type as DocumentType) ?? "other";
-      setDocumentType(dt);
-      setSuggested(dt);
-      setLoading(false);
-    });
+    setClassifyError(false);
+    classifySubmission(content)
+      .then((res) => {
+        if (cancelled) return;
+        const dt = (res.document_type as DocumentType) ?? "other";
+        setDocumentType(dt);
+        setSuggested(dt);
+      })
+      .catch(() => {
+        if (!cancelled) setClassifyError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [content]);
+  }, [content, retryKey]);
 
   const flagged = requiresProductMandatory(documentType);
   const suggestedLabel = DOCUMENT_TYPES.find((d) => d.value === suggested)?.label;
@@ -69,6 +78,19 @@ export function DocumentTypeGate({ content, onConfirm, onBack }: DocumentTypeGat
           </div>
         ) : (
           <>
+            {classifyError && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span className="flex-1">Couldn&apos;t auto-classify this content — pick a document type manually.</span>
+                <button
+                  type="button"
+                  onClick={() => setRetryKey((k) => k + 1)}
+                  className="shrink-0 font-medium underline underline-offset-2"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="document-type">Document type</Label>
               <select
