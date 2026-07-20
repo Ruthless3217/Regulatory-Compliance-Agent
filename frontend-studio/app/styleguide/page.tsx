@@ -1,5 +1,37 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusPill } from "@/components/ui/status-pill";
+import { ScoreRing } from "@/components/ui/score-ring";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+
 type Swatch = { name: string; bg: string; fg: string };
 
 const CORE_SWATCHES: Swatch[] = [
@@ -81,13 +113,224 @@ function SeverityChips() {
   return (
     <div className="flex flex-wrap gap-2">
       {SEVERITIES.map((s) => (
-        <span
-          key={s.name}
-          className={`micro-label rounded-full px-2.5 py-1 ${s.className}`}
-        >
+        <span key={s.name} className={`micro-label rounded-full px-2.5 py-1 ${s.className}`}>
           {s.name}
         </span>
       ))}
+    </div>
+  );
+}
+
+function ButtonGallery() {
+  const variants = ["default", "secondary", "outline", "ghost", "destructive"] as const;
+  const sizes = ["sm", "default", "lg", "icon"] as const;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {variants.map((v) => (
+          <Button key={v} variant={v}>
+            {v}
+          </Button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {sizes.map((s) => (
+          <Button key={s} size={s}>
+            {s === "icon" ? "★" : s}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CardExample() {
+  return (
+    <Card className="max-w-sm">
+      <CardHeader>
+        <CardTitle>Submission review</CardTitle>
+        <CardDescription>UIN-104N090V02 · Etouch II brochure</CardDescription>
+      </CardHeader>
+      <CardContent className="text-sm text-muted-foreground">
+        3 critical, 2 high, 1 medium violation found across 12 pages.
+      </CardContent>
+      <CardFooter className="gap-2">
+        <Button size="sm">Open</Button>
+        <Button size="sm" variant="outline">
+          Export
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
+function BadgeGallery() {
+  const variants = ["default", "secondary", "outline", "success", "warning"] as const;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {variants.map((v) => (
+        <Badge key={v} variant={v}>
+          {v}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+function StatusPillGallery() {
+  const severities = ["critical", "high", "medium", "low"] as const;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {severities.map((s) => (
+        <StatusPill key={s} severity={s}>
+          {s}
+        </StatusPill>
+      ))}
+      <StatusPill>unclassified</StatusPill>
+    </div>
+  );
+}
+
+function FormExample() {
+  return (
+    <div className="max-w-sm space-y-3">
+      <div className="space-y-1.5">
+        <Label htmlFor="sg-title">Submission title</Label>
+        <Input id="sg-title" placeholder="e.g. Etouch II — press release" />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="sg-notes">Reviewer notes</Label>
+        <Textarea id="sg-notes" placeholder="Add context for the reviewer…" />
+      </div>
+    </div>
+  );
+}
+
+function TabsExample() {
+  return (
+    <Tabs defaultValue="violations" className="max-w-sm">
+      <TabsList>
+        <TabsTrigger value="violations">Violations</TabsTrigger>
+        <TabsTrigger value="report">Report</TabsTrigger>
+        <TabsTrigger value="chat">Chat</TabsTrigger>
+      </TabsList>
+      <TabsContent value="violations" className="text-sm text-muted-foreground">
+        6 findings across 3 severity tiers.
+      </TabsContent>
+      <TabsContent value="report" className="text-sm text-muted-foreground">
+        Compliance score: 72 / 100.
+      </TabsContent>
+      <TabsContent value="chat" className="text-sm text-muted-foreground">
+        Ask the assistant about a specific clause.
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+function DialogExample() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline">Open dialog</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirm submission</DialogTitle>
+          <DialogDescription>
+            This will lock the submission for compliance review. You can still edit after review completes.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+          <DialogClose asChild>
+            <Button>Confirm</Button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DropdownExample() {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="secondary">Actions</Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuLabel>Submission</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem>View report</DropdownMenuItem>
+        <DropdownMenuItem>Re-run analysis</DropdownMenuItem>
+        <DropdownMenuItem>Export PDF</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function TooltipExample() {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost">Hover me</Button>
+        </TooltipTrigger>
+        <TooltipContent>Compliance score is a weighted rule + precedent blend.</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function TableExample() {
+  const rows = [
+    { id: "UIN-104N090V02", severity: "critical", status: "Open" },
+    { id: "UIN-104N091V01", severity: "medium", status: "Resolved" },
+    { id: "UIN-104N088V03", severity: "low", status: "Open" },
+  ];
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>UIN</TableHead>
+          <TableHead>Severity</TableHead>
+          <TableHead>Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((r) => (
+          <TableRow key={r.id}>
+            <TableCell className="font-mono text-xs">{r.id}</TableCell>
+            <TableCell>
+              <StatusPill severity={r.severity}>{r.severity}</StatusPill>
+            </TableCell>
+            <TableCell>{r.status}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function SkeletonExample() {
+  return (
+    <div className="max-w-sm space-y-2">
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-4 w-5/6" />
+      <Skeleton className="h-20 w-full" />
+    </div>
+  );
+}
+
+function ScoreRingGallery() {
+  return (
+    <div className="flex flex-wrap items-center gap-6">
+      <ScoreRing value={92} />
+      <ScoreRing value={68} />
+      <ScoreRing value={34} />
+      <ScoreRing value={80} grade="B+" />
     </div>
   );
 }
@@ -98,7 +341,7 @@ function Palette({ label }: { label: string }) {
       <div className="space-y-1">
         <h2 className="text-lg font-semibold">{label}</h2>
         <p className="text-sm text-muted-foreground">
-          Color tokens, type scale, and severity chips for this palette.
+          Color tokens, type scale, and UI primitives for this palette.
         </p>
       </div>
 
@@ -129,6 +372,62 @@ function Palette({ label }: { label: string }) {
         <p className="micro-label">Severity chips</p>
         <SeverityChips />
       </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <p className="micro-label">Buttons</p>
+        <ButtonGallery />
+      </div>
+
+      <div className="space-y-3">
+        <p className="micro-label">Card</p>
+        <CardExample />
+      </div>
+
+      <div className="space-y-3">
+        <p className="micro-label">Badges</p>
+        <BadgeGallery />
+      </div>
+
+      <div className="space-y-3">
+        <p className="micro-label">Status pills</p>
+        <StatusPillGallery />
+      </div>
+
+      <div className="space-y-3">
+        <p className="micro-label">Score ring</p>
+        <ScoreRingGallery />
+      </div>
+
+      <div className="space-y-3">
+        <p className="micro-label">Form controls</p>
+        <FormExample />
+      </div>
+
+      <div className="space-y-3">
+        <p className="micro-label">Tabs</p>
+        <TabsExample />
+      </div>
+
+      <div className="space-y-3">
+        <p className="micro-label">Overlays</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <DialogExample />
+          <DropdownExample />
+          <TooltipExample />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <p className="micro-label">Table</p>
+        <TableExample />
+      </div>
+
+      <div className="space-y-3">
+        <p className="micro-label">Skeleton</p>
+        <SkeletonExample />
+      </div>
     </section>
   );
 }
@@ -139,7 +438,7 @@ export default function StyleguidePage() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Styleguide</h1>
         <p className="text-sm text-muted-foreground">
-          Visual QA surface for design tokens — light and dark palettes rendered side by side.
+          Visual QA surface for design tokens and UI primitives — light and dark palettes rendered side by side.
         </p>
       </div>
 
