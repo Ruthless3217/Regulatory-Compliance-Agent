@@ -18,6 +18,21 @@ from .registry import Disclaimer, DisclaimerRegistry
 
 logger = logging.getLogger(__name__)
 
+
+class PartialDisclosureRecall(Exception):
+    """Some of the LLM backstop's windows classified, others failed.
+
+    The backstop reads a long document in windows. When only some of them come
+    back, the obligations they surfaced are still real (the union only ever ADDS),
+    so they are worth keeping — but the document was not fully swept, so recall
+    must be flagged degraded. Carries the types that did fire.
+    """
+
+    def __init__(self, fired_types: Optional[List[str]] = None, message: str = ""):
+        super().__init__(message or "disclosure backstop covered only part of the document")
+        self.fired_types: List[str] = list(fired_types or [])
+
+
 # When the KEY disclaimer fires, the listed disclaimers become redundant and are
 # dropped. This encodes spec precedence WITHOUT numeric tie-breaking:
 #   - a specific tax disclaimer suppresses the GENERIC tax fallback;
@@ -130,6 +145,14 @@ async def resolve_required(
         }
         try:
             fired_types = await llm_call(document_text, list(type_to_id.keys()))
+        except PartialDisclosureRecall as e:
+            # Keep what the windows that succeeded found, but flag the gap.
+            logger.warning(
+                "Disclosure LLM backstop covered only part of the document (%s); "
+                "keeping %d obligation(s), recall degraded.", e, len(e.fired_types),
+            )
+            recall_degraded = True
+            fired_types = e.fired_types
         except Exception as e:
             logger.warning("Disclosure LLM backstop failed (%s); deterministic-only.", e)
             recall_degraded = True

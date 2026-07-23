@@ -293,6 +293,18 @@ class Settings(BaseSettings):
     # LLM backstop recovers paraphrased obligations the regex misses; when off,
     # only deterministic (product-line + keyword) triggers fire.
     disclosure_llm_backstop_enabled: bool = True
+    # The backstop reads the WHOLE document in overlapping windows. It used to be
+    # handed the first 6,000 chars only, so paraphrased obligations in the tail of
+    # a long brochure were invisible. Window size barely moves token cost (the same
+    # document tokens are sent either way) â€” it mainly sets the request count, so
+    # keep it large enough that a typical document is a handful of calls.
+    disclosure_llm_window_chars: int = 20_000
+    # Overlap so an obligation phrase straddling a boundary appears intact in the
+    # next window. MUST stay below the window size or windowing cannot advance.
+    disclosure_llm_window_overlap_chars: int = 500
+    # Windows are independent; this many run concurrently per batch, so wall-clock
+    # stays close to one round-trip instead of N.
+    disclosure_llm_max_concurrency: int = 4
     product_docs_top_k: int = 3          # brochure passages per chunk (Path B)
     product_match_max: int = 3           # max products grounded per document
 
