@@ -17,8 +17,6 @@ const CATEGORIES = [
   { key: "sebi", label: "SEBI" },
 ] as const;
 
-const MAX_CHARS = 50_000;
-
 const SAMPLE = `Our brand-new ULIP scheme guarantees 25% returns every year — no market risk! Bajaj is India's No.1 life insurer and our policy is the cheapest in the market. Buy today and pay zero charges. Get rich while you sleep.
 
 Past performance: between 2022 and 2024 our equity-linked fund delivered an average of 22% per annum. Withdraw anytime — there are no lock-ins or surrender penalties.`;
@@ -83,7 +81,6 @@ export default function NewAnalysisPage() {
         content = `URL: ${url.trim()}`;
       }
       if (!content.trim()) { toast.error("Paste content first"); return; }
-      if (content.length > MAX_CHARS) { toast.error(`Content exceeds ${MAX_CHARS.toLocaleString()} characters`); return; }
     }
     setSubmitting(true);
     try {
@@ -118,7 +115,6 @@ export default function NewAnalysisPage() {
         meta={
           <>
             <PageHeaderMeta label="Pipeline" value="LangGraph · 5 nodes" />
-            <PageHeaderMeta label="Limit" value={`${MAX_CHARS.toLocaleString()} chars`} />
             <PageHeaderMeta label="Auth" value="Internal / VPN" />
           </>
         }
@@ -158,7 +154,7 @@ export default function NewAnalysisPage() {
               />
               <div className="mt-2 flex justify-between text-xs text-muted-foreground">
                 <span>Markdown allowed · Plain text preferred</span>
-                <span className="font-mono">{text.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}</span>
+                <span className="font-mono">{text.length.toLocaleString()} chars</span>
               </div>
               <ScopeChips scope={scope} toggle={toggleScope} />
               <div className="mt-6 flex items-center gap-3">

@@ -331,7 +331,7 @@ function ErrorPanel({ message }: { message: string }) {
 
 function EmptyWelcome() {
   const steps = [
-    { n: "01", title: "Paste or upload content", text: "Ad copy, brochure, landing page or social post — up to 50,000 characters." },
+    { n: "01", title: "Paste or upload content", text: "Ad copy, brochure, landing page or social post — any length." },
     { n: "02", title: "Run a compliance pass", text: "The 5-node LangGraph workflow checks every chunk against the active rule corpus." },
     { n: "03", title: "Review & fix inline", text: "Click any highlighted phrase to see the matching rule and copy a suggested rewrite." },
     { n: "04", title: "Export or chat", text: "Print-ready report or ask the AI assistant to rewrite passages in compliant language." },
