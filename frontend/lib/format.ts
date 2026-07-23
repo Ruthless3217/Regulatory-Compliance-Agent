@@ -1,4 +1,14 @@
-import type { ChangeItem, DiffBlock, Severity } from "./types";
+import type { ChangeItem, DiffBlock, DocumentComparison, Severity } from "./types";
+
+/**
+ * Human label for a comparison side: the original uploaded file name if we have
+ * one, otherwise the generic "Original"/"Revised" (e.g. when the side was pasted
+ * text rather than a file).
+ */
+export function sideLabel(c: DocumentComparison, side: "old" | "new"): string {
+  const name = side === "old" ? c.old_filename : c.new_filename;
+  return name?.trim() || (side === "old" ? "Original" : "Revised");
+}
 
 /**
  * Count how many words were removed vs. added across a diff.

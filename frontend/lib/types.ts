@@ -260,6 +260,9 @@ export interface DocumentComparison {
   title: string;
   old_content_type: string;
   new_content_type: string;
+  /** Original uploaded file name for each side; null/absent when the side was pasted text. */
+  old_filename?: string | null;
+  new_filename?: string | null;
   status: ComparisonStatus;
   error_message?: string | null;
   diff_result?: DiffBlock[] | null;

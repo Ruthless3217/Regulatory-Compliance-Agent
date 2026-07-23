@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Popover } from "@/components/ui/popover";
+import { sideLabel } from "@/lib/format";
 import { useViewer, deriveViewerChanges } from "./ViewerContext";
 import { ExportPopover } from "./ExportPopover";
 import { AdjustComparisonPopover } from "./AdjustComparisonPopover";
@@ -79,6 +80,9 @@ export function Toolbar() {
     [comparison, effectiveMode, showMoves]
   );
 
+  const oldLabel = sideLabel(comparison, "old");
+  const newLabel = sideLabel(comparison, "new");
+
   const step = (dir: 1 | -1) => {
     if (changes.length === 0) return;
     const cur = changes.findIndex((c) => c.id === selectedChangeId);
@@ -103,6 +107,14 @@ export function Toolbar() {
           className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
         >
           Open
+        </Link>
+        <Link
+          href="/compare/new"
+          title="Start a new comparison — upload or paste two documents"
+          className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+        >
+          <Plus className="h-3 w-3" />
+          New
         </Link>
         <ToolButton title="Print" onClick={() => window.print()}>
           Print
@@ -135,16 +147,18 @@ export function Toolbar() {
             <ToolButton
               active={singleSide === "old"}
               onClick={() => setSingleSide("old")}
-              title="Show the Original document"
+              title={`Show ${oldLabel}`}
+              className="max-w-[180px]"
             >
-              Original
+              <span className="truncate">{oldLabel}</span>
             </ToolButton>
             <ToolButton
               active={singleSide === "new"}
               onClick={() => setSingleSide("new")}
-              title="Show the Revised document"
+              title={`Show ${newLabel}`}
+              className="max-w-[180px]"
             >
-              Revised
+              <span className="truncate">{newLabel}</span>
             </ToolButton>
           </>
         )}

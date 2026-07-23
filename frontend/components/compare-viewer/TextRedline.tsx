@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { DiffViewer } from "@/components/compare/DiffViewer";
+import { sideLabel } from "@/lib/format";
 import { useViewer, textSelId, blockIndexFromSelId } from "./ViewerContext";
 
 /**
@@ -17,6 +18,8 @@ export function TextRedline() {
     <div className="h-full overflow-auto p-3">
       <DiffViewer
         blocks={blocks}
+        oldLabel={sideLabel(comparison, "old")}
+        newLabel={sideLabel(comparison, "new")}
         selectedId={selIndex == null ? null : String(selIndex)}
         onSelect={(id) => setSelectedChangeId(textSelId(Number(id)))}
         rowClassName={(block) =>

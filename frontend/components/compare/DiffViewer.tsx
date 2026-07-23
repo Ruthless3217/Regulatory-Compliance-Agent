@@ -17,9 +17,19 @@ interface DiffViewerProps {
    * violet "moved" left border). Backward-compatible: unused by the old pages.
    */
   rowClassName?: (block: DiffBlock, index: number) => string | undefined;
+  /** Pane header labels; default to the generic Original/Revised. */
+  oldLabel?: string;
+  newLabel?: string;
 }
 
-export function DiffViewer({ blocks, selectedId = null, onSelect, rowClassName }: DiffViewerProps) {
+export function DiffViewer({
+  blocks,
+  selectedId = null,
+  onSelect,
+  rowClassName,
+  oldLabel = "Original",
+  newLabel = "Revised",
+}: DiffViewerProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // Mirror the review page's DocumentPane: when the selection changes, scroll
@@ -39,8 +49,8 @@ export function DiffViewer({ blocks, selectedId = null, onSelect, rowClassName }
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-background shadow-card">
       <div className="grid grid-cols-2 border-b border-border bg-muted/30 text-xs">
-        <div className="border-r border-border px-4 py-2 micro-label">Original</div>
-        <div className="px-4 py-2 micro-label">Revised</div>
+        <div className="truncate border-r border-border px-4 py-2 micro-label" title={oldLabel}>{oldLabel}</div>
+        <div className="truncate px-4 py-2 micro-label" title={newLabel}>{newLabel}</div>
       </div>
       <div ref={scrollRef} className="max-h-[70vh] overflow-y-auto">
         {blocks.length === 0 ? (

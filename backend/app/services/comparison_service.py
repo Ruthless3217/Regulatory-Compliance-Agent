@@ -145,24 +145,82 @@ def _detect_running_lines(page_lines: List[List[str]]) -> Set[str]:
     return {ln for ln, count in band.items() if count >= threshold}
 
 
+def _pdf_text_layer_lines(file_path: str) -> List[List[str]]:
+    """Per-page non-empty text lines from a PDF's selectable text layer."""
+    import pdfplumber
+    page_lines: List[List[str]] = []
+    with pdfplumber.open(file_path) as pdf:
+        for page_no, page in enumerate(pdf.pages, start=1):
+            # A single malformed page (bad font map, broken content stream) must
+            # not fail the whole comparison — skip it and keep going.
+            try:
+                txt = page.extract_text() or ""
+            except Exception as e:  # noqa: BLE001
+                logger.warning("PDF page %s text extraction failed, skipping: %s", page_no, e)
+                txt = ""
+            page_lines.append([ln.strip() for ln in txt.split("\n") if ln.strip()])
+    return page_lines
+
+
+def _pdf_ocr_lines(file_path: str) -> List[List[str]]:
+    """OCR a scanned/image PDF into per-page text lines.
+
+    Rasterizes each page with pypdfium2 (already a dependency for the pixel view)
+    and runs Tesseract via pytesseract. Returns ``[]`` — never raises — if OCR is
+    disabled or the tooling isn't installed, so the caller can fall back to the
+    clear "run OCR" message. Capped at ``settings.compare_ocr_page_cap`` pages.
+    """
+    from app.config import settings
+    if not settings.compare_ocr_enabled:
+        return []
+    try:
+        import pypdfium2 as pdfium
+        import pytesseract
+    except Exception as e:  # noqa: BLE001 — OCR tooling not present in this image
+        logger.warning("OCR fallback unavailable (%s); scanned PDF will not be read", e)
+        return []
+
+    page_lines: List[List[str]] = []
+    try:
+        pdf = pdfium.PdfDocument(file_path)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("OCR: could not open PDF %s: %s", file_path, e)
+        return []
+    try:
+        cap = min(len(pdf), max(1, settings.compare_ocr_page_cap))
+        for i in range(cap):
+            try:
+                # scale 3.0 ≈ 216 DPI — enough for Tesseract without huge bitmaps.
+                pil = pdf[i].render(scale=3.0).to_pil()
+                txt = pytesseract.image_to_string(pil) or ""
+            except Exception as e:  # noqa: BLE001 — skip a page OCR can't handle
+                logger.warning("OCR failed on page %s: %s", i + 1, e)
+                txt = ""
+            page_lines.append([ln.strip() for ln in txt.split("\n") if ln.strip()])
+    finally:
+        pdf.close()
+    if any(page_lines):
+        logger.info("OCR fallback extracted text from %s (%d pages)", file_path, len(page_lines))
+    return page_lines
+
+
 def extract_pdf_segments(file_path: str) -> List[str]:
     """Extract sentence-level segments from a PDF, normalized for cross-format diff.
 
     Strips repeated running headers/footers and page numbers, de-hyphenates
     line-wraps, unwraps physical lines back into flowing text, then segments into
-    sentences. Raises ValueError if no text is extractable (likely a scanned PDF).
+    sentences. Falls back to OCR for a scanned/image PDF (no text layer); raises
+    ValueError only if neither the text layer nor OCR yields any text.
     """
-    import pdfplumber
-    page_lines: List[List[str]] = []
-    with pdfplumber.open(file_path) as pdf:
-        for page in pdf.pages:
-            txt = page.extract_text() or ""
-            page_lines.append([ln.strip() for ln in txt.split("\n") if ln.strip()])
+    page_lines = _pdf_text_layer_lines(file_path)
 
-    if page_lines and not any(page_lines):
+    if not any(page_lines):  # no selectable text — try OCR before giving up
+        page_lines = _pdf_ocr_lines(file_path)
+
+    if not any(page_lines):
         raise ValueError(
-            "No extractable text found in the PDF — it may be a scanned image. "
-            "Run OCR on it before comparing."
+            "No extractable text found in the PDF — it looks like a scanned image "
+            "and OCR could not read it. Provide a text-based PDF or run OCR first."
         )
 
     running = _detect_running_lines(page_lines)
@@ -176,44 +234,127 @@ def extract_pdf_segments(file_path: str) -> List[str]:
     return split_sentences(" ".join(cleaned))
 
 
-def _iter_docx_block_texts(doc) -> List[str]:
-    """Body text in document order — paragraphs (## for headings) AND table cells.
+def _docx_paragraph_text(p_el) -> str:
+    """Full visible text of a ``<w:p>`` element.
 
-    `doc.paragraphs` alone silently drops every table cell (policy documents keep
-    the forwarding-letter fields, benefit grids, etc. in tables), so we walk the
-    body element and descend into tables (including nested tables) to capture
-    everything. Merged cells share one underlying <w:tc>, so we de-dupe on it.
+    python-docx's ``Paragraph.text`` only concatenates runs that are *direct*
+    ``<w:r>`` children of the paragraph, so it silently drops any run wrapped in
+    another element — most importantly tracked-change insertions (``<w:ins>``),
+    moved-in runs (``<w:moveTo>``) and hyperlinks. In a reviewed document those
+    can be a large share of the body, which is exactly the content that then goes
+    "missing" from a comparison. We instead walk every text node under the
+    paragraph in document order.
+
+    Excluded on purpose: tracked *deletions* (which use ``<w:delText>``, not
+    ``<w:t>``, so they never appear here), the old location of a moved run
+    (``<w:moveFrom>`` — its twin ``<w:moveTo>`` carries the surviving copy), and
+    any text-box content (``<w:txbxContent>``) anchored inside the paragraph.
     """
     from docx.oxml.ns import qn
-    from docx.table import Table
+
+    t_tag, tab_tag = qn("w:t"), qn("w:tab")
+    br_tag, cr_tag = qn("w:br"), qn("w:cr")
+    move_from_tag, txbx_tag = qn("w:moveFrom"), qn("w:txbxContent")
+
+    parts: List[str] = []
+    for node in p_el.iter(t_tag, tab_tag, br_tag, cr_tag):
+        anc = node.getparent()
+        skip = False
+        while anc is not None and anc is not p_el:
+            if anc.tag == move_from_tag or anc.tag == txbx_tag:
+                skip = True
+                break
+            anc = anc.getparent()
+        if skip:
+            continue
+        if node.tag == t_tag:
+            parts.append(node.text or "")
+        elif node.tag == tab_tag:
+            parts.append("\t")
+        else:  # w:br / w:cr
+            parts.append("\n")
+    return "".join(parts)
+
+
+def _p_is_heading(p_el, doc) -> bool:
+    """True if a ``<w:p>`` element carries a Heading/Title paragraph style."""
     from docx.text.paragraph import Paragraph
+    try:
+        name = getattr(Paragraph(p_el, doc).style, "name", "") or ""
+    except Exception:
+        name = ""
+    return name.startswith("Heading") or name == "Title"
+
+
+def _iter_docx_block_texts(doc) -> List[str]:
+    """Every block of body text in document order — nothing structurally dropped.
+
+    A single recursive walk over the XML tree captures text wherever Word can put
+    it, because ``doc.paragraphs`` / ``doc.tables`` only see the top layer:
+
+    * **Table cells** — walked by raw ``<w:tc>`` iteration rather than
+      python-docx's ``row.cells``. That both avoids python-docx's grid expansion
+      (which duplicated vertically-merged cells) and sidesteps the ``id(cell._tc)``
+      de-dup trap (ephemeral lxml proxies whose ``id()`` CPython recycles, so
+      distinct cells collided and were skipped, dropping real content). Each
+      ``<w:tc>`` is a distinct element, so merges need no de-duping: a
+      vertically-merged continuation cell is its own (empty) ``<w:tc>``.
+    * **Content controls** (``<w:sdt>``) — descend into ``<w:sdtContent>`` at
+      block level and inside table rows; inline controls are covered by
+      :func:`_docx_paragraph_text`.
+    * **Text boxes** (``<w:txbxContent>``) — emitted as their own blocks, since
+      their text is anchored inside a run's drawing, invisible to a paragraph walk.
+
+    Tracked-change and hyperlink handling lives in :func:`_docx_paragraph_text`.
+    """
+    from docx.oxml.ns import qn
+
+    P, TBL, SDT, SDTC = qn("w:p"), qn("w:tbl"), qn("w:sdt"), qn("w:sdtContent")
+    TR, TC, TXBX = qn("w:tr"), qn("w:tc"), qn("w:txbxContent")
 
     out: List[str] = []
 
-    def emit_paragraph(p) -> None:
-        text = p.text.strip()
-        if not text:
-            return
-        style = getattr(p.style, "name", "") or ""
-        out.append(f"## {text}" if (style.startswith("Heading") or style == "Title") else text)
+    def emit_p(p_el) -> None:
+        text = _docx_paragraph_text(p_el).strip()
+        if text:
+            out.append(f"## {text}" if _p_is_heading(p_el, doc) else text)
+        # Text boxes anchored in this paragraph become their own blocks, in place.
+        for txbx in p_el.iter(TXBX):
+            walk(txbx)
 
-    def walk_table(tbl) -> None:
-        seen: set = set()
-        for row in tbl.rows:
-            for cell in row.cells:
-                if id(cell._tc) in seen:  # merged cell already visited
-                    continue
-                seen.add(id(cell._tc))
-                for p in cell.paragraphs:
-                    emit_paragraph(p)
-                for nested in cell.tables:
-                    walk_table(nested)
+    def walk_row(tr) -> None:
+        for cellish in tr.iterchildren():
+            if cellish.tag == TC:
+                walk(cellish)
+            elif cellish.tag == SDT:  # a content-control-wrapped cell
+                content = cellish.find(SDTC)
+                if content is not None:
+                    for tc in content.iterchildren(TC):
+                        walk(tc)
 
-    for child in doc.element.body.iterchildren():
-        if child.tag == qn("w:p"):
-            emit_paragraph(Paragraph(child, doc))
-        elif child.tag == qn("w:tbl"):
-            walk_table(Table(child, doc))
+    def walk_table(tbl_el) -> None:
+        for child in tbl_el.iterchildren():
+            if child.tag == TR:
+                walk_row(child)
+            elif child.tag == SDT:  # content-control-wrapped row(s)
+                content = child.find(SDTC)
+                if content is not None:
+                    for tr in content.iterchildren(TR):
+                        walk_row(tr)
+
+    def walk(container) -> None:
+        for child in container.iterchildren():
+            tag = child.tag
+            if tag == P:
+                emit_p(child)
+            elif tag == TBL:
+                walk_table(child)
+            elif tag == SDT:
+                content = child.find(SDTC)
+                if content is not None:
+                    walk(content)
+
+    walk(doc.element.body)
     return out
 
 
@@ -251,6 +392,43 @@ def extract_segments(
     for para in split_text_paragraphs(raw):
         segments.extend(split_sentences(para))
     return segments
+
+
+def _friendly_extract_message(content_type: str, exc: Exception) -> str:
+    """Turn a raw extraction exception into a message a reviewer can act on."""
+    name = type(exc).__name__
+    raw = str(exc).strip()
+    if content_type == "docx":
+        if name in ("PackageNotFoundError", "BadZipFile") or "not a Word file" in raw or "Package not found" in raw:
+            return (
+                "this doesn't open as a .docx. If it's an older .doc file, open it in "
+                "Word and use Save As → Word Document (.docx), then upload again."
+            )
+        return f"the Word file could not be read ({raw or name})."
+    if content_type == "pdf":
+        low = raw.lower()
+        if "password" in low or "encrypt" in low:
+            return "the PDF is password-protected — remove the protection and re-upload."
+        return f"the PDF could not be parsed ({raw or name})."
+    return raw or name
+
+
+def extract_segments_labeled(
+    file_path: Optional[str], content_type: str, pasted_text: Optional[str], side_label: str
+) -> List[str]:
+    """extract_segments with a clear, side-labelled error on failure.
+
+    ValueErrors raised deliberately downstream (e.g. the scanned-PDF hint) are
+    already user-friendly and pass through unchanged; anything else is wrapped so
+    the reviewer sees which side failed and why, instead of a raw library trace.
+    """
+    try:
+        return extract_segments(file_path, content_type, pasted_text)
+    except ValueError:
+        raise
+    except Exception as e:  # noqa: BLE001 — translate to a reviewer-facing message
+        logger.error("Extraction failed for %s side (%s): %s", side_label, content_type, e, exc_info=True)
+        raise ValueError(f"Couldn't read the {side_label} document: {_friendly_extract_message(content_type, e)}")
 
 
 # ---------------------------------------------------------------------------

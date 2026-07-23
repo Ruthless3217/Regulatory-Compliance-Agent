@@ -211,6 +211,13 @@ class Settings(BaseSettings):
     # Max pages rendered per side; surplus is reported as truncated_pages, never
     # silently dropped.
     pixel_render_page_cap: int = 60
+    # --- OCR fallback for scanned/image PDFs (no selectable text layer) ---
+    # When a PDF yields no extractable text, rasterize its pages and OCR them so
+    # the comparison still runs instead of failing. Needs the tesseract-ocr
+    # binary (installed in the backend image) + pytesseract; degrades to a clear
+    # "run OCR" message if either is missing. OCR is slow, so cap the pages.
+    compare_ocr_enabled: bool = True
+    compare_ocr_page_cap: int = 30
     # Root that knowledge-base ingest is confined to. Any folder_path outside
     # this tree is rejected (prevents arbitrary server-side file read — audit C8).
     kb_ingest_root: str = "./uploads"
