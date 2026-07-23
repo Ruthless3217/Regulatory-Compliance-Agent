@@ -358,21 +358,51 @@ class _ObligationResult(BaseModel):
 
 async def _disclosure_llm_call(document_text: str, obligation_types: List[str]) -> List[str]:
     """LLM backstop: which obligation types apply to this content? Returns a
-    subset of obligation_types. Uses the critic profile (cheap, independent)."""
+    subset of obligation_types. Uses the critic profile (cheap, independent).
+
+    Reads the document in overlapping windows rather than truncating it, so a
+    paraphrased obligation in the tail of a long brochure is still caught. Raises
+    ``PartialDisclosureRecall`` when only some windows come back, so the caller can
+    keep what was found while still flagging recall as degraded.
+    """
+    from app.config import settings as _s
+    from app.services.disclaimer.triggers import PartialDisclosureRecall
+    from app.services.disclaimer.windowing import classify_windows, window_text
     from app.services.llm_service import critic_llm_service
-    prompt = (
-        "You classify which mandatory-disclaimer obligations apply to the marketing "
-        "content below. Consider paraphrases, not just exact phrases (e.g. 'our fund "
-        "grew 12% last year' implies a past-performance obligation).\n\n"
-        f"Allowed obligation types: {obligation_types}\n\n"
-        f"CONTENT:\n{document_text[:6000]}\n\n"
-        "Return the obligation types that apply."
+
+    async def _classify(window: str, types: List[str]) -> List[str]:
+        prompt = (
+            "You classify which mandatory-disclaimer obligations apply to the marketing "
+            "content below. Consider paraphrases, not just exact phrases (e.g. 'our fund "
+            "grew 12% last year' implies a past-performance obligation).\n\n"
+            f"Allowed obligation types: {types}\n\n"
+            f"CONTENT:\n{window}\n\n"
+            "Return the obligation types that apply."
+        )
+        result = await critic_llm_service.generate_structured_response(
+            prompt=prompt, output_model=_ObligationResult,
+            tool_name="disclosure_backstop", temperature=0.0,
+        )
+        return [t for t in (result.obligations or []) if t in types]
+
+    windows = window_text(
+        document_text,
+        _s.disclosure_llm_window_chars,
+        _s.disclosure_llm_window_overlap_chars,
     )
-    result = await critic_llm_service.generate_structured_response(
-        prompt=prompt, output_model=_ObligationResult,
-        tool_name="disclosure_backstop", temperature=0.0,
+    fired, failures = await classify_windows(
+        windows, obligation_types, _classify,
+        max_concurrency=_s.disclosure_llm_max_concurrency,
     )
-    return [t for t in (result.obligations or []) if t in obligation_types]
+    if failures and len(failures) == len(windows):
+        raise failures[0]  # nothing classified at all â€” fully degraded, as before
+    if failures:
+        logger.warning(
+            "Disclosure backstop: %d/%d windows failed (first: %s); keeping %d obligation(s).",
+            len(failures), len(windows), failures[0], len(fired),
+        )
+        raise PartialDisclosureRecall(fired)
+    return fired
 
 
 def _normalize_ws(s: str) -> str:
