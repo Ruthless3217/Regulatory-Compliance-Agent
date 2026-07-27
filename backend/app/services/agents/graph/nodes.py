@@ -358,21 +358,51 @@ class _ObligationResult(BaseModel):
 
 async def _disclosure_llm_call(document_text: str, obligation_types: List[str]) -> List[str]:
     """LLM backstop: which obligation types apply to this content? Returns a
-    subset of obligation_types. Uses the critic profile (cheap, independent)."""
+    subset of obligation_types. Uses the critic profile (cheap, independent).
+
+    Reads the document in overlapping windows rather than truncating it, so a
+    paraphrased obligation in the tail of a long brochure is still caught. Raises
+    ``PartialDisclosureRecall`` when only some windows come back, so the caller can
+    keep what was found while still flagging recall as degraded.
+    """
+    from app.config import settings as _s
+    from app.services.disclaimer.triggers import PartialDisclosureRecall
+    from app.services.disclaimer.windowing import classify_windows, window_text
     from app.services.llm_service import critic_llm_service
-    prompt = (
-        "You classify which mandatory-disclaimer obligations apply to the marketing "
-        "content below. Consider paraphrases, not just exact phrases (e.g. 'our fund "
-        "grew 12% last year' implies a past-performance obligation).\n\n"
-        f"Allowed obligation types: {obligation_types}\n\n"
-        f"CONTENT:\n{document_text[:6000]}\n\n"
-        "Return the obligation types that apply."
+
+    async def _classify(window: str, types: List[str]) -> List[str]:
+        prompt = (
+            "You classify which mandatory-disclaimer obligations apply to the marketing "
+            "content below. Consider paraphrases, not just exact phrases (e.g. 'our fund "
+            "grew 12% last year' implies a past-performance obligation).\n\n"
+            f"Allowed obligation types: {types}\n\n"
+            f"CONTENT:\n{window}\n\n"
+            "Return the obligation types that apply."
+        )
+        result = await critic_llm_service.generate_structured_response(
+            prompt=prompt, output_model=_ObligationResult,
+            tool_name="disclosure_backstop", temperature=0.0,
+        )
+        return [t for t in (result.obligations or []) if t in types]
+
+    windows = window_text(
+        document_text,
+        _s.disclosure_llm_window_chars,
+        _s.disclosure_llm_window_overlap_chars,
     )
-    result = await critic_llm_service.generate_structured_response(
-        prompt=prompt, output_model=_ObligationResult,
-        tool_name="disclosure_backstop", temperature=0.0,
+    fired, failures = await classify_windows(
+        windows, obligation_types, _classify,
+        max_concurrency=_s.disclosure_llm_max_concurrency,
     )
-    return [t for t in (result.obligations or []) if t in obligation_types]
+    if failures and len(failures) == len(windows):
+        raise failures[0]  # nothing classified at all — fully degraded, as before
+    if failures:
+        logger.warning(
+            "Disclosure backstop: %d/%d windows failed (first: %s); keeping %d obligation(s).",
+            len(failures), len(windows), failures[0], len(fired),
+        )
+        raise PartialDisclosureRecall(fired)
+    return fired
 
 
 def _normalize_ws(s: str) -> str:
@@ -470,8 +500,116 @@ def _violation_rank(v: Dict[str, Any]) -> tuple:
     return (sev, tier)
 
 
+def _occurrence_intervals(needle_norm: str, haystack_norm: str) -> List[tuple]:
+    """All [start, end) intervals where ``needle_norm`` occurs in ``haystack_norm``
+    (both already normalized). Empty needle → no intervals."""
+    if not needle_norm:
+        return []
+    out: List[tuple] = []
+    start = 0
+    n = len(needle_norm)
+    while True:
+        i = haystack_norm.find(needle_norm, start)
+        if i == -1:
+            break
+        out.append((i, i + n))
+        start = i + 1  # allow overlapping occurrences
+    return out
+
+
+def _spans_overlap(a: List[tuple], b: List[tuple]) -> bool:
+    """True if any interval in ``a`` intersects any interval in ``b``."""
+    for a0, a1 in a:
+        for b0, b1 in b:
+            if a0 < b1 and b0 < a1:
+                return True
+    return False
+
+
+def group_chunk_violations(
+    violations: List[Dict[str, Any]], chunk_text: str = ""
+) -> List[Dict[str, Any]]:
+    """Group findings whose spans OVERLAP within this chunk into one cluster,
+    annotating each with ``group_id`` (shared) and ``is_primary`` (exactly one
+    per group) — the "merge, list all angles" behavior (Workstream C, 2026-07-15).
+
+    Unlike the older ``dedupe_chunk_violations`` (which DELETED the weaker
+    duplicates), every member is KEPT so the reviewer sees each distinct concern
+    on a span; scoring counts each group once by looking at ``is_primary`` only.
+
+    Grouping is by physical span overlap (occurrence intervals in the normalized
+    chunk), so it catches exact duplicates AND overlapping-but-not-identical
+    spans ("guaranteed returns" ⊂ "Enjoy guaranteed returns today") that the
+    old exact-match dedup missed — while NOT merging findings that merely share a
+    word at different positions (which would wrongly under-count the score).
+
+    Primary = the strongest member (severity → tier precedence) among the
+    NON-suppressed members; if every member is suppressed, the strongest overall
+    is primary (the group then contributes nothing to the score, which is
+    correct). Findings with an empty ``current_text`` (document-level, e.g.
+    disclosure) are left ungrouped: ``group_id=None``, ``is_primary=True``.
+    """
+    import uuid as _uuid
+
+    norm_chunk = _normalize_ws(chunk_text)
+
+    # Locate each finding's occurrence intervals; empty-span findings stand alone.
+    spanned: List[int] = []
+    intervals: Dict[int, List[tuple]] = {}
+    for idx, v in enumerate(violations):
+        needle = _normalize_ws(v.get("current_text") or "")
+        occ = _occurrence_intervals(needle, norm_chunk) if needle else []
+        if occ:
+            intervals[idx] = occ
+            spanned.append(idx)
+        else:
+            # Ungrouped standalone (document-level, or quote not locatable here).
+            v["group_id"] = None
+            v["is_primary"] = True
+
+    # Union-find over overlapping spanned findings.
+    parent = {i: i for i in spanned}
+
+    def _find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def _union(x, y):
+        parent[_find(x)] = _find(y)
+
+    for a_pos in range(len(spanned)):
+        for b_pos in range(a_pos + 1, len(spanned)):
+            ia, ib = spanned[a_pos], spanned[b_pos]
+            if _spans_overlap(intervals[ia], intervals[ib]):
+                _union(ia, ib)
+
+    groups: Dict[int, List[int]] = {}
+    for i in spanned:
+        groups.setdefault(_find(i), []).append(i)
+
+    for members in groups.values():
+        gid = _uuid.uuid4().hex
+        # Prefer the strongest non-suppressed member as primary so a suppressed
+        # top finding doesn't sink the whole group out of the score.
+        live = [i for i in members if not violations[i].get("suppressed")]
+        pool = live or members
+        primary_idx = max(pool, key=lambda i: _violation_rank(violations[i]))
+        for i in members:
+            violations[i]["group_id"] = gid
+            violations[i]["is_primary"] = (i == primary_idx)
+
+    return violations
+
+
 def dedupe_chunk_violations(violations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Collapse violations that quote the SAME phrase within one chunk (the
+    """SUPERSEDED by ``group_chunk_violations`` (Workstream C, 2026-07-15), which
+    keeps every member and links them via group_id instead of deleting. Retained
+    for its unit test and because it documents the shared ``_violation_rank``
+    ordering. No longer called in the grading path.
+
+    Collapse violations that quote the SAME phrase within one chunk (the
     three tiers routinely flag the same span — precedent + rule + novel),
     keeping the strongest by severity then tier precedence. Findings with empty
     current_text (structural) are never collapsed. First-occurrence order is
@@ -519,6 +657,82 @@ def mark_structural_findings(
         if ct and ct in heading_lines:
             v["suppressed"] = True
             v["suppressed_reason"] = "structural heading / brand line (not a claim)"
+    return violations
+
+
+def suppress_allowlisted_findings(
+    violations: List[Dict[str, Any]], phrases=None
+) -> List[Dict[str, Any]]:
+    """Route brand/tone false-positives on legitimate insurance language to the
+    suppressed review lane (Workstream B, 2026-07-15).
+
+    A finding is suppressed ONLY when its ENTIRE offending span (`current_text`)
+    is exactly an allowlisted phrase — a generic product category ("term
+    insurance", "ULIP") or neutral death-scenario phrasing ("passes away",
+    "sudden death"). Such a finding cannot be a substantive violation: a real
+    issue (a guarantee, an omission, an unsubstantiated claim) needs surrounding
+    context, so the bare term/phrase alone is naming/tone stylistics.
+
+    Deliberately category-independent: the same false positive arrives as a
+    'brand' rule finding AND as a 'regulatory' novel finding, so gating on
+    category would miss the novel tier. Two load-bearing safety properties keep
+    this conservative:
+
+      * WHOLE-SPAN match only — a term inside a longer claim ("term insurance
+        guarantees 25% returns") is NOT allowlisted and stays scored.
+      * `critical` is NEVER suppressed — false negatives on criticals are the
+        worst failure mode for a fail-closed compliance tool.
+
+    Suppression routes to the audit/review lane (kept + visible, out of the
+    score), never a silent drop. Already-suppressed findings keep their reason.
+    """
+    from app.services.compliance_allowlist import is_allowlisted_span
+
+    for v in violations:
+        if v.get("suppressed"):
+            continue
+        if str(v.get("severity", "")).strip().lower() == "critical":
+            continue
+        if is_allowlisted_span(v.get("current_text") or "", phrases):
+            v["suppressed"] = True
+            v["suppressed_reason"] = (
+                "acceptable insurance-domain term/phrase (allowlisted; not a "
+                "brand-naming or tone violation)"
+            )
+    return violations
+
+
+# Product-brochure/ad mandatory obligations (UIN + regulatory descriptor) that do
+# NOT apply to editorial document types (blog/article/social/email/website).
+_MANDATORY_ELEMENT_KINDS = {"missing-mandatory", "wrong-descriptor"}
+
+
+def suppress_nonproduct_mandatory_findings(
+    violations: List[Dict[str, Any]], require_mandatory_elements: bool
+) -> List[Dict[str, Any]]:
+    """Backstop for the document-type gate (Workstream A, 2026-07-15).
+
+    When the document is NOT a product brochure/ad (``require_mandatory_elements``
+    is False), a demand for a UIN or regulatory descriptor is a false positive:
+    those are product-collateral obligations. The prompt already instructs the
+    model to skip them, but if it emits one anyway we suppress it (route to the
+    review lane, not a silent drop). Banned/unqualified product claims
+    (must_avoid / must_support) still apply and are untouched.
+    """
+    if require_mandatory_elements:
+        return violations
+    for v in violations:
+        if v.get("suppressed"):
+            continue
+        meta = v.get("violation_metadata") or {}
+        if meta.get("grounding") != "product_fact":
+            continue
+        if meta.get("finding_kind") in _MANDATORY_ELEMENT_KINDS:
+            v["suppressed"] = True
+            v["suppressed_reason"] = (
+                "mandatory product element (UIN / regulatory descriptor) not "
+                "required for this document type"
+            )
     return violations
 
 
@@ -661,6 +875,19 @@ async def preprocess_node(state: ComplianceState) -> Dict:
 
         md = dict(state.get("metadata") or {})
         md["product_match"] = product_match
+
+        # Workstream A — semantic document type gates the product mandatory-element
+        # (UIN / descriptor) obligations downstream. Read it off the submission;
+        # None → strict (product) default in requires_product_mandatory_elements.
+        try:
+            from app.models.submission import Submission
+            sub = db.query(Submission.document_type).filter(
+                Submission.id == submission_id
+            ).first()
+            md["document_type"] = sub[0] if sub else None
+        except Exception as e:
+            logger.warning(f"document_type load failed (non-fatal): {e}")
+            md["document_type"] = None
 
         return {
             "chunks": chunks_data,
@@ -929,6 +1156,13 @@ async def analysis_node(state: ComplianceState) -> Dict:
     submission_id = state.get("submission_id")
     user_id = state.get("user_id")
 
+    # Workstream A — does this document type require the product mandatory elements
+    # (UIN / regulatory descriptor)? Non-product types (blog/article/…) relax them;
+    # unknown/unset stays strict. Gates the prompt AND a post-filter backstop.
+    from app.services.document_type import requires_product_mandatory_elements
+    _document_type = (state.get("metadata") or {}).get("document_type")
+    require_mandatory = requires_product_mandatory_elements(_document_type)
+
     def _rules_for_chunk(chunk_id) -> List[Dict]:
         return _select_rules_for_chunk(
             chunk_id, chunk_rules, active_rules, rag_degraded, _MAX_RULES_PER_CHUNK
@@ -1005,6 +1239,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 prompt = context_service.create_precedent_prompts(
                     chunk_text, precedents, rules=rules, document_context=document_context,
                     product_facts=product_facts, product_passages=passages,
+                    require_mandatory_elements=require_mandatory,
                 )
                 system_prompt = (
                     "You are a senior Bajaj Life Insurance compliance reviewer. Cite "
@@ -1063,6 +1298,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                             chunk_text, precedents, rules=rules, already_found=already,
                             document_context=document_context,
                             product_facts=product_facts, product_passages=passages,
+                            require_mandatory_elements=require_mandatory,
                         )
                         sweep = await _call(sweep_prompt)
                         citations, rule_findings, novel, product_ff = merge_findings(
@@ -1116,12 +1352,25 @@ async def analysis_node(state: ComplianceState) -> Dict:
                         chunk_text, rules, kept, precedents
                     )
 
-                # Precision (recall fix 2026-06-08): collapse cross-tier
-                # duplicates (same phrase flagged by precedent + rule + novel),
-                # then route heading / brand-line false-positives to the
-                # suppressed review lane (kept out of the score, not dropped).
-                kept = dedupe_chunk_violations(kept)
+                # Route heading / brand-line false-positives to the suppressed
+                # review lane (kept out of the score, not dropped).
                 kept = mark_structural_findings(kept, chunk_text)
+                # Workstream B: suppress brand/tone false positives whose whole
+                # span is a legitimate generic term ("term insurance") or neutral
+                # death-scenario phrase ("passes away"). Whole-span match only;
+                # never a critical; routes to the review lane, not a drop.
+                if _settings.allowlist_enabled:
+                    kept = suppress_allowlisted_findings(kept)
+                # Workstream A: for non-product document types, suppress any UIN /
+                # descriptor demand the model emitted despite the prompt gate.
+                kept = suppress_nonproduct_mandatory_findings(kept, require_mandatory)
+                # Workstream C: cluster overlapping cross-tier findings (same
+                # phrase flagged by precedent + rule + novel) into ONE group with
+                # a single primary, KEEPING every member so the reviewer sees each
+                # angle. Runs after suppression so a suppressed finding is never
+                # chosen as the group's (scored) primary. Scoring counts each
+                # group once via is_primary.
+                kept = group_chunk_violations(kept, chunk_text)
 
                 execution.status = "completed"
                 execution.output_data = {"violations": kept}

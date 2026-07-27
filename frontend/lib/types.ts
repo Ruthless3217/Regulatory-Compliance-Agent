@@ -9,10 +9,20 @@ export type SubmissionStatus =
   | "failed"
   | "waiting_for_review";
 
+// Semantic document type (Workstream A) — gates product-only obligations (UIN).
+export type DocumentType =
+  | "product_marketing"
+  | "blog_article"
+  | "social"
+  | "email"
+  | "website"
+  | "other";
+
 export interface Submission {
   id: string;
   title: string;
   content_type: string;
+  document_type?: DocumentType | string | null;
   original_content?: string | null;
   file_path?: string | null;
   submitted_by?: string | null;
@@ -66,6 +76,13 @@ export interface Violation {
   // in a separate "Needs review" lane (recall fix 2026-06-08).
   suppressed?: boolean | null;
   suppressed_reason?: string | null;
+  // Workstream C (2026-07-15) — overlap grouping. Findings that quote the same or
+  // overlapping span are merged into one group: all members share group_id and
+  // exactly one is_primary (the strongest, and the only one scored). The UI shows
+  // one expandable card per group and one <mark> per group's primary. NULL
+  // group_id = a standalone finding (e.g. document-level disclosure).
+  group_id?: string | null;
+  is_primary?: boolean | null;
 }
 
 export type ActionType =

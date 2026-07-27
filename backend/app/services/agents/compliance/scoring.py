@@ -62,7 +62,16 @@ class ScoringService:
         # Suppressed (sub-confidence-floor / uncertain) findings are persisted for
         # human review but MUST NOT move the score — they're not certain enough to
         # penalize. They still appear in the review lane.
-        scored_violations = [v for v in violations if not v.get("suppressed")]
+        #
+        # Grouped findings (Workstream C): overlapping cross-tier findings are
+        # merged into a group whose members are all kept for display, but only the
+        # group's `is_primary` member (the strongest) is scored — otherwise the
+        # same span would be penalized once per tier. Ungrouped / legacy violations
+        # have no `is_primary` key and default to True, so they still count.
+        scored_violations = [
+            v for v in violations
+            if not v.get("suppressed") and v.get("is_primary", True)
+        ]
 
         enriched_violations = ScoringService._enrich_violations_with_points(scored_violations, db)
 

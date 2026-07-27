@@ -185,6 +185,10 @@ def _serialize_violation(v: Violation) -> dict:
         # the score and surfaced in a separate "Needs review" lane in the UI.
         "suppressed": bool(v.suppressed),
         "suppressed_reason": v.suppressed_reason,
+        # Workstream C — overlap grouping. Members share group_id; the UI renders
+        # one expandable card per group and one <mark> per group's primary.
+        "group_id": v.group_id,
+        "is_primary": bool(v.is_primary),
     }
 
 

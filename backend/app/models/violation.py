@@ -63,6 +63,14 @@ class Violation(Base):
     suppressed = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
     suppressed_reason = Column(Text, nullable=True)
 
+    # Workstream C (2026-07-15) — overlapping cross-tier findings on one span are
+    # merged into a display group: all members share a group_id, and exactly one
+    # (the strongest, is_primary=true) is scored. group_id is a per-check grouping
+    # key (uuid hex), NOT a foreign key. NULL group_id = a standalone finding
+    # (e.g. document-level disclosure). Legacy rows: group_id NULL, is_primary true.
+    group_id = Column(String(36), nullable=True, index=True)
+    is_primary = Column(Boolean, nullable=False, default=True, server_default="true")
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

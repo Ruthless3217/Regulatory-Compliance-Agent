@@ -3,6 +3,7 @@ import * as React from "react";
 import { FilterChipBar, type FilterKey } from "./FilterChipBar";
 import { ViolationCard } from "./ViolationCard";
 import { severityOrder, normalizeSeverity } from "@/lib/format";
+import { groupViolations } from "@/lib/violationGroups";
 import type { Violation } from "@/lib/types";
 
 interface Props {
@@ -22,19 +23,30 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
   const active = React.useMemo(() => violations.filter((v) => !v.suppressed), [violations]);
   const suppressed = React.useMemo(() => violations.filter((v) => v.suppressed), [violations]);
 
+  // Workstream C — collapse overlapping cross-tier findings into one entry per
+  // span (the primary), with the other angles listed under it. Counts and the
+  // severity filter operate on the primaries, so a span is counted once.
+  const groups = React.useMemo(() => groupViolations(active), [active]);
+
   const sorted = React.useMemo(
-    () => [...active].sort((a, b) => severityOrder(a.severity) - severityOrder(b.severity)),
-    [active]
+    () =>
+      [...groups].sort(
+        (a, b) => severityOrder(a.primary.severity) - severityOrder(b.primary.severity)
+      ),
+    [groups]
   );
 
   const counts = React.useMemo(() => {
     const base: Record<FilterKey, number> = { all: sorted.length, critical: 0, high: 0, medium: 0, low: 0 };
-    for (const v of sorted) base[normalizeSeverity(v.severity)] += 1;
+    for (const g of sorted) base[normalizeSeverity(g.primary.severity)] += 1;
     return base;
   }, [sorted]);
 
   const filtered = React.useMemo(
-    () => (filter === "all" ? sorted : sorted.filter((v) => normalizeSeverity(v.severity) === filter)),
+    () =>
+      filter === "all"
+        ? sorted
+        : sorted.filter((g) => normalizeSeverity(g.primary.severity) === filter),
     [filter, sorted]
   );
 
@@ -55,16 +67,17 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
               No violations in this filter.
             </div>
           ) : (
-            filtered.map((v, i) => (
+            filtered.map((g, i) => (
               <ViolationCard
-                key={v.id}
+                key={g.primary.id}
                 index={i}
-                violation={v}
-                selected={v.id === selectedViolationId}
-                dismissed={dismissed.has(v.id)}
-                onSelect={() => setSelectedViolationId(v.id)}
-                onDismiss={() => setDismissed((d) => new Set(d).add(v.id))}
-                ref={(el) => { refs.current[v.id] = el; }}
+                violation={g.primary}
+                alsoFlagged={g.alsoFlagged}
+                selected={g.primary.id === selectedViolationId}
+                dismissed={dismissed.has(g.primary.id)}
+                onSelect={() => setSelectedViolationId(g.primary.id)}
+                onDismiss={() => setDismissed((d) => new Set(d).add(g.primary.id))}
+                ref={(el) => { refs.current[g.primary.id] = el; }}
               />
             ))
           )}

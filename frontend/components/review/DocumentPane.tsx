@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { applyHighlightsAsParagraphs } from "@/lib/highlightMarkup";
+import { primaryViolations } from "@/lib/violationGroups";
 import type { Violation } from "@/lib/types";
 
 interface Props {
@@ -11,8 +12,11 @@ interface Props {
 }
 
 export function DocumentPane({ text, violations, selectedViolationId, onSelect }: Props) {
+  // Workstream C — highlight one <mark> per merged span (the group primary), so
+  // a phrase flagged by several tiers isn't marked several times. Each mark's
+  // violation-id is the primary's, matching its sidebar card.
   const html = React.useMemo(
-    () => applyHighlightsAsParagraphs(text || "", violations),
+    () => applyHighlightsAsParagraphs(text || "", primaryViolations(violations)),
     [text, violations]
   );
   const containerRef = React.useRef<HTMLDivElement>(null);

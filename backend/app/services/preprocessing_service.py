@@ -584,6 +584,7 @@ Constraints:
         document_context: Optional[str] = None,
         product_facts: Optional[List[Dict]] = None,
         product_passages: Optional[List[Dict]] = None,
+        require_mandatory_elements: bool = True,
     ) -> str:
         """Build a reviewer-voice prompt over THREE grounding tiers (Fix A).
 
@@ -682,15 +683,27 @@ Constraints:
                 must_state = "; ".join(g.get("must_state") or []) or "(none listed)"
                 flags = card.get("structural_flags") or {}
                 flag_str = ", ".join(f"{k}={v}" for k, v in flags.items()) or "(none)"
-                pf_blocks.append(
+                block = (
                     f"\n--- PRODUCT {i} ---\n"
                     f"Product: {card.get('product_name') or '?'} (UIN {card.get('uin') or '?'})\n"
-                    f"Regulatory descriptor: {card.get('regulatory_descriptor') or '(not captured)'}\n"
+                )
+                # Workstream A: the regulatory descriptor and MUST STATE elements
+                # (UIN etc.) are product-brochure/ad obligations. For non-product
+                # document types (blog/article/social/…) drop them so editorial
+                # content is not asked for a UIN. MUST AVOID / MUST SUPPORT (banned
+                # and unqualified product claims) still apply to every type.
+                if require_mandatory_elements:
+                    block += (
+                        f"Regulatory descriptor: {card.get('regulatory_descriptor') or '(not captured)'}\n"
+                    )
+                block += (
                     f"Structural flags: {flag_str}\n"
                     f"MUST AVOID (banned claims): {_cap2(must_avoid, 800)}\n"
                     f"MUST SUPPORT (variant-qualified claims): {_cap2(must_support, 800)}\n"
-                    f"MUST STATE (mandatory elements): {_cap2(must_state, 600)}\n"
                 )
+                if require_mandatory_elements:
+                    block += f"MUST STATE (mandatory elements): {_cap2(must_state, 600)}\n"
+                pf_blocks.append(block)
             product_facts_block = "".join(pf_blocks)
         else:
             product_facts_block = ""
@@ -710,7 +723,7 @@ Constraints:
 
         # Build the per-tier instructions in strongest-first order.
         instr_parts = []
-        if product_facts:
+        if product_facts and require_mandatory_elements:
             instr_parts.append(
                 "(P) Check this section against the PRODUCT FACTS & MANDATORY GUARDRAILS\n"
                 "    below for the matched product(s). A claim in this section that\n"
@@ -721,6 +734,22 @@ Constraints:
                 "    `guardrail_text`, the `finding_kind`, and (except for missing-mandatory)\n"
                 "    the exact offending `current_text`. Name the phrase; never fire on a\n"
                 "    bare keyword."
+            )
+        elif product_facts:
+            # Non-product document (blog/article/social/email/website): banned and
+            # unqualified product claims still matter, but UIN / regulatory
+            # descriptor / other mandatory brochure elements do NOT apply here.
+            instr_parts.append(
+                "(P) Check this section against the PRODUCT FACTS & GUARDRAILS below\n"
+                "    for the matched product(s). A claim that matches a 'MUST AVOID'\n"
+                "    item IS a finding; a 'MUST SUPPORT' claim that is not\n"
+                "    variant-qualified IS a finding. This is NOT a product brochure or\n"
+                "    advertisement, so DO NOT flag missing mandatory elements — do NOT\n"
+                "    ask for a UIN or a regulatory descriptor; they are not required in\n"
+                "    this document type. Emit each finding under `product_fact_findings`\n"
+                "    with its `product_index`, the verbatim `guardrail_text`, the\n"
+                "    `finding_kind`, and the exact offending `current_text`. Name the\n"
+                "    phrase; never fire on a bare keyword."
             )
         if has_p:
             instr_parts.append(
@@ -803,6 +832,17 @@ Constraints:
             if product_passages_block else ""
         )
 
+        # Acceptable insurance-domain language carve-out (Workstream B): keep the
+        # LLM from raising brand/tone findings on legitimate generic terms and
+        # neutral death-scenario phrasing. Built from the same allowlist file the
+        # post-filter reads, so prompt and backstop never drift. Gated by the same
+        # kill switch as the post-filter.
+        from app.config import settings as _settings
+        from app.services.compliance_allowlist import allowlist_prompt_block
+        acceptable_language_block = (
+            allowlist_prompt_block() if _settings.allowlist_enabled else ""
+        )
+
         prompt = f"""You are a senior Bajaj Life Insurance compliance reviewer (Legal/Compliance/FPU).
 Your past colleagues' comments on similar copy are below — they show the
 substance you should be checking for AND the voice you should write in.
@@ -812,6 +852,8 @@ For the NEW DOCUMENT SECTION:
 {mode_instruction}
 Novel findings REQUIRE a `regulatory_basis` and confidence ≥ 0.75. Do not
 invent findings.
+
+{acceptable_language_block}
 
 Every `reviewer_comment` must state WHY the named phrase is non-compliant —
 the rule it breaks, the disclosure it omits, or the claim it leaves
@@ -930,6 +972,7 @@ valid JSON."""
         document_context: Optional[str] = None,
         product_facts: Optional[List[Dict]] = None,
         product_passages: Optional[List[Dict]] = None,
+        require_mandatory_elements: bool = True,
     ) -> str:
         """Second-pass prompt: same three-tier grading task, but the model is
         told which phrases were ALREADY flagged on the first pass and asked to
@@ -939,6 +982,7 @@ valid JSON."""
         base = self.create_precedent_prompts(
             content, precedents, rules=rules, document_context=document_context,
             product_facts=product_facts, product_passages=product_passages,
+            require_mandatory_elements=require_mandatory_elements,
         )
         found = [a.strip() for a in (already_found or []) if a and a.strip()]
         listing = "\n".join(f'  - "{a}"' for a in found) if found else "  (none)"

@@ -85,6 +85,7 @@ export async function createSubmission(body: {
   title: string;
   content_type: string;
   content?: string;
+  document_type?: string;
   file?: File;
 }): Promise<Submission> {
   // Backend uses Form(...) + File(...), so we must send multipart/form-data.
@@ -92,6 +93,7 @@ export async function createSubmission(body: {
   form.append("title", body.title);
   form.append("content_type", body.content_type);
   if (body.content) form.append("content", body.content);
+  if (body.document_type) form.append("document_type", body.document_type);
   if (body.file) form.append("file", body.file);
   const res = await fetch(`${base()}/submissions`, {
     method: "POST",
@@ -104,6 +106,16 @@ export async function createSubmission(body: {
     throw new Error(`${res.status} ${res.statusText}: ${text}`);
   }
   return (await res.json()) as Submission;
+}
+
+// Workstream A — suggest a document type for the pasted/extracted content. Used
+// to pre-fill the picker; the user confirms before running. Best-effort: callers
+// fall back to the strict default if this fails.
+export async function classifySubmission(content: string): Promise<{ document_type: string }> {
+  return jsonFetch(`${base()}/submissions/classify`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
 }
 export async function deleteSubmission(id: string): Promise<{ message: string }> {
   return jsonFetch(`${base()}/submissions/${id}`, { method: "DELETE" });

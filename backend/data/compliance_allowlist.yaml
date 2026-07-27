@@ -1,0 +1,68 @@
+# Acceptable insurance-domain language (Workstream B, 2026-07-15).
+#
+# A finding whose ENTIRE offending span (its `current_text`) is exactly one of
+# these phrases must NOT be raised as a brand-naming or tone/fear violation:
+#   - generic product categories are NOT the company brand — never suggest
+#     replacing "term insurance" with "Bajaj Life Insurance".
+#   - neutral, factual descriptions of the insured event are NOT fear-mongering.
+#
+# Safety property: matching is WHOLE-SPAN only. A phrase here that appears inside
+# a longer non-compliant claim ("term insurance guarantees 25% returns") is still
+# flaggable — the allowlist only exempts the bare term/phrase itself.
+#
+# This file is read at runtime (no re-seed, no rebuild of rules needed). Grow it
+# as new false positives surface. Keep entries lowercase; matching is
+# case/whitespace-insensitive.
+
+generic_product_terms:
+  - term insurance
+  - term plan
+  - term life insurance
+  - term life
+  - endowment
+  - endowment plan
+  - endowment policy
+  - ulip
+  - unit linked insurance plan
+  - unit-linked insurance plan
+  - whole life
+  - whole life plan
+  - money-back
+  - money back
+  - money back plan
+  - savings plan
+  - guaranteed savings plan
+  - retirement plan
+  - pension plan
+  - annuity
+  - annuity plan
+  - child plan
+  - health insurance
+  - group insurance
+  - rider
+  - riders
+  - sum assured
+  - maturity benefit
+  - death benefit
+  - life cover
+  - life insurance
+  - life insurance plan
+
+acceptable_scenario_phrases:
+  - passes away
+  - pass away
+  - passed away
+  - passing away
+  - sudden death
+  - untimely death
+  - unfortunate death
+  - in the event of death
+  - in case of death
+  - on death
+  - death of the life assured
+  - death of the policyholder
+  - demise
+  - unfortunate demise
+  - loss of life
+  - if something happens to you
+  - in your absence

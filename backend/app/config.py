@@ -293,6 +293,18 @@ class Settings(BaseSettings):
     # LLM backstop recovers paraphrased obligations the regex misses; when off,
     # only deterministic (product-line + keyword) triggers fire.
     disclosure_llm_backstop_enabled: bool = True
+    # The backstop reads the WHOLE document in overlapping windows. It used to be
+    # handed the first 6,000 chars only, so paraphrased obligations in the tail of
+    # a long brochure were invisible. Window size barely moves token cost (the same
+    # document tokens are sent either way) — it mainly sets the request count, so
+    # keep it large enough that a typical document is a handful of calls.
+    disclosure_llm_window_chars: int = 20_000
+    # Overlap so an obligation phrase straddling a boundary appears intact in the
+    # next window. MUST stay below the window size or windowing cannot advance.
+    disclosure_llm_window_overlap_chars: int = 500
+    # Windows are independent; this many run concurrently per batch, so wall-clock
+    # stays close to one round-trip instead of N.
+    disclosure_llm_max_concurrency: int = 4
     product_docs_top_k: int = 3          # brochure passages per chunk (Path B)
     product_match_max: int = 3           # max products grounded per document
 
@@ -306,6 +318,13 @@ class Settings(BaseSettings):
     # structured pass systematically under-enumerates on dense copy. This DOUBLES
     # LLM calls per chunk — disable on a tight Groq free-tier quota. Override via env.
     completeness_sweep_enabled: bool = True
+
+    # Acceptable insurance-domain language allowlist (Workstream B, 2026-07-15).
+    # Kill switch for both the prompt carve-out and the post-filter backstop that
+    # keep legitimate generic terms ("term insurance") and neutral death-scenario
+    # phrasing ("passes away") from being raised as brand/tone false positives.
+    # Terms live in data/compliance_allowlist.yaml (edit at runtime, no re-seed).
+    allowlist_enabled: bool = True
 
     # Cross-chunk context: grade each chunk against a read-only view of the whole
     # document so a disclaimer/reference present elsewhere (e.g. footer) isn't

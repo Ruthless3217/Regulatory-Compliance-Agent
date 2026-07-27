@@ -96,6 +96,16 @@ services:
       CRITIC_ENABLED: ${CRITIC_ENABLED:-true}
       CROSS_CHUNK_CONTEXT_ENABLED: ${CROSS_CHUNK_CONTEXT_ENABLED:-true}
       CROSS_CHUNK_CONTEXT_TOKEN_BUDGET: ${CROSS_CHUNK_CONTEXT_TOKEN_BUDGET:-8000}
+      # --- Mandatory-disclosure backstop ---
+      # The LLM backstop reads the WHOLE document in overlapping windows (it used
+      # to see only the first 6,000 chars). Window size mainly sets the request
+      # count — the same document tokens are sent either way. OVERLAP MUST STAY
+      # BELOW WINDOW_CHARS or windowing cannot advance (startup raises ValueError).
+      # Set BACKSTOP_ENABLED=false to fall back to deterministic triggers only.
+      DISCLOSURE_LLM_BACKSTOP_ENABLED: ${DISCLOSURE_LLM_BACKSTOP_ENABLED:-true}
+      DISCLOSURE_LLM_WINDOW_CHARS: ${DISCLOSURE_LLM_WINDOW_CHARS:-20000}
+      DISCLOSURE_LLM_WINDOW_OVERLAP_CHARS: ${DISCLOSURE_LLM_WINDOW_OVERLAP_CHARS:-500}
+      DISCLOSURE_LLM_MAX_CONCURRENCY: ${DISCLOSURE_LLM_MAX_CONCURRENCY:-4}
       # --- RAG embeddings ---
       # azure_cohere = Cohere embed served via the Azure AI Foundry /models
       # inference surface (AZURE_INFERENCE_*). cohere/openai/azure_openai also

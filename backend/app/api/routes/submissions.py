@@ -7,6 +7,7 @@ import os
 import logging
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -14,6 +15,10 @@ from app.database import get_db
 from app.models.submission import Submission
 from app.config import settings
 from app.auth.dependencies import require
+from app.services.document_type import (
+    normalize_document_type,
+    classify_document_type,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +33,31 @@ ALLOWED_CONTENT_TYPES = {
 }
 
 
+class ClassifyRequest(BaseModel):
+    content: str
+
+
+@router.post("/classify")
+async def classify_submission(
+    payload: ClassifyRequest,
+    user: dict = Depends(require("submission:create")),
+):
+    """Suggest a semantic document type for the pasted/extracted content.
+
+    The submission form calls this to pre-fill the document-type picker; the user
+    confirms or overrides before running analysis (hybrid — Workstream A). The
+    result is a suggestion only and never bypasses the user's confirmed choice.
+    """
+    suggested = await classify_document_type(payload.content or "")
+    return {"document_type": suggested}
+
+
 @router.post("")
 async def create_submission(
     title: str = Form(...),
     content_type: str = Form(default="text"),
     content: Optional[str] = Form(default=None),
+    document_type: Optional[str] = Form(default=None),
     file: Optional[UploadFile] = File(default=None),
     user: dict = Depends(require("submission:create")),
     db: Session = Depends(get_db)
@@ -42,6 +67,9 @@ async def create_submission(
     Accepts either raw text content or a file upload.
     """
     file_path = None
+    # Normalize the (user-confirmed) document type; an unrecognized value stores
+    # NULL, which the analysis gate treats as strict (product) — fail-closed.
+    document_type = normalize_document_type(document_type)
 
     # Handle file upload
     if file and file.filename:
@@ -73,6 +101,7 @@ async def create_submission(
         file_path=file_path,
         status="uploaded",
         submitted_by=getattr(user, "id", None),
+        document_type=document_type,
     )
     db.add(submission)
     db.commit()
@@ -86,6 +115,7 @@ async def create_submission(
         "id": str(submission.id),
         "title": submission.title,
         "content_type": submission.content_type,
+        "document_type": submission.document_type,
         "status": submission.status,
         "submitted_at": submission.submitted_at.isoformat()
     }
@@ -133,6 +163,7 @@ async def get_submission(
         "id": str(submission.id),
         "title": submission.title,
         "content_type": submission.content_type,
+        "document_type": submission.document_type,
         "original_content": submission.original_content,
         "status": submission.status,
         "approval_status": submission.approval_status,

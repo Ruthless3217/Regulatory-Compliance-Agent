@@ -31,6 +31,13 @@ class Submission(Base):
     product_line = Column(String(100), nullable=True, index=True)
     jurisdiction = Column(String(100), nullable=True, index=True)
 
+    # Semantic document type (Workstream A, 2026-07-15) — product_marketing |
+    # blog_article | social | email | website | other. Gates product mandatory
+    # elements (UIN / regulatory descriptor): only product_marketing (or an
+    # unset/unknown value → strict) requires them. Set at submission time from
+    # the LLM-suggested-then-user-confirmed picker.
+    document_type = Column(String(50), nullable=True, index=True)
+
     # Relationships
     compliance_checks = relationship("ComplianceCheck", back_populates="submission", cascade="all, delete-orphan")
     submitter = relationship("User", back_populates="submissions", foreign_keys=[submitted_by])

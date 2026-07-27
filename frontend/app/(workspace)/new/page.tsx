@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageHeader, PageHeaderMeta } from "@/components/ui/page-header";
-import { createSubmission, analyzeSubmission } from "@/lib/api";
+import { createSubmission, analyzeSubmission, classifySubmission } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
@@ -17,7 +17,20 @@ const CATEGORIES = [
   { key: "sebi", label: "SEBI" },
 ] as const;
 
-const MAX_CHARS = 50_000;
+// Semantic document type (Workstream A). Only "product_marketing" (or leaving it
+// strict) requires a UIN / regulatory descriptor; editorial types relax that.
+const DOC_TYPES = [
+  { key: "product_marketing", label: "Product brochure / ad" },
+  { key: "blog_article", label: "Blog / article" },
+  { key: "social", label: "Social post" },
+  { key: "email", label: "Email / newsletter" },
+  { key: "website", label: "Website page" },
+  { key: "other", label: "Other" },
+] as const;
+
+const DOC_TYPE_LABEL: Record<string, string> = Object.fromEntries(
+  DOC_TYPES.map((d) => [d.key, d.label])
+);
 
 const SAMPLE = `Our brand-new ULIP scheme guarantees 25% returns every year — no market risk! Bajaj is India's No.1 life insurer and our policy is the cheapest in the market. Buy today and pay zero charges. Get rich while you sleep.
 
@@ -44,10 +57,36 @@ export default function NewAnalysisPage() {
   const [dragOver, setDragOver] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [scope, setScope] = React.useState<string[]>(["irdai", "brand", "sebi"]);
+  // Document type — strict default (product) so a UIN is required unless the user
+  // marks it as editorial. Auto-suggested from pasted text; the user confirms.
+  const [docType, setDocType] = React.useState<string>("product_marketing");
+  const [detecting, setDetecting] = React.useState(false);
+  const [autoDetected, setAutoDetected] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const toggleScope = (k: string) =>
     setScope((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
+
+  // Hybrid pre-classification: suggest a document type from the pasted content,
+  // then let the user confirm/override the dropdown. Best-effort — a failure
+  // just leaves the current (strict) selection.
+  const detectDocType = async () => {
+    const body = text.trim();
+    if (detecting || body.length < 120) return;
+    setDetecting(true);
+    try {
+      const { document_type } = await classifySubmission(body);
+      if (document_type && DOC_TYPE_LABEL[document_type]) {
+        setDocType(document_type);
+        setAutoDetected(true);
+        toast.message(`Detected: ${DOC_TYPE_LABEL[document_type]} — change if needed`);
+      }
+    } catch {
+      /* non-fatal: keep the current selection */
+    } finally {
+      setDetecting(false);
+    }
+  };
 
   const loadSample = () => {
     setTitle("Sample ULIP brochure draft");
@@ -83,7 +122,6 @@ export default function NewAnalysisPage() {
         content = `URL: ${url.trim()}`;
       }
       if (!content.trim()) { toast.error("Paste content first"); return; }
-      if (content.length > MAX_CHARS) { toast.error(`Content exceeds ${MAX_CHARS.toLocaleString()} characters`); return; }
     }
     setSubmitting(true);
     try {
@@ -92,11 +130,13 @@ export default function NewAnalysisPage() {
           ? {
               title: title.trim() || file.name,
               content_type: contentTypeFor(file.name),
+              document_type: docType,
               file,
             }
           : {
               title: title.trim() || (kind === "url" ? url.trim() : "Untitled submission"),
               content_type: kind === "url" ? "html" : "text",
+              document_type: docType,
               content: kind === "url" ? `URL: ${url.trim()}` : text,
             };
       const sub = await createSubmission(payload);
@@ -118,7 +158,6 @@ export default function NewAnalysisPage() {
         meta={
           <>
             <PageHeaderMeta label="Pipeline" value="LangGraph · 5 nodes" />
-            <PageHeaderMeta label="Limit" value={`${MAX_CHARS.toLocaleString()} chars`} />
             <PageHeaderMeta label="Auth" value="Internal / VPN" />
           </>
         }
@@ -131,14 +170,33 @@ export default function NewAnalysisPage() {
 
       <div className="grid gap-10 lg:grid-cols-[1.4fr_0.6fr]">
         <section>
-          <div className="mb-5">
-            <label className="micro-label mb-2 block">Title</label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Q2 ULIP brochure draft"
-              className="h-10 text-base"
-            />
+          <div className="mb-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="micro-label mb-2 block">Title</label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Q2 ULIP brochure draft"
+                className="h-10 text-base"
+              />
+            </div>
+            <div>
+              <label className="micro-label mb-2 block">
+                Document type{detecting ? " · detecting…" : autoDetected ? " · suggested" : ""}
+              </label>
+              <select
+                value={docType}
+                onChange={(e) => { setDocType(e.target.value); setAutoDetected(false); }}
+                className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+              >
+                {DOC_TYPES.map((d) => (
+                  <option key={d.key} value={d.key}>{d.label}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Editorial types (blog, article…) aren’t asked for a UIN. Auto-suggested from pasted text.
+              </p>
+            </div>
           </div>
 
           <Tabs defaultValue="paste">
@@ -152,13 +210,14 @@ export default function NewAnalysisPage() {
               <Textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onBlur={detectDocType}
                 placeholder="Paste your ad copy, brochure text, landing-page copy, or social post here…"
                 rows={14}
                 className="min-h-[260px] resize-y font-serif text-[15px] leading-[1.7]"
               />
               <div className="mt-2 flex justify-between text-xs text-muted-foreground">
                 <span>Markdown allowed · Plain text preferred</span>
-                <span className="font-mono">{text.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}</span>
+                <span className="font-mono">{text.length.toLocaleString()} chars</span>
               </div>
               <ScopeChips scope={scope} toggle={toggleScope} />
               <div className="mt-6 flex items-center gap-3">

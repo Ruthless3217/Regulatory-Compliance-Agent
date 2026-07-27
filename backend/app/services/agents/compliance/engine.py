@@ -321,6 +321,10 @@ class ComplianceEngine:
                     # score and routed to human review.
                     suppressed=bool(v_data.get("suppressed", False)),
                     suppressed_reason=v_data.get("suppressed_reason"),
+                    # Workstream C — overlap grouping: members share group_id, one
+                    # is_primary. Absent (e.g. document-level) → standalone primary.
+                    group_id=v_data.get("group_id"),
+                    is_primary=bool(v_data.get("is_primary", True)),
                 )
 
                 # Try to resolve rule_id as UUID + snapshot the rule's version so
@@ -405,6 +409,8 @@ class ComplianceEngine:
                     "similarity_score": v.similarity_score,
                     "suppressed": bool(v.suppressed),
                     "suppressed_reason": v.suppressed_reason,
+                    "group_id": v.group_id,
+                    "is_primary": bool(v.is_primary),
                 }
                 for v in violations
             ]

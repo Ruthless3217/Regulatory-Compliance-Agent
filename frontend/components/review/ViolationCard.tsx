@@ -17,10 +17,13 @@ interface Props {
   dismissed: boolean;
   onSelect: () => void;
   onDismiss: () => void;
+  // Workstream C — the other angles flagged on the SAME span (non-primary group
+  // members). Rendered as a compact "also flagged as" list under this card.
+  alsoFlagged?: Violation[];
 }
 
 export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function ViolationCard(
-  { index, violation, selected, dismissed, onSelect, onDismiss },
+  { index, violation, selected, dismissed, onSelect, onDismiss, alsoFlagged = [] },
   ref
 ) {
   const sevClass = severityClass(violation.severity).split(" ")[0]; // border-l-*
@@ -106,6 +109,23 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
       <p className="text-sm leading-snug">{violation.description}</p>
 
       <ActionTags violation={violation} className="mt-2 flex flex-wrap items-center gap-1.5" />
+
+      {alsoFlagged.length > 0 && (
+        <details className="mt-3 rounded-sm border border-border bg-muted/30 p-2 text-xs">
+          <summary className="cursor-pointer select-none font-medium text-muted-foreground">
+            Also flagged as ({alsoFlagged.length}) — same phrase, other angles
+          </summary>
+          <ul className="mt-2 space-y-2">
+            {alsoFlagged.map((m) => (
+              <li key={m.id} className="flex items-start gap-1.5">
+                <SeverityBadge severity={m.severity} />
+                <Badge>{categoryLabel(m.category)}</Badge>
+                <span className="leading-snug text-muted-foreground">{m.description}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       {violation.current_text && (
         <div className="mt-3 rounded-sm border border-border bg-background p-2 text-xs">

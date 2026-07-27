@@ -6,6 +6,7 @@ import { ViolationGroup } from "./ViolationGroup";
 import { ExportPdfButton } from "./ExportPdfButton";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import { normalizeSeverity } from "@/lib/format";
+import { primaryViolations } from "@/lib/violationGroups";
 
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
 
@@ -20,11 +21,15 @@ export function ReportTab() {
     analysisMessage,
   } = useSubmissionWorkspace();
 
+  // Workstream C — one entry per span: collapse overlapping cross-tier findings
+  // to their group primary so the report doesn't repeat the same phrase.
+  const shown = React.useMemo(() => primaryViolations(violations), [violations]);
+
   const groups = React.useMemo(() => {
-    const m: Record<string, typeof violations> = { critical: [], high: [], medium: [], low: [] };
-    for (const v of violations) m[normalizeSeverity(v.severity)].push(v);
+    const m: Record<string, typeof shown> = { critical: [], high: [], medium: [], low: [] };
+    for (const v of shown) m[normalizeSeverity(v.severity)].push(v);
     return m;
-  }, [violations]);
+  }, [shown]);
 
   // Inject print stylesheet only on this route
   React.useEffect(() => {
@@ -60,12 +65,12 @@ export function ReportTab() {
       )}
       <ScoreHero score={overallScore} grade={grade} scores={scores} />
       <input type="hidden" data-submission-id={submission.id} />
-      <KPIStrip violations={violations} />
+      <KPIStrip violations={shown} />
       <div className="flex items-center justify-between px-8 py-4 no-print">
         <h2 className="font-serif text-lg">Violations</h2>
         <ExportPdfButton />
       </div>
-      {violations.length === 0 ? (
+      {shown.length === 0 ? (
         <div className="px-8 pb-12 text-center text-sm text-muted-foreground">
           {analysisIncomplete
             ? "No violations were recorded because the analysis did not complete — this is not a clean result."
