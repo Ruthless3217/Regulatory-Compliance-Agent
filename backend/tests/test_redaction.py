@@ -52,3 +52,17 @@ def test_non_string_passthrough():
 def test_plain_text_unchanged():
     s = "This guarantee claim violates IRDAI rule on assured returns."
     assert redact_pii(s) == s
+
+
+def test_argon2_hash_redacted():
+    h = "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$aGFzaGhhc2hoYXNo"
+    out = redact_pii(f"stored hash {h} for user")
+    assert h not in out
+    assert "[SECRET]" in out
+
+
+def test_bcrypt_hash_redacted():
+    h = "$2b$12$abcdefghijklmnopqrstuv.wxyz0123456789ABCDEFGHIJKLMNOP"
+    out = redact_pii(f"pw={h}")
+    assert "$2b$" not in out
+    assert "[SECRET]" in out

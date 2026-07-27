@@ -21,13 +21,18 @@ _PAN_RE = re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")
 _PHONE_RE = re.compile(r"(?<!\d)(?:\+91[\s-]?|0)?\d{5}[\s-]?\d{5}(?!\d)")
 # Any remaining run of 8+ digits — policy / account / Aadhaar numbers.
 _LONGNUM_RE = re.compile(r"\b\d{8,}\b")
+# Belt-and-suspenders: never let a password hash leak into a log even if one is
+# ever passed through here. Matches argon2 ($argon2id$...) and bcrypt ($2b$...).
+_PWHASH_RE = re.compile(r"\$(?:argon2[a-z]*|2[aby])\$[^\s\"']+")
 
 
 def redact_pii(text: str) -> str:
-    """Return ``text`` with emails, PAN, phone numbers, and long digit runs
-    replaced by typed placeholders. Non-str input is returned unchanged."""
+    """Return ``text`` with emails, PAN, phone numbers, long digit runs, and any
+    argon2/bcrypt password hashes replaced by typed placeholders. Non-str input
+    is returned unchanged."""
     if not isinstance(text, str) or not text:
         return text
+    text = _PWHASH_RE.sub("[SECRET]", text)
     text = _EMAIL_RE.sub("[EMAIL]", text)
     text = _PAN_RE.sub("[PAN]", text)
     text = _PHONE_RE.sub("[PHONE]", text)

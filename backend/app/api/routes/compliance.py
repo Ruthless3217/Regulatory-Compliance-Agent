@@ -15,7 +15,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -27,6 +27,8 @@ from app.database import get_db, SessionLocal
 from app.models.submission import Submission
 from app.models.compliance_check import ComplianceCheck
 from app.models.violation import Violation
+from app.models.user import User
+from app.auth.dependencies import require
 from app.services.agents.compliance.engine import ComplianceEngine
 
 logger = logging.getLogger(__name__)
@@ -38,7 +40,9 @@ router = APIRouter(prefix="/compliance", tags=["Compliance Analysis"])
 async def analyze_submission(
     submission_id: str,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require("analysis:run")),
 ):
     """
     Trigger compliance analysis for a submission.
@@ -52,8 +56,13 @@ async def analyze_submission(
     if submission.status in ("analyzing",):
         return {"message": "Analysis already in progress", "submission_id": submission_id}
 
-    # Queue analysis as a background task
-    background_tasks.add_task(_run_analysis, submission_id)
+    # Queue analysis as a background task. The task runs OUTSIDE the request
+    # context, so pass the acting user/session explicitly for attribution
+    # (a request-scoped ContextVar would not propagate into the task).
+    background_tasks.add_task(
+        _run_analysis, submission_id, str(user.id),
+        getattr(request.state, "session_id", None),
+    )
 
     return {
         "message": "Compliance analysis started",
@@ -62,12 +71,15 @@ async def analyze_submission(
     }
 
 
-async def _run_analysis(submission_id: str):
+async def _run_analysis(submission_id: str, triggered_by: Optional[str] = None,
+                        session_id: Optional[str] = None):
     """Background task runner for compliance analysis."""
     from app.database import SessionLocal
     db = SessionLocal()
     try:
-        await ComplianceEngine.analyze_submission(submission_id, db)
+        await ComplianceEngine.analyze_submission(
+            submission_id, db, triggered_by=triggered_by,
+            session_id=session_id, trigger_source="async")
         logger.info(f"Background analysis completed for {submission_id}")
     except Exception as e:
         logger.error(f"Background analysis failed for {submission_id}: {e}")
@@ -78,7 +90,9 @@ async def _run_analysis(submission_id: str):
 @router.post("/analyze/{submission_id}/sync", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
 async def analyze_submission_sync(
     submission_id: str,
-    db: Session = Depends(get_db)
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require("analysis:run")),
 ):
     """
     Trigger compliance analysis and wait for results (synchronous).
@@ -89,7 +103,9 @@ async def analyze_submission_sync(
         raise HTTPException(status_code=404, detail="Submission not found")
 
     try:
-        compliance_check = await ComplianceEngine.analyze_submission(submission_id, db)
+        compliance_check = await ComplianceEngine.analyze_submission(
+            submission_id, db, triggered_by=str(user.id),
+            session_id=getattr(request.state, "session_id", None), trigger_source="sync")
 
         if compliance_check is None:
             # Not persistable: the run was degraded (-> 'needs_review') or hit a
@@ -182,7 +198,8 @@ def _serialize_violation(v: Violation) -> dict:
     }
 
 
-async def _analyze_and_stream(submission_id: str):
+async def _analyze_and_stream(submission_id: str, triggered_by: Optional[str] = None,
+                             session_id: Optional[str] = None):
     """
     Generator: spawns analyze in a task and polls DB state, emitting SSE events
     for stage transitions, new violations, and final score.
@@ -202,7 +219,9 @@ async def _analyze_and_stream(submission_id: str):
     async def _runner():
         db = SessionLocal()
         try:
-            await ComplianceEngine.analyze_submission(submission_id, db)
+            await ComplianceEngine.analyze_submission(
+                submission_id, db, triggered_by=triggered_by,
+                session_id=session_id, trigger_source="stream")
         except Exception as e:
             logger.error(f"SSE analyze runner failed for {submission_id}: {e}")
         finally:
@@ -303,10 +322,17 @@ async def _analyze_and_stream(submission_id: str):
 
 
 @router.post("/analyze/{submission_id}/stream", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
-async def analyze_submission_stream(submission_id: str):
+async def analyze_submission_stream(
+    submission_id: str,
+    request: Request,
+    user: User = Depends(require("analysis:run")),
+):
     """SSE-stream analysis progress: stage / chunk / score / done / error."""
     return StreamingResponse(
-        _analyze_and_stream(submission_id),
+        _analyze_and_stream(
+            submission_id, triggered_by=str(user.id),
+            session_id=getattr(request.state, "session_id", None),
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -315,7 +341,8 @@ async def analyze_submission_stream(submission_id: str):
 @router.get("/results/{submission_id}")
 async def get_compliance_results(
     submission_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _user: User = Depends(require("submission:read")),
 ):
     """Get the latest compliance analysis results for a submission."""
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
@@ -354,7 +381,8 @@ async def get_compliance_results(
 @router.get("/check/{check_id}")
 async def get_compliance_check(
     check_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _user: User = Depends(require("submission:read")),
 ):
     """Get details of a specific compliance check by ID."""
     summary = await ComplianceEngine.get_check_summary(check_id, db)
@@ -386,6 +414,7 @@ async def submit_violation_feedback(
     violation_id: str,
     payload: ViolationFeedbackRequest,
     db: Session = Depends(get_db),
+    _user: User = Depends(require("feedback:submit")),
 ):
     """Record a reviewer's accept/reject on a finding and update the fired
     rule's learned reliability (Beta-Binomial pseudo-counts, damped by the
@@ -412,6 +441,7 @@ async def submit_reviewer_score(
     check_id: str,
     payload: ReviewerScoreRequest,
     db: Session = Depends(get_db),
+    _user: User = Depends(require("feedback:submit")),
 ):
     """Log the reviewer's document-level score next to the system's.
 

@@ -17,11 +17,15 @@ from app.models.submission import Submission
 from app.services.rag.retrievers.similar_subs_retriever import (
     get_similar_submissions_retriever,
 )
+from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
 
 # Mounted at root; the path-prefix carries the resource name.
-router = APIRouter(prefix="/submissions", tags=["Submissions"])
+router = APIRouter(
+    prefix="/submissions", tags=["Submissions"],
+    dependencies=[Depends(require("submission:read"))],
+)
 
 
 @router.get("/{submission_id}/similar")

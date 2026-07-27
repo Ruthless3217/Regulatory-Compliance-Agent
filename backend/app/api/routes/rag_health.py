@@ -17,10 +17,11 @@ from app.config import settings
 from app.database import get_db
 from app.services.rag.errors import RAGDegraded, RAGEmbedFailed
 from app.services.rag.factory import get_embedder, get_vector_store
+from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["RAG"])
+router = APIRouter(tags=["RAG"], dependencies=[Depends(require("knowledgebase:view"))])
 
 
 @router.get("/health/rag")

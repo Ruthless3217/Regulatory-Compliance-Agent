@@ -4,16 +4,43 @@
  * In the browser, requests proxy through /api/* (see next.config.ts rewrites).
  */
 import type {
+  AuditRow,
   ComplianceResults,
   DashboardSummary,
   DocumentComparison,
+  DocUsageRow,
   KnowledgeBaseSearchResponse,
+  LoginResult,
+  Me,
+  PerUserActiveTime,
   ProjectionResponse,
+  Role,
   Rule,
+  RuleAuditRow,
+  RunRow,
+  SessionRow,
   Submission,
   TimeseriesResponse,
   TopRulesResponse,
+  UsageSummaryRow,
+  UsageTimeseriesPoint,
+  UserRow,
 } from "./types";
+
+/**
+ * Error thrown by `jsonFetch` for any non-2xx response. Carries the HTTP
+ * `status` so callers (e.g. the login page) can map codes → user messages.
+ * The `message` string is unchanged from the previous `Error` shape, so
+ * existing `catch` handlers that read `.message` keep working.
+ */
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, statusText: string, body: string, url: string) {
+    super(`${status} ${statusText}: ${body || url}`);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
 
 // Server-side fetches run inside the container and need the docker DNS name.
 const SERVER_BASE =
@@ -42,9 +69,12 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText}: ${text || url}`);
+    throw new ApiError(res.status, res.statusText, text, url);
   }
-  return (await res.json()) as T;
+  // Tolerate empty 200/204 bodies (e.g. /auth/logout, /auth/heartbeat) which
+  // are not valid JSON; `res.json()` would throw on those.
+  const text = await res.text();
+  return (text ? (JSON.parse(text) as T) : (undefined as T));
 }
 
 /* ---------- submissions ---------- */
@@ -259,4 +289,199 @@ export async function createComparison(body: {
 }
 export async function deleteComparison(id: string): Promise<{ message: string }> {
   return jsonFetch(`${base()}/comparisons/${id}`, { method: "DELETE" });
+}
+
+/* ---------- auth (Phase 2) ---------- */
+// Every auth call sends the httpOnly `rca_session` cookie via
+// `credentials: "include"`. On failure `jsonFetch` throws an `ApiError` whose
+// `.status` the login page maps to a user-facing message (see 01 §5).
+
+export async function login(body: {
+  username: string;
+  password: string;
+}): Promise<LoginResult> {
+  return jsonFetch(`${base()}/auth/login`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    credentials: "include",
+  });
+}
+
+export async function logout(): Promise<void> {
+  await jsonFetch(`${base()}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+}
+
+// `init` lets a server component forward the incoming request's `cookie`
+// header (the browser default `credentials:"include"` only applies client-side).
+export async function getMe(init?: RequestInit): Promise<Me> {
+  return jsonFetch(`${base()}/auth/me`, { credentials: "include", ...init });
+}
+
+export async function heartbeat(): Promise<void> {
+  await jsonFetch(`${base()}/auth/heartbeat`, {
+    method: "POST",
+    credentials: "include",
+  });
+}
+
+export async function changePassword(body: {
+  current_password: string;
+  new_password: string;
+}): Promise<void> {
+  await jsonFetch(`${base()}/auth/change-password`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    credentials: "include",
+  });
+}
+
+/* ---------- super-admin console (Phase 6) ----------
+ * Every call sends the httpOnly `rca_session` cookie via `credentials:"include"`.
+ * These are all client-side reads/writes from the isolated `/super_admin` route
+ * group; the server layout guard (getMe → role check) 404s non-super-admins, and
+ * the backend re-checks `console:view` (+ finer perms) on every request.
+ *
+ * `days` maps to the `?days=` window every rollup endpoint accepts (default 30).
+ */
+
+/** Build a `?days=` query (omitted when undefined) plus any extra params. */
+function consoleQuery(params: Record<string, string | number | undefined>): string {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && `${v}` !== "") qs.set(k, String(v));
+  }
+  const s = qs.toString();
+  return s ? `?${s}` : "";
+}
+
+/* users */
+export async function listUsers(): Promise<UserRow[]> {
+  const res = await jsonFetch<{ users: UserRow[] }>(`${base()}/super_admin/users`, {
+    credentials: "include",
+  });
+  return res.users ?? [];
+}
+export async function createUser(body: {
+  username: string;
+  password: string;
+  registered_ip: string;
+  role: Role;
+}): Promise<UserRow> {
+  return jsonFetch(`${base()}/super_admin/users`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    credentials: "include",
+  });
+}
+/** Update IP / role / active flag, or reset the password (send `password`). */
+export async function updateUser(
+  id: string,
+  body: {
+    registered_ip?: string;
+    role?: Role;
+    is_active?: boolean;
+    password?: string;
+  }
+): Promise<UserRow> {
+  return jsonFetch(`${base()}/super_admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    credentials: "include",
+  });
+}
+/** Revoke all of a user's sessions (kick them out everywhere). */
+export async function forceLogout(id: string): Promise<void> {
+  await jsonFetch(`${base()}/super_admin/users/${id}/force-logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+}
+
+/* usage & cost */
+export async function usageSummary(days?: number): Promise<UsageSummaryRow[]> {
+  const res = await jsonFetch<{ days: number; users: UsageSummaryRow[] }>(
+    `${base()}/super_admin/usage/summary${consoleQuery({ days })}`,
+    { credentials: "include" }
+  );
+  return res.users ?? [];
+}
+export async function usageByDocument(days?: number): Promise<DocUsageRow[]> {
+  const res = await jsonFetch<{ days: number; documents: DocUsageRow[] }>(
+    `${base()}/super_admin/usage/by-document${consoleQuery({ days })}`,
+    { credentials: "include" }
+  );
+  return res.documents ?? [];
+}
+export async function usageTimeseries(days?: number): Promise<UsageTimeseriesPoint[]> {
+  const res = await jsonFetch<{ days: number; points: UsageTimeseriesPoint[] }>(
+    `${base()}/super_admin/usage/timeseries${consoleQuery({ days })}`,
+    { credentials: "include" }
+  );
+  return res.points ?? [];
+}
+
+/* runs */
+export async function listRuns(params?: {
+  user?: string;
+  status?: string;
+  days?: number;
+}): Promise<RunRow[]> {
+  const res = await jsonFetch<{ runs: RunRow[] }>(
+    `${base()}/super_admin/runs${consoleQuery({ ...params })}`,
+    { credentials: "include" }
+  );
+  return res.runs ?? [];
+}
+export async function submissionRuns(id: string): Promise<RunRow[]> {
+  const res = await jsonFetch<{ submission_id: string; runs: RunRow[] }>(
+    `${base()}/super_admin/submissions/${id}/runs`,
+    { credentials: "include" }
+  );
+  return res.runs ?? [];
+}
+
+/* sessions */
+// Backend returns `{ days, sessions, per_user_active_time }`; the sessions page
+// consumes only the `sessions` array, so we unwrap to it here.
+export async function listSessions(days?: number): Promise<SessionRow[]> {
+  const res = await jsonFetch<{
+    days: number;
+    sessions: SessionRow[];
+    per_user_active_time: PerUserActiveTime[];
+  }>(`${base()}/super_admin/sessions${consoleQuery({ days })}`, {
+    credentials: "include",
+  });
+  return res.sessions ?? [];
+}
+
+/* audit */
+export async function auditFeed(params?: {
+  event_type?: string;
+  actor?: string;
+  days?: number;
+}): Promise<AuditRow[]> {
+  const res = await jsonFetch<{ events: AuditRow[] }>(
+    `${base()}/super_admin/audit${consoleQuery({ ...params })}`,
+    { credentials: "include" }
+  );
+  return res.events ?? [];
+}
+export async function ruleAudit(days?: number): Promise<RuleAuditRow[]> {
+  const res = await jsonFetch<{ events: RuleAuditRow[] }>(
+    `${base()}/super_admin/rules/audit${consoleQuery({ days })}`,
+    { credentials: "include" }
+  );
+  return res.events ?? [];
+}
+
+/**
+ * Direct URL for the CSV export — used as an `<a href download>` so the browser
+ * streams the file. Same-origin (`/api/...` proxy or the relative platform base),
+ * so the httpOnly session cookie rides along automatically.
+ */
+export function usageCsvUrl(days?: number): string {
+  return `${base()}/super_admin/export/usage.csv${consoleQuery({ days })}`;
 }

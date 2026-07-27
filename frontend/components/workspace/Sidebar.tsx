@@ -1,6 +1,7 @@
 "use client";
+import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   FileText,
   PenSquare,
@@ -11,13 +12,19 @@ import {
   Search,
   Boxes,
   GitCompare,
+  LogOut,
+  Loader2,
 } from "lucide-react";
 import { DensityToggle } from "./DensityToggle";
 import { ApiHealthDot } from "./ApiHealthDot";
 import { useCommandPalette } from "./CommandPaletteProvider";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { logout } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type Item = { label: string; href: string; icon: React.ReactNode; kbd?: string };
+// `mutating` items are rule-authoring actions — hidden for the `user` role
+// (defense-in-depth UX; the API still 403s a `user` who forges the request).
+type Item = { label: string; href: string; icon: React.ReactNode; kbd?: string; mutating?: boolean };
 type Section = { title: string; items: Item[] };
 
 const SECTIONS: Section[] = [
@@ -33,7 +40,7 @@ const SECTIONS: Section[] = [
     title: "Library",
     items: [
       { label: "Rules", href: "/rules", icon: <Library className="h-3.5 w-3.5" />, kbd: "R" },
-      { label: "Generate rules", href: "/rules/generate", icon: <Sparkles className="h-3.5 w-3.5" /> },
+      { label: "Generate rules", href: "/rules/generate", icon: <Sparkles className="h-3.5 w-3.5" />, mutating: true },
     ],
   },
   {
@@ -57,6 +64,27 @@ function isActive(pathname: string, href: string) {
 export function Sidebar() {
   const pathname = usePathname() ?? "/";
   const { setOpen } = useCommandPalette();
+  const { me, role } = useAuth();
+  const canEdit = role !== "user";
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = React.useState(false);
+
+  const sections = SECTIONS.map((s) => ({
+    ...s,
+    items: s.items.filter((it) => canEdit || !it.mutating),
+  }));
+
+  async function onLogout() {
+    setLoggingOut(true);
+    try {
+      await logout();
+    } catch {
+      /* proceed to /login even if the network call fails */
+    } finally {
+      router.replace("/login");
+    }
+  }
+
   return (
     <aside className="fixed inset-y-0 left-0 z-10 flex w-60 flex-col border-r border-border bg-background/95 backdrop-blur-sm">
       {/* Masthead */}
@@ -93,7 +121,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-3">
-        {SECTIONS.map((s) => (
+        {sections.map((s) => (
           <div key={s.title} className="mb-5">
             <div className="mb-1 flex items-center gap-2 px-2">
               <div className="micro-label">{s.title}</div>
@@ -149,6 +177,33 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-border px-3 py-2">
+        {/* Current user + logout */}
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="truncate text-[12px] font-medium leading-tight">
+              {me?.username ?? "—"}
+            </div>
+            {role && (
+              <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
+                {role.replace(/_/g, " ")}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            disabled={loggingOut}
+            title="Sign out"
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground disabled:opacity-50"
+          >
+            {loggingOut ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <LogOut className="h-3 w-3" />
+            )}
+            Sign out
+          </button>
+        </div>
         <div className="flex items-center justify-between">
           <ApiHealthDot />
           <DensityToggle />

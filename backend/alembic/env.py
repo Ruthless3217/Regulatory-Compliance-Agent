@@ -16,6 +16,10 @@ from app.models import (  # noqa: F401
     AgentTrace,
     ToolInvocation,
     ComplianceState,
+    UserSession,
+    AnalysisRun,
+    LlmUsageEvent,
+    AuditEvent,
 )
 from app.config import settings
 

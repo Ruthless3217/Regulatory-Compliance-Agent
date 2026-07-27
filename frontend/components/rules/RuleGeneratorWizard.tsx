@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { SeverityBadge, Badge } from "@/components/ui/badge";
 import { createRule, generateRulesFromDocument } from "@/lib/api";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { categoryLabel } from "@/lib/format";
 
 type Step = "upload" | "review";
@@ -24,6 +25,10 @@ interface DraftRule {
 
 export function RuleGeneratorWizard() {
   const router = useRouter();
+  // Rule generation is admin-only (rules:generate). A `user` who reaches this
+  // route directly sees a read-only notice; the API would 403 the request anyway.
+  const { role } = useAuth();
+  const canEdit = role !== "user";
   const [step, setStep] = React.useState<Step>("upload");
   const [title, setTitle] = React.useState("");
   const [instructions, setInstructions] = React.useState("");
@@ -111,6 +116,25 @@ export function RuleGeneratorWizard() {
       setSubmitting(false);
     }
   };
+
+  if (!canEdit) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Rule generation is restricted</CardTitle>
+          <CardDescription>
+            Generating rules from a regulator document requires an admin role. Ask a compliance admin to
+            run this, or browse the existing rules library.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" onClick={() => router.push("/rules")}>
+            Back to rules
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (step === "upload") {
     return (

@@ -184,6 +184,45 @@ class Settings(BaseSettings):
     # per-IP limiter still applies). Sized to your provider/Foundry quota.
     llm_daily_token_budget: int = 0
 
+    # --- Auth, sessions & RBAC (audit-trail plan) ----------------------------
+    # Master switch. When False the auth layer is bypassed (open access) — only
+    # for a controlled dev/UAT cutover window; never leave off in a shared env.
+    auth_enabled: bool = True
+    # IP binding on login (Decision D1). strict = one registered IP per user,
+    # admin-updatable; cidr = per-user subnet; list = explicit IP list; log_only
+    # = never block, just record. Phase 1 ships the config + schema for all four.
+    auth_ip_binding_mode: str = "strict"          # strict | cidr | list | log_only
+    session_absolute_ttl_seconds: int = 8 * 3600  # hard session lifetime
+    session_idle_ttl_seconds: int = 60 * 60       # sliding idle timeout
+    login_max_attempts: int = 5                   # per username+ip before lockout
+    login_lockout_seconds: int = 900              # lockout window on too many fails
+    session_cookie_secure: bool = True            # Secure cookie (requires TLS at nginx)
+    # CSRF defense-in-depth (SameSite=Strict is the primary gate). When True,
+    # state-changing requests whose Origin header is present and NOT in
+    # api_cors_origins are rejected. Off by default so a mis-set CORS list can't
+    # break the app; enable in the locked-down prod env.
+    csrf_protect: bool = False
+    # First super-admin bootstrap — read ONLY by scripts/seed_super_admin.py.
+    # Never commit real values; supply via env/secret store at deploy time.
+    super_admin_username: str = ""
+    super_admin_password: str = ""
+    super_admin_ip: str = ""
+
+    # --- Cost model (Decision D6): tokens -> money ---------------------------
+    # USD per 1,000 tokens, per model/deployment. Rates are contract-specific —
+    # the zeros below are PLACEHOLDERS; fill from your Azure/Groq/Cohere billing
+    # agreement (or override the whole map via the LLM_PRICES env var as JSON).
+    # An unknown model falls back to "_default" and is flagged price_source=default.
+    llm_prices: dict = {
+        "gpt-5.4":                       {"input": 0.0, "output": 0.0},
+        "gpt-5.4-nano":                  {"input": 0.0, "output": 0.0},
+        "llama-3.3-70b-versatile":       {"input": 0.0, "output": 0.0},
+        "llama-3.1-8b-instant":          {"input": 0.0, "output": 0.0},
+        "Cohere-embed-v3-multilingual":  {"input": 0.0, "output": 0.0},
+        "_default":                      {"input": 0.0, "output": 0.0},
+    }
+    llm_price_currency: str = "USD"
+
     # Chat input caps (prompt-bloat / cost guard). Bound how much client-supplied
     # text reaches the LLM: the latest message plus a tail of conversation history.
     chat_max_message_chars: int = 8000

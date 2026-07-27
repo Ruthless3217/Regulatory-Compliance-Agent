@@ -13,6 +13,7 @@ from typing import Optional
 from app.database import get_db
 from app.models.submission import Submission
 from app.config import settings
+from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,8 @@ async def create_submission(
     content_type: str = Form(default="text"),
     content: Optional[str] = Form(default=None),
     file: Optional[UploadFile] = File(default=None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm=Depends(require("submission:create")),
 ):
     """
     Create a new submission for compliance analysis.
@@ -88,7 +90,8 @@ async def create_submission(
 async def list_submissions(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm=Depends(require("submission:read")),
 ):
     """List all submissions."""
     submissions = db.query(Submission).offset(skip).limit(limit).all()
@@ -113,7 +116,8 @@ async def list_submissions(
 @router.get("/{submission_id}")
 async def get_submission(
     submission_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm=Depends(require("submission:read")),
 ):
     """Get a specific submission by ID."""
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
@@ -134,7 +138,8 @@ async def get_submission(
 @router.delete("/{submission_id}")
 async def delete_submission(
     submission_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm=Depends(require("submission:delete")),
 ):
     """Delete a submission."""
     submission = db.query(Submission).filter(Submission.id == submission_id).first()

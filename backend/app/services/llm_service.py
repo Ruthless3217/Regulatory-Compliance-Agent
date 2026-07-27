@@ -324,6 +324,7 @@ class LLMService:
                     total_tokens = getattr(usage, "total_tokens", 0)
 
                 self._update_langsmith_usage(input_tokens, output_tokens, total_tokens)
+                await self._record_usage_event(usage, messages)
 
                 actual = total_tokens or estimate
                 if limiter is not None:
@@ -414,6 +415,7 @@ class LLMService:
 
                 if total_tokens > 0:
                     self._update_langsmith_usage(input_tokens, output_tokens, total_tokens)
+                await self._record_usage_event(usage if total_tokens > 0 else None, messages)
                 return
             except Exception as e:
                 logger.error(f"LLM streaming failed mid-stream: {e}")
@@ -611,6 +613,7 @@ class LLMService:
                     output_tokens,
                     token_usage or (input_tokens + output_tokens)
                 )
+                await self._record_usage_event(getattr(response, "usage", None), current_messages)
 
                 await self._log_to_json(prompt, response_text, system_prompt, context)
 
@@ -832,6 +835,33 @@ class LLMService:
                 })
         except Exception as e:
             logger.warning(f"Failed to set usage_metadata on LangSmith run: {e}")
+
+    async def _record_usage_event(self, usage, messages, *, is_retry: bool = False):
+        """Best-effort attributed token/cost ledger write (audit-trail 02).
+
+        Reads the request-scoped usage_context (user/session/submission/run/
+        feature) inside usage_recorder and stamps a per-call llm_usage_events
+        row. Never raises — a lost metering row must not fail a grade. Falls back
+        to the tiktoken prompt estimate (token_source='estimated') when a
+        provider omits usage."""
+        try:
+            from app.services.observability import usage_recorder
+
+            if usage:
+                p = getattr(usage, "prompt_tokens", 0) or 0
+                c = getattr(usage, "completion_tokens", 0) or 0
+                source = "measured"
+            else:
+                p = LLMService._count_prompt_tokens(messages)
+                c = 0
+                source = "estimated"
+            await usage_recorder.record(
+                model=self.model, provider=self.provider, profile=self.profile,
+                prompt_tokens=p, completion_tokens=c, is_retry=is_retry,
+                token_source=source,
+            )
+        except Exception:
+            pass
 
 
 # Singleton instances.

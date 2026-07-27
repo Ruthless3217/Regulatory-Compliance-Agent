@@ -17,10 +17,14 @@ from app.database import get_db
 from app.models.document_comparison import DocumentComparison
 from app.config import settings
 from app.services.comparison_service import extract_paragraphs, build_diff
+from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/comparisons", tags=["Comparisons"])
+router = APIRouter(
+    prefix="/comparisons", tags=["Comparisons"],
+    dependencies=[Depends(require("comparison:use"))],
+)
 
 ALLOWED_CONTENT_TYPES = {
     "application/pdf": "pdf",

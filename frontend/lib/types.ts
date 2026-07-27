@@ -228,3 +228,159 @@ export interface DocumentComparison {
   diff_result?: DiffBlock[] | null;
   created_at: string;
 }
+
+/* ---------- auth & RBAC (Phase 2) ---------- */
+
+export type Role = "user" | "admin" | "super_admin";
+
+/** The authenticated principal, as returned by `GET /auth/me`. */
+export interface Me {
+  id: string;
+  username: string;
+  role: Role;
+  must_change_password: boolean;
+}
+
+/** The minimal payload `POST /auth/login` returns on success (200). */
+export interface LoginResult {
+  role: Role;
+  must_change_password: boolean;
+}
+
+/* ---------- super-admin console (Phase 6) ----------
+ *
+ * Shapes mirror the SQL rollups in audit-trail/02 §7 and the models in
+ * backend/app/models/{analysis_run,user_session,llm_usage_event,audit_event}.py.
+ * Numeric money columns (Postgres NUMERIC) may serialize as strings, so every
+ * console formatter coerces through Number(...) before rendering.
+ */
+
+/** One row of `GET /super_admin/users` — account + status + activity rollup. */
+export interface UserRow {
+  id: string;
+  username: string | null;
+  role: Role;
+  registered_ip: string | null;
+  is_active: boolean;
+  must_change_password?: boolean;
+  last_login_at?: string | null;
+  created_at?: string | null;
+  /** Lifetime (or period) analysis runs attributed to this user. */
+  runs?: number;
+  /** Lifetime (or period) spend attributed to this user, USD. */
+  total_cost_usd?: number | string | null;
+}
+
+/** One row of `GET /super_admin/usage/summary` — per-user tokens + cost. */
+export interface UsageSummaryRow {
+  user_id?: string | null;
+  username: string | null;
+  role?: Role | string | null;
+  input_tokens: number;
+  output_tokens: number;
+  total_cost_usd: number | string;
+  runs: number;
+  // Not returned by the backend summary rollup; the page falls back to
+  // input+output for the total and shows "—" for sessions.
+  total_tokens?: number;
+  sessions?: number;
+}
+
+/** One row of `GET /super_admin/usage/by-document` — per-submission rollup. */
+export interface DocUsageRow {
+  submission_id: string;
+  title: string;
+  graded_by: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  total_cost_usd: number | string;
+  /** MAX(run_number) — total runs incl. re-runs for this document. */
+  total_runs: number;
+  last_run?: string | null;
+}
+
+/** One point of `GET /super_admin/usage/timeseries` — daily cost/tokens. */
+export interface UsageTimeseriesPoint {
+  day: string;
+  total_tokens: number;
+  total_cost_usd: number | string;
+}
+
+/**
+ * One row of the `per_user_active_time` rollup returned alongside
+ * `GET /super_admin/sessions`. Not currently rendered (the sessions page reads
+ * only the `sessions` array), but typed so the response contract is complete.
+ */
+export interface PerUserActiveTime {
+  username: string | null;
+  sessions: number;
+  active_seconds: number;
+}
+
+/** One row of `GET /super_admin/runs` (and `/submissions/{id}/runs`). */
+export interface RunRow {
+  id: string;
+  submission_id: string;
+  submission_title?: string | null;
+  triggered_by?: string | null;
+  username?: string | null;
+  session_id?: string | null;
+  run_number: number;
+  is_rerun: boolean;
+  trigger_source: string; // sync | async | stream
+  status: string; // running | completed | needs_review | failed
+  compliance_check_id?: string | null;
+  degraded_reason?: string | null;
+  started_at: string;
+  finished_at?: string | null;
+  duration_ms?: number | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  total_cost_usd: number | string;
+}
+
+/** One row of `GET /super_admin/sessions` — login session for session-time. */
+export interface SessionRow {
+  id: string;
+  user_id?: string | null;
+  username?: string | null;
+  ip?: string | null;
+  user_agent?: string | null;
+  login_at: string;
+  last_seen_at?: string | null;
+  logout_at?: string | null;
+  duration_seconds?: number | null;
+  status: string; // active | closed | expired
+}
+
+/** One row of `GET /super_admin/audit` — an append-only audit event. */
+export interface AuditRow {
+  id: string;
+  event_type: string;
+  actor_user_id?: string | null;
+  actor_username?: string | null;
+  actor_role?: string | null;
+  actor_ip?: string | null;
+  session_id?: string | null;
+  target_type?: string | null;
+  target_id?: string | null;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+  created_at: string;
+}
+
+/** One row of `GET /super_admin/rules/audit` — a rule-change timeline entry. */
+export interface RuleAuditRow {
+  id: string;
+  event_type: string; // rule_created | rule_updated | rule_deactivated | rule_deleted
+  actor_user_id?: string | null;
+  actor_username?: string | null;
+  actor_role?: string | null;
+  target_id?: string | null; // rule id
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+  created_at: string;
+}

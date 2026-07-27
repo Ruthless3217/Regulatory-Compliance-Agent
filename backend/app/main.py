@@ -3,7 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 from .config import settings
-from .api.routes import submissions, compliance, dashboard, rules, chat, similar, rag_health, knowledge_base, comparisons
+from .api.routes import submissions, compliance, dashboard, rules, chat, similar, rag_health, knowledge_base, comparisons, auth, admin_console
+from .auth.middleware import AuthContextMiddleware
+from .auth.csrf import CsrfOriginMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -29,6 +31,7 @@ async def lifespan(app: FastAPI):
             Violation, ContentChunk, AgentExecution,
             AgentTrace, ToolInvocation, ComplianceState,
             DocumentComparison,
+            UserSession, AnalysisRun, LlmUsageEvent, AuditEvent,
         )
         logger.info("✅ Database models registered (schema managed by Alembic)")
     except Exception as e:
@@ -104,7 +107,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Auth context middleware — binds usage_context(user_id, session_id) for any
+# request with a valid session so LLM calls are attributed to the acting user.
+# (Enforcement is per-route via require(...); this middleware never blocks.)
+app.add_middleware(AuthContextMiddleware)
+
+# CSRF Origin check (flag-gated via settings.csrf_protect; added last so it is
+# the outermost layer and rejects cross-origin mutations before any processing).
+app.add_middleware(CsrfOriginMiddleware)
+
 # Include routers - Compliance Agent only
+app.include_router(auth.router)
+app.include_router(admin_console.router)
 app.include_router(submissions.router)
 app.include_router(compliance.router)
 app.include_router(dashboard.router)

@@ -72,14 +72,23 @@ class ComplianceEngine:
 
     @staticmethod
     @traceable(run_type="chain", name="ComplianceEngine.analyze_submission")
-    async def analyze_submission(submission_id: str, db: Session) -> Optional[ComplianceCheck]:
+    async def analyze_submission(
+        submission_id: str,
+        db: Session,
+        *,
+        triggered_by: Optional[str] = None,
+        session_id: Optional[str] = None,
+        trigger_source: str = "sync",
+    ) -> Optional[ComplianceCheck]:
         """
         Entry point for compliance analysis using LangGraph.
-        
+
         Args:
             submission_id: UUID of the submission to analyze
             db: Database session
-            
+            triggered_by: acting user id (for run/cost attribution); falls back to
+                the submission's owner. session_id/trigger_source tag the run.
+
         Returns:
             ComplianceCheck if the run was gradeable and persisted; None if the
             run was not persistable (status set to 'needs_review' for degraded
@@ -144,6 +153,29 @@ class ComplianceEngine:
                 }
             }
 
+            # 5b. Open a first-class analysis_runs row (covers re-runs AND
+            #     fail-closed runs that persist no ComplianceCheck but still burn
+            #     tokens) and bind the usage_context so every LLM call inside the
+            #     graph attributes to this user/session/submission/run. Reset +
+            #     rolled-up close happen in the finally below.
+            import types as _types
+            from app.services import run_tracker
+            from app.services.observability.usage_context import (
+                UsageContext, bind_usage_context, reset_usage_context,
+            )
+
+            actor_id = triggered_by or (str(submission.submitted_by) if submission.submitted_by else None)
+            run = run_tracker.open(
+                db, submission_id=submission_id,
+                user=(_types.SimpleNamespace(id=actor_id) if actor_id else None),
+                session_id=session_id, trigger_source=trigger_source,
+            )
+            usage_token = bind_usage_context(UsageContext(
+                user_id=actor_id, session_id=session_id,
+                submission_id=str(submission_id), run_id=str(run.id), feature="analysis",
+            ))
+            run_status, run_check_id, run_degraded = "failed", None, None
+
             try:
                 logger.info(f"Starting LangGraph analysis for submission {submission_id}")
 
@@ -162,6 +194,7 @@ class ComplianceEngine:
                 if not can_persist:
                     needs_review = block_reason in ComplianceEngine._NEEDS_REVIEW_REASONS
                     submission.status = "needs_review" if needs_review else "failed"
+                    run_status, run_degraded = submission.status, block_reason
                     logger.error(
                         f"Refusing to persist gradeable result for submission "
                         f"{submission_id}: reason={block_reason}. "
@@ -181,6 +214,7 @@ class ComplianceEngine:
                     scores=final_state.get("scores", {}),
                     db=db
                 )
+                run_status, run_check_id = "completed", compliance_check.id
 
                 # 7. Flip RAG chunk status to 'analyzed' so they become eligible
                 # for cross-submission similarity search. Non-fatal on failure.
@@ -204,6 +238,26 @@ class ComplianceEngine:
                 # context next. Previously this block was dead (`pass`), so the
                 # token was never reset.
                 GraphContext.reset(token)
+                reset_usage_context(usage_token)
+                # Close the run: roll up this run's tokens/cost, set status +
+                # (nullable) compliance_check_id + duration. Runs for EVERY exit
+                # path — success, fail-closed, and exceptions — so degraded runs
+                # that spent tokens are still costed. Best-effort: a metering
+                # failure must not mask the real result/exception.
+                try:
+                    run_tracker.close(
+                        db, run, status=run_status,
+                        degraded_reason=run_degraded, compliance_check_id=run_check_id,
+                    )
+                    from app.services.observability import audit as _audit
+                    await _audit.record(
+                        "analysis_finished", metadata={
+                            "run_id": str(run.id), "run_number": run.run_number,
+                            "status": run_status, "is_rerun": run.is_rerun,
+                        },
+                    )
+                except Exception as _e:
+                    logger.warning(f"run_tracker.close/audit failed (non-fatal): {_e}")
 
         except Exception as e:
             traceback.print_exc()

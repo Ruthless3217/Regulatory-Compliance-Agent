@@ -6,7 +6,7 @@ Handles CRUD for compliance rules and AI-based rule generation from documents.
 import logging
 import os
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 from typing import Optional, List
@@ -14,12 +14,28 @@ from typing import Optional, List
 from app.api.rate_limit import llm_rate_limit
 from app.database import get_db
 from app.models.rule import Rule
+from app.models.user import User
 from app.services.rule_generator_service import rule_generator_service
 from app.services.rag.indexers.rules_indexer import (
     delete_rule as rag_delete_rule,
     upsert_rule as rag_upsert_rule,
 )
 from app.schemas.rule import RuleCreate, RuleResponse
+from app.auth.dependencies import require
+from app.services.observability import audit
+
+
+def _serialize_rule(rule: Rule) -> dict:
+    """Compact rule snapshot for before/after audit records."""
+    return {
+        "id": str(rule.id),
+        "category": rule.category,
+        "rule_text": rule.rule_text,
+        "severity": rule.severity,
+        "is_active": rule.is_active,
+        "version": getattr(rule, "version", None),
+        "points_deduction": float(rule.points_deduction) if rule.points_deduction else None,
+    }
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +75,9 @@ async def _safe_rag_delete(rule_id) -> None:
 @router.post("", response_model=dict)
 async def create_rule(
     rule: RuleCreate,
-    db: Session = Depends(get_db)
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require("rules:write")),
 ):
     """Create a new compliance rule manually."""
     new_rule = rule_generator_service.create_rule(
@@ -71,6 +89,9 @@ async def create_rule(
         points_deduction=rule.points_deduction
     )
     await _safe_rag_upsert(new_rule.id, db)
+    await audit.record("rule_created", actor=user, request=request,
+                       target_type="rule", target_id=str(new_rule.id),
+                       after=_serialize_rule(new_rule))
     return {
         "id": str(new_rule.id),
         "category": new_rule.category,
@@ -86,7 +107,8 @@ async def list_rules(
     is_active: Optional[bool] = True,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=1000),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm=Depends(require("rules:read")),
 ):
     """List all compliance rules with optional filtering."""
     query = db.query(Rule)
@@ -116,7 +138,11 @@ async def list_rules(
 
 
 @router.get("/{rule_id}")
-async def get_rule(rule_id: str, db: Session = Depends(get_db)):
+async def get_rule(
+    rule_id: str,
+    db: Session = Depends(get_db),
+    _perm=Depends(require("rules:read")),
+):
     """Get a specific rule by ID."""
     rule = db.query(Rule).filter(Rule.id == rule_id).first()
     if not rule:
@@ -138,10 +164,12 @@ async def get_rule(rule_id: str, db: Session = Depends(get_db)):
 @router.patch("/{rule_id}")
 async def update_rule(
     rule_id: str,
+    request: Request,
     is_active: Optional[bool] = None,
     severity: Optional[str] = None,
     rule_text: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(require("rules:write")),
 ):
     """Update a rule.
 
@@ -158,6 +186,8 @@ async def update_rule(
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
 
+    before = _serialize_rule(rule)  # snapshot for the audit record
+
     is_content_change = (
         (severity is not None and severity != rule.severity)
         or (rule_text is not None and rule_text != rule.rule_text)
@@ -170,6 +200,11 @@ async def update_rule(
         db.commit()
         db.refresh(rule)
         await _safe_rag_upsert(rule.id, db)
+        await audit.record(
+            "rule_activated" if rule.is_active else "rule_deactivated",
+            actor=user, request=request, target_type="rule", target_id=str(rule.id),
+            before=before, after=_serialize_rule(rule),
+        )
         return {
             "id": str(rule.id), "category": rule.category, "rule_text": rule.rule_text,
             "severity": rule.severity, "is_active": rule.is_active, "version": rule.version,
@@ -207,6 +242,12 @@ async def update_rule(
     # New version goes into RAG; old row stays (is_active=false → filtered out).
     await _safe_rag_upsert(new_rule.id, db)
 
+    await audit.record(
+        "rule_updated", actor=user, request=request, target_type="rule",
+        target_id=str(new_rule.id), before=before, after=_serialize_rule(new_rule),
+        metadata={"version": new_rule.version, "superseded": str(rule.id)},
+    )
+
     return {
         "id": str(new_rule.id),
         "category": new_rule.category,
@@ -219,27 +260,37 @@ async def update_rule(
 
 
 @router.delete("/{rule_id}")
-async def delete_rule(rule_id: str, db: Session = Depends(get_db)):
+async def delete_rule(
+    rule_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require("rules:write")),
+):
     """Delete a rule."""
     rule = db.query(Rule).filter(Rule.id == rule_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
 
+    before = _serialize_rule(rule)
     db.delete(rule)
     db.commit()
 
     await _safe_rag_delete(rule_id)
+    await audit.record("rule_deleted", actor=user, request=request,
+                       target_type="rule", target_id=str(rule_id), before=before)
 
     return {"message": "Rule deleted", "id": rule_id}
 
 
 @router.post("/generate-from-document", dependencies=[Depends(llm_rate_limit)])
 async def generate_rules_from_document(
+    request: Request,
     title: str = Form(...),
     instructions: Optional[str] = Form(default=None),
     file: Optional[UploadFile] = File(default=None),
     content: Optional[str] = Form(default=None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(require("rules:generate")),
 ):
     """
     Generate compliance rules from a document using AI.
@@ -293,14 +344,17 @@ async def generate_rules_from_document(
         )
         document_content = document_content[:_MAX_DOC_CHARS]
 
-    # v1 has no auth; created_by is nullable on the rules table. Passing None
-    # avoids the FK to a non-existent system-user row.
+    # Attribute generated rules to the authenticated actor (created_by FK).
     result = await rule_generator_service.generate_rules_from_text(
         document_content=document_content,
         document_title=title,
-        created_by_user_id=None,
+        created_by_user_id=str(user.id),
         db=db,
         instructions=instructions
     )
+
+    await audit.record("rules_generated", actor=user, request=request,
+                       target_type="rule",
+                       metadata={"title": title, "result_summary": str(result)[:500]})
 
     return result

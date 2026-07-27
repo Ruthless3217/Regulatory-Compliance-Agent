@@ -32,9 +32,12 @@ from app.services.rag.retrievers.source_docs_retriever import (
 
 from app.config import settings
 from app.services.llm_budget import llm_budget_guard
+from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/chat", tags=["Chat"])
+router = APIRouter(
+    prefix="/chat", tags=["Chat"], dependencies=[Depends(require("chat:use"))]
+)
 
 
 def clamp_text(text: str, max_chars: int) -> str:

@@ -7,6 +7,7 @@ import { SeverityBadge, Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { categoryLabel } from "@/lib/format";
 import { updateRule, deleteRule } from "@/lib/api";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 import type { Rule } from "@/lib/types";
 
@@ -22,6 +23,10 @@ type Sev = (typeof SEVERITIES)[number];
 type Active = "all" | "active" | "inactive";
 
 export function RulesTable({ initialRules }: Props) {
+  // Rule mutation (toggle/edit/delete) is admin-only. A `user` sees a read-only
+  // library; the API 403s any mutation regardless, so this is UX-only.
+  const { role } = useAuth();
+  const canEdit = role !== "user";
   const [rules, setRules] = React.useState<Rule[]>(initialRules);
   const [cat, setCat] = React.useState<Cat>("all");
   const [sev, setSev] = React.useState<Sev>("all");
@@ -117,13 +122,13 @@ export function RulesTable({ initialRules }: Props) {
               <th className="px-4 py-3 micro-label w-[90px]">Severity</th>
               <th className="px-4 py-3 micro-label">Rule</th>
               <th className="px-4 py-3 micro-label w-[110px] text-right">Status</th>
-              <th className="px-4 py-3 micro-label w-[120px] text-right">Actions</th>
+              {canEdit && <th className="px-4 py-3 micro-label w-[120px] text-right">Actions</th>}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={canEdit ? 5 : 4} className="px-4 py-10 text-center text-muted-foreground">
                   No rules match this filter.
                 </td>
               </tr>
@@ -145,48 +150,63 @@ export function RulesTable({ initialRules }: Props) {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => toggle(r)}
-                      disabled={pending.has(r.id)}
-                      className={cn(
-                        "rounded-sm border px-2 py-0.5 text-xs uppercase tracking-micro transition-colors",
-                        r.is_active
-                          ? "border-success text-success hover:bg-success/10"
-                          : "border-border text-muted-foreground hover:bg-muted"
-                      )}
-                    >
-                      {r.is_active ? "active" : "inactive"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {editingId === r.id ? (
-                      <div className="inline-flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={saveEdit} disabled={pending.has(r.id)}>
-                          <Check className="h-4 w-4 text-success" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={cancelEdit}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => toggle(r)}
+                        disabled={pending.has(r.id)}
+                        className={cn(
+                          "rounded-sm border px-2 py-0.5 text-xs uppercase tracking-micro transition-colors",
+                          r.is_active
+                            ? "border-success text-success hover:bg-success/10"
+                            : "border-border text-muted-foreground hover:bg-muted"
+                        )}
+                      >
+                        {r.is_active ? "active" : "inactive"}
+                      </button>
                     ) : (
-                      <div className="inline-flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => startEdit(r)} title="Edit rule">
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => remove(r)}
-                          disabled={pending.has(r.id)}
-                          title="Delete rule"
-                          className="text-muted-foreground hover:text-sev-critical"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                      <span
+                        className={cn(
+                          "inline-block rounded-sm border px-2 py-0.5 text-xs uppercase tracking-micro",
+                          r.is_active
+                            ? "border-success text-success"
+                            : "border-border text-muted-foreground"
+                        )}
+                      >
+                        {r.is_active ? "active" : "inactive"}
+                      </span>
                     )}
                   </td>
+                  {canEdit && (
+                    <td className="px-4 py-3 text-right">
+                      {editingId === r.id ? (
+                        <div className="inline-flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={saveEdit} disabled={pending.has(r.id)}>
+                            <Check className="h-4 w-4 text-success" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={cancelEdit}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="inline-flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => startEdit(r)} title="Edit rule">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => remove(r)}
+                            disabled={pending.has(r.id)}
+                            title="Delete rule"
+                            className="text-muted-foreground hover:text-sev-critical"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))
             )}

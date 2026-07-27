@@ -68,8 +68,12 @@ _WINDOW_SECONDS = 60
 
 
 def _principal(request: Request) -> str:
-    """Identify the caller for rate-limiting. Prefer an API key header (stable
-    per-client) over IP, which behind a proxy is the proxy's address."""
+    """Identify the caller for rate-limiting. Prefer the authenticated user id
+    (set by the auth middleware) — most precise — then an API key header, then
+    IP, which behind a proxy is the proxy's address."""
+    user_id = getattr(getattr(request, "state", None), "user_id", None)
+    if user_id:
+        return f"user:{user_id}"
     api_key = request.headers.get("x-api-key") or request.headers.get("authorization")
     if api_key:
         # Don't key on the raw secret — use a short stable suffix.

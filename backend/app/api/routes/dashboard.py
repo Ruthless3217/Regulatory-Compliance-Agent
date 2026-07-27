@@ -12,8 +12,11 @@ from app.models.submission import Submission
 from app.models.compliance_check import ComplianceCheck
 from app.models.violation import Violation
 from app.models.rule import Rule
+from app.auth.dependencies import require
 
-router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+router = APIRouter(
+    prefix="/dashboard", tags=["Dashboard"], dependencies=[Depends(require("dashboard:view"))]
+)
 
 
 @router.get("/summary")
