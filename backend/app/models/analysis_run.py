@@ -1,6 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Numeric, Index, desc
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from ..database import Base
@@ -25,6 +25,10 @@ class AnalysisRun(Base):
     completion_tokens = Column(Integer, nullable=False, default=0)
     total_tokens = Column(Integer, nullable=False, default=0)
     total_cost_usd = Column(Numeric(12, 6), nullable=False, default=0)
+    # Observability extract of the final graph state: retrieval scope +
+    # per-candidate accept/reject debug, grounding mix, degradation flags
+    # (migration 0022, RETRIEVAL_RCA.md §4).
+    run_metadata = Column(JSONB, nullable=True)
 
     # Relationships
     submission = relationship("Submission", backref="runs")

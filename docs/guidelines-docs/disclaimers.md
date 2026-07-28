@@ -16,7 +16,7 @@ The Unit Linked Insurance Products do not offer any liquidity during the first f
 
 ULIPs are different from the traditional insurance products and are subject to the risk factors. The premium paid in ULIPs are subject to investment risks associated with capital markets and the NAVs of the units may go up or down based on the performance of fund and factors influencing the capital market and the insured is responsible for his/her decisions. Please know the associated risks and the applicable charges, from your Insurance agent or the Intermediary or policy document issued by the insurance company. The various funds offered under this contract are the names of the funds and do not in any way indicate the quality of these plans, their future prospects and returns.
 
-The views stated in this article are not to be construed as investment advice and readers are suggested to seek independent financial advice before making any investment decisions. For more details on risk factors, terms and conditions please read the sales brochure & policy document (available on www.bajajlifeinsurance.com) carefully before concluding a sale. Bajaj Life Insurance Limited (Formerly known as Bajaj Allianz Life Insurance Company Limited) Reg. Office Address: Bajaj Insurance House, Airport Road, Yerawada, Pune - 411006. CIN: U66010PN2001PLC015959,  call us on Customer Care No. 020-6712 1212 , mail us on: customercare@bajajlife.com. The Logo of Bajaj Life Insurance Limited is provided on the basis of license given by Bajaj Finserv Ltd. to use its “Bajaj” Logo.
+The views stated in this article are not to be construed as investment advice and readers are suggested to seek independent financial advice before making any investment decisions. For more details on risk factors, terms and conditions please read the sales brochure & policy document (available on www.bajajlifeinsurance.com) carefully before concluding a sale. Bajaj Life Insurance Limited (Formerly known as Bajaj Allianz Life Insurance Company Limited) Reg. Office Address: Bajaj Insurance House, Airport Road, Yerawada, Pune - 411006. CIN: U66010PN2001PLC015959, call us on Customer Care No. 020-6712 1212 , mail us on: customercare@bajajlife.com. The Logo of Bajaj Life Insurance Limited is provided on the basis of license given by Bajaj Finserv Ltd. to use its “Bajaj” Logo.
 ```
 
 ## Tax Disclaimer for Section 123 and 11
@@ -71,14 +71,14 @@ Past performance of the Company doesn't construe any indication of future bonuse
 The product is subject to the overall performance of the Company in terms of investments, management of expenses, mortality and lapses
 ```
 
-## Past Performance **
+## Past Performance
 
-When required: Past Performance ** (trigger id `past_performance`).
+When required: Past Performance (trigger id `past_performance`).
 
 Mandated text (verbatim):
 
 ```
-**Past performance is not indicative of future performance.
+Past performance is not indicative of future performance.
 ```
 
 ## Generic Tax Disclaimer
@@ -98,7 +98,7 @@ When required: General Product Disclaimer (trigger id `general_product`).
 Mandated text (verbatim):
 
 ```
-The views stated in this article are not to be construed as investment advice and readers are suggested to seek independent financial advice before making any investment decisions. For more details on risk factors, terms and conditions please read the sales brochure & policy document (available on www.bajajlifeinsurance.com) carefully before concluding a sale. Bajaj Life Insurance Limited (Formerly known as Bajaj Allianz Life Insurance Company Limited) Reg. Office Address: Bajaj Insurance House, Airport Road, Yerawada, Pune - 411006. CIN: U66010PN2001PLC015959,  call us on Customer Care No. 020-6712 1212 , mail us on: customercare@bajajlife.com. The Logo of Bajaj Life Insurance Limited is provided on the basis of license given by Bajaj Finserv Ltd. to use its “Bajaj” Logo.
+The views stated in this article are not to be construed as investment advice and readers are suggested to seek independent financial advice before making any investment decisions. For more details on risk factors, terms and conditions please read the sales brochure & policy document (available on www.bajajlifeinsurance.com) carefully before concluding a sale. Bajaj Life Insurance Limited (Formerly known as Bajaj Allianz Life Insurance Company Limited) Reg. Office Address: Bajaj Insurance House, Airport Road, Yerawada, Pune - 411006. CIN: U66010PN2001PLC015959, call us on Customer Care No. 020-6712 1212 , mail us on: customercare@bajajlife.com. The Logo of Bajaj Life Insurance Limited is provided on the basis of license given by Bajaj Finserv Ltd. to use its “Bajaj” Logo.
 ```
 
 ## Generic (non Product)

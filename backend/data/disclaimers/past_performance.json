@@ -1,7 +1,7 @@
 {
   "id": "past_performance",
-  "type": "Past Performance **",
-  "text": "**Past performance is not indicative of future performance.",
+  "type": "Past Performance",
+  "text": "Past performance is not indicative of future performance.",
   "anchors": [],
   "severity": "high",
   "altered_severity": "moderate",

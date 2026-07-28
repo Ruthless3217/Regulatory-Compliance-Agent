@@ -76,10 +76,23 @@ export type ActionType =
   | "remove";
 
 export interface ViolationMetadata {
-  grounding?: "precedent" | "rule" | "novel";
+  grounding?: "precedent" | "rule" | "novel" | "disclosure" | "product_fact";
   action_type?: ActionType | string;
   evidence_needed?: string | null;
   regulatory_basis?: string | null;
+  // Mandatory-disclosure explainability payload (2026-07-28). Present only on
+  // grounding === "disclosure" findings.
+  verdict_provenance?: "deterministic_rule" | "hybrid" | string;
+  match_method?: string;
+  match_reason?: string;
+  normalized_similarity?: number;
+  raw_similarity?: number;
+  evidence_span?: string;
+  token_overlap?: number;
+  critical_tokens_missing?: string[];
+  decision_trace?: string[];
+  counterfactual?: string;
+  approved_wording?: string;
   [k: string]: unknown;
 }
 

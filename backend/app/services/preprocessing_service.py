@@ -454,6 +454,20 @@ class ContextEngineeringService:
         # Strip noise before extracting body
         for noise in soup(["script", "style", "noscript", "template"]):
             noise.decompose()
+        # Hidden elements are not consumer-visible creative content — reviewer
+        # notes parked in display:none divs must not be graded as published copy.
+        hidden_re = re.compile(r"display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0")
+        hidden_count = 0
+        for el in soup.find_all(True):
+            style = (el.get("style") or "")
+            if (el.has_attr("hidden")
+                    or (el.get("aria-hidden") or "").lower() == "true"
+                    or hidden_re.search(style)):
+                hidden_count += 1
+                el.decompose()
+        if hidden_count:
+            logger.info(f"HTML extraction: dropped {hidden_count} hidden element(s) "
+                        f"(not consumer-visible)")
         body_text = soup.get_text("\n", strip=True)
 
         parts: list[str] = []
@@ -469,40 +483,156 @@ class ContextEngineeringService:
         return "\n".join(parts)
 
     async def _extract_pdf(self, file_path: str) -> str:
+        """Text-layer extraction with per-page OCR fallback.
+
+        Design-exported creatives are often flattened: a page (or the footer
+        disclaimer on it) exists only as pixels or outlined vector text, which
+        pdfplumber cannot see. Any page with an empty text layer is OCR'd via
+        the Compare tool's engine (pypdfium2 + Tesseract, governed by the same
+        ``compare_ocr_*`` settings; returns [] when tooling is absent) — the
+        false 'Past Performance altered' verdict came from exactly this loss
+        (see ROOT_CAUSE_ANALYSIS.md)."""
         try:
             import pdfplumber
-            text = []
+            pages: List[str] = []
             with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text.append(page_text)
-            return "\n\n".join(text)
+                for page_no, page in enumerate(pdf.pages, start=1):
+                    try:
+                        pages.append(page.extract_text() or "")
+                    except Exception as e:
+                        logger.warning(f"PDF page {page_no} text extraction failed: {e}")
+                        pages.append("")
         except Exception as e:
             logger.error(f"PDF extraction failed: {e}")
             return ""
 
+        if any(not p.strip() for p in pages):
+            from app.services.comparison_service import _pdf_ocr_lines
+            try:
+                ocr_pages = _pdf_ocr_lines(file_path)
+            except Exception as e:
+                logger.warning(f"PDF OCR fallback failed: {e}")
+                ocr_pages = []
+            for i, ptext in enumerate(pages):
+                if not ptext.strip() and i < len(ocr_pages) and ocr_pages[i]:
+                    pages[i] = "\n".join(ocr_pages[i])
+                    logger.info(f"PDF page {i + 1}: recovered {len(pages[i])} chars via OCR")
+
+        return "\n\n".join(p for p in pages if p.strip())
+
     async def _extract_docx(self, file_path: str) -> str:
+        """Extract every consumer-VISIBLE surface of a Word document.
+
+        ``Document.paragraphs`` covers only body paragraphs — footers, headers,
+        tables and text boxes are invisible to it, and mandated disclaimers
+        live precisely there (the 'Past Performance' false mismatch was a
+        footer disclaimer silently dropped here). Word COMMENTS and tracked
+        changes are deliberately NOT extracted: they are reviewer metadata,
+        not published creative content."""
         try:
             from docx import Document
             doc = Document(file_path)
             parts: List[str] = []
-            for para in doc.paragraphs:
-                text = para.text.strip()
+
+            # Body in document order (paragraphs + tables interleaved) when the
+            # installed python-docx supports it; otherwise paragraphs then tables.
+            try:
+                body_items = list(doc.iter_inner_content())
+            except AttributeError:
+                body_items = list(doc.paragraphs) + list(doc.tables)
+            for item in body_items:
+                if hasattr(item, "rows"):  # a table
+                    parts.extend(self._docx_table_lines(item))
+                    continue
+                text = item.text.strip()
                 if not text:
                     continue
                 # Preserve Word heading structure as markdown so section-aware
                 # chunking can split on it. (Unstyled docs are still handled by
                 # the heading heuristic in _detect_sections.)
-                style = (getattr(para.style, "name", "") or "")
+                style = (getattr(item.style, "name", "") or "")
                 if style.startswith("Heading") or style == "Title":
                     parts.append(f"## {text}")
                 else:
                     parts.append(text)
+
+            # Text boxes (VML w:pict and DrawingML w:drawing both nest their
+            # content in w:txbxContent). Body-run iteration never descends into
+            # them, so collect via XML and label the provenance.
+            textbox_lines = self._docx_textbox_lines(doc)
+            if textbox_lines:
+                parts.append("[TEXT BOXES]")
+                parts.extend(textbox_lines)
+
+            # Headers/footers per section, deduplicated: linked sections
+            # inherit the same header/footer object and repeat its text.
+            header_lines, footer_lines = self._docx_header_footer_lines(doc)
+            if header_lines:
+                parts.append("[PAGE HEADER]")
+                parts.extend(header_lines)
+            if footer_lines:
+                parts.append("[PAGE FOOTER]")
+                parts.extend(footer_lines)
+
             return "\n\n".join(parts)
         except Exception as e:
             logger.error(f"DOCX extraction failed: {e}")
             return ""
+
+    @staticmethod
+    def _docx_table_lines(table) -> List[str]:
+        lines: List[str] = []
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells]
+            line = " | ".join(c for c in cells if c)
+            if line:
+                lines.append(line)
+        return lines
+
+    @staticmethod
+    def _docx_textbox_lines(doc) -> List[str]:
+        lines: List[str] = []
+        try:
+            from docx.oxml.ns import qn
+            move_from = qn("w:moveFrom")
+            for txbx in doc.element.body.iter(qn("w:txbxContent")):
+                for p in txbx.iter(qn("w:p")):
+                    # Skip tracked-change residue: w:moveFrom holds the stale
+                    # source of a moved run; w:del text lives in w:delText and is
+                    # excluded already by selecting w:t only.
+                    text = "".join(
+                        t.text or "" for t in p.iter(qn("w:t"))
+                        if not any(a.tag == move_from for a in t.iterancestors())
+                    ).strip()
+                    if text:
+                        lines.append(text)
+        except Exception as e:
+            logger.warning(f"DOCX text-box extraction failed (non-fatal): {e}")
+        return lines
+
+    def _docx_header_footer_lines(self, doc) -> tuple:
+        headers: List[str] = []
+        footers: List[str] = []
+        seen: set = set()
+        for sec in doc.sections:
+            for kind, container, bucket in (
+                ("header", getattr(sec, "header", None), headers),
+                ("footer", getattr(sec, "footer", None), footers),
+            ):
+                if container is None:
+                    continue
+                block: List[str] = []
+                for para in container.paragraphs:
+                    text = para.text.strip()
+                    if text:
+                        block.append(text)
+                for table in getattr(container, "tables", []):
+                    block.extend(self._docx_table_lines(table))
+                key = (kind, "\n".join(block))
+                if block and key not in seen:
+                    seen.add(key)
+                    bucket.extend(block)
+        return headers, footers
 
     def create_compliance_prompts(self, content: str, rules_dict: Dict[str, List]) -> str:
         """

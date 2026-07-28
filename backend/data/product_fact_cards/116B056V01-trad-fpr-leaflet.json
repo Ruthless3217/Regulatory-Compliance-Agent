@@ -29,7 +29,7 @@
     "min_sum_assured": null,
     "policy_term": "Rider Policy Term and Rider PPT must align with the base policy term and base PPT; numeric range not captured in this leaflet",
     "premium_payment_term": "Aligned to base policy; single / limited / regular per base; numeric range not captured",
-    "note": "This is a RIDER attachable to a base policy (illustration uses Bajaj Life Insurance eTouch II). Eligibility boundary table not recovered; female lives get a 3-year age set-back. Note this leaflet uses the legacy 'Bajaj Life Insurance' branding."
+    "note": "This is a RIDER attachable to a base policy (illustration uses Bajaj Life Insurance eTouch II). Eligibility boundary table not recovered; female lives get a 3-year age set-back. Note this leaflet uses the legacy 'Bajaj Allianz Life Insurance' branding."
   },
   "key_terms": {
     "free_look_period_days": 30,
@@ -77,7 +77,7 @@
     "gaps": [
       "Parser's primary UIN (116N198V02) is the base plan eTouch II referenced in the illustration; the rider's own UIN 116B056V01 was taken from the brochure footer/disclosure line.",
       "Numeric entry/maturity age, sum-assured and rider-term boundary table not recovered. Leaflet covers the Parental Care option; Child Care option terms differ.",
-      "Leaflet uses legacy 'Bajaj Life Insurance' branding (older filing)."
+      "Leaflet uses legacy 'Bajaj Allianz Life Insurance' branding (older filing)."
     ]
   }
 }

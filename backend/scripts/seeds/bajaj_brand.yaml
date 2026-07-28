@@ -4,9 +4,9 @@ category: brand
 generation_source: seed/bajaj_brand-2024-q1
 confidence_score: 0.9
 rules:
-  - rule_text: "The brand name must appear as 'Bajaj Life Insurance' in full at first mention; 'Bajaj Life Insurance' is acceptable thereafter. Never 'BALIC' in customer-facing copy."
+  - rule_text: "The brand name must appear as 'Bajaj Life Insurance Limited' in full at first mention; 'Bajaj Life Insurance' is acceptable thereafter. Never 'BALIC' or 'BLIL' in customer-facing copy. Historical creatives filed under 'Bajaj Allianz Life Insurance Company Limited' retain the former name; where the legal footer is required it reads 'Bajaj Life Insurance Limited (Formerly known as Bajaj Allianz Life Insurance Company Limited)'."
     severity: high
-    keywords: ["Bajaj Life Insurance", "balic"]
+    keywords: ["Bajaj Life Insurance Limited", "Bajaj Allianz Life", "balic"]
     points_deduction: -7.0
   - rule_text: "Tagline 'Jiyo Befikar' is the registered brand line; use as approved in title case, not all caps."
     severity: medium
@@ -68,7 +68,7 @@ rules:
     severity: medium
     keywords: ["award", "winner", "recognized"]
     points_deduction: -5.0
-  - rule_text: "Product names use Title Case: 'Bajaj Life Insurance Smart Wealth Goal'; never 'Bajaj Life Insurance SMART WEALTH GOAL'."
+  - rule_text: "Product names use Title Case: 'Bajaj Life Smart Wealth Goal'; never 'Bajaj Life SMART WEALTH GOAL'."
     severity: low
     keywords: ["product name", "title case", "capitalization"]
     points_deduction: -3.0

@@ -70,6 +70,27 @@ class ComplianceEngine:
             return False, "analysis_incomplete"
         return True, None
 
+    # Whitelisted observability keys persisted onto analysis_runs.run_metadata.
+    # Everything else in graph state (chunks, prompts, messages) stays out —
+    # the column is for "why did retrieval/grading behave this way", not a dump.
+    _RUN_METADATA_KEYS = (
+        "retrieval_debug", "grounding_mix", "product_match",
+        "rag_degraded", "degraded", "analysis_failed_chunks",
+        "disclosure_recall_degraded", "rag_rules_per_chunk", "precedents_per_chunk",
+    )
+
+    @staticmethod
+    def run_metadata_from_state(final_state: dict) -> dict:
+        """Compact, whitelisted extract of graph-state metadata for durable
+        run-level observability (retrieval debugger — RETRIEVAL_RCA.md §4)."""
+        md = (final_state or {}).get("metadata") or {}
+        out = {}
+        for key in ComplianceEngine._RUN_METADATA_KEYS:
+            value = md.get(key)
+            if value not in (None, {}, []):
+                out[key] = value
+        return out
+
     @staticmethod
     @traceable(run_type="chain", name="ComplianceEngine.analyze_submission")
     async def analyze_submission(submission_id: str, db: Session, user=None, session_id: str = None) -> Optional[ComplianceCheck]:
@@ -174,7 +195,10 @@ class ComplianceEngine:
                         f"Marking submission '{submission.status}' (NOT graded)."
                     )
                     db.commit()
-                    await close_run(db, run, {"status": submission.status, "error": block_reason}, user)
+                    await close_run(db, run, {
+                        "status": submission.status, "error": block_reason,
+                        "run_metadata": ComplianceEngine.run_metadata_from_state(final_state),
+                    }, user)
                     return None
 
                 # 6. Persist results. The submission status flip to 'analyzed'
@@ -203,7 +227,10 @@ class ComplianceEngine:
                 except Exception as e:
                     logger.warning(f"RAG mark-analyzed failed (non-fatal): {e}")
 
-                await close_run(db, run, {"status": "completed", "check_id": str(compliance_check.id)}, user)
+                await close_run(db, run, {
+                    "status": "completed", "check_id": str(compliance_check.id),
+                    "run_metadata": ComplianceEngine.run_metadata_from_state(final_state),
+                }, user)
                 return compliance_check
 
             finally:

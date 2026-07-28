@@ -301,22 +301,61 @@ def _product_fact_finding_to_violation(
     }
 
 
+def _counterfactual_for(d: "Any", details: "Any") -> str:
+    """The minimum valid change that flips this verdict — never a change to the
+    approved rule, and never a cosmetic tweak to satisfy a flawed matcher."""
+    reason = getattr(details, "reason", "")
+    if reason == "critical_token_lost":
+        lost = ", ".join(getattr(details, "critical_tokens_missing", []) or [])
+        return (
+            f"Verdict becomes 'present' when the creative's wording restores the "
+            f"legally-critical word(s): {lost}. The approved wording itself is the fix."
+        )
+    if reason == "anchor_absent":
+        anchors = "; ".join(d.anchors or [])
+        return (
+            f"Verdict becomes 'present' when the mandated anchor text appears "
+            f"verbatim: {anchors!r}."
+        )
+    if reason == "partial_attempt":
+        return (
+            "Verdict becomes 'present' when the matched span is replaced with the "
+            "approved wording verbatim."
+        )
+    return (
+        "Verdict becomes 'present' when the approved wording appears in the "
+        "extracted document text. If the wording is already visible in the "
+        "creative (footer, image or text box), the extraction stage — not the "
+        "creative — needs fixing; no wording change is required."
+    )
+
+
 def _disclosure_finding_to_violation(
-    d: "Any", *, status: str, similarity: float, provenance: str, confidence: float
+    d: "Any", *, status: str, similarity: float, provenance: str, confidence: float,
+    details: "Any" = None, trigger_source: str = "deterministic",
 ) -> Dict[str, Any]:
     """Map one missing/altered mandated disclaimer to a violation dict.
 
     Document-level (chunk_id=None, empty current_text): a disclaimer obligation
     is about the whole document, not a single span. The verbatim registry text
     is surfaced as suggested_fix — paste-ready, never paraphrased. Severity is
-    the registry's per-disclaimer value (one notch lower for 'altered')."""
+    the registry's per-disclaimer value (one notch lower for 'altered').
+
+    ``details`` (matcher.MatchDetails) carries the evidence behind the verdict;
+    ``trigger_source`` says who established the obligation (deterministic
+    keyword/product-line vs the LLM backstop). The match itself is always
+    deterministic, so provenance is 'deterministic_rule' or 'hybrid' — never
+    'llm_interpretation'."""
     severity = d.severity if status == "missing" else d.altered_severity
     if status == "missing":
         desc = f"Required disclaimer missing: {d.type}. ({provenance})"
     else:
+        span = (getattr(details, "evidence_span", "") or "")[:90]
+        found = f'; found: "{span}"' if span else ""
         desc = (
             f"Disclaimer present but altered/incomplete: {d.type} "
-            f"(similarity {similarity:.2f}). Replace with the approved wording. ({provenance})"
+            f"(similarity {similarity:.2f}{found}). "
+            f"Replace with the approved wording. ({provenance})"
         )
     return {
         "category": "mandatory disclosure",
@@ -348,6 +387,19 @@ def _disclosure_finding_to_violation(
             "disclaimer_type": d.type,
             "match_status": status,
             "trigger_provenance": provenance,
+            # --- explainability payload (2026-07-28) ---
+            "verdict_provenance": "hybrid" if trigger_source == "llm" else "deterministic_rule",
+            "match_method": getattr(details, "match_method", None),
+            "match_reason": getattr(details, "reason", None),
+            "normalized_similarity": float(getattr(details, "similarity", similarity)),
+            "raw_similarity": float(getattr(details, "raw_similarity", 0.0)),
+            "evidence_span": getattr(details, "evidence_span", ""),
+            "token_overlap": float(getattr(details, "token_overlap", 0.0)),
+            "critical_tokens_missing": list(getattr(details, "critical_tokens_missing", []) or []),
+            "decision_trace": list(getattr(details, "decision_trace", []) or []),
+            "counterfactual": _counterfactual_for(d, details),
+            "approved_wording": d.text,
+            "rule_source": getattr(d, "source", ""),
         },
     }
 
@@ -799,12 +851,41 @@ async def dispatch_node(state: ComplianceState) -> Dict:
                     "category": r.category,
                     "severity": r.severity,
                     "keywords": r.keywords or [],
+                    # Scope tag consumed by rag.applicability (dormant column
+                    # now surfaced — RETRIEVAL_RCA.md §4).
+                    "product_line": getattr(r, "product_line", None),
                 }
                 for r in r_list
             ]
             active_agents.append(f"agent_{cat}")
 
     active_rule_count = sum(len(v) for v in rules_serializable.values())
+
+    # --- Retrieval scope: regulatory applicability BEFORE similarity ---------
+    # Product identity was resolved by the librarian; build the scope once and
+    # validate every retrieved/fallback candidate against it. Rejected
+    # candidates never reach any prompt tier — including the degraded flat-rules
+    # fallback, which previously dumped ULIP/pension/rider rules into every
+    # chunk of any product when embeddings were down (RETRIEVAL_RCA.md).
+    from app.services.fact_card_service import get_fact_card_service
+    from app.services.rag.applicability import (
+        build_scope, validate_precedents, validate_rules,
+    )
+    _md_in = state.get("metadata") or {}
+    scope = build_scope(_md_in.get("product_match") or [], get_fact_card_service())
+    product_line_by_id: Dict[str, Any] = {
+        r["id"]: r.get("product_line")
+        for r_list in rules_serializable.values() for r in r_list
+    }
+    retrieval_debug: List[Dict[str, Any]] = []
+
+    # Scope the fallback set itself (state.active_rules feeds the degraded path
+    # in _select_rules_for_chunk and the scoring category list — keys are kept
+    # even when a category empties).
+    for cat in list(rules_serializable.keys()):
+        accepted, dbg = validate_rules(rules_serializable[cat], scope, product_line_by_id)
+        rules_serializable[cat] = accepted
+        retrieval_debug.extend({**d, "tier": "active_rules_fallback"} for d in dbg)
 
     # 2. Try RAG per-chunk retrieval. On any failure, set rag_degraded=true
     #    and let analysis_node use the flat rules_serializable.
@@ -856,6 +937,13 @@ async def dispatch_node(state: ComplianceState) -> Dict:
             logger.warning(f"RAG rule retrieval failed; falling back to all-rules: {e}")
             rag_degraded = True
 
+    # Applicability validation of per-chunk retrieved rules (contract C1/C6).
+    for cid, cat_map in (chunk_rules or {}).items():
+        for cat, rule_list in cat_map.items():
+            accepted, dbg = validate_rules(rule_list, scope, product_line_by_id)
+            cat_map[cat] = accepted
+            retrieval_debug.extend({**d, "tier": "chunk_rules", "chunk_id": str(cid)} for d in dbg)
+
     md = dict(state.get("metadata") or {})
     md["rag_degraded"] = rag_degraded
     md["rag_rules_per_chunk"] = (
@@ -888,6 +976,14 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         logger.warning(f"Precedent retrieval failed (analysis will find no violations): {e}")
         retrieved_examples = {str(c.get("id")): [] for c in chunks}
 
+    # Applicability validation of retrieved precedents (contract C1/C6): a
+    # ULIP surrender precedent must not grade a term creative however similar
+    # the wording is.
+    for cid, precedent_list in retrieved_examples.items():
+        accepted, dbg = validate_precedents(precedent_list, scope)
+        retrieved_examples[cid] = accepted
+        retrieval_debug.extend({**d, "tier": "precedents", "chunk_id": str(cid)} for d in dbg)
+
     total_precedents = sum(len(v) for v in retrieved_examples.values())
     # Only label "knowledge_base_empty" when chunks exist but the knowledge
     # base returned nothing — the empty-chunks case is already labelled
@@ -900,6 +996,25 @@ async def dispatch_node(state: ComplianceState) -> Dict:
             "(scripts.ingest_knowledge_base) to enable grading."
         )
     md["precedents_per_chunk"] = {cid: len(v) for cid, v in retrieved_examples.items()}
+
+    # Retrieval debugger (contract C6): why every candidate entered or was
+    # refused. Rejections are always kept; acceptances are capped so a large
+    # run cannot bloat run metadata. used_in_final_verdict is derivable by
+    # joining violations' rule_id / cited_precedent_id onto these ids.
+    _rejected = [d for d in retrieval_debug if d["verdict"] == "rejected"]
+    _accepted = [d for d in retrieval_debug if d["verdict"] == "accepted"]
+    md["retrieval_debug"] = {
+        "scope": scope.as_dict(),
+        "candidates_total": len(retrieval_debug),
+        "rejected_total": len(_rejected),
+        "rejected": _rejected[:100],
+        "accepted_sample": _accepted[:100],
+    }
+    if _rejected:
+        logger.info(
+            "dispatch_node: applicability rejected %d/%d retrieval candidate(s) "
+            "for scope %s", len(_rejected), len(retrieval_debug), scope.as_dict(),
+        )
 
     if "agent_precedent" not in active_agents:
         active_agents.append("agent_precedent")
@@ -1187,6 +1302,11 @@ async def analysis_node(state: ComplianceState) -> Dict:
     md["analysis_failed_chunks"] = failed_chunks
     if failed_chunks and not md.get("degraded"):
         md["degraded"] = "analysis_incomplete"
+    # Verdict-origin census: makes precedent(comment)-influenced verdicts
+    # visible at run level instead of only per violation row.
+    md["grounding_mix"] = grounding_mix(new_violations)
+    if md["grounding_mix"]:
+        logger.info(f"Analysis grounding mix: {md['grounding_mix']}")
 
     return {
         "violations": new_violations,
@@ -1198,6 +1318,17 @@ async def analysis_node(state: ComplianceState) -> Dict:
             )
         )]
     }
+
+
+def grounding_mix(violations: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Count verdict origins (precedent / rule / novel / disclosure / product_fact)
+    so "did reviewer-comment-derived evidence influence this run" is a
+    first-class, queryable run fact rather than a per-row reconstruction."""
+    mix: Dict[str, int] = {}
+    for v in violations or []:
+        g = str((v.get("violation_metadata") or {}).get("grounding") or "unknown")
+        mix[g] = mix.get(g, 0) + 1
+    return mix
 
 
 def _log_grade_error(chunk_id, violation: Dict, errors: List[str]) -> None:
@@ -1220,7 +1351,7 @@ async def disclosure_node(state: ComplianceState) -> Dict:
 
     from app.services.disclaimer.registry import get_disclaimer_registry
     from app.services.disclaimer.triggers import derive_product_context, resolve_required
-    from app.services.disclaimer.matcher import classify
+    from app.services.disclaimer.matcher import match_details
     from app.services.fact_card_service import get_fact_card_service
 
     md = dict(state.get("metadata") or {})
@@ -1247,14 +1378,19 @@ async def disclosure_node(state: ComplianceState) -> Dict:
         d = registry.get(did)
         if d is None:
             continue
-        status, sim = classify(d.text, d.anchors, document_text, d.present_threshold, d.altered_threshold)
+        det = match_details(d.text, d.anchors, document_text, d.present_threshold, d.altered_threshold)
+        status, sim = det.status, det.similarity
         summary.append({"disclaimer_id": did, "status": status, "similarity": round(sim, 3),
-                        "provenance": info["provenance"], "source": info["source"]})
+                        "provenance": info["provenance"], "source": info["source"],
+                        "match_method": det.match_method, "match_reason": det.reason,
+                        "raw_similarity": round(det.raw_similarity, 3),
+                        "evidence_span": det.evidence_span[:160]})
         if status == "present":
             continue
         confidence = 1.0 if info["source"] == "deterministic" else 0.85
         violations.append(_disclosure_finding_to_violation(
-            d, status=status, similarity=sim, provenance=info["provenance"], confidence=confidence))
+            d, status=status, similarity=sim, provenance=info["provenance"],
+            confidence=confidence, details=det, trigger_source=info["source"]))
 
     if recall_degraded:
         md["disclosure_recall_degraded"] = True

@@ -53,7 +53,12 @@ async def close_run(db: Session, run: AnalysisRun, final_state: dict, user=None)
     
     if "check_id" in final_state and final_state["check_id"]:
         run.compliance_check_id = final_state["check_id"]
-        
+
+    # Durable retrieval/observability extract (migration 0022): why candidates
+    # entered or were refused from context, grounding mix, degradation flags.
+    if final_state.get("run_metadata"):
+        run.run_metadata = final_state["run_metadata"]
+
     run.degraded_reason = final_state.get("error") if status == "failed" else None
 
     db.commit()

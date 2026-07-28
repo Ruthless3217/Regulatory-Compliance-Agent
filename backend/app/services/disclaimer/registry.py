@@ -76,6 +76,16 @@ class DisclaimerRegistry:
                 )
                 self._load_errors.append(path.name)
                 continue
+            # Ingestion-artefact guard: spreadsheet footnote markers ('**') in the
+            # mandated wording corrupt the UI verdict and the suggested fix (the
+            # 'Past Performance **' incident). Warn loudly; matching itself is
+            # unaffected because the matcher normalises punctuation away.
+            for fld in ("type", "text"):
+                if "**" in str(raw.get(fld, "")):
+                    logger.warning(
+                        "DisclaimerRegistry: %s field %r contains '**' footnote/markdown "
+                        "artefacts — clean the source data", path.name, fld
+                    )
             match = raw.get("match") or {}
             disc = Disclaimer(
                 id=raw["id"],

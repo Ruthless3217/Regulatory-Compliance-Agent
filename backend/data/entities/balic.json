@@ -1,0 +1,46 @@
+{
+  "id": "balic",
+  "canonical_name": "Bajaj Life Insurance Limited",
+  "short_name": "Bajaj Life Insurance",
+  "cin": "U66010PN2001PLC015959",
+  "must_appear_as_first_mention": "Bajaj Life Insurance Limited",
+  "legal_footer_form": "Bajaj Life Insurance Limited (Formerly known as Bajaj Allianz Life Insurance Company Limited)",
+  "aliases": [
+    {
+      "name": "Bajaj Life Insurance Limited",
+      "status": "current",
+      "effective_from": "2025-01-01"
+    },
+    {
+      "name": "Bajaj Life Insurance",
+      "status": "current_short",
+      "effective_from": "2025-01-01"
+    },
+    {
+      "name": "Bajaj Allianz Life Insurance Company Limited",
+      "status": "former",
+      "effective_to": "2025-01-01"
+    },
+    {
+      "name": "Bajaj Allianz Life Insurance",
+      "status": "former",
+      "effective_to": "2025-01-01"
+    },
+    {
+      "name": "Bajaj Allianz Life",
+      "status": "former",
+      "effective_to": "2025-01-01"
+    },
+    {
+      "name": "BALIC",
+      "status": "prohibited_customer_facing"
+    },
+    {
+      "name": "BLIL",
+      "status": "prohibited_customer_facing"
+    }
+  ],
+  "alias_regex": "\\bBajaj(?:\\s+Allianz)?\\s+Life(?:\\s+Insurance)?(?:\\s+Company)?(?:\\s+Limited|\\s+Ltd\\.?)?\\b",
+  "notes": "Historical records filed under the former name remain valid regulatory records. Never rewrite historical names in stored data; map them through this registry at match time. The 2025 rename must NOT be applied as textual find-and-replace (see docs/audits/2026-07-28-brand-entity-audit.md for the damage that caused).",
+  "source": "brand rename 2025; CIN per registry filings"
+}

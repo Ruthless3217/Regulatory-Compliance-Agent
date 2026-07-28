@@ -94,6 +94,20 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
               needs review
             </Badge>
           )}
+          {violation.violation_metadata?.verdict_provenance && (
+            <Badge
+              tone="neutral"
+              title={
+                violation.violation_metadata.verdict_provenance === "hybrid"
+                  ? "Obligation detected by the LLM backstop; wording judged deterministically"
+                  : "Obligation and wording both judged deterministically"
+              }
+            >
+              {violation.violation_metadata.verdict_provenance === "hybrid"
+                ? "hybrid (LLM trigger)"
+                : "deterministic"}
+            </Badge>
+          )}
         </div>
         <div className="font-mono text-xs text-muted-foreground">
           {typeof violation.chunk_index === "number" && (
@@ -126,6 +140,34 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
           <p className="line-clamp-3 italic">“{violation.regulator_quote}”</p>
         </div>
       )}
+
+      {/* Disclosure verdict evidence: what the matcher actually looked at and
+          the minimum valid change that would flip the verdict. */}
+      {violation.violation_metadata?.grounding === "disclosure" &&
+        violation.violation_metadata.match_method && (
+          <div className="mt-3 rounded-sm border border-border bg-background p-2 text-xs">
+            <div className="micro-label mb-1">Match evidence</div>
+            <p className="text-muted-foreground">
+              {violation.violation_metadata.match_method}
+              {typeof violation.violation_metadata.normalized_similarity === "number" &&
+                ` · normalised ${violation.violation_metadata.normalized_similarity.toFixed(2)}`}
+              {typeof violation.violation_metadata.raw_similarity === "number" &&
+                ` · raw ${violation.violation_metadata.raw_similarity.toFixed(2)}`}
+              {violation.violation_metadata.match_reason &&
+                ` · ${violation.violation_metadata.match_reason.replace(/_/g, " ")}`}
+            </p>
+            {violation.violation_metadata.evidence_span && (
+              <p className="mt-1 line-clamp-2">
+                closest span: “{violation.violation_metadata.evidence_span}”
+              </p>
+            )}
+            {violation.violation_metadata.counterfactual && (
+              <p className="mt-1 italic text-muted-foreground">
+                {violation.violation_metadata.counterfactual}
+              </p>
+            )}
+          </div>
+        )}
 
       {/* Provenance: the precedent's reviewer comment, or the novel-finding
           regulatory basis. The substance behind the flag. */}

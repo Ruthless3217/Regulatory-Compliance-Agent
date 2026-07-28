@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 class FactCardService:
     def __init__(self, cards_dir: Union[str, Path]):
         self._by_uin: Dict[str, Dict[str, Any]] = {}
+        self._all_by_uin: Dict[str, List[Dict[str, Any]]] = {}
         self._cards: List[Dict[str, Any]] = []
         self._load(Path(cards_dir))
 
@@ -38,15 +39,39 @@ class FactCardService:
                 continue
             self._cards.append(card)
             self._by_uin[uin] = card
+            self._all_by_uin.setdefault(uin, []).append(card)
             for rider in (card.get("rider_uins") or []):
                 # Plan UIN wins if a rider UIN collides with a plan UIN.
                 self._by_uin.setdefault(rider, card)
+        # Product/variant records sharing one UIN (real data: 116L211V02 Supreme
+        # Gold/Horizon; 116L214V01 Smart Wealth Goal VI ×3, whose guardrails and
+        # offers_guaranteed_benefits DISAGREE). get() keeps returning the
+        # last-sorted card for compatibility, but the collision must be loud and
+        # queryable so resolution can expose the ambiguity instead of silently
+        # grading against an arbitrary variant.
+        for uin, cards in self._all_by_uin.items():
+            if len(cards) > 1:
+                names = [c.get("product_name") or "?" for c in cards]
+                logger.warning(
+                    "FactCardService: UIN collision — %s maps to %d cards %s; "
+                    "get() returns the last-sorted card, use get_all() to see "
+                    "every variant", uin, len(cards), names,
+                )
+
+    @property
+    def collisions(self) -> Dict[str, List[Dict[str, Any]]]:
+        """UINs that map to more than one fact card → all their cards."""
+        return {u: list(cs) for u, cs in self._all_by_uin.items() if len(cs) > 1}
 
     def all_products(self) -> List[Dict[str, str]]:
         return [{"uin": c["uin"], "product_name": c.get("product_name") or ""} for c in self._cards]
 
     def get(self, uin: str) -> Optional[Dict[str, Any]]:
         return self._by_uin.get(uin)
+
+    def get_all(self, uin: str) -> List[Dict[str, Any]]:
+        """Every card for this UIN (variants included), [] when unknown."""
+        return list(self._all_by_uin.get(uin) or [])
 
     def lookup_many(self, uins: Iterable[str]) -> List[Dict[str, Any]]:
         out: List[Dict[str, Any]] = []

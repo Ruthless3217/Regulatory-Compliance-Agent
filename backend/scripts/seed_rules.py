@@ -32,15 +32,21 @@ def seed_file(db, path: Path) -> int:
     confidence = float(data.get("confidence_score", 0.9))
     rules = data.get("rules", [])
 
-    existing_texts = {
-        r.rule_text
-        for r in db.query(Rule.rule_text).filter(Rule.category == category).all()
+    existing_by_text = {
+        r.rule_text: r
+        for r in db.query(Rule).filter(Rule.category == category).all()
     }
 
     inserted = 0
     for r in rules:
         text = r["rule_text"]
-        if text in existing_texts:
+        product_line = r.get("product_line")  # None = global (applies to all products)
+        existing = existing_by_text.get(text)
+        if existing is not None:
+            # Backfill the scope tag onto already-seeded rows so environments
+            # seeded before product-aware retrieval pick it up on re-run.
+            if product_line and existing.product_line != product_line:
+                existing.product_line = product_line
             continue
         db.add(
             Rule(
@@ -49,6 +55,7 @@ def seed_file(db, path: Path) -> int:
                 severity=r.get("severity", "medium"),
                 keywords=r.get("keywords") or [],
                 points_deduction=r.get("points_deduction", -5.0),
+                product_line=product_line,
                 is_active=True,
                 is_auto_generated=False,
                 generated_from_industry=category,

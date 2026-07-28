@@ -191,7 +191,10 @@ def _pdf_ocr_lines(file_path: str) -> List[List[str]]:
         for i in range(cap):
             try:
                 # scale 3.0 ≈ 216 DPI — enough for Tesseract without huge bitmaps.
-                pil = pdf[i].render(scale=3.0).to_pil()
+                # draw_annots=False: reviewer annotations (FreeText notes, stamps,
+                # popups) must not be rasterized into text that downstream
+                # consumers treat as page content — pypdfium2 draws them by default.
+                pil = pdf[i].render(scale=3.0, draw_annots=False).to_pil()
                 txt = pytesseract.image_to_string(pil) or ""
             except Exception as e:  # noqa: BLE001 — skip a page OCR can't handle
                 logger.warning("OCR failed on page %s: %s", i + 1, e)

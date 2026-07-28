@@ -40,6 +40,9 @@ def _hit_to_precedent(hit: SearchHit) -> Dict[str, Any]:
         "why_rationale": f.get("why_rationale"),
         "guideline_ref": f.get("guideline_ref"),
         "occurrence_count": f.get("occurrence_count"),
+        # Scope tag consumed by rag.applicability — was previously dropped here,
+        # which made product-aware validation impossible (RETRIEVAL_RCA.md §1).
+        "product_category": f.get("product_category"),
     }
 
 

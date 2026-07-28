@@ -48,16 +48,19 @@ _LINE_Y_TOLERANCE = 3.0
 _FULL_PAGE_TABLE_FRACTION = 0.85
 
 _UIN_RE = re.compile(r"UIN[\s:\-]*([0-9]{2,3}[A-Z][0-9]{3}V[0-9]{2})")
-#: The product name in the running-header-less marketing leaflets appears as a
-#: ``Bajaj [] Life <Name>`` phrase in the body. Capture the lead word
-#: plus up to a few following tokens; _trim_product_name keeps only the name.
+#: The product name in the marketing leaflets appears as a
+#: ``Bajaj [Allianz] Life <Name>`` phrase in the body — brochures filed before
+#: the 2025 rename carry the former "Bajaj Allianz Life" branding and remain
+#: valid regulatory records, so BOTH eras must parse. (The optional Allianz
+#: group was once deleted by a blind find-and-replace, which silently broke
+#: legacy-brochure ingestion — see docs/audits/2026-07-28-brand-entity-audit.md.)
 _PRODUCT_PHRASE_RE = re.compile(
-    r"Bajaj(?:\s+)?\s+Life\s+"
+    r"Bajaj(?:\s+Allianz)?\s+Life\s+"
     r"([A-Z][A-Za-z0-9][A-Za-z0-9\-]*(?:\s+[A-Za-z0-9][A-Za-z0-9\-]*){0,6})"
 )
 #: The insurer's own legal name — never a product. Used to reject both a
-#: company-name running header and company-name body matches.
-_COMPANY_NAME_RE = re.compile(r"bajaj\s+(?:\s+)?life\s+insurance", re.I)
+#: company-name running header and company-name body matches, in either era.
+_COMPANY_NAME_RE = re.compile(r"bajaj\s+(?:allianz\s+)?life\s+insurance", re.I)
 _DESCRIPTOR_RE = re.compile(
     r"\bAn?\b.{0,80}?(Linked|Participating).{0,80}?Plan\b", re.IGNORECASE
 )

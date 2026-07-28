@@ -17,6 +17,7 @@ rules:
     severity: critical
     keywords: ["ulip", "market risk", "risk factor"]
     points_deduction: -10.0
+    product_line: ulip
   - rule_text: "Use of the term 'guaranteed return' is permitted only for traditional plans with explicit guarantees and must specify the rate."
     severity: critical
     keywords: ["guaranteed return", "rate", "traditional plan"]
@@ -45,6 +46,7 @@ rules:
     severity: critical
     keywords: ["senior citizen", "60", "ulip", "suitability"]
     points_deduction: -10.0
+    product_line: ulip
   - rule_text: "Commission and charges (premium allocation, policy administration, fund management) must be disclosed in benefit illustrations."
     severity: high
     keywords: ["commission", "premium allocation", "policy admin charges", "fund management"]
@@ -77,6 +79,7 @@ rules:
     severity: high
     keywords: ["pension", "annuity", "tax on maturity"]
     points_deduction: -7.0
+    product_line: pension_annuity
   - rule_text: "Use of words 'best', 'cheapest', 'India's No.1' requires factual substantiation and time-bounded data source."
     severity: high
     keywords: ["best", "cheapest", "no 1", "number one"]
@@ -93,10 +96,12 @@ rules:
     severity: high
     keywords: ["rider", "critical illness", "accidental death", "waiver of premium"]
     points_deduction: -7.0
+    product_line: rider
   - rule_text: "Policy term, premium payment term, and lock-in must be clearly stated for ULIPs."
     severity: high
     keywords: ["policy term", "premium payment term", "ppt", "lock in"]
     points_deduction: -7.0
+    product_line: ulip
   - rule_text: "Mortality charge structure must be disclosed for ULIP and term plans."
     severity: medium
     keywords: ["mortality charge", "cost of insurance"]
@@ -117,6 +122,7 @@ rules:
     severity: medium
     keywords: ["group insurance", "exit", "ceases"]
     points_deduction: -5.0
+    product_line: group
   - rule_text: "GST treatment on premium must be disclosed: 'Premium amount is exclusive/inclusive of GST.'"
     severity: medium
     keywords: ["gst", "tax inclusive", "tax exclusive"]
