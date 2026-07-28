@@ -1,0 +1,36 @@
+{
+  "source": "Business product-category segregation (user-provided, 2026-07-28)",
+  "notes": "Declared reference list for the Par / Term / Non-Par / ULIP market segments. Runtime segment derivation uses fact-card structural flags (par = is_participating, ulip = is_unit_linked, term = product_category, non_par = neither flag on individual savings/pension); tests/test_product_segments.py keeps this list and the fact cards consistent. Abbreviated names carry their expansion as an alias. Version suffixes (II/III/IV/VII) are matched version-agnostically.",
+  "segments": {
+    "par": [
+      { "name": "Bajaj Life ACE" },
+      { "name": "Bajaj Life ACE Advantage" },
+      { "name": "Bajaj Life Elite Assure" },
+      { "name": "Bajaj Life FIG Plus", "aliases": ["Bajaj Life Flexi Income Goal Plus"] }
+    ],
+    "term": [
+      { "name": "Bajaj Life eTouch II" },
+      { "name": "Bajaj Life iSecure II" },
+      { "name": "Bajaj Life Diabetic Term Plan" }
+    ],
+    "non_par": [
+      { "name": "Bajaj Life GWG", "aliases": ["Bajaj Life Guaranteed Wealth Goal"] },
+      { "name": "Bajaj Life AWG Platinum", "aliases": ["Bajaj Life Assured Wealth Goal Platinum"] },
+      { "name": "Bajaj Life Guaranteed Pension Goal II" },
+      { "name": "Bajaj Life Goal Suraksha" },
+      { "name": "Bajaj Life Saral Pension" }
+    ],
+    "ulip": [
+      { "name": "Bajaj Life SWG VII", "aliases": ["Bajaj Life Smart Wealth Goal VII"] },
+      { "name": "Bajaj Life Fortune Gain" },
+      { "name": "Bajaj Life FWG", "aliases": ["Bajaj Life Future Wealth Gain"] },
+      { "name": "Bajaj Life Gain" },
+      { "name": "Bajaj Life Supreme" },
+      { "name": "Bajaj Life MFP III", "aliases": ["Bajaj Life Magnum Fortune Plus III"] },
+      { "name": "Bajaj Life IPG III", "aliases": ["Bajaj Life Invest Protect Goal III"] },
+      { "name": "Bajaj Life GBS III", "aliases": ["Bajaj Life Goal Based Saving III"] },
+      { "name": "Bajaj Life LLG III", "aliases": ["Bajaj Life LongLife Goal III"] },
+      { "name": "Bajaj Life Goal Assure IV" }
+    ]
+  }
+}

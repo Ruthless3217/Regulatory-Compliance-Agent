@@ -21,9 +21,13 @@ from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Canonical product families = the fact-card `product_category` enum.
+# Canonical product families = the fact-card `product_category` enum, plus the
+# business MARKET SEGMENTS (Par / Term / Non-Par / ULIP — declared segregation
+# in backend/data/product_segments.json, 2026-07-28). Segments and categories
+# share one scope vocabulary so rules/precedents can be tagged with either.
 _CANONICAL = {
     "term", "ulip", "rider", "group", "savings_endowment", "pension_annuity",
+    "par", "non_par",
 }
 
 # Aliases from other taggers (precedent ingest hints, prose) → canonical.
@@ -37,6 +41,11 @@ _ALIASES = {
     "pension": "pension_annuity",
     "annuity": "pension_annuity",
     "retirement": "pension_annuity",
+    "participating": "par",
+    "non-par": "non_par",
+    "non par": "non_par",
+    "nonpar": "non_par",
+    "non-participating": "non_par",
 }
 
 
@@ -67,12 +76,41 @@ class RetrievalScope:
         }
 
 
+def derive_segments(card: Dict[str, Any]) -> FrozenSet[str]:
+    """Business market segment(s) of one fact card, derived deterministically
+    from structural flags per the declared segregation
+    (backend/data/product_segments.json):
+
+      par     — is_participating
+      ulip    — is_unit_linked
+      term    — product_category == term (its own segment, never non_par)
+      non_par — neither flag, on an individual savings/pension product
+    """
+    flags = card.get("structural_flags") or {}
+    cat = normalize_category(card.get("product_category"))
+    segs: set = set()
+    if flags.get("is_unit_linked"):
+        segs.add("ulip")
+    if flags.get("is_participating"):
+        segs.add("par")
+    if cat == "term":
+        segs.add("term")
+    if (
+        not flags.get("is_unit_linked")
+        and not flags.get("is_participating")
+        and cat in {"savings_endowment", "pension_annuity"}
+    ):
+        segs.add("non_par")
+    return frozenset(segs)
+
+
 def build_scope(product_match: List[Dict[str, Any]], fact_cards: Any) -> RetrievalScope:
     """Scope from the librarian's resolved products + their fact cards.
 
-    Structural flags widen the scope deterministically (C4): a unit-linked
-    product/rider also accepts ulip-scoped items; a participating one accepts
-    savings_endowment-scoped items."""
+    The scope is the union of the fact-card product categories and the derived
+    business market segments (C4): a unit-linked product/rider also accepts
+    ulip-scoped items; a participating one accepts par-scoped items; a
+    non-par savings/pension product accepts non_par-scoped items."""
     uins: set = set()
     cats: set = set()
     for m in product_match or []:
@@ -89,11 +127,7 @@ def build_scope(product_match: List[Dict[str, Any]], fact_cards: Any) -> Retriev
             cat = normalize_category(card.get("product_category"))
             if cat:
                 cats.add(cat)
-            flags = card.get("structural_flags") or {}
-            if flags.get("is_unit_linked"):
-                cats.add("ulip")
-            if flags.get("is_participating"):
-                cats.add("savings_endowment")
+            cats |= derive_segments(card)
     return RetrievalScope(
         uins=frozenset(uins), categories=frozenset(cats), resolved=bool(uins)
     )

@@ -92,6 +92,7 @@ rules:
     severity: medium
     keywords: ["bonus", "bonus history", "declaration"]
     points_deduction: -5.0
+    product_line: par
   - rule_text: "Riders (Critical Illness, Accidental Death, Waiver of Premium) must list inclusions and exclusions in marketing material."
     severity: high
     keywords: ["rider", "critical illness", "accidental death", "waiver of premium"]
