@@ -63,8 +63,18 @@ class FactCardService:
         """UINs that map to more than one fact card → all their cards."""
         return {u: list(cs) for u, cs in self._all_by_uin.items() if len(cs) > 1}
 
-    def all_products(self) -> List[Dict[str, str]]:
-        return [{"uin": c["uin"], "product_name": c.get("product_name") or ""} for c in self._cards]
+    def all_products(self) -> List[Dict[str, Any]]:
+        return [
+            {
+                "uin": c["uin"],
+                "product_name": c.get("product_name") or "",
+                # Marketing/feature aliases (e.g. eTouch II's "Health Management
+                # Services") so feature collateral without a product name still
+                # resolves to its product.
+                "aliases": list(c.get("marketing_aliases") or []),
+            }
+            for c in self._cards
+        ]
 
     def get(self, uin: str) -> Optional[Dict[str, Any]]:
         return self._by_uin.get(uin)

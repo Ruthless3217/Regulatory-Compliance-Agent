@@ -60,20 +60,39 @@ def resolve_products(
     # 2. Fuzzy product-name match for products not already matched by UIN.
     # One UIN emits ONE entry (the best-scoring variant name) — variant cards
     # sharing a UIN must not each consume a slot of the max_matches budget.
+    # Marketing/feature aliases (fact-card `marketing_aliases`) also resolve:
+    # feature collateral like an HMS services table carries no product name, so
+    # the alias is its only grounding. Short aliases (acronyms like "HMS") are
+    # matched on word boundaries only — partial_ratio on a 3-letter needle
+    # fires on noise like "months".
     lowered = text.lower()
     best_fuzzy: Dict[str, Dict[str, Any]] = {}
+
+    def _consider(uin: str, display_name: str, confidence: float, method: str) -> None:
+        entry = _entry(uin, display_name, confidence, method)
+        prev = best_fuzzy.get(uin)
+        if prev is None or entry["confidence"] > prev["confidence"]:
+            best_fuzzy[uin] = entry
+
     for p in products:
         if p["uin"] in seen_uins:
             continue
         name = (p.get("product_name") or "").strip()
-        if not name:
-            continue
-        score = fuzz.partial_ratio(name.lower(), lowered)
-        if score >= min_fuzzy_score:
-            entry = _entry(p["uin"], name, round(score / 100.0, 3), "name_fuzzy")
-            prev = best_fuzzy.get(p["uin"])
-            if prev is None or entry["confidence"] > prev["confidence"]:
-                best_fuzzy[p["uin"]] = entry
+        if name:
+            score = fuzz.partial_ratio(name.lower(), lowered)
+            if score >= min_fuzzy_score:
+                _consider(p["uin"], name, round(score / 100.0, 3), "name_fuzzy")
+        for alias in (p.get("aliases") or []):
+            alias = (alias or "").strip()
+            if not alias:
+                continue
+            if len(alias) < 8:
+                if re.search(rf"\b{re.escape(alias)}\b", text, re.IGNORECASE):
+                    _consider(p["uin"], name or alias, 0.9, "alias_match")
+                continue
+            score = fuzz.partial_ratio(alias.lower(), lowered)
+            if score >= min_fuzzy_score:
+                _consider(p["uin"], name or alias, round(score / 100.0, 3), "alias_match")
     fuzzy = sorted(best_fuzzy.values(), key=lambda x: x["confidence"], reverse=True)
 
     ranked = matches + fuzzy

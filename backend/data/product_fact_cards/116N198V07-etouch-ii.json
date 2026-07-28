@@ -15,6 +15,7 @@
     "offers_loan": false
   },
   "variants": ["Life Shield", "Life Shield ROP", "Life Shield Plus"],
+  "marketing_aliases": ["Health Management Services", "HMS"],
   "key_benefits": [
     "Death Benefit (Sum Assured on Death) payable to nominee",
     "Terminal Illness benefit — acceleration of death benefit, capped at Rs 2 crore",
@@ -23,7 +24,8 @@
     "Additional Accidental Death Benefit payout — ONLY under the Life Shield Plus variant",
     "Death benefit payout as lump sum and/or monthly income for 5/10/20/30/40 years",
     "Early Exit Value (Life Shield & Life Shield Plus variants)",
-    "Premium Holiday option (skip premiums for 1–3 years) and Auto Cover Continuance (defer up to 12 months)"
+    "Premium Holiday option (skip premiums for 1–3 years) and Auto Cover Continuance (defer up to 12 months)",
+    "Health Management Services (HMS) — for women: annual comprehensive health check-up (cancer screening, diabetic/thyroid/lipid profile, calcium serum, complete blood count), annual OPD specialist consultations (gynaecologist, obstetrician, dermatologist, paediatrician, orthopaedic, general physician), pregnancy OPD wallet (₹2,000, once per policy term), 36 doctor insta-consultations/year, 12 health-coach (diet & nutrition) and 12 emotional-wellness (psychologist) sessions/year, plus network discounts (10% medicines, 10% lab tests, 10% OPD, 5% IPD)"
   ],
   "riders_available": [
     "Accidental Death Benefit Rider",
@@ -61,7 +63,8 @@
     "claims_marketing_must_support": [
       "Any 'get your premiums back' / 'return of premium' / 'maturity benefit' claim is valid ONLY for the Life Shield ROP variant — must be variant-qualified.",
       "Any accidental-death-payout claim is valid ONLY for the Life Shield Plus variant.",
-      "Terminal Illness benefit is an acceleration of (not additional to) the death benefit, capped at Rs 2 crore."
+      "Terminal Illness benefit is an acceleration of (not additional to) the death benefit, capped at Rs 2 crore.",
+      "Health Management Services (HMS) claims must match the HMS service schedule exactly — service counts (36 insta-consultations/yr, 12 health-coach/yr, 12 emotional-wellness/yr), frequencies (health check-up and OPD consultations 1/yr; pregnancy OPD wallet once per policy term), and discount percentages (10% medicines/lab/OPD, 5% IPD). The women's HMS schedule is the women's package — do not generalise it to all lives."
     ],
     "claims_marketing_must_avoid": [
       "Do NOT position as an investment, savings, or wealth-creation product — it is non-linked, non-participating pure protection.",
@@ -77,8 +80,8 @@
   },
   "curation": {
     "curated_by": "claude-opus-4-8",
-    "curated_from": "brochure structural parse (pdfplumber sections) of etouch-plan-sl.pdf",
+    "curated_from": "brochure structural parse (pdfplumber sections) of etouch-plan-sl.pdf; HMS feature added 2026-07-28 from Health-Management-Services-for-Women-2.pdf (business-confirmed as an eTouch II feature)",
     "confidence": "high",
-    "gaps": ["numeric entry/maturity age and minimum sum-assured boundary table not fully recovered from parse", "plan UIN corrected from parser's first-UIN (116B056V01, a rider) to the brochure-footer plan UIN 116N198V07"]
+    "gaps": ["numeric entry/maturity age and minimum sum-assured boundary table not fully recovered from parse", "plan UIN corrected from parser's first-UIN (116B056V01, a rider) to the brochure-footer plan UIN 116N198V07", "HMS collateral covers the women's package only — the all-lives HMS schedule (if any) not yet captured"]
   }
 }
