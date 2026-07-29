@@ -29,6 +29,11 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # Explicit tag (like the frontend below) so up-shared.sh can build the image
+    # directly with `podman build -t` and compose then just RUNS it. Without a
+    # fixed name podman-compose derives `<project-dir>_backend`, which changes
+    # if the checkout is cloned to a different path.
+    image: localhost/compliance-backend:latest
     container_name: compliance-backend
     pull_policy: never
     restart: unless-stopped
