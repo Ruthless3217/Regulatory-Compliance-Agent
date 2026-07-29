@@ -96,7 +96,7 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
           )}
           {violation.violation_metadata?.verdict_provenance && (
             <Badge
-              tone="neutral"
+              tone="default"
               title={
                 violation.violation_metadata.verdict_provenance === "hybrid"
                   ? "Obligation detected by the LLM backstop; wording judged deterministically"
