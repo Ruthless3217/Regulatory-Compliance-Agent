@@ -33,12 +33,16 @@ from app.services.rag.precedent_filters import is_thin_comment
 logger = logging.getLogger(__name__)
 
 # Map a topic/title hint to a product family (best-effort; null when unknown).
+# Non-Par must be checked before Par: "non-participating" contains "participating"
+# as a substring, so the more specific needle has to win the first-match order.
 _PRODUCT_HINTS = [
     ("ULIP", ("ulip", "unit linked", "market linked")),
     ("Term", ("term insurance", "term plan", "protection")),
     ("Pension", ("pension", "retirement", "annuity")),
     ("Child", ("child", "education")),
     ("Savings", ("savings", "endowment", "guaranteed")),
+    ("Non-Par", ("non-par", "non par", "nonpar", "non-participating", "non participating")),
+    ("Par", ("participating", "with profit", "with-profit")),
 ]
 
 

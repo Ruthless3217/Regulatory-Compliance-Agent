@@ -1,8 +1,8 @@
 "use client";
 import * as React from "react";
-import { FilterChipBar, type FilterKey } from "./FilterChipBar";
+import { FilterChipBar, type FilterKey, type SelectFilterDef, type SelectFilterOption } from "./FilterChipBar";
 import { ViolationCard } from "./ViolationCard";
-import { severityOrder, normalizeSeverity } from "@/lib/format";
+import { severityOrder, normalizeSeverity, categoryLabel } from "@/lib/format";
 import type { Violation } from "@/lib/types";
 
 interface Props {
@@ -11,9 +11,66 @@ interface Props {
   setSelectedViolationId: (id: string | null) => void;
 }
 
+// Sentinels for the "no value" bucket of a facet — distinct from the "all"
+// value so a violation lacking e.g. a section_title is still reachable as its
+// own filter choice instead of silently disappearing from every specific pick.
+const UNSPECIFIED = "__unspecified__";
+const REVIEW_STATUS_OPEN = "__open__";
+
+/** Distinct present values (trimmed, deduped, alpha-sorted) plus an
+ * "Unspecified" bucket when at least one violation is missing the field. */
+function distinctOptions(
+  values: (string | null | undefined)[],
+  unspecifiedLabel: string,
+  labelFor: (v: string) => string = (v) => v
+): SelectFilterOption[] {
+  const seen = new Set<string>();
+  let hasUnspecified = false;
+  for (const raw of values) {
+    const v = (raw ?? "").trim();
+    if (!v) hasUnspecified = true;
+    else seen.add(v);
+  }
+  const opts = Array.from(seen)
+    .sort((a, b) => a.localeCompare(b))
+    .map((v) => ({ value: v, label: labelFor(v) }));
+  if (hasUnspecified) opts.push({ value: UNSPECIFIED, label: unspecifiedLabel });
+  return opts;
+}
+
+/** review_status is null until a reviewer acts (see rule_feedback_service.py
+ * — it only ever writes "actioned"), so null means "open" rather than
+ * "unspecified". */
+function reviewStatusOptions(values: (string | null | undefined)[]): SelectFilterOption[] {
+  const seen = new Set<string>();
+  let hasOpen = false;
+  for (const raw of values) {
+    const v = (raw ?? "").trim();
+    if (!v) hasOpen = true;
+    else seen.add(v);
+  }
+  const opts: SelectFilterOption[] = [];
+  if (hasOpen) opts.push({ value: REVIEW_STATUS_OPEN, label: "Open" });
+  for (const v of Array.from(seen).sort((a, b) => a.localeCompare(b))) {
+    opts.push({ value: v, label: v.charAt(0).toUpperCase() + v.slice(1) });
+  }
+  return opts;
+}
+
+/** True if `raw` (a nullable facet value) satisfies a select's current
+ * filter value, where `unspecifiedSentinel` stands in for "field is empty". */
+function matchesFacet(raw: string | null | undefined, filterValue: string, unspecifiedSentinel: string): boolean {
+  if (filterValue === "all") return true;
+  const v = (raw ?? "").trim();
+  return filterValue === unspecifiedSentinel ? !v : v === filterValue;
+}
+
 export function ViolationsPane({ violations, selectedViolationId, setSelectedViolationId }: Props) {
   const [filter, setFilter] = React.useState<FilterKey>("all");
-  const [dismissed, setDismissed] = React.useState<Set<string>>(new Set());
+  const [categoryFilter, setCategoryFilter] = React.useState("all");
+  const [productFilter, setProductFilter] = React.useState("all");
+  const [sectionFilter, setSectionFilter] = React.useState("all");
+  const [reviewStatusFilter, setReviewStatusFilter] = React.useState("all");
   const [showSuppressed, setShowSuppressed] = React.useState(false);
   const refs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -33,10 +90,45 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
     return base;
   }, [sorted]);
 
-  const filtered = React.useMemo(
-    () => (filter === "all" ? sorted : sorted.filter((v) => normalizeSeverity(v.severity) === filter)),
-    [filter, sorted]
+  // Facet option lists are derived from the full active set (not the
+  // currently-filtered one) so picking one filter never makes another
+  // filter's own options disappear out from under the user.
+  const categoryOptions = React.useMemo(
+    () => distinctOptions(sorted.map((v) => v.category), "—", categoryLabel),
+    [sorted]
   );
+  const productOptions = React.useMemo(
+    () => distinctOptions(sorted.map((v) => v.violation_metadata?.product_name), "No product tag"),
+    [sorted]
+  );
+  const sectionOptions = React.useMemo(
+    () => distinctOptions(sorted.map((v) => v.section_title), "No section"),
+    [sorted]
+  );
+  const reviewStatusOpts = React.useMemo(
+    () => reviewStatusOptions(sorted.map((v) => v.review_status)),
+    [sorted]
+  );
+
+  const filtered = React.useMemo(
+    () =>
+      sorted.filter(
+        (v) =>
+          (filter === "all" || normalizeSeverity(v.severity) === filter) &&
+          (categoryFilter === "all" || v.category === categoryFilter) &&
+          matchesFacet(v.violation_metadata?.product_name, productFilter, UNSPECIFIED) &&
+          matchesFacet(v.section_title, sectionFilter, UNSPECIFIED) &&
+          matchesFacet(v.review_status, reviewStatusFilter, REVIEW_STATUS_OPEN)
+      ),
+    [filter, categoryFilter, productFilter, sectionFilter, reviewStatusFilter, sorted]
+  );
+
+  const selectFilters: SelectFilterDef[] = [
+    { key: "category", label: "Category", value: categoryFilter, options: categoryOptions, onChange: setCategoryFilter },
+    { key: "product", label: "Product", value: productFilter, options: productOptions, onChange: setProductFilter },
+    { key: "section", label: "Section", value: sectionFilter, options: sectionOptions, onChange: setSectionFilter },
+    { key: "review-status", label: "Review status", value: reviewStatusFilter, options: reviewStatusOpts, onChange: setReviewStatusFilter },
+  ];
 
   // Scroll selected card into view when selection changes
   React.useEffect(() => {
@@ -47,7 +139,7 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col border-l border-border bg-background">
-      <FilterChipBar counts={counts} value={filter} onChange={setFilter} />
+      <FilterChipBar counts={counts} value={filter} onChange={setFilter} selectFilters={selectFilters} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="space-y-3 p-4">
           {filtered.length === 0 ? (
@@ -61,9 +153,7 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
                 index={i}
                 violation={v}
                 selected={v.id === selectedViolationId}
-                dismissed={dismissed.has(v.id)}
                 onSelect={() => setSelectedViolationId(v.id)}
-                onDismiss={() => setDismissed((d) => new Set(d).add(v.id))}
                 ref={(el) => { refs.current[v.id] = el; }}
               />
             ))
@@ -89,9 +179,7 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
                       index={i}
                       violation={v}
                       selected={v.id === selectedViolationId}
-                      dismissed={dismissed.has(v.id)}
                       onSelect={() => setSelectedViolationId(v.id)}
-                      onDismiss={() => setDismissed((d) => new Set(d).add(v.id))}
                       ref={(el) => { refs.current[v.id] = el; }}
                     />
                   ))}

@@ -25,6 +25,22 @@
 # =============================================================================
 
 services:
+  # DOCX -> PDF conversion sidecar for submission export
+  # (backend/app/services/gotenberg_client.py, config.py's gotenberg_url).
+  # Internal-only — no host port; joins shared-network so `backend` (also on
+  # shared-network) can resolve it at http://gotenberg:3000.
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: compliance-gotenberg
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shared-network
+
   backend:
     build:
       context: ./backend

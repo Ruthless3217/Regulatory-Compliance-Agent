@@ -9,7 +9,7 @@ import logging
 import traceback
 from typing import Dict, List, Any, Optional
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     from langsmith import traceable
@@ -23,6 +23,7 @@ from app.models.compliance_check import ComplianceCheck
 from app.models.violation import Violation
 from app.schemas.compliance_schemas import ComplianceAnalysisResult
 from app.services.agents.compliance.scoring import scoring_service
+from app.services.violation_serializer import serialize_violation, latest_feedback_map
 
 logger = logging.getLogger(__name__)
 
@@ -122,12 +123,33 @@ class ComplianceEngine:
                 raise ValueError(f"Submission {submission_id} not found")
 
             if submission.status == "analyzing":
-                logger.warning(
-                    f"Submission {submission_id} is already being analyzed; "
-                    f"skipping duplicate trigger (idempotency guard)."
+                from app.config import settings
+                from app.services.run_tracker import find_stale_running_run
+
+                stale_run = await find_stale_running_run(
+                    db, str(submission_id), settings.stale_analysis_run_minutes
                 )
-                db.commit()  # release the row lock
-                return None
+                if stale_run is None:
+                    logger.warning(
+                        f"Submission {submission_id} is already being analyzed; "
+                        f"skipping duplicate trigger (idempotency guard)."
+                    )
+                    db.commit()  # release the row lock
+                    return None
+
+                # Orphaned: the process running that run was killed mid-flight
+                # (container restart, OOM, --reload) so its `except Exception`
+                # handler never ran to flip the status back. Close the dead run
+                # and fall through to claim the submission for this attempt.
+                logger.warning(
+                    f"Reclaiming orphaned analysis run {stale_run.id} for "
+                    f"submission {submission_id} (stale > "
+                    f"{settings.stale_analysis_run_minutes}m, no finished_at)."
+                )
+                stale_run.status = "failed"
+                stale_run.finished_at = datetime.now(timezone.utc)
+                stale_run.degraded_reason = "orphaned_stale_run_reclaimed"
+                db.add(stale_run)
 
             # 2. Claim the submission. Commit releases the lock so readers see
             #    'analyzing' immediately.
@@ -210,7 +232,8 @@ class ComplianceEngine:
                     submission_id=str(submission_id),
                     violations=final_state.get("violations", []),
                     scores=final_state.get("scores", {}),
-                    db=db
+                    db=db,
+                    analysis_run_id=str(run.id),
                 )
 
                 # 7. Flip RAG chunk status to 'analyzed' so they become eligible
@@ -265,7 +288,8 @@ class ComplianceEngine:
         submission_id: str,
         violations: List[Dict],
         scores: Dict,
-        db: Session
+        db: Session,
+        analysis_run_id: Optional[str] = None,
     ) -> ComplianceCheck:
         """
         Persist compliance analysis results to the database.
@@ -322,6 +346,7 @@ class ComplianceEngine:
 
                 violation = Violation(
                     compliance_check_id=check.id,
+                    analysis_run_id=analysis_run_id,
                     category=cat,
                     severity=sev,
                     description=v_data.get("description", ""),
@@ -401,6 +426,7 @@ class ComplianceEngine:
             return None
 
         violations = db.query(Violation).filter(Violation.compliance_check_id == check.id).all()
+        feedback_map = latest_feedback_map(db, [v.id for v in violations])
 
         return {
             "id": str(check.id),
@@ -411,28 +437,6 @@ class ComplianceEngine:
             "scores": check.scores,
             "checked_at": check.checked_at.isoformat() if check.checked_at else None,
             "violations": [
-                {
-                    "id": str(v.id),
-                    "category": v.category,
-                    "severity": v.severity,
-                    "description": v.description,
-                    "location": v.location,
-                    "current_text": v.current_text,
-                    "suggested_fix": v.suggested_fix,
-                    "auto_fixable": v.auto_fixable,
-                    "confidence": v.confidence,
-                    "regulator_quote": v.regulator_quote,
-                    "violation_metadata": v.violation_metadata,
-                    "cited_precedent_id": str(v.cited_precedent_id) if v.cited_precedent_id else None,
-                    "cited_document_id": v.cited_document_id,
-                    "cited_source_file": v.cited_source_file,
-                    "cited_anchor_text": v.cited_anchor_text,
-                    "cited_comment_verbatim": v.cited_comment_verbatim,
-                    "cited_final_text": v.cited_final_text,
-                    "similarity_score": v.similarity_score,
-                    "suppressed": bool(v.suppressed),
-                    "suppressed_reason": v.suppressed_reason,
-                }
-                for v in violations
+                serialize_violation(v, feedback_map.get(str(v.id))) for v in violations
             ]
         }

@@ -7,18 +7,23 @@ Endpoints:
 - POST /compliance/analyze/{submission_id}/stream - SSE-streamed analysis with progress
 - GET  /compliance/results/{submission_id}        - Get analysis results
 - GET  /compliance/check/{check_id}               - Get specific check details
-- POST /compliance/violations/{violation_id}/feedback - Reviewer verdict (adaptive weights)
+- POST /compliance/violations/{violation_id}/feedback - Reviewer verdict (back-compat accept/reject shim)
+- POST /compliance/violations/{violation_id}/actions  - Reviewer action taxonomy (correct/not_violation/dismiss)
+- GET  /compliance/reviewer-actions/queues            - Open reviewer-action queue entries (feedback:review)
+- POST /compliance/reviewer-actions/{feedback_id}/resolve - Resolve a queued reviewer-action entry
+- GET  /compliance/submissions/{submission_id}/runs   - Reviewer-facing run history
+- GET  /compliance/runs/{run_id}/diff                 - Diff one run's violations against another
 - POST /compliance/check/{check_id}/reviewer-score    - Held-out reviewer score (eval only)
 """
 import asyncio
 import json
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from typing import Literal, Optional, Set
+from typing import Dict, Literal, Optional, Set
 
 from app.api.rate_limit import llm_rate_limit
 from app.services.llm_budget import llm_budget_guard
@@ -26,7 +31,10 @@ from app.database import get_db, SessionLocal
 from app.models.submission import Submission
 from app.models.compliance_check import ComplianceCheck
 from app.models.violation import Violation
+from app.models.analysis_run import AnalysisRun
+from app.models.rule_feedback import RuleFeedback
 from app.services.agents.compliance.engine import ComplianceEngine
+from app.services.violation_serializer import serialize_violation, latest_feedback_map
 from app.auth.dependencies import require
 
 logger = logging.getLogger(__name__)
@@ -52,7 +60,16 @@ async def analyze_submission(
         raise HTTPException(status_code=404, detail="Submission not found")
 
     if submission.status in ("analyzing",):
-        return {"message": "Analysis already in progress", "submission_id": submission_id}
+        from app.config import settings
+        from app.services.run_tracker import find_stale_running_run
+
+        stale_run = await find_stale_running_run(db, submission_id, settings.stale_analysis_run_minutes)
+        if stale_run is None:
+            return {"message": "Analysis already in progress", "submission_id": submission_id}
+        # Stale/orphaned run (owning process was killed mid-flight): fall
+        # through and queue a new attempt. ComplianceEngine.analyze_submission's
+        # own guard performs the actual reclaim under the row lock.
+        logger.warning(f"Submission {submission_id} has a stale 'analyzing' run; allowing reclaim.")
 
     # Queue analysis as a background task
     session_id = getattr(getattr(request, 'state', None), 'session_id', None)
@@ -154,40 +171,6 @@ def _stage_progress(status: str) -> float:
     return mapping.get(status, 0.5)
 
 
-def _serialize_violation(v: Violation) -> dict:
-    return {
-        "id": str(v.id),
-        "category": v.category,
-        "severity": v.severity,
-        "description": v.description,
-        "location": v.location,
-        "current_text": v.current_text,
-        "suggested_fix": v.suggested_fix,
-        "auto_fixable": v.auto_fixable,
-        "chunk_index": v.chunk_index,
-        "rule_id": str(v.rule_id) if v.rule_id else None,
-        "confidence": v.confidence,
-        "regulator_quote": v.regulator_quote,
-        # Reviewer-voice tags (2026-05-28): action_type, evidence_needed,
-        # grounding (precedent|novel), regulatory_basis. Live in JSONB; the UI
-        # renders them as the action/needed/source badge row.
-        "violation_metadata": v.violation_metadata,
-        # Precedent-citation provenance (Phase 1.5). All fields are nullable;
-        # populated only when the violation came from the precedent path.
-        "cited_precedent_id": str(v.cited_precedent_id) if v.cited_precedent_id else None,
-        "cited_document_id": v.cited_document_id,
-        "cited_source_file": v.cited_source_file,
-        "cited_anchor_text": v.cited_anchor_text,
-        "cited_comment_verbatim": v.cited_comment_verbatim,
-        "cited_final_text": v.cited_final_text,
-        "similarity_score": v.similarity_score,
-        # Sub-confidence-floor / structural findings: persisted but kept out of
-        # the score and surfaced in a separate "Needs review" lane in the UI.
-        "suppressed": bool(v.suppressed),
-        "suppressed_reason": v.suppressed_reason,
-    }
-
-
 async def _analyze_and_stream(submission_id: str, user=None, session_id=None):
     """
     Generator: spawns analyze in a task and polls DB state, emitting SSE events
@@ -258,7 +241,9 @@ async def _analyze_and_stream(submission_id: str, user=None, session_id=None):
                         # Group by chunk_index for the "chunk" event shape
                         by_chunk: dict[int, list] = {}
                         for v in fresh:
-                            by_chunk.setdefault(v.chunk_index or 0, []).append(_serialize_violation(v))
+                            # Freshly-created violations mid-run have no reviewer
+                            # feedback yet — no bulk lookup needed here.
+                            by_chunk.setdefault(v.chunk_index or 0, []).append(serialize_violation(v))
                         for chunk_index, violations in by_chunk.items():
                             yield _sse(
                                 "chunk",
@@ -349,6 +334,7 @@ async def get_compliance_results(
     violations = db.query(Violation).filter(
         Violation.compliance_check_id == check.id
     ).all()
+    feedback_map = latest_feedback_map(db, [v.id for v in violations])
 
     return {
         "submission_id": submission_id,
@@ -358,7 +344,7 @@ async def get_compliance_results(
         "compliance_status": check.status,
         "scores": check.scores,
         "checked_at": check.checked_at.isoformat() if check.checked_at else None,
-        "violations": [_serialize_violation(v) for v in violations],
+        "violations": [serialize_violation(v, feedback_map.get(str(v.id))) for v in violations],
         "violation_count": len(violations)
     }
 
@@ -423,6 +409,277 @@ async def submit_violation_feedback(
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail=str(e))
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# --------------------------------------------------------------------------
+# Reviewer-action taxonomy (Correct / Not-a-violation / Dismiss)
+# --------------------------------------------------------------------------
+
+# Which reviewer-supplied `reason` escalates a finding to a human-review
+# queue, and which queue. Reasons absent from this map (or no reason at all)
+# route to no queue — most actions are routine and need no escalation.
+REASON_TO_QUEUE: Dict[str, str] = {
+    "wrong_severity": "needs_severity_review",
+    "out_of_scope": "needs_legal_review",
+    "duplicate": "needs_dedup_review",
+}
+
+
+def resolve_routed_queue(reason: Optional[str]) -> Optional[str]:
+    """Pure REASON_TO_QUEUE lookup — no queue for an unmapped/absent reason."""
+    if not reason:
+        return None
+    return REASON_TO_QUEUE.get(reason)
+
+
+class ViolationActionRequest(BaseModel):
+    """The real reviewer-action taxonomy replacing the binary accept/reject
+    shim: Correct (the finding is right), Not-a-violation (it's wrong), or
+    Dismiss (skip it, no weight-update signal either way)."""
+    action: Literal["correct", "not_violation", "dismiss"]
+    reason: Optional[str] = None
+    explanation: Optional[str] = None
+    final_text: Optional[str] = None
+    severity_override: Optional[
+        Literal["critical", "high", "medium", "low", "moderate", "informational"]
+    ] = None
+
+
+@router.post("/violations/{violation_id}/actions")
+async def submit_violation_action(
+    violation_id: str,
+    payload: ViolationActionRequest,
+    user: dict = Depends(require("feedback:submit")),
+    db: Session = Depends(get_db),
+):
+    """Record a reviewer's Correct/Not-a-violation/Dismiss action.
+
+    Correct/not_violation delegate the rule-weight update to
+    `RuleFeedbackService.apply_feedback` unchanged (mapped to its
+    accept/reject vocabulary); dismiss skips weight update entirely. Either
+    way this is a real, server-persisted action — previously "Dismiss" was
+    100% client-side React state that persisted nothing (silent-discard bug).
+    """
+    from app.services.rule_feedback_service import RuleFeedbackService
+
+    try:
+        res = RuleFeedbackService.apply_action(
+            db,
+            violation_id,
+            payload.action,
+            reviewer_id=getattr(user, "id", None),
+            reason=payload.reason,
+            explanation=payload.explanation,
+            final_text=payload.final_text,
+            severity_override=payload.severity_override,
+            routed_queue=resolve_routed_queue(payload.reason),
+        )
+        import asyncio
+        from app.services.observability import audit
+        asyncio.create_task(audit.record("violation_action_submitted", actor=user, target_type="violation", target_id=violation_id, metadata=payload.model_dump()))
+        return res
+    except ValueError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class ReviewerActionResolveRequest(BaseModel):
+    note: Optional[str] = None
+
+
+@router.get("/reviewer-actions/queues")
+async def list_reviewer_action_queues(
+    queue: Optional[str] = Query(None),
+    min_occurrences: int = Query(1, ge=1),
+    user: dict = Depends(require("feedback:review")),
+    db: Session = Depends(get_db),
+):
+    """Open (unresolved) reviewer-action queue entries — optionally filtered
+    to one named queue, and to only the patterns (same rule_id + reason) that
+    recurred at least `min_occurrences` times, so a one-off doesn't drown out
+    a systemic issue.
+    """
+    q = db.query(RuleFeedback).filter(
+        RuleFeedback.routed_queue.isnot(None),
+        RuleFeedback.queue_resolved_at.is_(None),
+    )
+    if queue:
+        q = q.filter(RuleFeedback.routed_queue == queue)
+    rows = q.order_by(RuleFeedback.created_at.desc()).all()
+
+    def _pattern(r) -> tuple:
+        return (str(r.rule_id) if r.rule_id else None, r.reason)
+
+    counts: Dict[tuple, int] = {}
+    for r in rows:
+        key = _pattern(r)
+        counts[key] = counts.get(key, 0) + 1
+
+    entries = [r for r in rows if counts[_pattern(r)] >= min_occurrences]
+
+    return {
+        "queue": queue,
+        "min_occurrences": min_occurrences,
+        "entries": [
+            {
+                "id": str(r.id),
+                "violation_id": str(r.violation_id),
+                "rule_id": str(r.rule_id) if r.rule_id else None,
+                "verdict": r.verdict,
+                "reason": r.reason,
+                "comment": r.comment,
+                "routed_queue": r.routed_queue,
+                "occurrences": counts[_pattern(r)],
+                "submission_id": str(r.submission_id) if r.submission_id else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in entries
+        ],
+    }
+
+
+@router.post("/reviewer-actions/{feedback_id}/resolve")
+async def resolve_reviewer_action_queue_entry(
+    feedback_id: str,
+    payload: ReviewerActionResolveRequest,
+    user: dict = Depends(require("feedback:review")),
+    db: Session = Depends(get_db),
+):
+    """Mark one queued reviewer-action entry resolved (e.g. a severity review
+    or legal review that's been triaged)."""
+    entry = db.query(RuleFeedback).filter(RuleFeedback.id == feedback_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Reviewer-action queue entry not found")
+    if entry.routed_queue is None:
+        raise HTTPException(status_code=400, detail="Entry is not routed to any queue")
+
+    entry.queue_resolved_at = datetime.utcnow()
+    entry.queue_resolved_by = getattr(user, "id", None)
+    entry.queue_resolved_note = payload.note
+    db.commit()
+
+    return {
+        "id": str(entry.id),
+        "routed_queue": entry.routed_queue,
+        "queue_resolved_at": entry.queue_resolved_at.isoformat(),
+        "queue_resolved_by": str(entry.queue_resolved_by) if entry.queue_resolved_by else None,
+        "queue_resolved_note": entry.queue_resolved_note,
+    }
+
+
+# --------------------------------------------------------------------------
+# Reviewer-facing run history + diff
+#
+# Distinct from the existing admin-only GET /super_admin/submissions/{id}/runs
+# (gated behind usage:view, keeps cost/duration) — this surfaces only what a
+# reviewer needs (run_number, status, timing) behind submission:read.
+# --------------------------------------------------------------------------
+
+def _run_summary(r: AnalysisRun) -> dict:
+    return {
+        "id": str(r.id),
+        "run_number": r.run_number,
+        "is_rerun": bool(r.is_rerun),
+        "status": r.status,
+        "degraded_reason": r.degraded_reason,
+        "compliance_check_id": str(r.compliance_check_id) if r.compliance_check_id else None,
+        "started_at": r.started_at.isoformat() if r.started_at else None,
+        "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+        "scoring_policy_version": r.scoring_policy_version,
+    }
+
+
+@router.get("/submissions/{submission_id}/runs")
+async def list_submission_runs(
+    submission_id: str,
+    user: dict = Depends(require("submission:read")),
+    db: Session = Depends(get_db),
+):
+    """Reviewer-facing run history for a submission, oldest to newest."""
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    runs = (
+        db.query(AnalysisRun)
+        .filter(AnalysisRun.submission_id == submission_id)
+        .order_by(AnalysisRun.run_number)
+        .all()
+    )
+    return {"submission_id": submission_id, "runs": [_run_summary(r) for r in runs]}
+
+
+@router.get("/runs/{run_id}/diff")
+async def diff_run(
+    run_id: str,
+    against: str = Query("previous"),
+    user: dict = Depends(require("submission:read")),
+    db: Session = Depends(get_db),
+):
+    """Diff one run's violations against `previous` (the prior run_number for
+    the same submission) or an explicit run_id. Findings are matched across
+    runs by (rule_id, category, chunk_index, description) — each run's
+    violation rows are freshly created, so there's no stable id to join on.
+    """
+    run = db.query(AnalysisRun).filter(AnalysisRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Analysis run not found")
+
+    if against == "previous":
+        against_run = (
+            db.query(AnalysisRun)
+            .filter(
+                AnalysisRun.submission_id == run.submission_id,
+                AnalysisRun.run_number < run.run_number,
+            )
+            .order_by(AnalysisRun.run_number.desc())
+            .first()
+        )
+    else:
+        against_run = db.query(AnalysisRun).filter(AnalysisRun.id == against).first()
+        if against_run and str(against_run.submission_id) != str(run.submission_id):
+            raise HTTPException(status_code=400, detail="Runs belong to different submissions")
+
+    if against_run is None:
+        raise HTTPException(status_code=404, detail="No run to diff against")
+
+    def _violations_for(r: AnalysisRun):
+        if not r.compliance_check_id:
+            return []
+        return db.query(Violation).filter(Violation.compliance_check_id == r.compliance_check_id).all()
+
+    current_violations = _violations_for(run)
+    prior_violations = _violations_for(against_run)
+
+    def _key(v: Violation) -> tuple:
+        return (str(v.rule_id) if v.rule_id else None, v.category, v.chunk_index, v.description)
+
+    current_by_key = {_key(v): v for v in current_violations}
+    prior_by_key = {_key(v): v for v in prior_violations}
+
+    feedback_map = latest_feedback_map(db, [v.id for v in current_violations + prior_violations])
+
+    added = [
+        serialize_violation(v, feedback_map.get(str(v.id)))
+        for k, v in current_by_key.items() if k not in prior_by_key
+    ]
+    removed = [
+        serialize_violation(v, feedback_map.get(str(v.id)))
+        for k, v in prior_by_key.items() if k not in current_by_key
+    ]
+    unchanged_count = len(set(current_by_key) & set(prior_by_key))
+
+    return {
+        "run_id": str(run.id),
+        "against_run_id": str(against_run.id),
+        "run_number": run.run_number,
+        "against_run_number": against_run.run_number,
+        "added": added,
+        "removed": removed,
+        "unchanged_count": unchanged_count,
+        "summary": {"added": len(added), "removed": len(removed), "unchanged": unchanged_count},
+    }
 
 
 @router.post("/check/{check_id}/reviewer-score")

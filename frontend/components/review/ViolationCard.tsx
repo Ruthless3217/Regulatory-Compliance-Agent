@@ -3,44 +3,104 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge, Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { categoryLabel, severityClass, truthyAutoFix, normalizeSeverity } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ActionTags } from "@/components/violation/ActionTags";
 import { PrecedentNote } from "@/components/violation/PrecedentNote";
-import { submitViolationFeedback } from "@/lib/api";
-import type { Violation } from "@/lib/types";
+import { submitReviewerAction, applySubmissionRevision } from "@/lib/api";
+import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
+import type { DismissReason, NotViolationReason, ReviewerActionType, Violation } from "@/lib/types";
 
 interface Props {
   index: number;
   violation: Violation;
   selected: boolean;
-  dismissed: boolean;
   onSelect: () => void;
-  onDismiss: () => void;
 }
 
+// Legacy rows from the old binary accept/reject shim map onto the taxonomy
+// this card now speaks so a verdict recorded before 0023 still renders.
+function normalizeVerdict(v?: string | null): ReviewerActionType | null {
+  if (v === "accept") return "correct";
+  if (v === "reject") return "not_violation";
+  if (v === "correct" || v === "not_violation" || v === "dismiss") return v;
+  return null;
+}
+
+const DISMISS_REASONS: { value: DismissReason; label: string }[] = [
+  { value: "duplicate", label: "Duplicate" },
+  { value: "vague", label: "Vague" },
+  { value: "low-value", label: "Low value" },
+  { value: "insufficient-evidence", label: "Insufficient evidence" },
+  { value: "needs-human-legal-review", label: "Needs human legal review" },
+  { value: "unsupported-format", label: "Unsupported format" },
+  { value: "other", label: "Other" },
+];
+
+const NOT_VIOLATION_REASONS: { value: NotViolationReason; label: string }[] = [
+  { value: "wrong-product", label: "Wrong product" },
+  { value: "wrong-section", label: "Wrong section" },
+  { value: "wrong-context", label: "Wrong context" },
+  { value: "outdated-rule", label: "Outdated rule" },
+  { value: "retrieval-mismatch", label: "Retrieval mismatch" },
+  { value: "valid-regulatory-exception", label: "Valid regulatory exception" },
+  { value: "wrong-severity", label: "Wrong severity" },
+  { value: "hallucination", label: "Hallucination" },
+  { value: "other", label: "Other" },
+];
+
+const SELECT_CLASS =
+  "h-8 w-full rounded-md border border-border bg-background px-2.5 py-1 text-sm " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+
 export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function ViolationCard(
-  { index, violation, selected, dismissed, onSelect, onDismiss },
+  { index, violation, selected, onSelect },
   ref
 ) {
+  const { submission, setViolations } = useSubmissionWorkspace();
   const sevClass = severityClass(violation.severity).split(" ")[0]; // border-l-*
   const autoFix = truthyAutoFix(violation.auto_fixable);
 
-  // Reviewer verdict (adaptive rule weights). Re-clicking flips the verdict;
-  // the backend reverts the previous pseudo-count so nothing double-counts.
-  const [verdict, setVerdict] = React.useState<"accept" | "reject" | null>(null);
+  // Reviewer verdict (Correct / Not-a-violation / Dismiss) — the real
+  // taxonomy behind POST /compliance/violations/{id}/actions, replacing the
+  // old accept/reject shim. Initialized from the persisted verdict so it
+  // survives a reload instead of always starting null.
+  const [verdict, setVerdict] = React.useState<ReviewerActionType | null>(
+    normalizeVerdict(violation.reviewer_verdict)
+  );
   const [verdictBusy, setVerdictBusy] = React.useState(false);
+  const [activePanel, setActivePanel] = React.useState<ReviewerActionType | null>(null);
+  const [dismissReason, setDismissReason] = React.useState<DismissReason | "">("");
+  const [notViolationReason, setNotViolationReason] = React.useState<NotViolationReason | "">("");
+  const [explanation, setExplanation] = React.useState("");
+  const [finalText, setFinalText] = React.useState(violation.suggested_fix ?? "");
 
-  const sendVerdict = async (v: "accept" | "reject") => {
-    if (verdictBusy || verdict === v) return;
+  const [applyFixBusy, setApplyFixBusy] = React.useState(false);
+  const fixApplied = violation.fix_applied === true;
+
+  const togglePanel = (panel: ReviewerActionType) =>
+    setActivePanel((cur) => (cur === panel ? null : panel));
+
+  const submitAction = async (
+    action: ReviewerActionType,
+    payload: { reason?: string; explanation?: string; final_text?: string }
+  ) => {
+    if (verdictBusy) return;
     setVerdictBusy(true);
     try {
-      const res = await submitViolationFeedback(violation.id, { verdict: v });
-      setVerdict(v);
+      const res = await submitReviewerAction(violation.id, { action, ...payload });
+      setVerdict(action);
+      setActivePanel(null);
+      setViolations((prev) =>
+        prev.map((v) =>
+          v.id === violation.id
+            ? { ...v, reviewer_verdict: action, review_status: res.review_status, resolved_at: res.resolved_at }
+            : v
+        )
+      );
       if (res.weight_updated && res.reliability != null) {
-        toast.success(
-          `Verdict recorded — rule reliability now ${Math.round(res.reliability * 100)}%`
-        );
+        toast.success(`Verdict recorded — rule reliability now ${Math.round(res.reliability * 100)}%`);
       } else {
         toast.success("Verdict recorded");
       }
@@ -51,16 +111,69 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     }
   };
 
-  const applyFix = async () => {
-    if (!violation.suggested_fix) {
-      toast.message("No suggested fix on this violation");
+  const confirmCorrect = () => submitAction("correct", { final_text: finalText.trim() || undefined });
+
+  const confirmNotViolation = () => {
+    if (!notViolationReason) {
+      toast.error("Pick a reason");
       return;
     }
+    if (!explanation.trim()) {
+      toast.error("Explanation is required");
+      return;
+    }
+    submitAction("not_violation", { reason: notViolationReason, explanation: explanation.trim() });
+  };
+
+  const confirmDismiss = () => {
+    if (!dismissReason) {
+      toast.error("Pick a reason");
+      return;
+    }
+    submitAction("dismiss", { reason: dismissReason });
+  };
+
+  const applyFix = async () => {
+    const suggestedFix = violation.suggested_fix;
+    if (!suggestedFix || fixApplied || applyFixBusy) return;
+
+    const baseText = submission.current_content ?? submission.original_content ?? "";
+    const evidence = violation.current_text;
+
+    // ponytail: known ceiling — splices against the submission's content as
+    // known to THIS card at render time. Applying fixes for two different
+    // violations back-to-back in one session can clobber each other because
+    // neither knows about the other's write until the page reloads (context
+    // has no live "current document text" yet). Upgrade path: once
+    // DocumentPane/context track live current_content, read+write through it
+    // here instead of submission.current_content.
+    if (!evidence || !baseText.includes(evidence)) {
+      try {
+        await navigator.clipboard.writeText(suggestedFix);
+        toast.message("Could not auto-locate the flagged text — suggested fix copied to clipboard instead");
+      } catch {
+        toast.error("Clipboard write failed");
+      }
+      return;
+    }
+
+    setApplyFixBusy(true);
     try {
-      await navigator.clipboard.writeText(violation.suggested_fix);
-      toast.success("Suggested fix copied to clipboard");
+      const nextContent = baseText.replace(evidence, suggestedFix);
+      await applySubmissionRevision(submission.id, {
+        content: nextContent,
+        source: "apply_fix",
+        applied_violation_ids: [violation.id],
+      });
+      const appliedAt = new Date().toISOString();
+      setViolations((prev) =>
+        prev.map((v) => (v.id === violation.id ? { ...v, fix_applied: true, fix_applied_at: appliedAt } : v))
+      );
+      toast.success("Fix applied to document");
     } catch {
-      toast.error("Clipboard write failed");
+      toast.error("Could not apply fix");
+    } finally {
+      setApplyFixBusy(false);
     }
   };
 
@@ -76,7 +189,7 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
         "hover:bg-muted/40",
         sevClass,
         selected && "bg-primary-50",
-        dismissed && "opacity-50"
+        verdict === "dismiss" && "opacity-50"
       )}
     >
       <div className="mb-2 flex items-start justify-between gap-3">
@@ -186,38 +299,137 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
         <div className="flex items-center gap-1.5" title="Your verdict tunes this rule's weight">
           <span className="micro-label text-muted-foreground">Verdict</span>
           <Button
-            variant={verdict === "accept" ? "default" : "ghost"}
+            variant={verdict === "correct" ? "default" : "ghost"}
             size="sm"
             disabled={verdictBusy}
-            aria-pressed={verdict === "accept"}
-            onClick={(e) => { e.stopPropagation(); sendVerdict("accept"); }}
+            aria-pressed={verdict === "correct"}
+            onClick={(e) => { e.stopPropagation(); togglePanel("correct"); }}
           >
             Correct
           </Button>
           <Button
-            variant={verdict === "reject" ? "default" : "ghost"}
+            variant={verdict === "not_violation" ? "default" : "ghost"}
             size="sm"
             disabled={verdictBusy}
-            aria-pressed={verdict === "reject"}
-            onClick={(e) => { e.stopPropagation(); sendVerdict("reject"); }}
+            aria-pressed={verdict === "not_violation"}
+            onClick={(e) => { e.stopPropagation(); togglePanel("not_violation"); }}
           >
             Not a violation
           </Button>
+          <Button
+            variant={verdict === "dismiss" ? "default" : "ghost"}
+            size="sm"
+            disabled={verdictBusy}
+            aria-pressed={verdict === "dismiss"}
+            onClick={(e) => { e.stopPropagation(); togglePanel("dismiss"); }}
+          >
+            Dismiss
+          </Button>
         </div>
         <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDismiss(); }}>
-          Dismiss
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={(e) => { e.stopPropagation(); applyFix(); }}
-          disabled={!violation.suggested_fix}
-        >
-          Apply fix
-        </Button>
+          {fixApplied && <Badge tone="success">Applied</Badge>}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={(e) => { e.stopPropagation(); applyFix(); }}
+            disabled={!violation.suggested_fix || fixApplied || applyFixBusy}
+          >
+            {applyFixBusy ? "Applying…" : "Apply fix"}
+          </Button>
         </div>
       </div>
+
+      {activePanel === "correct" && (
+        <div
+          className="mt-2 space-y-2 rounded-sm border border-border bg-muted/20 p-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="micro-label text-muted-foreground">Final text</div>
+          <Textarea
+            value={finalText}
+            onChange={(e) => setFinalText(e.target.value)}
+            className="min-h-[72px] text-xs"
+            placeholder="The text approved as final…"
+          />
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setActivePanel(null)}>
+              Cancel
+            </Button>
+            <Button size="sm" disabled={verdictBusy} onClick={confirmCorrect}>
+              Confirm correct
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {activePanel === "not_violation" && (
+        <div
+          className="mt-2 space-y-2 rounded-sm border border-border bg-muted/20 p-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="micro-label text-muted-foreground">Reason (required)</div>
+          <select
+            value={notViolationReason}
+            onChange={(e) => setNotViolationReason(e.target.value as NotViolationReason)}
+            className={SELECT_CLASS}
+          >
+            <option value="">Select a reason…</option>
+            {NOT_VIOLATION_REASONS.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+          <div className="micro-label text-muted-foreground">Explanation (required)</div>
+          <Textarea
+            value={explanation}
+            onChange={(e) => setExplanation(e.target.value)}
+            className="min-h-[64px] text-xs"
+            placeholder="Why is this not a violation?"
+          />
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setActivePanel(null)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={verdictBusy || !notViolationReason || !explanation.trim()}
+              onClick={confirmNotViolation}
+            >
+              Confirm
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {activePanel === "dismiss" && (
+        <div
+          className="mt-2 space-y-2 rounded-sm border border-border bg-muted/20 p-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="micro-label text-muted-foreground">Reason (required)</div>
+          <select
+            value={dismissReason}
+            onChange={(e) => setDismissReason(e.target.value as DismissReason)}
+            className={SELECT_CLASS}
+          >
+            <option value="">Select a reason…</option>
+            {DISMISS_REASONS.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setActivePanel(null)}>
+              Cancel
+            </Button>
+            <Button size="sm" disabled={verdictBusy || !dismissReason} onClick={confirmDismiss}>
+              Confirm dismiss
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 });

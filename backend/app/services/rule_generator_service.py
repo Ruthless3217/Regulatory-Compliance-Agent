@@ -113,7 +113,9 @@ class RuleGeneratorService:
         points_deduction: float = -5.0,
         created_by: Optional[uuid.UUID] = None,
         project_id: Optional[uuid.UUID] = None,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        product_line: Optional[str] = None,
+        jurisdiction: Optional[str] = None,
     ) -> Rule:
         """Create a new compliance rule."""
         # project_id is accepted for forward-compat but the Rule model has no
@@ -130,6 +132,8 @@ class RuleGeneratorService:
             rule_metadata=metadata,
             is_active=True,
             is_auto_generated=is_auto,
+            product_line=product_line,
+            jurisdiction=jurisdiction,
         )
         db.add(rule)
         db.commit()
@@ -146,11 +150,17 @@ class RuleGeneratorService:
         project_id: Optional[uuid.UUID] = None,
         instructions: Optional[str] = None,
         regulator: str = "irdai",
+        product_line: Optional[str] = None,
+        jurisdiction: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Generate compliance rules from document text using LLM, and index the
         source passages into the RAG store so generated rules can carry a
         verbatim citation back to the regulator passage that produced them.
+
+        ``product_line``/``jurisdiction``, when given, are stamped onto every
+        rule extracted from this document (the whole document is scoped to one
+        product/jurisdiction; per-rule overrides aren't extracted by the LLM).
         """
         logger.info(f"Starting rule generation from document: {document_title}")
 
@@ -245,6 +255,8 @@ Return at least one rule unless the document genuinely has none.
                             "source": document_title,
                             "source_doc_id": str(document_id),
                         },
+                        product_line=product_line,
+                        jurisdiction=jurisdiction,
                     )
                     created_rule_ids.append(rule.id)
                     result["rules"].append({

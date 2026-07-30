@@ -46,6 +46,6 @@ export function statusTone(status: string): Tone {
   if (s === "analyzed") return "success";
   if (s === "analyzing" || s === "preprocessing" || s === "preprocessed" || s === "uploaded") return "info";
   if (s === "failed") return "danger";
-  if (s === "waiting_for_review") return "warning";
+  if (s === "needs_review") return "warning";
   return "neutral";
 }

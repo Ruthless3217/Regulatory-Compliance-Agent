@@ -4,7 +4,8 @@ from sqlalchemy import func
 from app.models.analysis_run import AnalysisRun
 from app.models.llm_usage_event import LlmUsageEvent
 from app.services.observability import audit
-from datetime import datetime, timezone
+from app.config import settings
+from datetime import datetime, timezone, timedelta
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,8 @@ async def open_run(db: Session, submission_id: str, user, session_id: str, trigg
         run_number=run_number,
         is_rerun=(run_number > 1),
         trigger_source=trigger_source,
-        status="running"
+        status="running",
+        scoring_policy_version=settings.scoring_policy_version,
     )
     db.add(run)
     db.commit()
@@ -30,6 +32,25 @@ async def open_run(db: Session, submission_id: str, user, session_id: str, trigg
     # Fire and forget audit
     asyncio.create_task(audit.record(event_type, actor=user, target_type="submission", target_id=submission_id, metadata={"run_id": str(run.id)}))
     return run
+
+async def find_stale_running_run(db: Session, submission_id: str, stale_minutes: int) -> AnalysisRun | None:
+    """The submission's latest AnalysisRun if it's stuck 'running' past the
+    staleness threshold with no finished_at — the process that owned it was
+    killed (container restart, OOM, --reload) before it could self-close,
+    leaving submissions.status='analyzing' with no recovery path otherwise."""
+    latest = (
+        db.query(AnalysisRun)
+        .filter(AnalysisRun.submission_id == submission_id)
+        .order_by(AnalysisRun.started_at.desc())
+        .first()
+    )
+    if not latest or latest.status != "running" or latest.finished_at is not None or not latest.started_at:
+        return None
+    started = latest.started_at if latest.started_at.tzinfo else latest.started_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) - started > timedelta(minutes=stale_minutes):
+        return latest
+    return None
+
 
 async def close_run(db: Session, run: AnalysisRun, final_state: dict, user=None):
     status = final_state.get("status", "failed")

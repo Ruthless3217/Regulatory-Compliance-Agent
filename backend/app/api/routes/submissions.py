@@ -4,16 +4,31 @@ Submissions API Routes
 Handles document upload and submission management.
 """
 import os
+import re
+import shutil
 import logging
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from datetime import datetime, timezone
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, UploadFile, File, Form, Query, Response
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.database import get_db
 from app.models.submission import Submission
+from app.models.submission_revision import SubmissionRevision
+from app.models.document_comment import DocumentComment
+from app.models.violation import Violation
 from app.config import settings
 from app.auth.dependencies import require
+from app.schemas.submission import (
+    SubmissionRevisionCreate,
+    DocumentCommentCreate,
+    DocumentCommentUpdate,
+)
+from app.services.submission_render_service import renders_dir, run_render
+from app.services import submission_export_service
+from app.services.gotenberg_client import GotenbergError
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +45,7 @@ ALLOWED_CONTENT_TYPES = {
 
 @router.post("")
 async def create_submission(
+    background_tasks: BackgroundTasks,
     title: str = Form(...),
     content_type: str = Form(default="text"),
     content: Optional[str] = Form(default=None),
@@ -66,17 +82,25 @@ async def create_submission(
 
         content_type = detected_type
 
+    # Pixel page rendering (Compare's renderer, reused) is PDF-only — matches
+    # render_orchestrator's constraint. Anything else needs no render pass.
+    will_render = content_type == "pdf" and file_path is not None
+
     submission = Submission(
         title=title,
         content_type=content_type,
         original_content=content,
         file_path=file_path,
         status="uploaded",
+        page_render_status="processing" if will_render else "skipped",
         submitted_by=getattr(user, "id", None),
     )
     db.add(submission)
     db.commit()
     db.refresh(submission)
+
+    if will_render:
+        background_tasks.add_task(run_render, str(submission.id))
 
     import asyncio
     from app.services.observability import audit
@@ -87,6 +111,7 @@ async def create_submission(
         "title": submission.title,
         "content_type": submission.content_type,
         "status": submission.status,
+        "page_render_status": submission.page_render_status,
         "submitted_at": submission.submitted_at.isoformat()
     }
 
@@ -136,8 +161,321 @@ async def get_submission(
         "original_content": submission.original_content,
         "status": submission.status,
         "approval_status": submission.approval_status,
+        "page_render_status": submission.page_render_status,
         "submitted_at": submission.submitted_at.isoformat()
     }
+
+
+@router.get("/{submission_id}/pages/{n}")
+async def get_submission_page(
+    submission_id: str,
+    n: int,
+    user: dict = Depends(require("submission:read")),
+    db: Session = Depends(get_db)
+):
+    """Stream one rendered page PNG for the pixel document view.
+
+    Single-sided mirror of `GET /comparisons/{id}/pages/{side}/{n}` — reuses
+    the same renderer, just one document instead of an old/new pair.
+    """
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    path = os.path.join(renders_dir(str(submission.id)), f"page-{n:04d}.png")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Page image not found")
+    return FileResponse(path, media_type="image/png")
+
+
+# ---------------------------------------------------------------------------
+# Content revisions — the one mutation primitive behind manual edits,
+# apply-fix, bulk-apply-fixes, and restore (migration 0026).
+# ---------------------------------------------------------------------------
+
+def _serialize_revision(r: SubmissionRevision) -> dict:
+    return {
+        "id": str(r.id),
+        "submission_id": str(r.submission_id),
+        "revision_number": r.revision_number,
+        "content": r.content,
+        "source": r.source,
+        "note": r.note,
+        "applied_violation_ids": [str(v) for v in (r.applied_violation_ids or [])],
+        "created_by": str(r.created_by) if r.created_by else None,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    }
+
+
+def _next_revision_number(db: Session, submission_id) -> int:
+    """1-based, per submission. Mirrors run_tracker.open_run's count+1 idiom —
+    no extra app-level locking; UNIQUE(submission_id, revision_number) is the
+    backstop against a genuine race."""
+    existing = (
+        db.query(SubmissionRevision)
+        .filter(SubmissionRevision.submission_id == submission_id)
+        .all()
+    )
+    return max((r.revision_number for r in existing), default=0) + 1
+
+
+@router.post("/{submission_id}/revisions")
+async def create_revision(
+    submission_id: str,
+    body: SubmissionRevisionCreate = Body(...),
+    user: dict = Depends(require("submission:create")),
+    db: Session = Depends(get_db),
+):
+    """Record a new content revision and make it the submission's current
+    content. `source` distinguishes manual_edit/apply_fix/bulk_apply_fixes/
+    restore — restore is just this same endpoint re-posting an old revision's
+    content with source='restore'."""
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    revision = SubmissionRevision(
+        submission_id=submission.id,
+        revision_number=_next_revision_number(db, submission.id),
+        content=body.content,
+        source=body.source,
+        note=body.note,
+        applied_violation_ids=body.applied_violation_ids or None,
+        created_by=getattr(user, "id", None),
+    )
+    db.add(revision)
+    submission.current_content = body.content
+
+    # Flip fix_applied on every violation this revision resolved, so the
+    # reviewer UI's "Applied" badge/disabled-button state survives reload
+    # instead of resetting on next fetch.
+    if body.applied_violation_ids:
+        applied_at = datetime.now(timezone.utc)
+        for vid in body.applied_violation_ids:
+            fixed = db.query(Violation).filter(Violation.id == vid).first()
+            if fixed is not None:
+                fixed.fix_applied = True
+                fixed.fix_applied_at = applied_at
+                db.add(fixed)
+
+    db.commit()
+    db.refresh(revision)
+    return _serialize_revision(revision)
+
+
+@router.get("/{submission_id}/revisions")
+async def list_revisions(
+    submission_id: str,
+    user: dict = Depends(require("submission:read")),
+    db: Session = Depends(get_db),
+):
+    """List every revision for a submission, oldest first."""
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    revisions = (
+        db.query(SubmissionRevision)
+        .filter(SubmissionRevision.submission_id == submission.id)
+        .order_by(SubmissionRevision.revision_number)
+        .all()
+    )
+    return {"revisions": [_serialize_revision(r) for r in revisions]}
+
+
+@router.get("/{submission_id}/revisions/{revision_number}")
+async def get_revision(
+    submission_id: str,
+    revision_number: int,
+    user: dict = Depends(require("submission:read")),
+    db: Session = Depends(get_db),
+):
+    """Fetch one revision by its 1-based number — lets the UI address a past
+    version directly (e.g. to preview it before restoring)."""
+    revision = (
+        db.query(SubmissionRevision)
+        .filter(
+            SubmissionRevision.submission_id == submission_id,
+            SubmissionRevision.revision_number == revision_number,
+        )
+        .first()
+    )
+    if not revision:
+        raise HTTPException(status_code=404, detail="Revision not found")
+    return _serialize_revision(revision)
+
+
+# ---------------------------------------------------------------------------
+# Document comments — freestanding reviewer notes anchored to a text
+# selection (migration 0027). Mirrors comparisons.py's annotation shape, but
+# each comment is its own row rather than a per-change-id upsert, since a
+# submission's document has no comparison-style stable change id.
+# ---------------------------------------------------------------------------
+
+def _serialize_comment(c: DocumentComment) -> dict:
+    return {
+        "id": str(c.id),
+        "submission_id": str(c.submission_id),
+        "anchor_text": c.anchor_text,
+        "page_number": c.page_number,
+        "body": c.body,
+        "resolved": c.resolved,
+        "created_by": str(c.created_by) if c.created_by else None,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+    }
+
+
+@router.post("/{submission_id}/comments")
+async def create_comment(
+    submission_id: str,
+    body: DocumentCommentCreate = Body(...),
+    user: dict = Depends(require("submission:create")),
+    db: Session = Depends(get_db),
+):
+    """Create a freestanding comment anchored to a text selection."""
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if not (body.body or "").strip():
+        raise HTTPException(status_code=422, detail="body is required")
+
+    comment = DocumentComment(
+        submission_id=submission.id,
+        anchor_text=body.anchor_text,
+        page_number=body.page_number,
+        body=body.body,
+        resolved=False,
+        created_by=getattr(user, "id", None),
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return _serialize_comment(comment)
+
+
+@router.get("/{submission_id}/comments")
+async def list_comments(
+    submission_id: str,
+    user: dict = Depends(require("submission:read")),
+    db: Session = Depends(get_db),
+):
+    """List every comment on a submission, oldest first."""
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    comments = (
+        db.query(DocumentComment)
+        .filter(DocumentComment.submission_id == submission.id)
+        .order_by(DocumentComment.created_at)
+        .all()
+    )
+    return {"comments": [_serialize_comment(c) for c in comments]}
+
+
+@router.patch("/{submission_id}/comments/{comment_id}")
+async def update_comment(
+    submission_id: str,
+    comment_id: str,
+    body: DocumentCommentUpdate = Body(...),
+    user: dict = Depends(require("submission:create")),
+    db: Session = Depends(get_db),
+):
+    """Update a comment's body and/or resolved flag."""
+    comment = (
+        db.query(DocumentComment)
+        .filter(
+            DocumentComment.submission_id == submission_id,
+            DocumentComment.id == comment_id,
+        )
+        .first()
+    )
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    if body.body is not None:
+        comment.body = body.body
+    if body.resolved is not None:
+        comment.resolved = body.resolved
+    db.commit()
+    db.refresh(comment)
+    return _serialize_comment(comment)
+
+
+@router.delete("/{submission_id}/comments/{comment_id}")
+async def delete_comment(
+    submission_id: str,
+    comment_id: str,
+    user: dict = Depends(require("submission:delete")),
+    db: Session = Depends(get_db),
+):
+    """Remove a comment (idempotent)."""
+    comment = (
+        db.query(DocumentComment)
+        .filter(
+            DocumentComment.submission_id == submission_id,
+            DocumentComment.id == comment_id,
+        )
+        .first()
+    )
+    if comment:
+        db.delete(comment)
+        db.commit()
+    return {"message": "Comment deleted", "id": comment_id}
+
+
+# ---------------------------------------------------------------------------
+# Export — clean/annotated/report/feedback-report copies (docx + pdf) plus a
+# bundle.zip. Mirrors GET /comparisons/{id}/export/{kind}'s dispatch shape:
+# an allow-list check, then one call into the export service, streamed back
+# as an attachment.
+# ---------------------------------------------------------------------------
+
+_EXPORT_MEDIA = {
+    "clean.docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "clean.pdf": "application/pdf",
+    "annotated.docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "annotated.pdf": "application/pdf",
+    "report.docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "report.pdf": "application/pdf",
+    "feedback-report.docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "feedback-report.pdf": "application/pdf",
+    "bundle.zip": "application/zip",
+}
+
+
+def _safe_title(title: Optional[str]) -> str:
+    """Filesystem-safe slug for export download filenames (mirrors
+    comparisons.py's helper of the same name)."""
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", (title or "submission").strip()).strip("-")
+    return slug or "submission"
+
+
+@router.get("/{submission_id}/export/{kind}")
+async def export_submission(
+    submission_id: str,
+    kind: str,
+    user: dict = Depends(require("submission:read")),
+    db: Session = Depends(get_db),
+):
+    """Generate and stream one export artifact."""
+    if kind not in _EXPORT_MEDIA:
+        raise HTTPException(status_code=404, detail="Unknown export kind")
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    try:
+        data = submission_export_service.build_export(db, submission, kind)
+    except GotenbergError as e:
+        raise HTTPException(status_code=502, detail=f"PDF conversion unavailable: {e}")
+
+    filename = f"{_safe_title(submission.title)}-{kind}"
+    return Response(
+        content=data,
+        media_type=_EXPORT_MEDIA[kind],
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/{submission_id}")
@@ -154,6 +492,10 @@ async def delete_submission(
     # Clean up file if exists
     if submission.file_path and os.path.exists(submission.file_path):
         os.remove(submission.file_path)
+
+    render_dir = renders_dir(str(submission.id))
+    if os.path.isdir(render_dir):
+        shutil.rmtree(render_dir, ignore_errors=True)
 
     db.delete(submission)
     db.commit()

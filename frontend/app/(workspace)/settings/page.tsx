@@ -5,7 +5,8 @@ import { Cpu, Gauge, Database, Plug, Info, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DensityToggle } from "@/components/workspace/DensityToggle";
 import { PageHeader } from "@/components/ui/page-header";
-import { health } from "@/lib/api";
+import { health, healthModels, healthRag, listRules } from "@/lib/api";
+import type { ModelsHealth, RagHealth } from "@/lib/types";
 
 function Section({
   icon,
@@ -49,10 +50,44 @@ const GRADE_BANDS = [
   { grade: "F", range: "0–39", tone: "text-sev-critical" },
 ];
 
+// Same category values as the /rules page's coverage cards (rules.category).
+const RULE_CATEGORIES = [
+  { key: "regulatory", label: "IRDAI" },
+  { key: "brand", label: "Brand" },
+  { key: "sebi", label: "SEBI" },
+];
+
 export default function SettingsPage() {
   const [pinging, setPinging] = React.useState(false);
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
   const buildSha = process.env.NEXT_PUBLIC_BUILD_SHA || "dev";
+
+  const [models, setModels] = React.useState<ModelsHealth | null>(null);
+  const [modelsErr, setModelsErr] = React.useState<string | null>(null);
+  const [rag, setRag] = React.useState<RagHealth | null>(null);
+  const [ragErr, setRagErr] = React.useState<string | null>(null);
+  const [ruleCounts, setRuleCounts] = React.useState<Record<string, number> | null>(null);
+  const [ruleCountsErr, setRuleCountsErr] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    healthModels()
+      .then(setModels)
+      .catch((e) => setModelsErr((e as Error).message));
+    // /health/rag legitimately 503s when the embedder/vector store is down —
+    // that's a real degraded state, not a bug, so render it rather than throw.
+    healthRag()
+      .then(setRag)
+      .catch((e) => setRagErr((e as Error).message));
+    Promise.all(RULE_CATEGORIES.map((c) => listRules({ category: c.key, limit: 1 })))
+      .then((results) => {
+        const counts: Record<string, number> = {};
+        RULE_CATEGORIES.forEach((c, i) => {
+          counts[c.key] = results[i].total;
+        });
+        setRuleCounts(counts);
+      })
+      .catch((e) => setRuleCountsErr((e as Error).message));
+  }, []);
 
   const ping = async () => {
     setPinging(true);
@@ -85,17 +120,50 @@ export default function SettingsPage() {
             <span className="font-mono text-xs">LangGraph · 5-node</span>
           </Row>
           <Row label="Model">
-            <span className="font-mono text-xs">llama-3.3-70b</span>
+            <span className="font-mono text-xs">
+              {modelsErr ? "unavailable" : models ? `${models.llm_model} (${models.llm_provider})` : "loading…"}
+            </span>
+          </Row>
+          <Row label="Critic model">
+            <span className="font-mono text-xs">
+              {modelsErr ? "unavailable" : models ? models.critic_llm_model : "loading…"}
+            </span>
+          </Row>
+          <Row label="Chat model">
+            <span className="font-mono text-xs">
+              {modelsErr ? "unavailable" : models ? models.chat_llm_model : "loading…"}
+            </span>
           </Row>
           <Row label="RAG backend">
-            <span className="font-mono text-xs">pgvector</span>
+            <span className="font-mono text-xs">
+              {ragErr ? "degraded" : rag ? rag.backend : "loading…"}
+            </span>
+          </Row>
+          <Row label="Embedder">
+            <span className="font-mono text-xs">
+              {ragErr ? "degraded" : rag ? rag.model : "loading…"}
+            </span>
+          </Row>
+          <Row label="Disclosure check">
+            <span className="font-mono text-xs">
+              {modelsErr ? "unavailable" : models ? (models.disclosure_check_enabled ? "on" : "off") : "loading…"}
+            </span>
+          </Row>
+          <Row label="Product grounding">
+            <span className="font-mono text-xs">
+              {modelsErr ? "unavailable" : models ? (models.product_grounding_enabled ? "on" : "off") : "loading…"}
+            </span>
           </Row>
         </Section>
 
         <Section icon={<Database className="h-4 w-4" />} title="Rule corpus" description="Active rules the pipeline evaluates against.">
-          <Row label="IRDAI"><span className="font-mono text-xs">~30</span></Row>
-          <Row label="Brand"><span className="font-mono text-xs">~20</span></Row>
-          <Row label="SEBI"><span className="font-mono text-xs">~15</span></Row>
+          {RULE_CATEGORIES.map((c) => (
+            <Row key={c.key} label={c.label}>
+              <span className="font-mono text-xs">
+                {ruleCountsErr ? "unavailable" : ruleCounts ? ruleCounts[c.key] : "…"}
+              </span>
+            </Row>
+          ))}
         </Section>
 
         <Section icon={<Gauge className="h-4 w-4" />} title="Scoring" description="Letter-grade bands applied to the 0–100 compliance score.">

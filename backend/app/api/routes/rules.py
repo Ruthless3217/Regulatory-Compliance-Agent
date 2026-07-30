@@ -70,7 +70,9 @@ async def create_rule(
         rule_text=rule.rule_text,
         severity=rule.severity,
         keywords=rule.keywords,
-        points_deduction=rule.points_deduction
+        points_deduction=rule.points_deduction,
+        product_line=rule.product_line,
+        jurisdiction=rule.jurisdiction,
     )
     await _safe_rag_upsert(new_rule.id, db)
     return {
@@ -198,6 +200,11 @@ async def update_rule(
         effective_date=func.now(),
         product_line=rule.product_line,
         jurisdiction=rule.jurisdiction,
+        # Learned trust (Beta-Binomial reliability) carries forward to the new
+        # version — an edit isn't a fresh rule, so it shouldn't reset to
+        # "no feedback history" and lose everything reviewers already taught it.
+        reliability_alpha=rule.reliability_alpha,
+        reliability_beta=rule.reliability_beta,
     )
     db.add(new_rule)
     db.flush()  # get new_rule.id
@@ -207,6 +214,11 @@ async def update_rule(
     rule.superseded_by = new_rule.id
     db.commit()
     db.refresh(new_rule)
+
+    # Old row is now inactive; its RAG index entry is stale and must be
+    # cleaned up so retrieval doesn't keep matching a superseded rule version
+    # (mirrors the cleanup DELETE /rules/{id} already performs).
+    await _safe_rag_delete(rule.id)
 
     # New version goes into RAG; old row stays (is_active=false → filtered out).
     await _safe_rag_upsert(new_rule.id, db)

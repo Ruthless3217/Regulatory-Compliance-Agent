@@ -14,11 +14,19 @@ export interface Submission {
   title: string;
   content_type: string;
   original_content?: string | null;
+  // 0025 — editable working copy; NULL means "no edits yet, current ==
+  // original". original_content stays immutable (grading/highlighting
+  // reference); current_content is what edits/apply-fix/restore write.
+  current_content?: string | null;
   file_path?: string | null;
   submitted_by?: string | null;
   submitted_at?: string;
   status: SubmissionStatus;
   approval_status?: string;
+  // 0024 — async page-render pass status, independent of `status` (the
+  // analysis lifecycle). PDF-only; null/"skipped" for every other
+  // content_type. Drives the PdfPagePane vs. text-mark DocumentPane switch.
+  page_render_status?: RenderStatus | null;
 }
 
 export interface Rule {
@@ -66,6 +74,77 @@ export interface Violation {
   // in a separate "Needs review" lane (recall fix 2026-06-08).
   suppressed?: boolean | null;
   suppressed_reason?: string | null;
+  // Rule-citation locators (rule path) — previously dropped by both hand-rolled
+  // serializers despite being populated at write time.
+  cited_section?: string | null;
+  cited_page?: number | null;
+  cited_regulation_version?: string | null;
+  rule_version?: number | null;
+  // 0023 — which AnalysisRun produced this finding, and its reviewer-facing
+  // lifecycle (open/actioned) independent of the rule_feedback audit trail.
+  analysis_run_id?: string | null;
+  review_status?: string | null;
+  resolved_at?: string | null;
+  // 0024 — real page/bbox anchor for the document viewer, matching
+  // pdf_render_service.PositionedWord ([x0,y0,x1,y1]).
+  section_title?: string | null;
+  anchor_page?: number | null;
+  anchor_bbox?: [number, number, number, number] | null;
+  // 0028 — has this finding's suggested_fix already been written into the
+  // document via a submission_revisions entry.
+  fix_applied?: boolean | null;
+  fix_applied_at?: string | null;
+  // Left-joined latest reviewer verdict (rule_feedback), if any. Legacy rows
+  // may still hold "accept"/"reject"; new rows hold the reviewer-action
+  // taxonomy value ("correct" | "not_violation" | "dismiss").
+  reviewer_verdict?: string | null;
+  reviewer_comment?: string | null;
+}
+
+/** The reviewer-action taxonomy (Correct / Not-a-violation / Dismiss) —
+ * POST /compliance/violations/{id}/actions. Replaces the old binary
+ * accept/reject shim in the UI (the shim endpoint still exists server-side
+ * for back-compat). */
+export type ReviewerActionType = "correct" | "not_violation" | "dismiss";
+
+/** Dismiss reason picker — required, no weight-update signal either way. */
+export type DismissReason =
+  | "duplicate"
+  | "vague"
+  | "low-value"
+  | "insufficient-evidence"
+  | "needs-human-legal-review"
+  | "unsupported-format"
+  | "other";
+
+/** "Not a violation" reason picker — required, paired with a required
+ * free-text explanation. */
+export type NotViolationReason =
+  | "wrong-product"
+  | "wrong-section"
+  | "wrong-context"
+  | "outdated-rule"
+  | "retrieval-mismatch"
+  | "valid-regulatory-exception"
+  | "wrong-severity"
+  | "hallucination"
+  | "other";
+
+// --- Content revisions (migration 0026) -------------------------------------
+// The one mutation primitive behind manual edits, apply-fix, bulk-apply-fixes,
+// and restore.
+export type RevisionSource = "manual_edit" | "apply_fix" | "bulk_apply_fixes" | "restore";
+
+export interface SubmissionRevision {
+  id: string;
+  submission_id: string;
+  revision_number: number;
+  content: string;
+  source: RevisionSource;
+  note: string | null;
+  applied_violation_ids: string[];
+  created_by: string | null;
+  created_at: string | null;
 }
 
 export type ActionType =
@@ -93,6 +172,12 @@ export interface ViolationMetadata {
   decision_trace?: string[];
   counterfactual?: string;
   approved_wording?: string;
+  // Product-fact grounding (nodes.py::_product_fact_finding_to_violation) —
+  // which resolved product this finding's fact card belongs to. Present only
+  // on grounding === "product_fact" findings; other groundings have no single
+  // product to pin (rule/precedent findings can apply doc-wide).
+  product_uin?: string;
+  product_name?: string;
   [k: string]: unknown;
 }
 
@@ -108,6 +193,59 @@ export interface ComplianceResults {
   violation_count?: number;
   status?: SubmissionStatus;
   message?: string;
+}
+
+// GET /compliance/check/{check_id} — reviewer-facing summary for one specific
+// run's compliance check (keyed by AnalysisRun.compliance_check_id), used to
+// show a historical run's own findings instead of the submission's latest.
+export interface CheckSummary {
+  id: string;
+  submission_id: string;
+  overall_score: number | null;
+  grade: string | null;
+  status: string | null;
+  scores: Record<string, number> | null;
+  checked_at: string | null;
+  violations: Violation[];
+}
+
+// --- Reviewer-facing run history + diff (GET /compliance/submissions/{id}/runs,
+// GET /compliance/runs/{id}/diff) --------------------------------------------
+export interface RunSummary {
+  id: string;
+  run_number: number;
+  is_rerun: boolean;
+  status: string;
+  degraded_reason: string | null;
+  compliance_check_id: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  scoring_policy_version: string | null;
+}
+
+export interface RunDiff {
+  run_id: string;
+  against_run_id: string;
+  run_number: number;
+  against_run_number: number;
+  added: Violation[];
+  removed: Violation[];
+  unchanged_count: number;
+  summary: { added: number; removed: number; unchanged: number };
+}
+
+// GET/POST /submissions/{id}/comments (migration 0027) — a freestanding
+// reviewer note anchored to a text selection.
+export interface DocumentComment {
+  id: string;
+  submission_id: string;
+  anchor_text: string | null;
+  page_number: number | null;
+  body: string;
+  resolved: boolean;
+  created_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface DashboardSummary {
@@ -363,4 +501,126 @@ export interface RuleAuditRow {
   rule_id: string;
   before: Record<string, any>;
   after: Record<string, any>;
+}
+
+export interface RagHealth {
+  backend: string;
+  embedder: string;
+  model: string;
+  dim: number;
+  embedder_ok: boolean;
+  embedder_error: string | null;
+  vector_store_ok: boolean;
+  last_indexed_at: Record<string, string | null>;
+}
+
+export interface ModelsHealth {
+  llm_provider: string;
+  llm_model: string;
+  critic_llm_model: string;
+  chat_llm_model: string;
+  disclosure_check_enabled: boolean;
+  product_grounding_enabled: boolean;
+}
+
+/* ---------- model learning ---------- */
+export interface LearningFunnel {
+  flagged: number;
+  awaiting_review: number;
+  feedback_collected: number;
+  applied_to_scoring: number;
+  no_gate_warning: string;
+  status: "computed";
+}
+
+export interface PrecisionGroup {
+  key: string;
+  correct: number;
+  not_violation: number;
+  reviewed_total: number;
+  precision: number | null;
+  status: "computed" | "insufficient_data";
+  rule_text?: string | null;
+  category?: string | null;
+  severity?: string | null;
+}
+
+export interface LearningPrecision {
+  by: "rule" | "category" | "severity";
+  groups: PrecisionGroup[];
+  status: "computed" | "insufficient_data";
+  note: string;
+}
+
+export interface CalibrationPoint {
+  check_id: string;
+  checked_at: string | null;
+  system_score: number;
+  reviewer_score: number;
+  gap: number;
+}
+
+export interface LearningCalibration {
+  sample_size: number;
+  status: "computed" | "insufficient_data";
+  mean_absolute_gap: number | null;
+  mean_system_score: number | null;
+  mean_reviewer_score: number | null;
+  points: CalibrationPoint[];
+  note: string;
+}
+
+export interface RuleReliabilityEventRow {
+  id: string;
+  created_at: string | null;
+  rule_feedback_id: string | null;
+  alpha_before: number;
+  beta_before: number;
+  theta_before: number;
+  alpha_after: number;
+  beta_after: number;
+  theta_after: number;
+}
+
+export interface RuleReliabilityHistory {
+  rule_id: string;
+  rule_text: string | null;
+  current_alpha: number | null;
+  current_beta: number | null;
+  current_theta: number | null;
+  events: RuleReliabilityEventRow[];
+  status: "computed" | "insufficient_data";
+  note: string;
+}
+
+export interface LearningLatency {
+  sample_size: number;
+  status: "computed" | "insufficient_data";
+  avg_duration_ms: number | null;
+  p50_duration_ms: number | null;
+  p95_duration_ms: number | null;
+  avg_prompt_tokens: number | null;
+  avg_completion_tokens: number | null;
+  avg_cost_usd: number | null;
+  by_trigger_source: { trigger_source: string; count: number; avg_duration_ms: number }[];
+  note: string;
+}
+
+export interface RepeatedPattern {
+  rule_id: string;
+  rule_text: string | null;
+  category: string | null;
+  severity: string | null;
+  submission_count: number;
+  violation_count: number;
+  reliability_theta: number | null;
+  reviewer_precision: number | null;
+  reviewed_count: number;
+}
+
+export interface RepeatedPatterns {
+  min_submissions: number;
+  patterns: RepeatedPattern[];
+  status: "computed" | "insufficient_data";
+  note: string;
 }

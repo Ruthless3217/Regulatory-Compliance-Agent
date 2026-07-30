@@ -18,6 +18,18 @@ export interface HighlightSpan {
 }
 
 /**
+ * Anything markable in a document: a violation's flagged text today, a
+ * reviewer comment's anchor_text tomorrow. `findSpans` only needs these three
+ * fields, so it isn't tied to the `Violation` shape — callers adapt their own
+ * data (see `violationsToHighlightables` below for the Violation adapter).
+ */
+export interface Highlightable {
+  id: string;
+  text: string;
+  severity?: string;
+}
+
+/**
  * Build a whitespace/case-normalized view of `text` plus a map from each
  * normalized character back to its original offset. Normalization mirrors the
  * backend's evidence-grounding check (`_normalize_ws`: lowercase + collapse
@@ -52,12 +64,21 @@ function normalizeNeedle(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-export function findSpans(text: string, violations: Violation[]): HighlightSpan[] {
+/** Adapt a Violation[] to the generic Highlightable[] shape `findSpans` takes
+ * — the one caller-side conversion that lets violations and (future) comments
+ * share the same span-finding algorithm. */
+export function violationsToHighlightables(violations: Violation[]): Highlightable[] {
+  return violations
+    .filter((v) => !!v.current_text)
+    .map((v) => ({ id: v.id, text: v.current_text as string, severity: v.severity }));
+}
+
+export function findSpans(text: string, items: Highlightable[]): HighlightSpan[] {
   const spans: HighlightSpan[] = [];
   const { norm, map } = normalizeWithMap(text);
-  for (const v of violations) {
-    if (!v.current_text) continue;
-    const needle = normalizeNeedle(v.current_text);
+  for (const item of items) {
+    if (!item.text) continue;
+    const needle = normalizeNeedle(item.text);
     if (!needle) continue;
     let from = 0;
     while (from <= norm.length - needle.length) {
@@ -70,8 +91,8 @@ export function findSpans(text: string, violations: Violation[]): HighlightSpan[
       spans.push({
         start,
         end,
-        severity: v.severity,
-        violationId: v.id,
+        severity: item.severity ?? "medium",
+        violationId: item.id,
       });
       from = idx + needle.length;
     }
@@ -115,7 +136,7 @@ function escapeHtml(s: string): string {
 }
 
 export function applyHighlights(text: string, violations: Violation[]): string {
-  const spans = findSpans(text, violations);
+  const spans = findSpans(text, violationsToHighlightables(violations));
   if (spans.length === 0) return escapeHtml(text);
   const out: string[] = [];
   let cursor = 0;

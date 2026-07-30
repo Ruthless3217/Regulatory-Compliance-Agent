@@ -204,6 +204,11 @@ class Settings(BaseSettings):
     # File Upload
     max_upload_size: int = 52428800  # 50MB
     upload_dir: str = "./uploads"
+    # An 'analyzing' submission whose latest AnalysisRun is still 'running'
+    # past this many minutes with no finished_at is treated as orphaned (the
+    # owning process was killed mid-run) and reclaimed instead of wedging the
+    # submission on 'analyzing' forever with no recovery path.
+    stale_analysis_run_minutes: int = 15
     # --- Pixel-faithful comparison rendering ---
     # Gotenberg sidecar (wraps LibreOffice) used to convert Word -> PDF before
     # rendering pages. Internal compose DNS name; no API key.
@@ -326,6 +331,12 @@ class Settings(BaseSettings):
     # docs/superpowers/specs/2026-06-15-cross-chunk-context-design.md.
     cross_chunk_context_enabled: bool = True
     cross_chunk_context_token_budget: int = 8000
+
+    # Scoring policy version — stamped onto every AnalysisRun at open_run time
+    # (analysis_runs.scoring_policy_version, migration 0029) so a later change
+    # to the scoring formula/weights can't silently make historic run scores
+    # incomparable without a record of which policy produced them.
+    scoring_policy_version: str = "1.0"
 
     class Config:
         env_file = ".env"

@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScoreRing } from "@/components/ui/score-ring";
 import { StatusPill, statusTone } from "@/components/ui/status-pill";
 import { analyzeSubmission, deleteSubmission } from "@/lib/api";
+import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import type { Submission } from "@/lib/types";
 
 interface Props {
@@ -17,9 +18,38 @@ interface Props {
   grade?: string | null;
 }
 
+/** Compact "Run #N of M" picker — lets a reviewer step back to a past
+ * analysis run. Hidden until there's more than one run to choose between.
+ * Shares its selection via SubmissionWorkspaceContext so ReviewTab's
+ * historical-run banner reflects the same choice. */
+function RunPicker() {
+  const { runs, selectedRunId, setSelectedRunId } = useSubmissionWorkspace();
+  if (runs.length <= 1) return null;
+
+  const latest = runs[runs.length - 1];
+  const current = selectedRunId ?? latest.id;
+
+  return (
+    <select
+      value={current}
+      onChange={(e) => setSelectedRunId(e.target.value === latest.id ? null : e.target.value)}
+      title="View a past analysis run"
+      className="h-5 rounded-sm border border-border bg-background px-1 font-mono text-[10px] text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+    >
+      {runs.map((r) => (
+        <option key={r.id} value={r.id}>
+          Run #{r.run_number} of {runs.length}
+          {r.id === latest.id ? " (latest)" : ""}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export function SubmissionHeader({ submission, overallScore, grade: _grade }: Props) {
   const pathname = usePathname() ?? "";
   const router = useRouter();
+  const { setOptimisticAnalyzing, setSelectedRunId } = useSubmissionWorkspace();
 
   const id = submission.id;
   const tab = pathname.endsWith("/report")
@@ -31,11 +61,19 @@ export function SubmissionHeader({ submission, overallScore, grade: _grade }: Pr
   const score = overallScore ?? null;
 
   const rerun = async () => {
+    // Optimistic: flip the shared "analyzing" flag and jump back to viewing
+    // the latest run immediately, before the round trip to the server (and
+    // its follow-up router.refresh()) lands the real status. Without this,
+    // ReviewTab's isAnalyzing stays derived from the stale pre-rerun
+    // submission.status until the next refresh actually observes 'analyzing'.
+    setOptimisticAnalyzing(true);
+    setSelectedRunId(null);
     try {
       await analyzeSubmission(id);
       toast.success("Re-running analysis");
       router.refresh();
     } catch (e) {
+      setOptimisticAnalyzing(false);
       toast.error(`Failed: ${(e as Error).message}`);
     }
   };
@@ -71,6 +109,7 @@ export function SubmissionHeader({ submission, overallScore, grade: _grade }: Pr
               <StatusPill tone={statusTone(submission.status)} pulse={submission.status === "analyzing"}>
                 <span className="text-[10px]">{submission.status.replace(/_/g, " ")}</span>
               </StatusPill>
+              <RunPicker />
             </div>
             <div className="mt-0.5 truncate text-[16px] font-semibold leading-tight tracking-tight">{submission.title}</div>
           </div>

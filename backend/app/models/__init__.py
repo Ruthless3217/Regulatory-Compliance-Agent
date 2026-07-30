@@ -15,6 +15,9 @@ from .user_session import UserSession
 from .analysis_run import AnalysisRun
 from .llm_usage_event import LlmUsageEvent
 from .audit_event import AuditEvent
+from .submission_revision import SubmissionRevision
+from .document_comment import DocumentComment
+from .rule_reliability_event import RuleReliabilityEvent
 
 __all__ = [
     "User",
@@ -35,4 +38,7 @@ __all__ = [
     "AnalysisRun",
     "LlmUsageEvent",
     "AuditEvent",
+    "SubmissionRevision",
+    "DocumentComment",
+    "RuleReliabilityEvent",
 ]

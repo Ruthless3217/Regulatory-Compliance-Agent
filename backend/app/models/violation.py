@@ -63,8 +63,27 @@ class Violation(Base):
     suppressed = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
     suppressed_reason = Column(Text, nullable=True)
 
+    # 0023 — which AnalysisRun produced this finding, and its reviewer-facing
+    # lifecycle (open/actioned) independent of the rule_feedback audit trail.
+    analysis_run_id = Column(UUID(as_uuid=True), ForeignKey("analysis_runs.id", ondelete="SET NULL"), nullable=True, index=True)
+    review_status = Column(String(20), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    # 0024 — real page/bbox anchor for the document viewer, matching
+    # pdf_render_service.PositionedWord ([x0,y0,x1,y1]), replacing the
+    # synthetic "chunk:N" string in `location` for PDF-sourced uploads.
+    section_title = Column(Text, nullable=True)
+    anchor_page = Column(Integer, nullable=True)
+    anchor_bbox = Column(JSONB, nullable=True)
+
+    # 0028 — has this finding's suggested_fix already been written into the
+    # document via a submission_revisions entry?
+    fix_applied = Column(Boolean, nullable=False, default=False, server_default="false")
+    fix_applied_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     compliance_check = relationship("ComplianceCheck", back_populates="violations")
     rule = relationship("Rule")
+    analysis_run = relationship("AnalysisRun")

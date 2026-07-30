@@ -11,6 +11,7 @@ import {
   Search,
   Boxes,
   GitCompare,
+  Brain,
 } from "lucide-react";
 import { DensityToggle } from "./DensityToggle";
 import { ApiHealthDot } from "./ApiHealthDot";
@@ -43,6 +44,7 @@ const SECTIONS: Section[] = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: <LineChart className="h-3.5 w-3.5" />, kbd: "D" },
       { label: "Knowledge base", href: "/knowledge-base", icon: <Boxes className="h-3.5 w-3.5" />, kbd: "K" },
+      { label: "Model learning", href: "/model-learning", icon: <Brain className="h-3.5 w-3.5" /> },
     ],
   },
   {

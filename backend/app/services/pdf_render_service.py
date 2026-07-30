@@ -32,12 +32,25 @@ class PageMeta:
 def to_pdf(file_path: str, content_type: str, out_dir: str, side: str) -> str:
     """Return a path to a PDF representation of the input.
 
-    pdf -> passthrough. Everything else raises: pixel rendering is PDF-only until a
-    DOCX->PDF converter (Gotenberg sidecar) is wired back in — ``gotenberg_client``
-    remains on disk as that re-enable seam. Callers map the raise to
+    pdf -> passthrough. docx -> converted via the Gotenberg sidecar
+    (``gotenberg_client.convert_to_pdf``'s LibreOffice route) and written into
+    ``out_dir`` — this is the DOCX re-enable seam noted in ``okf/log.md``,
+    now used by ``submission_export_service`` for the *.pdf export kinds.
+    The Compare/pixel-render call sites (``render_orchestrator``,
+    ``submission_render_service``) still gate on content_type == "pdf" before
+    ever reaching here, so this doesn't change their PDF-only behaviour.
+    Anything else raises: no page layout to render. Callers map the raise to
     ``render_status='skipped'`` and fall back to the text redline."""
     if content_type == "pdf":
         return file_path
+    if content_type == "docx":
+        from app.services.gotenberg_client import convert_to_pdf
+        os.makedirs(out_dir, exist_ok=True)
+        pdf_bytes = convert_to_pdf(file_path)
+        out_path = os.path.join(out_dir, f"{side}.pdf")
+        with open(out_path, "wb") as f:
+            f.write(pdf_bytes)
+        return out_path
     raise ValueError(f"content_type {content_type!r} has no page layout to render (PDF-only)")
 
 

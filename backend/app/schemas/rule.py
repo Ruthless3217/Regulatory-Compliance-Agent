@@ -9,6 +9,8 @@ class RuleCreate(BaseModel):
     severity: str = "medium"
     keywords: Optional[List[str]] = None
     points_deduction: float = -5.0
+    product_line: Optional[str] = None
+    jurisdiction: Optional[str] = None
 
 
 class RuleResponse(BaseModel):

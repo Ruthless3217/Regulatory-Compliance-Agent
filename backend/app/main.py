@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 from .config import settings
-from .api.routes import submissions, compliance, dashboard, rules, chat, similar, rag_health, knowledge_base, comparisons
+from .api.routes import submissions, compliance, dashboard, model_learning, rules, chat, similar, rag_health, knowledge_base, comparisons
 
 # Configure logging
 logging.basicConfig(
@@ -141,7 +141,7 @@ app.add_middleware(
 from .auth.middleware import AuthMiddleware
 app.add_middleware(AuthMiddleware)
 
-from .api.routes import submissions, compliance, dashboard, rules, chat, similar, rag_health, knowledge_base, comparisons, auth, admin_console
+from .api.routes import submissions, compliance, dashboard, model_learning, rules, chat, similar, rag_health, knowledge_base, comparisons, auth, admin_console
 
 # Include routers - Compliance Agent only
 app.include_router(auth.router)
@@ -149,6 +149,7 @@ app.include_router(admin_console.router)
 app.include_router(submissions.router)
 app.include_router(compliance.router)
 app.include_router(dashboard.router)
+app.include_router(model_learning.router)
 app.include_router(rules.router)
 app.include_router(chat.router)
 app.include_router(similar.router)
@@ -171,6 +172,25 @@ async def health_check():
         "service": "Regulatory Compliance Agent",
         "version": "1.0.0",
         "llm_available": llm_status
+    }
+
+
+# Explicit allow-list ONLY. This is a hard security boundary — never return
+# settings.dict()/settings.model_dump() here, never any *_api_key field, even
+# indirectly. Adding a new Settings field must NOT change this endpoint's
+# output unless it's deliberately added to the dict below.
+@app.get("/health/models", tags=["Health"])
+async def health_models():
+    """Model-identity snapshot for the settings UI (no secrets)."""
+    return {
+        "llm_provider": settings.llm_provider,
+        "llm_model": settings.llm_model,
+        # Same inherit-fallback as _resolve_profile() in llm_service.py: an
+        # empty override means "use the main LLM_MODEL".
+        "critic_llm_model": settings.critic_llm_model or settings.llm_model,
+        "chat_llm_model": settings.chat_llm_model or settings.llm_model,
+        "disclosure_check_enabled": settings.disclosure_check_enabled,
+        "product_grounding_enabled": settings.product_grounding_enabled,
     }
 
 

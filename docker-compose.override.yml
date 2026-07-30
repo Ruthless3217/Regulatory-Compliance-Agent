@@ -36,3 +36,9 @@ services:
     # host 3000 (taken by another local Next.js dev), so the bind fails.
     ports: !override
       - "3001:3000"
+  gotenberg:
+    # LOCAL DEV ONLY — publish so `curl http://localhost:3033/health` works
+    # without exec-ing into the container network. The base file declares no
+    # ports for this service, so this is a plain append, not an override.
+    ports:
+      - "3033:3000"

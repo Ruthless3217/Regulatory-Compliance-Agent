@@ -63,15 +63,28 @@ class ProductContext:
 
 
 def derive_product_context(product_match: List[Dict[str, Any]], fact_cards: Any) -> ProductContext:
+    """OR the structural is_ulip/is_par flags across every variant card for each
+    resolved UIN (same get_all() pattern as applicability.build_scope) — never
+    regex the free-text regulatory_descriptor, whose "non-linked"/"non
+    participating" wording varies (hyphen vs space) and false-positives on the
+    bare "linked"/"participating" word."""
     is_ulip = is_par = False
     has_product = bool(product_match)
     for m in product_match or []:
-        card = fact_cards.get(m.get("uin")) if hasattr(fact_cards, "get") else None
-        descriptor = str((card or {}).get("regulatory_descriptor") or "").lower()
-        if "non-linked" not in descriptor and re.search(r"\blinked\b", descriptor):
-            is_ulip = True
-        if "non-participating" not in descriptor and re.search(r"\bparticipating\b", descriptor):
-            is_par = True
+        uin = m.get("uin")
+        if not uin:
+            continue
+        cards = (
+            fact_cards.get_all(uin)
+            if hasattr(fact_cards, "get_all")
+            else [c for c in [fact_cards.get(uin)] if c]
+        )
+        for card in cards:
+            flags = card.get("structural_flags") or {}
+            if flags.get("is_unit_linked"):
+                is_ulip = True
+            if flags.get("is_participating"):
+                is_par = True
     return ProductContext(is_ulip=is_ulip, is_par=is_par, has_product=has_product)
 
 

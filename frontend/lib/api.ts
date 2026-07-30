@@ -6,19 +6,34 @@
 import type {
   Annotation,
   AuditRow,
+  CheckSummary,
   ComplianceResults,
   DashboardSummary,
   DocUsageRow,
+  DocumentComment,
   DocumentComparison,
   KnowledgeBaseSearchResponse,
   SearchHit,
+  LearningCalibration,
+  LearningFunnel,
+  LearningLatency,
+  LearningPrecision,
   Me,
+  ModelsHealth,
   ProjectionResponse,
+  RagHealth,
+  RepeatedPatterns,
+  RunDiff,
+  RunSummary,
   Rule,
   RuleAuditRow,
+  RuleReliabilityHistory,
   RunRow,
   SessionRow,
   Submission,
+  SubmissionRevision,
+  RevisionSource,
+  ReviewerActionType,
   TimeseriesResponse,
   TopRulesResponse,
   UsageSummary,
@@ -109,6 +124,68 @@ export async function deleteSubmission(id: string): Promise<{ message: string }>
   return jsonFetch(`${base()}/submissions/${id}`, { method: "DELETE" });
 }
 
+/** The one mutation primitive behind manual edits/apply-fix/bulk-apply/restore
+ * — records a new content revision and makes it the submission's current
+ * content. */
+export async function applySubmissionRevision(
+  submissionId: string,
+  body: {
+    content: string;
+    source: RevisionSource;
+    note?: string;
+    applied_violation_ids?: string[];
+  }
+): Promise<SubmissionRevision> {
+  return jsonFetch(`${base()}/submissions/${submissionId}/revisions`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Full revision history for a submission, oldest first (matches the
+ * backend's ordering) — feeds VersionHistoryPopover's View/Restore list. */
+export async function listSubmissionRevisions(
+  submissionId: string
+): Promise<{ revisions: SubmissionRevision[] }> {
+  return jsonFetch(`${base()}/submissions/${submissionId}/revisions`);
+}
+
+// These URLs are consumed by the browser (<img src>), so they must use the
+// browser base on BOTH server render and client — mirrors comparisonPageImageUrl.
+export function submissionPageImageUrl(submissionId: string, n: number): string {
+  return `${BROWSER_BASE}/submissions/${submissionId}/pages/${n}`;
+}
+
+/** Create a freestanding reviewer note anchored to a text selection (or a
+ * PDF page number, for PdfPagePane) — mirrors comparisons.py's annotation
+ * shape but each comment is its own row. */
+export async function createSubmissionComment(
+  submissionId: string,
+  body: { anchor_text?: string | null; page_number?: number | null; body: string }
+): Promise<DocumentComment> {
+  return jsonFetch(`${base()}/submissions/${submissionId}/comments`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export type SubmissionExportKind =
+  | "clean.docx"
+  | "clean.pdf"
+  | "annotated.docx"
+  | "annotated.pdf"
+  | "report.docx"
+  | "report.pdf"
+  | "feedback-report.docx"
+  | "feedback-report.pdf"
+  | "bundle.zip";
+
+/** Same-origin URL for a submission export artifact (feed to a download
+ * anchor / window.open) — mirrors exportComparisonUrl for Compare. */
+export function exportSubmissionUrl(id: string, kind: SubmissionExportKind): string {
+  return `${BROWSER_BASE}/submissions/${id}/export/${kind}`;
+}
+
 /* ---------- compliance ---------- */
 export async function analyzeSubmission(id: string) {
   return jsonFetch<{ message: string; submission_id: string; status: string }>(
@@ -122,8 +199,22 @@ export async function analyzeSubmissionSync(id: string) {
 export async function getComplianceResults(id: string): Promise<ComplianceResults> {
   return jsonFetch(`${base()}/compliance/results/${id}`);
 }
-export async function getCheck(checkId: string) {
+export async function getCheck(checkId: string): Promise<CheckSummary> {
   return jsonFetch(`${base()}/compliance/check/${checkId}`);
+}
+
+/** Reviewer-facing run history for a submission, oldest to newest — feeds the
+ * "Run #N of M" picker and the historical-run banner. */
+export async function listSubmissionRuns(
+  submissionId: string
+): Promise<{ submission_id: string; runs: RunSummary[] }> {
+  return jsonFetch(`${base()}/compliance/submissions/${submissionId}/runs`);
+}
+
+/** Diff one run's violations against `previous` (the prior run_number) or an
+ * explicit run id (e.g. the latest run, for "Compare to latest"). */
+export async function diffRun(runId: string, against: string = "previous"): Promise<RunDiff> {
+  return jsonFetch(`${base()}/compliance/runs/${runId}/diff?against=${encodeURIComponent(against)}`);
 }
 
 /* ---------- adaptive rule weights (HITL feedback) ---------- */
@@ -142,6 +233,35 @@ export async function submitViolationFeedback(
   reliability: number | null;
 }> {
   return jsonFetch(`${base()}/compliance/violations/${violationId}/feedback`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** The real reviewer-action taxonomy (Correct / Not-a-violation / Dismiss)
+ * replacing the binary accept/reject shim above. correct/not_violation still
+ * update the fired rule's reliability (delegated server-side); dismiss does
+ * not. */
+export async function submitReviewerAction(
+  violationId: string,
+  body: {
+    action: ReviewerActionType;
+    reason?: string;
+    explanation?: string;
+    final_text?: string;
+    severity_override?: string;
+  }
+): Promise<{
+  violation_id: string;
+  rule_id: string | null;
+  action: string;
+  weight_updated: boolean;
+  reliability: number | null;
+  routed_queue: string | null;
+  review_status: string | null;
+  resolved_at: string | null;
+}> {
+  return jsonFetch(`${base()}/compliance/violations/${violationId}/actions`, {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -232,9 +352,37 @@ export async function getTopRules(limit: number = 10): Promise<TopRulesResponse>
   return jsonFetch(`${base()}/dashboard/top-rules?limit=${limit}`);
 }
 
+/* ---------- model learning ---------- */
+export async function getLearningFunnel(): Promise<LearningFunnel> {
+  return jsonFetch(`${base()}/model-learning/funnel`);
+}
+export async function getLearningPrecision(
+  by: "rule" | "category" | "severity" = "rule"
+): Promise<LearningPrecision> {
+  return jsonFetch(`${base()}/model-learning/precision?by=${by}`);
+}
+export async function getLearningCalibration(): Promise<LearningCalibration> {
+  return jsonFetch(`${base()}/model-learning/calibration`);
+}
+export async function getRuleReliabilityHistory(ruleId: string): Promise<RuleReliabilityHistory> {
+  return jsonFetch(`${base()}/model-learning/rule-reliability-history?rule_id=${ruleId}`);
+}
+export async function getLearningLatency(): Promise<LearningLatency> {
+  return jsonFetch(`${base()}/model-learning/latency`);
+}
+export async function getRepeatedPatterns(minSubmissions: number = 2): Promise<RepeatedPatterns> {
+  return jsonFetch(`${base()}/model-learning/repeated-patterns?min_submissions=${minSubmissions}`);
+}
+
 /* ---------- health ---------- */
 export async function health(): Promise<{ status: string; llm_available: boolean }> {
   return jsonFetch(`${base()}/health`);
+}
+export async function healthRag(): Promise<RagHealth> {
+  return jsonFetch(`${base()}/health/rag`);
+}
+export async function healthModels(): Promise<ModelsHealth> {
+  return jsonFetch(`${base()}/health/models`);
 }
 
 /* ---------- knowledge base ---------- */

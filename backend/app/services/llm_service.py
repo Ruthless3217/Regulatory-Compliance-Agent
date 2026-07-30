@@ -664,7 +664,11 @@ class LLMService:
                         db=db,
                         execution_id=execution_id,
                         tool_name=tool_name,
-                        input_data={"prompt": prompt[:500]},
+                        input_data={
+                            "prompt": prompt[:500],
+                            "model": model,
+                            "provider": self.provider,
+                        },
                         output_data=result.model_dump(mode='json'),
                         start_time=start_time,
                         end_time=end_time,

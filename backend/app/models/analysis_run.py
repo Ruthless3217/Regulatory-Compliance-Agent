@@ -29,6 +29,10 @@ class AnalysisRun(Base):
     # per-candidate accept/reject debug, grounding mix, degradation flags
     # (migration 0022, RETRIEVAL_RCA.md §4).
     run_metadata = Column(JSONB, nullable=True)
+    # Which scoring-policy revision (settings.SCORING_POLICY_VERSION) computed
+    # this run's score — stamped at open_run time so a later policy change
+    # can't silently make historic scores incomparable (migration 0029).
+    scoring_policy_version = Column(String(32), nullable=True)
 
     # Relationships
     submission = relationship("Submission", backref="runs")
