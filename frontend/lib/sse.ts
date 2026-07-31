@@ -72,6 +72,83 @@ function parseSSEEvent(raw: string): { event: string; data: string } | null {
 /**
  * React hook: runs an SSE stream with auto-abort on unmount.
  */
+/**
+ * One live stream per path, shared by every subscriber.
+ *
+ * Why this exists: aborting the fetch does NOT stop the work. The analyze
+ * endpoint spawns the run and then deliberately lets it finish even if the
+ * client goes away ("Let it finish in background — don't cancel mid-flight",
+ * compliance.py). So every POST that reaches the server costs a full analysis,
+ * whether or not the browser still cares about the response.
+ *
+ * A second POST therefore is not a wasted request, it is a second graded run:
+ * ~100 LLM calls, competing for the same token quota as the first. Production
+ * logs on 2026-07-31 showed two stream POSTs ~600ms apart and two complete runs
+ * for one document. Anything that remounts the component — StrictMode's
+ * double-invoke, a router.refresh(), a parent re-render — used to buy another
+ * one.
+ *
+ * Subscribers attach to the existing stream instead of opening their own, and
+ * teardown is deferred briefly so an immediate remount reattaches to the live
+ * stream rather than racing its abort.
+ */
+type StreamEntry = {
+  ctrl: AbortController;
+  subscribers: Set<SSEHandler>;
+  closeTimer: ReturnType<typeof setTimeout> | null;
+};
+
+const _streams = new Map<string, StreamEntry>();
+
+// Long enough to span a synchronous unmount/remount, short enough that a real
+// navigation away still tears the stream down promptly.
+const _TEARDOWN_GRACE_MS = 250;
+
+function _subscribe(path: string, body: unknown, handler: SSEHandler): () => void {
+  let entry = _streams.get(path);
+
+  if (entry) {
+    // A stream is already live (or pending teardown) for this path — join it.
+    if (entry.closeTimer !== null) {
+      clearTimeout(entry.closeTimer);
+      entry.closeTimer = null;
+    }
+    entry.subscribers.add(handler);
+  } else {
+    const ctrl = new AbortController();
+    const created: StreamEntry = { ctrl, subscribers: new Set([handler]), closeTimer: null };
+    _streams.set(path, created);
+    entry = created;
+
+    const fanout: SSEHandler = (e, d) => {
+      for (const sub of Array.from(created.subscribers)) sub(e, d);
+    };
+
+    streamSSE(path, body, fanout, ctrl.signal)
+      .catch((err) => {
+        if (ctrl.signal.aborted) return;
+        fanout("error", JSON.stringify({ message: String(err) }));
+      })
+      .finally(() => {
+        // Only clear if this entry is still the current one for the path;
+        // a later subscriber may already have started a fresh stream.
+        if (_streams.get(path) === created) _streams.delete(path);
+      });
+  }
+
+  const joined = entry;
+  return () => {
+    joined.subscribers.delete(handler);
+    if (joined.subscribers.size > 0 || joined.closeTimer !== null) return;
+    joined.closeTimer = setTimeout(() => {
+      if (joined.subscribers.size === 0) {
+        joined.ctrl.abort();
+        if (_streams.get(path) === joined) _streams.delete(path);
+      }
+    }, _TEARDOWN_GRACE_MS);
+  };
+}
+
 export function useSSEStream(
   path: string | null,
   body: unknown,
@@ -82,12 +159,10 @@ export function useSSEStream(
 
   useEffect(() => {
     if (!path) return;
-    const ctrl = new AbortController();
-    streamSSE(path, body, (e, d) => onEventRef.current(e, d), ctrl.signal).catch((err) => {
-      if (ctrl.signal.aborted) return;
-      onEventRef.current("error", JSON.stringify({ message: String(err) }));
-    });
-    return () => ctrl.abort();
+    // Stable identity so the registry can add/remove exactly this subscriber
+    // while still calling the latest handler.
+    const handler: SSEHandler = (e, d) => onEventRef.current(e, d);
+    return _subscribe(path, body, handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
 }

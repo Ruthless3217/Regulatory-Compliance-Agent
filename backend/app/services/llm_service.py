@@ -40,6 +40,13 @@ T = TypeVar("T", bound=BaseModel)
 
 logger = logging.getLogger(__name__)
 
+# health_check() cache: model -> (monotonic_timestamp, ok). Keyed by model so
+# the analysis / chat / critic profiles never share a verdict. Monotonic clock
+# so a system clock change can't pin a stale entry as fresh forever.
+_HEALTH_TTL_SECONDS = 60.0
+_HEALTH_CACHE: Dict[str, tuple] = {}
+_monotonic = time.monotonic
+
 
 async def _record_budget_tokens(tokens: int) -> None:
     """Add real token usage to the global daily budget counter. Best-effort:
@@ -263,25 +270,50 @@ class LLMService:
         return params
 
     async def health_check(self) -> bool:
-        """Check if LLM service is available.
+        """Check if LLM service is available. Result is cached per model for
+        ``_HEALTH_TTL_SECONDS``.
 
         Azure OpenAI does not expose ``/models`` on the resource root, so
         ``models.list()`` 404s there even when chat calls succeed. Treat that as
         available rather than failing the probe (and warning about a non-issue).
+
+        The cache is not an optimisation, it is a quota fix. GET /health calls
+        this on every request and the frontend polls it continuously; in
+        production that was ~2 live Azure round-trips every 10s (~17k/day),
+        drawn from the SAME per-minute token quota the analysis pipeline needs,
+        so health polling was actively slowing down grading. Note also that on
+        Azure both branches below return True — there, the network call cannot
+        change the answer at all.
         """
+        now = _monotonic()
+        cached = _HEALTH_CACHE.get(self.model)
+        if cached is not None and now - cached[0] < _HEALTH_TTL_SECONDS:
+            return cached[1]
+
         try:
             await self.client.models.list()
             logger.info(f"✅ LLM service available with model '{self.model}'")
-            return True
+            ok = True
         except Exception as e:
-            if settings.llm_is_azure:
+            # NB: this used to read `settings.llm_is_azure`, which does not
+            # exist on Settings — accessing it raises AttributeError, so this
+            # entire fallback could never run. It went unnoticed because
+            # models.list() succeeds against the current Azure resource, so the
+            # except branch is normally dead. The moment Azure did 404 (the
+            # exact case the fallback documents) the probe would have raised
+            # instead of reporting available.
+            if str(settings.llm_provider).strip().lower() == "azure":
                 logger.info(
                     f"Azure endpoint has no models.list; assuming deployment "
                     f"'{self.model}' is available (chat calls verified at runtime)"
                 )
-                return True
-            logger.warning(f"LLM health check failed: {str(e)}")
-            return False
+                ok = True
+            else:
+                logger.warning(f"LLM health check failed: {str(e)}")
+                ok = False
+
+        _HEALTH_CACHE[self.model] = (now, ok)
+        return ok
 
     @traceable(run_type="llm", name="LLM.generate_response")
     async def generate_response(

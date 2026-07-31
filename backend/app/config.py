@@ -313,10 +313,18 @@ class Settings(BaseSettings):
     product_docs_top_k: int = 3          # brochure passages per chunk (Path B)
     product_match_max: int = 3           # max products grounded per document
 
-    # Max chunks graded concurrently. Keep low to avoid bursting past the
-    # provider's per-minute token limit — raises to 429 → chunk fails →
-    # run closes at "waiting_for_review". Override via env.
-    grade_concurrency: int = 2
+    # Max chunks graded concurrently. The ceiling exists because a 429 fails
+    # the chunk, which closes the whole run at "needs_review" — throughput is
+    # bounded by the provider's per-minute token limit, not by CPU.
+    #
+    # Was 2, calibrated for the Groq free tier. Production now runs a dedicated
+    # Azure deployment with its own TPM quota, where 2 left the pipeline idle:
+    # a measured run spent ~5.5 min on one brochure at ~3 LLM calls per chunk
+    # (grade + completeness sweep + critic) two chunks at a time. Raised to 6.
+    # If 429s appear, lower it — do NOT raise this to chase speed without
+    # checking the deployment's TPM headroom first, since the failure mode is a
+    # lost run rather than a slow one.
+    grade_concurrency: int = 6
 
     # Completeness sweep (recall fix 2026-06-08): run a second per-chunk "what did
     # you miss?" grading pass and merge the additional findings. A single
