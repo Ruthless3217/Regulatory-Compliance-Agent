@@ -62,13 +62,24 @@ recorded as compliant.
 We report the system's architectural history across five months of
 development, including several instances where a design was reversed after
 production evidence contradicted it. We then present an honest measurement of
-the deployed system over 29 documents and 1{,}537 findings, which surfaces
-three material limitations: a corpus in which 58.4\,\% of precedents carry no
-usable product scope, an aggregate scoring path that disagrees with its own
-subscores, and the highest-firing rule family exhibiting zero reviewer-accepted
-precision on a small sample. We argue that the reporting of such negative
-results is the substantive contribution: the mechanisms that make this system
-safe are inseparable from the mechanisms that make its failures visible.
+the deployed system over 29 documents and 1{,}537 findings, which surfaces four
+material limitations: a product-scoping layer that is correct but starved ---
+58.4\,\% of precedents and 95.3\,\% of rules carry no usable scope; a rename
+applied as a repository-wide text substitution that corrupted regular
+expressions, mandated disclaimer wording and a seed rule simultaneously,
+producing the highest-firing and least precise rule family in production; an
+aggregate scoring path that disagrees with its own subscores; and a product
+identity keyed on a regulatory identifier that three source records answer
+differently.
+
+We also report three quality gates that were specified and then bypassed --- an
+A/B blocked by a provider quota, an end-to-end suite never written, and an
+audit table nothing writes to --- and a monitoring check of our own that raised
+a false alarm on a healthy corpus. We argue that reporting such results is the
+substantive contribution: the mechanisms that make this system safe are
+inseparable from the mechanisms that make its failures visible, and an
+engineering literature that publishes only confirmed root causes overstates how
+legible production failures are.
 \end{abstract}
 
 \section{Introduction}
@@ -107,8 +118,10 @@ to record a grade for any run it cannot justify.
   \item A \emph{deterministic applicability layer} separating regulatory
         applicability from semantic similarity, motivated by a root-cause
         analysis of cross-product contamination (Section~\ref{sec:applicability}).
-  \item An \emph{honest measurement} of the deployed system, including three
-        negative results (Section~\ref{sec:evaluation}).
+  \item An \emph{honest measurement} of the deployed system, including four
+        negative results, three bypassed quality gates, a self-inflicted false
+        alarm, and three investigations that exonerated a plausible suspect
+        (Section~\ref{sec:evaluation}).
 \end{enumerate}
 
 \section{System Overview}
@@ -445,7 +458,9 @@ novel findings hallucinating.
 
 \begin{table}[htbp]
 \centering
-\caption{Development baseline, 27 May 2026.}
+\caption{Development baseline, 27 May 2026. Nine to ten documents; the
+run terminated early on a provider quota.}
+\label{tab:baseline}
 \begin{tabular}{@{}lr@{}}
 \toprule
 \textbf{Metric} & \textbf{Value} \\
@@ -508,19 +523,94 @@ Savings    &  74 &  3.0 & scoped \\
 \end{tabular}
 \end{table}
 
-Two observations. First, the applicability layer is correct but
-under-supplied: the majority of the corpus is exempt from the scoping it
-implements. Second, the corpus contains \emph{no} instances of the
+The rule corpus is worse. Read from the same deployment:
+
+\begin{table}[htbp]
+\centering
+\caption{Rule scope coverage, 148 active rules.}
+\begin{tabular}{@{}lr r@{}}
+\toprule
+\textbf{Scope} & \textbf{Rules} & \textbf{\%} \\
+\midrule
+\textbf{(global --- untagged)} & \textbf{141} & \textbf{95.3} \\
+ulip & 3 & 2.0 \\
+rider / par / pension\_annuity / group & 1 each & 2.7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The seven scoped rules are exactly the seven hand-tagged entries in the seed
+YAML. \emph{Every} machine-extracted rule --- roughly half the live corpus ---
+is untagged and therefore applies to every product.
+
+Three observations. First, the applicability layer is correct but
+under-supplied: the majority of both corpora is exempt from the scoping it
+implements. Verifying a filter is not the same as verifying that anything
+reaches it. Second, the precedent corpus contains \emph{no} instances of the
 participating/non-participating distinction, because those ingest heuristics
-postdate the corpus. The market segmentation the business considers primary is
-therefore unexpressed at the precedent level.
+postdate the corpus; the market segmentation the business considers primary is
+unexpressed at the precedent level. Third, this is a \emph{supply} failure, not
+a mechanism failure --- and the two demand entirely different remedies, which
+is why measuring coverage before optimising retrieval mattered.
 
-This also bounds an apparently attractive optimisation. Pushing the scope
-filter into SQL --- retrieving within scope rather than filtering afterwards
---- yields less than expected when 58.4\,\% of rows must be retained
-regardless.
+It also bounds an apparently attractive optimisation. Pushing the scope filter
+into SQL --- retrieving within scope rather than filtering afterwards --- buys
+little when 58.4\,\% of precedents and 95.3\,\% of rules must be retained
+regardless. The optimisation was designed, costed against this measurement, and
+deliberately not shipped.
 
-\subsection{Negative result 2: aggregate--subscore disagreement}
+\subsection{Negative result 2: a text substitution that reached production}
+\label{sec:brand}
+
+The three highest-firing rules in the deployment are brand-name conventions
+(45, 23 and 9 activations) and reviewers rejected every one they adjudicated.
+An audit of the corpus supplies the mechanism, and it is not ``brand rules are
+inherently fuzzy''.
+
+A company rename was applied as a repository-wide textual find-and-replace of
+the old entity name. Brand strings in this system are simultaneously three
+things --- stored data, regular-expression \emph{source}, and ground truth
+injected into prompts --- so one substitution corrupted all three layers at
+once:
+
+\begin{itemize}
+  \item A product-name regex was left containing the literal residue of an
+        optional group whose contents had been deleted. Legacy brochures
+        naming the old entity then extracted \emph{no} product name, and the
+        company-name rejection pattern stopped matching --- so a running page
+        header could be ingested \emph{as} a product name, which then poisoned
+        an exact-equality \code{product\_name} retrieval filter.
+  \item Three mandated-disclaimer registry texts became tautologies of the form
+        ``X (formerly known as X)''. Notably this did \emph{not} break
+        matching: measured similarity remained $\approx 0.98$. The engine held
+        up nonsense as the approved wording, and the similarity metric was
+        robust enough to conceal it.
+  \item A seed brand rule became self-nullifying: both of its clauses ---
+        ``must appear in full at first mention'' and ``is acceptable
+        thereafter'' --- were reduced to the \emph{same string}. The rule is
+        unenforceable, it is judged by an LLM, and it carries severity
+        \emph{high}.
+\end{itemize}
+
+That last item closes the loop on the production measurement. An LLM asked to
+adjudicate a tautological predicate at high severity will fire on essentially
+any brand mention, which is precisely the observed behaviour: highest volume,
+zero reviewer-accepted precision. The 0\,\% precision is not evidence that the
+model is bad at brand rules; it is evidence that it was asked an incoherent
+question. A fourth defect had the mirror-image effect --- a product fact card
+was rewritten to describe the \emph{current} brand as legacy, and fact cards
+are injected verbatim into prompts as ground truth, giving the strongest
+available mechanism for flagging correct copy as wrong.
+
+The remediation is the interesting part. Rather than a corrective
+find-and-replace, an entity registry was introduced in which aliases carry
+status (\textit{current}, \textit{former}, \textit{prohibited}) and effective
+dates, under an explicit principle: \emph{historical names are never rewritten
+in stored records; they are mapped through the registry at match time}. The
+incident is a compact argument that in a system where data and code share a
+vocabulary, bulk text edits are a schema change performed without a migration.
+
+\subsection{Negative result 3: aggregate--subscore disagreement}
 
 The deployed report surface displays an overall score of 0.0 alongside
 component scores of 35.8--99.1 for the same document. No weighting of those
@@ -535,20 +625,106 @@ cost of the deliberate decision in Section~\ref{sec:failclosed} to persist
 suppressed findings rather than discard them. Introducing a second class of
 finding requires every consumer to state which class it counts.
 
-\subsection{Negative result 3: rule precision}
+\subsection{Negative result 4: rule precision}
 
-The highest-firing rules --- brand-name conventions, 45, 23 and 9 activations
---- have been rejected by reviewers in every instance so far adjudicated (0\,\%
-precision on 4 and 2 verdicts respectively). With 22 verdicts against 1{,}308
-findings, this is a signal to investigate rather than a conclusion. But the
-direction is consistent with the $3\times$ over-generation of the development
-baseline and with Medium severity comprising 80\,\% of all findings: the system
-is producing high-volume, low-specificity output in one rule family.
+The rules of Section~\ref{sec:brand} were rejected by reviewers in every
+instance so far adjudicated (0\,\% precision on 4 and 2 verdicts
+respectively). With 22 verdicts against 1{,}308 findings, this is a signal to
+investigate rather than a conclusion. But the direction is consistent with the
+$3\times$ over-generation of the development baseline and with Medium severity
+comprising 80\,\% of all findings.
 
 Notably, this was surfaced \emph{by the system's own analytics}, because
 reviewer verdicts are recorded per rule with provenance. The instrumentation
 built to demonstrate improvement was the instrumentation that revealed the
 defect.
+
+\subsection{Identity is not equality: a corpus with three answers}
+
+Product identity is keyed on the regulatory UIN. An audit of 44 product fact
+cards found they resolve to only \textbf{41 distinct UINs} --- two collision
+groups, both unit-linked. One UIN carries three variant brochures whose
+\code{offers\_guaranteed\_benefits} flags \emph{disagree}: two assert true, one
+false. That flag gatekeeps whether ``guaranteed'' claims are permissible.
+
+The loader resolved collisions by last-file-wins, so every document for that
+UIN was graded against whichever card sorted last by \emph{filename} --- two of
+three records discarded on every lookup, and the selected one asserting the
+permissive value. A second consequence: the product resolver emitted one entry
+per \emph{card} rather than per UIN, so variant cards consumed the
+resolved-product budget and displaced genuinely different products.
+
+The proposed remedy is instructive because it was \emph{not} shipped
+unilaterally: grade against the union of guardrails with a logical OR on the
+guarantee flag so that ``the gate stays closed'', or route the document to
+human review with \code{degraded="product\_ambiguous"}. Both change grading
+outcomes, so both were gated on compliance sign-off rather than merged as
+bugfixes. The same repository already applied the stricter posture elsewhere
+--- the disclaimer registry treats a duplicate identifier as a load error and
+fails closed --- so the defect is better characterised as an \emph{inconsistently
+applied} principle than a missing one.
+
+\subsection{Three quality gates that were defined and then bypassed}
+
+Each of the following was specified as a gate, and each was passed without
+being satisfied. We report them because the pattern --- not any individual
+instance --- is the finding.
+
+\begin{enumerate}
+  \item \textbf{An A/B that hit a quota.} Cross-chunk context was to ship or
+        not ship ``based on eval delta''. The evaluation was blocked by a
+        free-tier provider limit that terminated the run at document 37 of 40,
+        was marked an optional follow-up, and the feature shipped enabled by
+        default. The delta was never obtained.
+  \item \textbf{An end-to-end suite that was never written.} The original plan
+        made a browser golden-path test an acceptance gate for the phase
+        containing the project's six numeric success criteria. No such test
+        exists in the repository. Consequently \emph{none} of the stated
+        latency targets has ever been measured --- they are targets, not
+        results, and this paper does not report them as achieved.
+  \item \textbf{An audit table nothing writes to.} A migration added an
+        append-only history for learned rule reliability precisely because the
+        live counters are mutated in place. The table, model and endpoint all
+        shipped; no code path inserted a row. The endpoint reported
+        \code{insufficient\_data}, which was honest, and the gap persisted
+        undetected until the reliability panel was actually opened.
+\end{enumerate}
+
+\subsection{A preflight check that cried wolf}
+
+While preparing this deployment we added a preflight verifier. On its first
+production run it reported that the corpus was embedded with one model while
+the configured model was another, and concluded ``retrieval fails closed''.
+
+Retrieval was fine. The check compared against a configuration key that
+\emph{names} an embedding model but drives nothing; the runtime guard compares
+against the live embedder's identity, which on this provider is the deployment
+name. The two agreed. The check did not.
+
+We record this because the failure mode is specific to fail-closed systems. The
+report named the wrong variable and asserted an outage, and the obvious
+remedial action it invited --- re-embedding 2{,}440 precedents --- would have
+cost real money to fix nothing. A monitor that produces false alarms on a
+system designed to fail closed does not merely waste time; it trains the
+operator to discount exactly the class of alarm the design depends on. The fix
+was to resolve the expected identity through the same path the guard uses, so
+the two cannot diverge again.
+
+\subsection{Results that were measured and found \emph{not} to be causes}
+
+Three investigations concluded that a plausible suspect was innocent: the UIN
+collisions above could not have produced the disclosure false-positive, because
+the disclaimer in question declares no product lines and therefore never
+consults product context; the brand rename likewise did not cause it; and the
+tautological legal footer did not degrade matching at all, measuring
+$\approx 0.98$ similarity.
+
+We report these because an engineering literature that publishes only
+confirmed root causes overstates how legible production failures are. Two of
+the three suspects were independently plausible, and one of them --- the
+corrupted footer --- was a genuine defect that simply was not \emph{this}
+defect. Separating ``is broken'' from ``caused this'' required measurement in
+every case.
 
 \section{Discussion}
 
@@ -565,24 +741,95 @@ editorial one. In a regulated setting, ``which model graded this document'' is
 an audit question, and the deployed system answered it two different ways on
 two different screens.
 
+Two further cases are operationally sharper, because a reader following the
+document would break the system. Two production runbooks in the same repository
+prescribe \emph{incompatible} embedding dimensions --- one 1536, one 1024 ---
+and the code agrees with 1024. Because the vector column width is frozen when
+the migration runs, and because the embedding-identity guard fails closed,
+following the wrong runbook yields a database the query path refuses to serve,
+and re-running migrations cannot repair it. Separately, a migration runbook
+instructs the operator to verify 45 product fact cards; the repository contains
+44, so the verification step fails as written against a correct installation.
+
+The general lesson is that prose describing a system decays at a different rate
+from the system, and the decay is invisible until someone acts on it.
+Documentation that carries \emph{constants} --- dimensions, counts, model names
+--- is executable in the hands of an operator, and deserves the same treatment
+as code that carries them: a single source, or a test.
+
+\subsection{What the original design promised}
+
+The founding specification is a useful control, because it recorded scope
+decisions explicitly. Several were later reversed, and the reversals cluster:
+
+\begin{itemize}
+  \item ``The existing 5-node workflow is \emph{untouched} --- wrap, don't
+        modify'' was stated as a hard cross-cutting constraint. The graph is
+        now six nodes and the analysis node was rewritten from a rule grader
+        into the multi-tier grounding engine described here.
+  \item Authentication and RBAC were declared out of scope. Both shipped, with
+        a full scope taxonomy, driven by a separate design series that did not
+        exist when the constraint was written.
+  \item Applying a suggested fix was specified as ``client-side only ---
+        copies to clipboard, \emph{no document mutation}''. It is now a
+        server-side revision with version history.
+  \item A single named model appeared in the architecture diagram. Production
+        has since run four different providers in roughly ten weeks, and the
+        configuration default still names the first of them --- dead default
+        drift that outlived three migrations.
+\end{itemize}
+
+The pattern is that constraints written to protect a \emph{schedule} did not
+survive contact with requirements, while constraints written to protect a
+\emph{safety property} --- fail-closed persistence, held-out evaluation,
+grounding before generation --- survived every one of these rewrites intact. We
+offer that as the useful distinction for anyone writing such a document: state
+which of your constraints are commitments and which are estimates.
+
+Not every reversal was scope creep. Two were forced by the domain: the
+retrieval-relevance threshold was originally specified on a scale the fusion
+function does not produce --- rank-fusion scores are unbounded below, so a
+$0.65$ floor was not merely wrong but uninterpretable --- and was replaced by
+per-leg floors on bounded scales. Pluggable embedding providers were specified,
+built, and later deleted down to the single provider actually exercised, while
+the vector-store abstraction, which \emph{was} exercised by a real migration,
+survived. Abstraction survived exactly where it was used.
+
 \subsection{On negative results}
 
 The mechanisms that make this system safe --- per-candidate accept/reject
 provenance, held-out evaluation, honest \code{insufficient\_data} responses,
 suppressed-but-persisted findings --- are the same mechanisms that made the
-three negative results in Section~\ref{sec:evaluation} discoverable. A system
-built to look successful would have reported a mean compliance score and
-stopped.
+negative results in Section~\ref{sec:evaluation} discoverable. A system built to
+look successful would have reported a mean compliance score and stopped.
+
+The strongest form of this argument is the reliability-history table: shipping
+an endpoint that answers \emph{``I cannot tell you''} is what made a silent gap
+visible. Had it defaulted to an empty chart, the absence of a write path would
+have read as an absence of feedback.
 
 \section{Limitations}
 
 The evaluation is observational, on a single deployment, with 1.7\,\% reviewer
 adjudication coverage; precision figures are indicative only. No inter-rater
 agreement was measured. No ablation isolates the contribution of individual
-grounding tiers. The development baseline covers 9--10 documents. Cost
-telemetry was not functioning during measurement, so efficiency claims are not
-made. The system has not been compared against a human-reviewer control or a
-non-grounded baseline; such a comparison is the obvious next work.
+grounding tiers. Cost telemetry was not functioning during measurement, so
+efficiency claims are not made. The system has not been compared against a
+human-reviewer control or a non-grounded baseline; such a comparison is the
+obvious next work.
+
+The development baseline in Table~\ref{tab:baseline} deserves a sharper
+caveat than it usually receives: it covers 9--10 documents and the run
+terminated on a provider quota, so it is a partial sample of a small sample.
+The reviewer-voice corpus that motivated the redesign comprises 35 comments
+drawn from two source documents. Neither supports a claim about the population
+of marketing copy; both were sufficient to identify \emph{qualitative} failure
+modes, which is the use we make of them.
+
+Finally, the four latency and startup targets in the founding specification are
+quoted in this paper only as \emph{targets}. The acceptance test that would
+have measured them was never written, so we have no basis to report whether any
+was met, and we do not.
 
 \section{Conclusion}
 
