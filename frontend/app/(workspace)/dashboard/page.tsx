@@ -24,6 +24,9 @@ interface Summary {
   stats?: {
     total_submissions?: number;
     total_violations?: number;
+    scored_violations?: number;
+    suppressed_findings?: number;
+    total_findings?: number;
     active_rules?: number;
     average_score?: number;
     total_checks?: number;
@@ -85,7 +88,7 @@ export default async function DashboardPage() {
   const avgScore = stats.average_score ?? 0;
   const hasData =
     (stats.total_submissions ?? 0) > 0 ||
-    (stats.total_violations ?? 0) > 0 ||
+    (stats.total_findings ?? stats.total_violations ?? 0) > 0 ||
     byCat.length > 0 ||
     bySev.length > 0;
 
@@ -97,7 +100,8 @@ export default async function DashboardPage() {
         meta={
           <>
             <PageHeaderMeta label="Submissions" value={stats.total_submissions ?? 0} />
-            <PageHeaderMeta label="Violations" value={stats.total_violations ?? 0} />
+            <PageHeaderMeta label="Scored findings" value={stats.scored_violations ?? stats.total_violations ?? 0} />
+            <PageHeaderMeta label="Needs review" value={stats.suppressed_findings ?? 0} />
             <PageHeaderMeta label="Avg score" value={avgScore.toFixed(1)} />
             <PageHeaderMeta label="Active rules" value={stats.active_rules ?? 0} />
           </>
@@ -135,9 +139,9 @@ export default async function DashboardPage() {
                 icon={<FileText className="h-3.5 w-3.5" />}
               />
               <StatCard
-                label="Violations caught"
-                value={stats.total_violations ?? 0}
-                sub="across all checks"
+                label="Scored findings"
+                value={stats.scored_violations ?? stats.total_violations ?? 0}
+                sub={String(stats.suppressed_findings ?? 0) + " additional findings need review"}
                 icon={<AlertOctagon className="h-3.5 w-3.5" />}
               />
               <StatCard
@@ -150,7 +154,7 @@ export default async function DashboardPage() {
               <StatCard
                 label="Auto-fix rate"
                 value={stats.auto_fix_rate !== undefined ? `${stats.auto_fix_rate}%` : "—"}
-                sub={`${stats.auto_fixable_count ?? 0}/${stats.total_violations ?? 0} fixable`}
+                sub={String(stats.auto_fixable_count ?? 0) + "/" + String(stats.scored_violations ?? stats.total_violations ?? 0) + " scored findings fixable"}
                 tone="primary"
                 icon={<Wrench className="h-3.5 w-3.5" />}
               />

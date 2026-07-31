@@ -65,6 +65,7 @@ _ALIASES = {
 # vocabulary fix from silently narrowing retrieval, and tells SQL pushdown
 # which raw values it must retain alongside the in-scope ones.
 _CROSS_CUTTING = {"child"}
+_EXPLICIT_GLOBAL = {"global", "all_products"}
 
 
 def is_cross_cutting(raw: Optional[str]) -> bool:
@@ -165,6 +166,8 @@ def _judge(scope: RetrievalScope, raw_tag: Optional[str]) -> Tuple[str, str]:
     """(verdict, reason) for one candidate under the contract."""
     if not scope.resolved:
         return "accepted", "scope_unresolved: no product identified; nothing rejected (C3)"
+    if raw_tag and str(raw_tag).strip().lower() in _EXPLICIT_GLOBAL:
+        return "accepted", f"global_explicit: {raw_tag!r} applies to every product"
     if is_cross_cutting(raw_tag):
         # Recognised, deliberately non-scoping (e.g. 'child' spans a ULIP
         # variant AND a term-plan rider). Accepted on purpose, not because the

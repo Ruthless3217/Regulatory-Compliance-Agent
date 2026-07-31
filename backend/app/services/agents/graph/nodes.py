@@ -743,6 +743,20 @@ async def preprocess_node(state: ComplianceState) -> Dict:
 
         md = dict(state.get("metadata") or {})
         md["product_match"] = product_match
+        ambiguous_uins = _ambiguous_product_uins(product_match)
+        if ambiguous_uins:
+            # A UIN is the key used to inject deterministic fact cards.  When
+            # more than one variant answers that key, choosing one card would
+            # make grading depend on filename order (and can select the more
+            # permissive guarantee flag).  Preserve the candidates for the
+            # reviewer, but fail closed before this run can persist a grade.
+            md.setdefault("degraded", "product_ambiguous")
+            md["product_ambiguous_uins"] = ambiguous_uins
+            logger.error(
+                "product grounding: ambiguous UIN(s) %s; routing run to "
+                "needs_review instead of selecting an arbitrary fact card",
+                ambiguous_uins,
+            )
 
         return {
             "chunks": chunks_data,
@@ -761,6 +775,15 @@ async def preprocess_node(state: ComplianceState) -> Dict:
         }
 
 
+def _ambiguous_product_uins(matches: List[Dict[str, Any]]) -> List[str]:
+    """Return stable, de-duplicated UINs whose fact-card identity is ambiguous."""
+    return sorted({
+        str(match.get("uin"))
+        for match in (matches or [])
+        if match.get("ambiguous") and match.get("uin")
+    })
+
+
 async def _resolve_product_grounding(state: Dict, chunks: List[Dict]) -> tuple:
     """Return (product_facts, product_passages) for the matched product(s).
 
@@ -774,6 +797,17 @@ async def _resolve_product_grounding(state: Dict, chunks: List[Dict]) -> tuple:
         return [], {}
     matches = (state.get("metadata") or {}).get("product_match") or []
     if not matches:
+        return [], {}
+    ambiguous_uins = _ambiguous_product_uins(matches)
+    if ambiguous_uins:
+        # Do not inject FactCardService.get()/lookup_many() output here: its
+        # compatibility path intentionally returns one deterministic variant,
+        # which is still the wrong contract for compliance grading.  The
+        # preprocess metadata makes the enclosing run non-persistable.
+        logger.warning(
+            "product grounding skipped for ambiguous UIN(s) %s",
+            ambiguous_uins,
+        )
         return [], {}
 
     uins = [m["uin"] for m in matches]

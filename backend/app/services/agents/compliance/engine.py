@@ -23,7 +23,11 @@ from app.models.compliance_check import ComplianceCheck
 from app.models.violation import Violation
 from app.schemas.compliance_schemas import ComplianceAnalysisResult
 from app.services.agents.compliance.scoring import scoring_service
-from app.services.violation_serializer import serialize_violation, latest_feedback_map
+from app.services.violation_serializer import (
+    finding_counts,
+    latest_feedback_map,
+    serialize_violation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +52,7 @@ class ComplianceEngine:
         "rag_degraded",
         "rules_unavailable",
         "disclosure_unavailable",
+        "product_ambiguous",
     }
 
     @staticmethod
@@ -82,6 +87,7 @@ class ComplianceEngine:
     _RUN_METADATA_KEYS = (
         "retrieval_debug", "grounding_mix", "product_match",
         "rag_degraded", "degraded", "analysis_failed_chunks",
+        "product_ambiguous_uins",
         "disclosure_recall_degraded", "rag_rules_per_chunk", "precedents_per_chunk",
     )
 
@@ -447,6 +453,7 @@ class ComplianceEngine:
 
         violations = db.query(Violation).filter(Violation.compliance_check_id == check.id).all()
         feedback_map = latest_feedback_map(db, [v.id for v in violations])
+        counts = finding_counts(violations)
 
         return {
             "id": str(check.id),
@@ -458,5 +465,9 @@ class ComplianceEngine:
             "checked_at": check.checked_at.isoformat() if check.checked_at else None,
             "violations": [
                 serialize_violation(v, feedback_map.get(str(v.id))) for v in violations
-            ]
+            ],
+            "violation_count": counts["scored"],
+            "suppressed_count": counts["suppressed"],
+            "finding_count": counts["total"],
+            "finding_counts": counts,
         }

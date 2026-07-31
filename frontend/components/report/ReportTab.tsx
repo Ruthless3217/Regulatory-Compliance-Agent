@@ -20,11 +20,19 @@ export function ReportTab() {
     analysisMessage,
   } = useSubmissionWorkspace();
 
+  const scoredViolations = React.useMemo(
+    () => violations.filter((v) => !v.suppressed),
+    [violations]
+  );
+  const needsReview = React.useMemo(
+    () => violations.filter((v) => v.suppressed),
+    [violations]
+  );
   const groups = React.useMemo(() => {
     const m: Record<string, typeof violations> = { critical: [], high: [], medium: [], low: [] };
-    for (const v of violations) m[normalizeSeverity(v.severity)].push(v);
+    for (const v of scoredViolations) m[normalizeSeverity(v.severity)].push(v);
     return m;
-  }, [violations]);
+  }, [scoredViolations]);
 
   // Inject print stylesheet only on this route
   React.useEffect(() => {
@@ -61,15 +69,25 @@ export function ReportTab() {
       <ScoreHero score={overallScore} grade={grade} scores={scores} />
       <input type="hidden" data-submission-id={submission.id} />
       <KPIStrip violations={violations} />
+      {needsReview.length > 0 && (
+        <div className="mx-8 mt-5 rounded-md border border-sev-medium/40 bg-sev-medium/5 px-4 py-3 text-sm">
+          <span className="font-medium">{needsReview.length} additional findings need human review.</span>
+          <span className="ml-1 text-muted-foreground">
+            They are persisted for audit but excluded from this score and the violation totals below.
+          </span>
+        </div>
+      )}
       <div className="flex items-center justify-between px-8 py-4 no-print">
         <h2 className="font-serif text-lg">Violations</h2>
         <ExportPdfButton />
       </div>
-      {violations.length === 0 ? (
+      {scoredViolations.length === 0 ? (
         <div className="px-8 pb-12 text-center text-sm text-muted-foreground">
           {analysisIncomplete
             ? "No violations were recorded because the analysis did not complete — this is not a clean result."
-            : "No violations recorded for this submission."}
+            : needsReview.length > 0
+              ? "No scored violations. Review the suppressed findings before treating the document as clean."
+              : "No violations recorded for this submission."}
         </div>
       ) : (
         SEVERITIES.map((s) => (

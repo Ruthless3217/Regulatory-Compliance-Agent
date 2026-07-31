@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getComplianceResults, getSubmission } from "@/lib/api";
 import { SubmissionHeader } from "@/components/workspace/SubmissionHeader";
 import { SubmissionWorkspaceProvider } from "@/components/workspace/SubmissionWorkspaceContext";
-import type { Submission, Violation } from "@/lib/types";
+import type { ScoreBreakdown, Submission, Violation } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,7 @@ export default async function SubmissionLayout({
   let violations: Violation[] = [];
   let overallScore: number | null = null;
   let grade: string | null = null;
-  let scores: Record<string, number> | null = null;
+  let scores: ScoreBreakdown | null = null;
   let analysisStatus: string | null = null;
   let analysisMessage: string | null = null;
   try {

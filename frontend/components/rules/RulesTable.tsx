@@ -17,6 +17,10 @@ interface Props {
 
 const CATEGORIES = ["all", "irdai", "brand", "sebi", "regulatory", "seo"] as const;
 const SEVERITIES = ["all", "critical", "high", "medium", "low"] as const;
+const PRODUCT_SCOPES = [
+  "global", "term", "ulip", "par", "non_par", "savings_endowment",
+  "pension_annuity", "rider", "group",
+] as const;
 
 type Cat = (typeof CATEGORIES)[number];
 type Sev = (typeof SEVERITIES)[number];
@@ -32,6 +36,7 @@ export function RulesTable({ initialRules }: Props) {
   const [act, setAct] = React.useState<Active>("active");
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editText, setEditText] = React.useState("");
+  const [editScope, setEditScope] = React.useState("");
   const [pending, setPending] = React.useState<Set<string>>(new Set());
 
   const filtered = rules.filter((r) => {
@@ -64,17 +69,26 @@ export function RulesTable({ initialRules }: Props) {
   const startEdit = (r: Rule) => {
     setEditingId(r.id);
     setEditText(r.rule_text);
+    setEditScope(r.product_line ?? "");
   };
   const cancelEdit = () => {
     setEditingId(null);
     setEditText("");
+    setEditScope("");
   };
   const saveEdit = async () => {
     if (!editingId) return;
+    if (!editScope) {
+      toast.error("Choose an explicit product scope before saving");
+      return;
+    }
     setBusy(editingId, true);
     try {
-      await updateRule(editingId, { rule_text: editText });
-      setRules((rs) => rs.map((x) => (x.id === editingId ? { ...x, rule_text: editText } : x)));
+      const updated = await updateRule(editingId, {
+        rule_text: editText,
+        product_line: editScope,
+      });
+      setRules((rs) => rs.map((x) => (x.id === editingId ? { ...x, ...updated } : x)));
       toast.success("Rule updated");
       cancelEdit();
     } catch (e) {
@@ -119,6 +133,7 @@ export function RulesTable({ initialRules }: Props) {
             <tr className="border-b border-border bg-muted/30 text-left">
               <th className="px-4 py-3 micro-label w-[110px]">Category</th>
               <th className="px-4 py-3 micro-label w-[90px]">Severity</th>
+              <th className="px-4 py-3 micro-label w-[150px]">Product scope</th>
               <th className="px-4 py-3 micro-label">Rule</th>
               <th className="px-4 py-3 micro-label w-[110px] text-right">Status</th>
               {canEdit && <th className="px-4 py-3 micro-label w-[120px] text-right">Actions</th>}
@@ -127,7 +142,7 @@ export function RulesTable({ initialRules }: Props) {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={canEdit ? 5 : 4} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={canEdit ? 6 : 5} className="px-4 py-10 text-center text-muted-foreground">
                   No rules match this filter.
                 </td>
               </tr>
@@ -136,6 +151,22 @@ export function RulesTable({ initialRules }: Props) {
                 <tr key={r.id} className="border-b border-border last:border-0 align-top">
                   <td className="px-4 py-3"><Badge>{categoryLabel(r.category)}</Badge></td>
                   <td className="px-4 py-3"><SeverityBadge severity={r.severity} /></td>
+                  <td className="px-4 py-3">
+                    {editingId === r.id ? (
+                      <select
+                        value={editScope}
+                        onChange={(e) => setEditScope(e.target.value)}
+                        className="h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                      >
+                        <option value="">Select scope</option>
+                        {PRODUCT_SCOPES.map((scope) => (
+                          <option key={scope} value={scope}>{categoryLabel(scope)}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Badge>{r.product_line ? categoryLabel(r.product_line) : "Unclassified"}</Badge>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     {editingId === r.id ? (
                       <Textarea

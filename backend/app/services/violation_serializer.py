@@ -19,6 +19,31 @@ from app.models.violation import Violation
 from app.models.rule_feedback import RuleFeedback
 
 
+def finding_counts(violations: List) -> Dict[str, int]:
+    """Return explicit scored/suppressed/total finding counts.
+
+    Suppressed rows are intentionally persisted for audit and human review but
+    do not affect the score. Returning one unlabeled violation_count made
+    different screens disagree depending on whether their query included that
+    review lane, so every consumer now derives all three counts together.
+    """
+    total = len(violations)
+    suppressed = sum(
+        1
+        for violation in violations
+        if bool(
+            violation.get("suppressed")
+            if isinstance(violation, dict)
+            else getattr(violation, "suppressed", False)
+        )
+    )
+    return {
+        "scored": total - suppressed,
+        "suppressed": suppressed,
+        "total": total,
+    }
+
+
 def serialize_violation(v: Violation, feedback: Optional[RuleFeedback] = None) -> dict:
     return {
         "id": str(v.id),

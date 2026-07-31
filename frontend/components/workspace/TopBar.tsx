@@ -16,8 +16,19 @@ const LABELS: Record<string, string> = {
   submissions: "Submission",
 };
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function crumbLabel(segment: string) {
-  return LABELS[segment] ?? segment.replace(/-/g, " ");
+  if (LABELS[segment]) return LABELS[segment];
+  // Never de-hyphenate an id. The kebab-to-space prettifier is for route names
+  // ("knowledge-base" -> "knowledge base"); applied to a UUID it renders
+  // "5340240a be77 48b7 ..." — which reads as the real id and gets copied as
+  // one. That produced a request to /admin/retrieval/runs/5340240a%20be77%20...
+  // and a bare 404 that looked like a missing run rather than a broken paste.
+  // Show a short prefix instead: identifiable, and useless to copy by accident.
+  if (UUID_RE.test(segment)) return `${segment.slice(0, 8)}…`;
+  return segment.replace(/-/g, " ");
 }
 
 export function TopBar() {

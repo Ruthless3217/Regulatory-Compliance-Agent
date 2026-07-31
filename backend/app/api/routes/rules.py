@@ -30,6 +30,10 @@ logger = logging.getLogger(__name__)
 _ALLOWED_DOC_EXTS = {".pdf", ".docx", ".html", ".htm", ".md", ".txt"}
 # Max chars of extracted text handed to the LLM (cost-leak guard, audit H10).
 _MAX_DOC_CHARS = 200_000
+_ALLOWED_PRODUCT_LINES = {
+    "global", "term", "ulip", "rider", "group", "savings_endowment",
+    "pension_annuity", "par", "non_par",
+}
 
 
 def safe_extension(filename: str) -> str:
@@ -80,7 +84,8 @@ async def create_rule(
         "category": new_rule.category,
         "rule_text": new_rule.rule_text,
         "severity": new_rule.severity,
-        "is_active": new_rule.is_active
+        "is_active": new_rule.is_active,
+        "product_line": new_rule.product_line,
     }
 
 
@@ -112,6 +117,7 @@ async def list_rules(
                 "rule_text": r.rule_text,
                 "severity": r.severity,
                 "is_active": r.is_active,
+                "product_line": r.product_line,
                 "points_deduction": float(r.points_deduction) if r.points_deduction else -5.0,
                 "created_at": r.created_at.isoformat() if r.created_at else None
             }
@@ -134,6 +140,7 @@ async def get_rule(rule_id: str, user: dict = Depends(require("rules:read")), db
         "severity": rule.severity,
         "keywords": rule.keywords,
         "is_active": rule.is_active,
+        "product_line": rule.product_line,
         "points_deduction": float(rule.points_deduction) if rule.points_deduction else -5.0,
         "is_auto_generated": rule.is_auto_generated,
         "created_at": rule.created_at.isoformat() if rule.created_at else None
@@ -146,6 +153,7 @@ async def update_rule(
     is_active: Optional[bool] = None,
     severity: Optional[str] = None,
     rule_text: Optional[str] = None,
+    product_line: Optional[str] = None,
     user: dict = Depends(require("rules:write")),
     db: Session = Depends(get_db)
 ):
@@ -167,7 +175,42 @@ async def update_rule(
     is_content_change = (
         (severity is not None and severity != rule.severity)
         or (rule_text is not None and rule_text != rule.rule_text)
+        or (product_line is not None and product_line != rule.product_line)
     )
+
+    # Generated rules are created as inactive drafts so the documented review
+    # step is a real approval gate. Because a draft has never participated in a
+    # grade, its first edit can safely happen in place; this preserves the
+    # source-document linkage. Once activated, normal immutable versioning
+    # applies to every later content/scope change.
+    metadata = dict(rule.rule_metadata or {})
+    is_unpublished_draft = (
+        not rule.is_active
+        and rule.is_auto_generated
+        and metadata.get("lifecycle") == "draft_pending_review"
+        and rule.superseded_by is None
+    )
+    if is_unpublished_draft:
+        if severity is not None:
+            rule.severity = severity
+        if rule_text is not None:
+            rule.rule_text = rule_text
+        if product_line is not None:
+            rule.product_line = product_line
+        if is_active is not None:
+            rule.is_active = is_active
+        if rule.is_active:
+            metadata["lifecycle"] = "reviewed_active"
+        rule.rule_metadata = metadata
+        db.commit()
+        db.refresh(rule)
+        await _safe_rag_upsert(rule.id, db)
+        return {
+            "id": str(rule.id), "category": rule.category,
+            "rule_text": rule.rule_text, "severity": rule.severity,
+            "is_active": rule.is_active, "product_line": rule.product_line,
+            "version": rule.version,
+        }
 
     if not is_content_change:
         # Lifecycle-only (activate/deactivate) — mutate in place.
@@ -178,7 +221,8 @@ async def update_rule(
         await _safe_rag_upsert(rule.id, db)
         return {
             "id": str(rule.id), "category": rule.category, "rule_text": rule.rule_text,
-            "severity": rule.severity, "is_active": rule.is_active, "version": rule.version,
+            "severity": rule.severity, "is_active": rule.is_active,
+            "product_line": rule.product_line, "version": rule.version,
         }
 
     # Content change → create a new version row.
@@ -198,7 +242,7 @@ async def update_rule(
         confidence_score=rule.confidence_score,
         version=(rule.version or 1) + 1,
         effective_date=func.now(),
-        product_line=rule.product_line,
+        product_line=product_line if product_line is not None else rule.product_line,
         jurisdiction=rule.jurisdiction,
         # Learned trust (Beta-Binomial reliability) carries forward to the new
         # version — an edit isn't a fresh rule, so it shouldn't reset to
@@ -229,6 +273,7 @@ async def update_rule(
         "rule_text": new_rule.rule_text,
         "severity": new_rule.severity,
         "is_active": new_rule.is_active,
+        "product_line": new_rule.product_line,
         "version": new_rule.version,
         "superseded_rule_id": str(rule.id),
     }
@@ -252,6 +297,7 @@ async def delete_rule(rule_id: str, user: dict = Depends(require("rules:write"))
 @router.post("/generate-from-document", dependencies=[Depends(llm_rate_limit)])
 async def generate_rules_from_document(
     title: str = Form(...),
+    product_line: str = Form(...),
     instructions: Optional[str] = Form(default=None),
     file: Optional[UploadFile] = File(default=None),
     content: Optional[str] = Form(default=None),
@@ -263,6 +309,13 @@ async def generate_rules_from_document(
     Accepts either file upload or raw text content.
     """
     from app.config import settings
+
+    product_line = product_line.strip().lower()
+    if product_line not in _ALLOWED_PRODUCT_LINES:
+        raise HTTPException(
+            status_code=400,
+            detail="product_line must be an explicit supported scope or global",
+        )
 
     # Get content
     document_content = content or ""
@@ -317,7 +370,8 @@ async def generate_rules_from_document(
         document_title=title,
         created_by_user_id=None,
         db=db,
-        instructions=instructions
+        instructions=instructions,
+        product_line=product_line,
     )
 
     return result

@@ -39,13 +39,14 @@ class ScoringService:
         db: Optional[Session] = None,
         project_config: Optional[Dict] = None,
         categories: Optional[List[str]] = None
-    ) -> Dict[str, float]:
+    ) -> Dict[str, object]:
         """
         Absolute-deduction compliance score.
 
-        overall = 100 − Σ (severity_weight(v) × confidence(v)), clamped to [0,100],
-        plus a hard cap: any critical finding at/above CRITICAL_CONFIDENCE_THRESHOLD
-        caps the grade at C and fails the verdict.
+        Weighted burden is deducted linearly through 50 points. Above that knee,
+        the score follows 50 / (1 + (burden - 50) / 100), preserving a positive,
+        strictly decreasing tail. A high-confidence critical finding still caps
+        the grade at C and fails the verdict.
 
         This is MONOTONIC in severity: adding a finding (or raising a finding's
         severity/confidence) can only lower the score. The previous model weighted
@@ -66,9 +67,10 @@ class ScoringService:
 
         enriched_violations = ScoringService._enrich_violations_with_points(scored_violations, db)
 
-        # Overall = absolute deductions from 100, independent of category count.
+        # Overall burden is mapped through the shared soft-tail curve and remains
+        # independent of category count.
         total_deduction = sum(v.get("points_deduction", 0) for v in enriched_violations)
-        overall_score = max(0.0, min(100.0, 100.0 - total_deduction))
+        overall_score = ScoringService._score_from_deduction(total_deduction)
 
         # Hard critical cap (confidence-aware): a credible critical can never grade
         # better than C, even if it's the only finding.
@@ -97,6 +99,10 @@ class ScoringService:
             "overall": round(overall_score, 2),
             "grade": grade,
             "status": status,
+            "weighted_burden": round(total_deduction, 2),
+            "scored_finding_count": len(enriched_violations),
+            "suppressed_finding_count": len(violations) - len(scored_violations),
+            "scoring_policy_version": "absolute-soft-tail-v2",
         }
         for cat, score in category_scores.items():
             result[cat] = round(score, 2)
@@ -174,24 +180,21 @@ class ScoringService:
 
     @staticmethod
     def _calculate_category_score(violations: List[Dict], category: str) -> float:
-        base_score = 100.0
         category_violations = [
             v for v in violations
             if category == v.get("category", "") or category in v.get("category", "").split("|")
         ]
 
-        if not category_violations:
-            return 100.0
-
         total_deduction = sum(v.get("points_deduction", 0) for v in category_violations)
+        return ScoringService._score_from_deduction(total_deduction)
 
-        if total_deduction > 100:
-            scaled_deduction = 95 * (1 - (1 / (1 + total_deduction / 100)))
-            base_score -= scaled_deduction
-        else:
-            base_score -= total_deduction
-
-        return max(0.0, min(100.0, base_score))
+    @staticmethod
+    def _score_from_deduction(total_deduction: float) -> float:
+        """Map non-negative weighted burden to a continuous compliance score."""
+        deduction = max(0.0, float(total_deduction))
+        if deduction <= 50.0:
+            return 100.0 - deduction
+        return 50.0 / (1.0 + (deduction - 50.0) / 100.0)
 
     @staticmethod
     def _get_grade(score: float) -> str:

@@ -24,7 +24,13 @@ async def get_dashboard_summary(user: dict = Depends(require("dashboard:view")),
 
     total_submissions = db.query(Submission).count()
     total_checks = db.query(ComplianceCheck).count()
-    total_violations = db.query(Violation).count()
+    total_findings = db.query(Violation).count()
+    scored_violations = db.query(Violation).filter(
+        Violation.suppressed == False  # noqa: E712 - SQLAlchemy predicate
+    ).count()
+    suppressed_findings = db.query(Violation).filter(
+        Violation.suppressed == True  # noqa: E712 - SQLAlchemy predicate
+    ).count()
     total_rules = db.query(Rule).filter(Rule.is_active == True).count()
 
     # Score distribution
@@ -47,16 +53,20 @@ async def get_dashboard_summary(user: dict = Depends(require("dashboard:view")),
     ).count()
 
     # Critical violations (open)
-    critical_count = db.query(Violation).filter(Violation.severity == "critical").count()
+    critical_count = db.query(Violation).filter(
+        Violation.severity == "critical",
+        Violation.suppressed == False,  # noqa: E712
+    ).count()
 
     # Auto-fix rate: share of violations the LLM marked auto_fixable.
     # Column is varchar — keep the IN list all-strings (mixing in a bool
     # raises `operator does not exist: character varying = boolean` on PG).
-    if total_violations > 0:
+    if scored_violations > 0:
         auto_fixable_count = db.query(Violation).filter(
-            Violation.auto_fixable.in_(["true", "True", "TRUE", "1", "yes"])
+            Violation.auto_fixable.in_(["true", "True", "TRUE", "1", "yes"]),
+            Violation.suppressed == False,  # noqa: E712
         ).count()
-        auto_fix_rate = round((auto_fixable_count / total_violations) * 100, 1)
+        auto_fix_rate = round((auto_fixable_count / scored_violations) * 100, 1)
     else:
         auto_fixable_count = 0
         auto_fix_rate = 0.0
@@ -68,7 +78,12 @@ async def get_dashboard_summary(user: dict = Depends(require("dashboard:view")),
         "stats": {
             "total_submissions": total_submissions,
             "total_checks": total_checks,
-            "total_violations": total_violations,
+            # total_violations remains for API compatibility, with the
+            # explicit scored-only meaning used by charts and the report.
+            "total_violations": scored_violations,
+            "scored_violations": scored_violations,
+            "suppressed_findings": suppressed_findings,
+            "total_findings": total_findings,
             "active_rules": total_rules,
             "average_score": round(avg_score, 2),
             "submissions_this_week": submissions_this_week,
@@ -118,10 +133,17 @@ async def get_dashboard_timeseries(
         .all()
     )
 
-    # Violations per period.
+    # Scored findings and the suppressed human-review lane per period.
     vio_period = func.date_trunc(bucket, Violation.created_at).label("period")
     vio_rows = (
         db.query(vio_period, func.count(Violation.id).label("violation_count"))
+        .filter(Violation.suppressed == False)  # noqa: E712
+        .group_by(vio_period)
+        .all()
+    )
+    suppressed_rows = (
+        db.query(vio_period, func.count(Violation.id).label("suppressed_count"))
+        .filter(Violation.suppressed == True)  # noqa: E712
         .group_by(vio_period)
         .all()
     )
@@ -137,7 +159,8 @@ async def get_dashboard_timeseries(
         if k is None:
             continue
         points.setdefault(
-            k, {"period": k, "submission_count": 0, "avg_score": None, "violation_count": 0}
+            k, {"period": k, "submission_count": 0, "avg_score": None,
+                "violation_count": 0, "suppressed_count": 0, "finding_count": 0}
         )
         points[k]["submission_count"] = int(r.submission_count or 0)
 
@@ -146,7 +169,8 @@ async def get_dashboard_timeseries(
         if k is None:
             continue
         points.setdefault(
-            k, {"period": k, "submission_count": 0, "avg_score": None, "violation_count": 0}
+            k, {"period": k, "submission_count": 0, "avg_score": None,
+                "violation_count": 0, "suppressed_count": 0, "finding_count": 0}
         )
         points[k]["avg_score"] = (
             round(float(r.avg_score), 2) if r.avg_score is not None else None
@@ -157,9 +181,22 @@ async def get_dashboard_timeseries(
         if k is None:
             continue
         points.setdefault(
-            k, {"period": k, "submission_count": 0, "avg_score": None, "violation_count": 0}
+            k, {"period": k, "submission_count": 0, "avg_score": None,
+                "violation_count": 0, "suppressed_count": 0, "finding_count": 0}
         )
         points[k]["violation_count"] = int(r.violation_count or 0)
+        points[k]["finding_count"] += int(r.violation_count or 0)
+
+    for r in suppressed_rows:
+        k = _key(r.period)
+        if k is None:
+            continue
+        points.setdefault(
+            k, {"period": k, "submission_count": 0, "avg_score": None,
+                "violation_count": 0, "suppressed_count": 0, "finding_count": 0}
+        )
+        points[k]["suppressed_count"] = int(r.suppressed_count or 0)
+        points[k]["finding_count"] += int(r.suppressed_count or 0)
 
     ordered = sorted(points.values(), key=lambda p: p["period"])
     # Keep the most recent 90 periods.
@@ -184,7 +221,10 @@ async def get_top_rules(
             Rule.rule_text.label("rule_text"),
         )
         .join(Rule, Rule.id == Violation.rule_id)
-        .filter(Violation.rule_id.isnot(None))
+        .filter(
+            Violation.rule_id.isnot(None),
+            Violation.suppressed == False,  # noqa: E712
+        )
         .group_by(Violation.rule_id, Rule.category, Rule.severity, Rule.rule_text)
         .order_by(func.count(Violation.id).desc())
         .limit(limit)
@@ -216,6 +256,8 @@ async def get_violations_by_category(user: dict = Depends(require("dashboard:vie
     result = db.query(
         Violation.category,
         func.count(Violation.id).label("count")
+    ).filter(
+        Violation.suppressed == False  # noqa: E712
     ).group_by(Violation.category).all()
 
     return {
@@ -232,6 +274,8 @@ async def get_violations_by_severity(user: dict = Depends(require("dashboard:vie
     result = db.query(
         Violation.severity,
         func.count(Violation.id).label("count")
+    ).filter(
+        Violation.suppressed == False  # noqa: E712
     ).group_by(Violation.severity).all()
 
     return {

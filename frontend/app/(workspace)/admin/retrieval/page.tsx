@@ -33,6 +33,29 @@ import type {
 
 type NoDataKind = "pre_observability" | "died_before_dispatch" | "zero_candidates" | "unknown";
 
+/**
+ * Repair a pasted UUID before sending it.
+ *
+ * Copying an id out of a log or a terminal routinely mangles the hyphens into
+ * spaces or line breaks — production hit exactly that, requesting
+ * `.../runs/5340240a%20be77%2048b7%20bde9%207c16a4b47000` and getting a bare
+ * 404 that looked like "this run does not exist" rather than "your paste lost
+ * its hyphens". A UUID has a fixed shape, so it is cheap to put back.
+ *
+ * Anything that is not 32 hex digits in the right places is returned trimmed
+ * and untouched, so a genuinely wrong id still reaches the server and still
+ * 404s honestly.
+ */
+function normalizeUuid(raw: string): string {
+  const trimmed = (raw || "").trim();
+  const hex = trimmed.replace(/[^0-9a-fA-F]/g, "");
+  if (hex.length !== 32) return trimmed;
+  return [
+    hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16),
+    hex.slice(16, 20), hex.slice(20),
+  ].join("-").toLowerCase();
+}
+
 function classifyNoData(reason: string): NoDataKind {
   if (reason.includes("run_metadata is NULL/empty")) return "pre_observability";
   if (reason.includes("no retrieval_debug block")) return "died_before_dispatch";
@@ -705,7 +728,7 @@ export default function AdminRetrievalPage() {
               className="mt-1 flex gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                const id = runIdInput.trim();
+                const id = normalizeUuid(runIdInput);
                 if (!id) return;
                 setSubId("");
                 inspect(() => getRunRetrieval(id));

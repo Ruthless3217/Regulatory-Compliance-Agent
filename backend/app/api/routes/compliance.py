@@ -36,7 +36,11 @@ from app.models.violation import Violation
 from app.models.analysis_run import AnalysisRun
 from app.models.rule_feedback import RuleFeedback
 from app.services.agents.compliance.engine import ComplianceEngine
-from app.services.violation_serializer import serialize_violation, latest_feedback_map
+from app.services.violation_serializer import (
+    finding_counts,
+    latest_feedback_map,
+    serialize_violation,
+)
 from app.auth.dependencies import require
 from app.auth.permissions import role_has
 
@@ -338,6 +342,7 @@ async def get_compliance_results(
         Violation.compliance_check_id == check.id
     ).all()
     feedback_map = latest_feedback_map(db, [v.id for v in violations])
+    counts = finding_counts(violations)
 
     return {
         "submission_id": submission_id,
@@ -348,7 +353,13 @@ async def get_compliance_results(
         "scores": check.scores,
         "checked_at": check.checked_at.isoformat() if check.checked_at else None,
         "violations": [serialize_violation(v, feedback_map.get(str(v.id))) for v in violations],
-        "violation_count": len(violations)
+        # Back-compatible name now has one explicit meaning: findings that
+        # affect the score. The persisted human-review lane is reported
+        # separately instead of silently changing totals between surfaces.
+        "violation_count": counts["scored"],
+        "suppressed_count": counts["suppressed"],
+        "finding_count": counts["total"],
+        "finding_counts": counts,
     }
 
 

@@ -38,6 +38,7 @@ export interface Rule {
   points_deduction?: number;
   is_auto_generated?: boolean;
   keywords?: string[] | null;
+  product_line?: string | null;
   created_at?: string;
 }
 
@@ -188,16 +189,27 @@ export interface ViolationMetadata {
   [k: string]: unknown;
 }
 
+export type ScoreBreakdown = Record<string, number | string>;
+
+export interface FindingCounts {
+  scored: number;
+  suppressed: number;
+  total: number;
+}
+
 export interface ComplianceResults {
   submission_id: string;
   check_id?: string;
   overall_score?: number;
   grade?: "A" | "B" | "C" | "D" | "F";
   compliance_status?: string;
-  scores?: Record<string, number>;
+  scores?: ScoreBreakdown;
   checked_at?: string | null;
   violations: Violation[];
   violation_count?: number;
+  suppressed_count?: number;
+  finding_count?: number;
+  finding_counts?: FindingCounts;
   status?: SubmissionStatus;
   message?: string;
 }
@@ -211,9 +223,13 @@ export interface CheckSummary {
   overall_score: number | null;
   grade: string | null;
   status: string | null;
-  scores: Record<string, number> | null;
+  scores: ScoreBreakdown | null;
   checked_at: string | null;
   violations: Violation[];
+  violation_count?: number;
+  suppressed_count?: number;
+  finding_count?: number;
+  finding_counts?: FindingCounts;
 }
 
 // --- Reviewer-facing run history + diff (GET /compliance/submissions/{id}/runs,
@@ -278,7 +294,7 @@ export interface SSEAnalyzeChunk {
 export interface SSEAnalyzeScore {
   overall_score: number;
   grade: string;
-  scores: Record<string, number>;
+  scores: ScoreBreakdown;
 }
 
 export interface TimeseriesPoint {
@@ -286,6 +302,8 @@ export interface TimeseriesPoint {
   submission_count: number;
   avg_score: number | null;
   violation_count: number;
+  suppressed_count: number;
+  finding_count: number;
 }
 
 export interface TimeseriesResponse {

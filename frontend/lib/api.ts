@@ -345,17 +345,19 @@ export async function createRule(body: {
   severity?: string;
   keywords?: string[];
   points_deduction?: number;
+  product_line?: string;
 }): Promise<Rule> {
   return jsonFetch(`${base()}/rules`, { method: "POST", body: JSON.stringify(body) });
 }
 export async function updateRule(
   id: string,
-  body: { is_active?: boolean; severity?: string; rule_text?: string }
+  body: { is_active?: boolean; severity?: string; rule_text?: string; product_line?: string }
 ): Promise<Rule> {
   const qs = new URLSearchParams();
   if (body.is_active !== undefined) qs.set("is_active", String(body.is_active));
   if (body.severity) qs.set("severity", body.severity);
   if (body.rule_text) qs.set("rule_text", body.rule_text);
+  if (body.product_line) qs.set("product_line", body.product_line);
   return jsonFetch(`${base()}/rules/${id}?${qs.toString()}`, { method: "PATCH" });
 }
 export async function deleteRule(id: string) {

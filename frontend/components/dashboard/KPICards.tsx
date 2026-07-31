@@ -4,6 +4,7 @@ import { StatCard } from "@/components/ui/stat-card";
 interface Stats {
   total_submissions?: number;
   total_violations?: number;
+  suppressed_findings?: number;
   active_rules?: number;
   average_score?: number;
   total_checks?: number;
@@ -31,9 +32,9 @@ export function KPICards({ stats }: Props) {
         icon={<FileText className="h-3.5 w-3.5" />}
       />
       <StatCard
-        label="Violations caught"
+        label="Scored findings"
         value={stats.total_violations ?? 0}
-        sub="across all checks"
+        sub={String(stats.suppressed_findings ?? 0) + " additional findings need review"}
         delta={{ value: 4, positive: false, suffix: "%" }}
         spark={spark(7)}
         icon={<AlertOctagon className="h-3.5 w-3.5" />}

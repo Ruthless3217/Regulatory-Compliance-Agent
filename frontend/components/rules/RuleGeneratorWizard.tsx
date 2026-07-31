@@ -8,20 +8,34 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { SeverityBadge, Badge } from "@/components/ui/badge";
-import { createRule, generateRulesFromDocument } from "@/lib/api";
+import { deleteRule, generateRulesFromDocument, updateRule } from "@/lib/api";
 import { categoryLabel } from "@/lib/format";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 type Step = "upload" | "review";
 
 interface DraftRule {
+  id: string;
   category: string;
   rule_text: string;
   severity: string;
   keywords?: string[];
   points_deduction?: number;
+  product_line: string;
   _include: boolean;
 }
+
+const PRODUCT_SCOPES = [
+  ["global", "Global / all products"],
+  ["term", "Term"],
+  ["ulip", "ULIP"],
+  ["par", "Participating"],
+  ["non_par", "Non-participating"],
+  ["savings_endowment", "Savings / endowment"],
+  ["pension_annuity", "Pension / annuity"],
+  ["rider", "Rider"],
+  ["group", "Group"],
+] as const;
 
 export function RuleGeneratorWizard() {
   const router = useRouter();
@@ -29,6 +43,7 @@ export function RuleGeneratorWizard() {
   const [step, setStep] = React.useState<Step>("upload");
   const [title, setTitle] = React.useState("");
   const [instructions, setInstructions] = React.useState("");
+  const [productLine, setProductLine] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const [content, setContent] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
@@ -54,22 +69,29 @@ export function RuleGeneratorWizard() {
       toast.error("Upload a file or paste content");
       return;
     }
+    if (!productLine) {
+      toast.error("Choose the product scope; use Global only for genuinely cross-product rules");
+      return;
+    }
     setSubmitting(true);
     try {
       const form = new FormData();
       form.set("title", title);
+      form.set("product_line", productLine);
       if (instructions.trim()) form.set("instructions", instructions);
       if (file) form.set("file", file);
       else if (content.trim()) form.set("content", content);
       const res = await generateRulesFromDocument(form);
       const generated: DraftRule[] = (res.rules || res.generated_rules || []).map((r: Record<string, unknown>) => ({
+        id: String(r.id ?? ""),
         category: String(r.category ?? "regulatory"),
         rule_text: String(r.rule_text ?? r.text ?? ""),
         severity: String(r.severity ?? "medium"),
         keywords: Array.isArray(r.keywords) ? (r.keywords as string[]) : [],
         points_deduction: typeof r.points_deduction === "number" ? r.points_deduction : -5,
+        product_line: String(r.product_line ?? productLine),
         _include: true,
-      })).filter((r: DraftRule) => r.rule_text);
+      })).filter((r: DraftRule) => r.id && r.rule_text);
       if (generated.length === 0) {
         toast.warning("No rules extracted. Try a clearer source document.");
       } else {
@@ -93,18 +115,21 @@ export function RuleGeneratorWizard() {
     setSubmitting(true);
     let okCount = 0;
     try {
-      for (const r of selected) {
+      for (const r of drafts) {
         try {
-          await createRule({
-            category: r.category,
-            rule_text: r.rule_text,
-            severity: r.severity,
-            keywords: r.keywords,
-            points_deduction: r.points_deduction,
-          });
-          okCount += 1;
+          if (!r._include) {
+            await deleteRule(r.id);
+          } else {
+            await updateRule(r.id, {
+              rule_text: r.rule_text,
+              severity: r.severity,
+              product_line: r.product_line,
+              is_active: true,
+            });
+            okCount += 1;
+          }
         } catch (err) {
-          console.error("Rule create failed:", err);
+          console.error("Rule review failed:", err);
         }
       }
       toast.success(`Saved ${okCount} of ${selected.length} rules`);
@@ -135,6 +160,22 @@ export function RuleGeneratorWizard() {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. IRDAI Circular on ULIP Advertisements 2024"
             />
+          </div>
+          <div>
+            <label className="micro-label mb-1 block">Product scope</label>
+            <select
+              value={productLine}
+              onChange={(e) => setProductLine(e.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">Select a scope</option>
+              {PRODUCT_SCOPES.map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Required for every generated rule. This prevents unclassified rules from applying to every product.
+            </p>
           </div>
           <label
             onDrop={onDrop}
@@ -183,7 +224,9 @@ export function RuleGeneratorWizard() {
     <Card>
       <CardHeader>
         <CardTitle>Step 2 — Review extracted rules</CardTitle>
-        <CardDescription>Toggle inclusion, then bulk-accept to save into the rules library.</CardDescription>
+        <CardDescription>
+          These rules are inactive drafts. Toggle inclusion, edit them, then approve the selected rules.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="mb-4 flex items-center gap-3 text-sm text-muted-foreground">
@@ -199,6 +242,7 @@ export function RuleGeneratorWizard() {
                 <th className="w-10 px-3 py-2"></th>
                 <th className="px-3 py-2 micro-label w-[100px]">Category</th>
                 <th className="px-3 py-2 micro-label w-[90px]">Severity</th>
+                <th className="px-3 py-2 micro-label w-[120px]">Scope</th>
                 <th className="px-3 py-2 micro-label">Rule</th>
               </tr>
             </thead>
@@ -216,6 +260,7 @@ export function RuleGeneratorWizard() {
                   </td>
                   <td className="px-3 py-2"><Badge>{categoryLabel(d.category)}</Badge></td>
                   <td className="px-3 py-2"><SeverityBadge severity={d.severity} /></td>
+                  <td className="px-3 py-2"><Badge>{d.product_line}</Badge></td>
                   <td className="px-3 py-2">
                     <Textarea
                       rows={2}

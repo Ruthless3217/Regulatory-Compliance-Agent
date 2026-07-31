@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { applySubmissionRevision, listSubmissionRevisions, listSubmissionRuns } from "@/lib/api";
-import type { RevisionSource, RunSummary, Submission, Violation } from "@/lib/types";
+import type { RevisionSource, RunSummary, ScoreBreakdown, Submission, Violation } from "@/lib/types";
 
 export type SaveState = "idle" | "saving" | "error";
 
@@ -39,7 +39,7 @@ interface Ctx {
   overallScore: number | null;
   grade: string | null;
   setScore: (score: number | null, grade: string | null) => void;
-  scores: Record<string, number> | null;
+  scores: ScoreBreakdown | null;
   // Status + message from the compliance result. `analysisMessage` is set when
   // the run was degraded / needs review — the signal the UI uses to avoid
   // showing an un-gradeable document as "clean".
@@ -71,7 +71,7 @@ interface ProviderProps {
   initialViolations: Violation[];
   initialScore?: number | null;
   initialGrade?: string | null;
-  initialScores?: Record<string, number> | null;
+  initialScores?: ScoreBreakdown | null;
   analysisStatus?: string | null;
   analysisMessage?: string | null;
   children: React.ReactNode;

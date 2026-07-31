@@ -396,22 +396,54 @@ class ContextEngineeringService:
         return chunks if chunks else [{"text": content, "metadata": {}}]
 
     async def _extract_from_file(self, file_path: str, content_type: str) -> str:
-        """Extract text content from uploaded files."""
+        """Extract text content from uploaded files.
+
+        Every format funnels through here, so this is the one place worth
+        sanitising — see _sanitize_extracted().
+        """
         try:
             if content_type == "pdf":
-                return await self._extract_pdf(file_path)
+                return self._sanitize_extracted(await self._extract_pdf(file_path))
             elif content_type == "docx":
-                return await self._extract_docx(file_path)
+                return self._sanitize_extracted(await self._extract_docx(file_path))
             elif content_type == "html":
                 with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                     raw = f.read()
-                return self._extract_html(raw)
+                return self._sanitize_extracted(self._extract_html(raw))
             elif content_type in ("markdown", "text"):
                 with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                    return f.read()
+                    return self._sanitize_extracted(f.read())
         except Exception as e:
             logger.error(f"Failed to extract content from {file_path}: {e}")
         return ""
+
+    # C0 control characters, except the three that are real formatting:
+    # \t (09), \n (0A), \r (0D). Also DEL (7F).
+    _CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+    @classmethod
+    def _sanitize_extracted(cls, text: str) -> str:
+        """Replace stray C0 control characters with a space.
+
+        Word and PDF extraction leak control bytes into the text — production
+        chunks contained \\x16 and \\x03 sitting where a space belongs
+        ("option to\\x16withdraw\\x16the\\x16Fund", "objective of the
+        strategy is\\x03to optimise").
+
+        This is not cosmetic. The grounding guard drops any finding whose
+        `current_text` is not literally present in its chunk — the defence
+        against fabricated evidence. An LLM quoting such a passage silently
+        normalises the control byte to a space, the literal comparison then
+        fails, and a CORRECT finding is discarded as "fabricated". Observed
+        repeatedly in production on 2026-07-31.
+
+        Replaced with a space rather than deleted: these bytes stand where a
+        separator belongs, so deleting them would weld two words together and
+        break matching a second way.
+        """
+        if not text:
+            return text
+        return cls._CONTROL_CHARS_RE.sub(" ", text)
 
     @staticmethod
     def _extract_html(raw_html: str) -> str:

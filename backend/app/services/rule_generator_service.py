@@ -116,6 +116,7 @@ class RuleGeneratorService:
         metadata: Optional[Dict] = None,
         product_line: Optional[str] = None,
         jurisdiction: Optional[str] = None,
+        is_active: bool = True,
     ) -> Rule:
         """Create a new compliance rule."""
         # project_id is accepted for forward-compat but the Rule model has no
@@ -130,7 +131,7 @@ class RuleGeneratorService:
             points_deduction=points_deduction,
             created_by=created_by,
             rule_metadata=metadata,
-            is_active=True,
+            is_active=is_active,
             is_auto_generated=is_auto,
             product_line=product_line,
             jurisdiction=jurisdiction,
@@ -254,16 +255,21 @@ Return at least one rule unless the document genuinely has none.
                         metadata={
                             "source": document_title,
                             "source_doc_id": str(document_id),
+                            "lifecycle": "draft_pending_review",
                         },
                         product_line=product_line,
                         jurisdiction=jurisdiction,
+                        is_active=False,
                     )
                     created_rule_ids.append(rule.id)
                     result["rules"].append({
                         "id": str(rule.id),
                         "category": rule.category,
                         "rule_text": rule.rule_text,
-                        "severity": rule.severity
+                        "severity": rule.severity,
+                        "keywords": list(rule.keywords or []),
+                        "points_deduction": float(rule.points_deduction or -5.0),
+                        "product_line": rule.product_line,
                     })
                     result["rules_created"] += 1
                     # Best-effort: index this new rule into rag_rules.

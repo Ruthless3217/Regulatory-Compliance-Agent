@@ -84,10 +84,11 @@ export function VolumeTrend({ points }: { points: TimeseriesPoint[] }) {
   const data = points.map((p) => ({
     x: fmtPeriod(p.period),
     Submissions: p.submission_count,
-    Violations: p.violation_count,
+    "Scored findings": p.violation_count,
+    "Needs review": p.suppressed_count,
   }));
   return (
-    <ChartCard title="Activity volume" subtitle="Submissions and violations over time">
+    <ChartCard title="Activity volume" subtitle="Submissions, scored findings, and the human-review lane">
       {data.length === 0 ? (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           No activity yet.
@@ -100,7 +101,8 @@ export function VolumeTrend({ points }: { points: TimeseriesPoint[] }) {
             <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} width={36} allowDecimals={false} />
             <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "hsl(var(--muted))" }} />
             <Bar dataKey="Submissions" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} maxBarSize={28} />
-            <Bar dataKey="Violations" fill="hsl(var(--sev-medium))" radius={[3, 3, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="Scored findings" fill="hsl(var(--sev-high))" radius={[3, 3, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="Needs review" fill="hsl(var(--sev-medium))" radius={[3, 3, 0, 0]} maxBarSize={28} />
           </BarChart>
         </ResponsiveContainer>
       )}

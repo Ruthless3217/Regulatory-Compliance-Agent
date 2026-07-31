@@ -27,6 +27,13 @@ export default async function RulesPage() {
   }
   const activeCount = rules.filter((r) => r.is_active).length;
   const inactiveCount = rules.length - activeCount;
+  const unclassifiedActive = rules.filter(
+    (r) => r.is_active && !r.product_line
+  ).length;
+  const explicitGlobalActive = rules.filter(
+    (r) => r.is_active && r.product_line === "global"
+  ).length;
+  const scopedActive = activeCount - unclassifiedActive - explicitGlobalActive;
 
   const coverage = REGULATORS.map((r) => ({
     ...r,
@@ -48,6 +55,8 @@ export default async function RulesPage() {
             <PageHeaderMeta label="Total" value={rules.length} />
             <PageHeaderMeta label="Active" value={activeCount} />
             <PageHeaderMeta label="Inactive" value={inactiveCount} />
+            <PageHeaderMeta label="Product-scoped" value={scopedActive} />
+            <PageHeaderMeta label="Unclassified" value={unclassifiedActive} />
           </>
         }
       />
@@ -68,6 +77,14 @@ export default async function RulesPage() {
         </div>
       ) : (
         <>
+          {unclassifiedActive > 0 && (
+            <div className="mb-5 rounded-md border border-sev-high/40 bg-sev-high/5 px-4 py-3 text-sm">
+              <span className="font-medium">{unclassifiedActive} active rules have no product scope.</span>
+              <span className="ml-1 text-muted-foreground">
+                They currently apply globally. Edit each rule to assign a product scope or mark it explicitly Global.
+              </span>
+            </div>
+          )}
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {coverage.map((c) => (
               <div key={c.key} className="rounded-lg border border-border bg-background p-4 shadow-card">
