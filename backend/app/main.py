@@ -157,6 +157,11 @@ app.include_router(rag_health.router)
 app.include_router(knowledge_base.router)
 app.include_router(comparisons.router)
 
+from .api.routes import admin_corpus  # noqa: E402
+app.include_router(admin_corpus.router)
+from .api.routes import admin_retrieval  # noqa: E402
+app.include_router(admin_retrieval.router)
+
 
 @app.get("/health", tags=["Health"])
 async def health_check():

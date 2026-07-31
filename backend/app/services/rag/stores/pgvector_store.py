@@ -38,8 +38,16 @@ _FILTER_WHITELIST: Dict[IndexName, set] = {
         "reviewer_name", "violation_category", "severity", "document_id",
     },
     "rag_product_docs": {"product_document_id", "uin", "product_name", "block_type"},
+    # product_category enables pushdown scoping: retrieve top-K WITHIN the
+    # resolved product scope instead of retrieving globally and discarding the
+    # out-of-scope survivors in Python (applicability.validate_precedents).
+    # Pass None in the collection to keep untagged rows, per the C2/C7 global
+    # contract. rag_rules deliberately has no product_line equivalent — that
+    # column does not exist on the index, and with ~150 rules the post-filter
+    # is cheap anyway.
     "precedent_cases": {
         "issue_type", "severity", "ticket", "is_reviewer", "guideline_ref",
+        "product_category",
     },
 }
 
@@ -72,8 +80,25 @@ _RETURN_COLUMNS: Dict[IndexName, List[str]] = {
         "before_text", "after_text", "regulation_tags", "issue_type",
         "why_rationale", "guideline_ref", "severity", "product_category",
         "ticket", "source_file", "comment_date", "occurrence_count",
-        "example_tickets",
+        "example_tickets", "source_layer_id",
     ],
+}
+
+
+# Corpus layers (migration 0030). A precedent belonging to a DISABLED layer is
+# invisible to retrieval — instantly, reversibly, and without re-embedding
+# anything. This lives in the store, not in the callers, because a caller that
+# forgets the filter silently resurrects content an admin switched off.
+#
+# NULL-safe by construction: `source_layer_id IS NULL` is checked FIRST, so every
+# precedent that predates layers (all ~2,440 production rows) stays retrievable.
+# The NOT IN subquery selects a PK, which can never be NULL, so the usual
+# NOT-IN/NULL trap does not apply either.
+_LAYER_GUARD: Dict[IndexName, str] = {
+    "precedent_cases": (
+        " AND (source_layer_id IS NULL OR source_layer_id NOT IN"
+        " (SELECT id FROM corpus_layers WHERE enabled = FALSE))"
+    ),
 }
 
 
@@ -97,7 +122,20 @@ def _uuid_array_literal(ids) -> str:
 def _build_filter_clause(
     index: IndexName, filters: Optional[Dict[str, Any]], params: Dict[str, Any]
 ) -> str:
-    """Build a parameterized 'AND ...' clause. Mutates `params`."""
+    """Build a parameterized 'AND ...' clause. Mutates `params`.
+
+    NULL semantics matter here. SQL's `IN` never matches NULL, so a scoping
+    filter like product_category IN ('ulip','par') silently EXCLUDES every
+    untagged row — the opposite of the applicability contract, where an
+    untagged item is GLOBAL and must still be retrieved (applicability.py,
+    C2/C7). Pass None inside the collection to mean "...or untagged":
+
+        {"product_category": ["ulip", "par", None]}
+            -> (product_category IN (:a,:b) OR product_category IS NULL)
+
+    A bare None means "untagged only" and emits IS NULL — not `= NULL`,
+    which is never true for any row.
+    """
     if not filters:
         return ""
     allowed = _FILTER_WHITELIST[index]
@@ -109,12 +147,21 @@ def _build_filter_clause(
             if not v:
                 parts.append("FALSE")
                 continue
+            values = [item for item in v if item is not None]
+            include_null = len(values) != len(v)
             placeholders = []
-            for i, item in enumerate(v):
+            for i, item in enumerate(values):
                 p = f"f_{k}_{i}"
                 placeholders.append(f":{p}")
                 params[p] = item
-            parts.append(f"{k} IN ({','.join(placeholders)})")
+            if not placeholders:          # e.g. [None] -> untagged only
+                parts.append(f"{k} IS NULL")
+            elif include_null:
+                parts.append(f"({k} IN ({','.join(placeholders)}) OR {k} IS NULL)")
+            else:
+                parts.append(f"{k} IN ({','.join(placeholders)})")
+        elif v is None:
+            parts.append(f"{k} IS NULL")
         else:
             p = f"f_{k}"
             params[p] = v
@@ -556,7 +603,8 @@ class PgVectorStore:
                     "min_cosine": settings.rag_min_cosine,
                     "min_ts_rank": settings.rag_min_ts_rank,
                 }
-                fclause = _build_filter_clause(index, filters, params)
+                # Caller filters, then the non-negotiable disabled-layer guard.
+                fclause = _build_filter_clause(index, filters, params) + _LAYER_GUARD.get(index, "")
 
                 # Vector leg
                 vec_rows = db.execute(text(_vector_leg_sql(index, fclause)), params).all()

@@ -49,13 +49,41 @@ _ALIASES = {
 }
 
 
+# Tags the precedent ingest heuristic emits that are REAL and recognised, but
+# deliberately do NOT scope to a product family — they are cross-cutting
+# themes that legitimately appear across several families at once:
+#
+#   child — a variant of a ULIP (Smart Wealth Goal's child-wealth brochure,
+#           UIN 116L214V01, product_category=ulip) AND a rider benefit
+#           (Family Protect Rider – Parental Care, 116B056V01,
+#           product_category=rider) added to term plans. Scoping a
+#           child-benefit precedent to ONE family would hide it from the other.
+#
+# These already behaved as global, but only because normalize_category()
+# happened to return None for them — i.e. correct by accident, via the
+# "unmappable" path. Naming them makes the intent explicit, keeps a future
+# vocabulary fix from silently narrowing retrieval, and tells SQL pushdown
+# which raw values it must retain alongside the in-scope ones.
+_CROSS_CUTTING = {"child"}
+
+
+def is_cross_cutting(raw: Optional[str]) -> bool:
+    """True for a recognised tag that intentionally does not product-scope."""
+    return bool(raw) and str(raw).strip().lower() in _CROSS_CUTTING
+
+
 def normalize_category(raw: Optional[str]) -> Optional[str]:
     """Map any known category spelling to the canonical fact-card enum.
     Unknown/unmappable tags return None — treated as GLOBAL by the contract
-    (C7): a heuristic ingest tag must never overblock retrieval."""
+    (C7): a heuristic ingest tag must never overblock retrieval.
+
+    Cross-cutting tags (see _CROSS_CUTTING) also return None: they are not
+    product categories, so they must not enter a scope comparison."""
     if not raw:
         return None
     s = str(raw).strip().lower()
+    if s in _CROSS_CUTTING:
+        return None
     if s in _CANONICAL:
         return s
     return _ALIASES.get(s)
@@ -137,6 +165,11 @@ def _judge(scope: RetrievalScope, raw_tag: Optional[str]) -> Tuple[str, str]:
     """(verdict, reason) for one candidate under the contract."""
     if not scope.resolved:
         return "accepted", "scope_unresolved: no product identified; nothing rejected (C3)"
+    if is_cross_cutting(raw_tag):
+        # Recognised, deliberately non-scoping (e.g. 'child' spans a ULIP
+        # variant AND a term-plan rider). Accepted on purpose, not because the
+        # tag failed to parse — the reason string must not claim otherwise.
+        return "accepted", f"global_cross_cutting: {raw_tag!r} is not product-scoping"
     cat = normalize_category(raw_tag)
     if cat is None:
         label = "untagged" if not raw_tag else f"unmappable tag {raw_tag!r}"

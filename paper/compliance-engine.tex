@@ -1,0 +1,626 @@
+% ============================================================================
+%  Grounded Regulatory Compliance Review: An Engineering Case Study
+%
+%  Build:  pdflatex compliance-engine.tex   (twice, for refs)
+%  No external .bib required — references are inlined via thebibliography.
+% ============================================================================
+\documentclass[10pt,conference]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{caption}
+\hypersetup{colorlinks=true, linkcolor=black, citecolor=black, urlcolor=blue}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  showstringspaces=false,
+  xleftmargin=0.5em,
+}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+\title{\textbf{Grounded Regulatory Compliance Review:\\
+An Engineering Case Study of a Precedent-Imitating\\
+Retrieval System in Insurance Marketing}}
+
+\author{%
+  Bajaj Allianz Life Insurance --- Marketing Compliance\\
+  \small \textit{Draft --- internal review}
+}
+
+\date{31 July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We describe the design, evolution and measured behaviour of a production
+retrieval-augmented system that reviews life-insurance marketing copy against
+IRDAI and SEBI obligations, brand policy, and product-specific factual
+constraints. The system's central commitment is \emph{grounding before
+generation}: no finding is emitted from unaided model judgement. Every
+violation is anchored either in a retrieved past human-reviewer decision (a
+``precedent''), an active rule, a deterministic product fact, a mandatory
+disclosure obligation, or --- only above a confidence floor and with an
+explicit regulatory basis --- a novel judgement. Anything the system cannot
+substantively evaluate \emph{fails closed} to human review rather than being
+recorded as compliant.
+
+We report the system's architectural history across five months of
+development, including several instances where a design was reversed after
+production evidence contradicted it. We then present an honest measurement of
+the deployed system over 29 documents and 1{,}537 findings, which surfaces
+three material limitations: a corpus in which 58.4\,\% of precedents carry no
+usable product scope, an aggregate scoring path that disagrees with its own
+subscores, and the highest-firing rule family exhibiting zero reviewer-accepted
+precision on a small sample. We argue that the reporting of such negative
+results is the substantive contribution: the mechanisms that make this system
+safe are inseparable from the mechanisms that make its failures visible.
+\end{abstract}
+
+\section{Introduction}
+
+Marketing copy for regulated life-insurance products is reviewed by human
+compliance officers before publication. The review is expensive, slow,
+inconsistent across reviewers, and --- critically --- \emph{asymmetric in its
+error costs}. A false positive wastes reviewer attention. A false negative
+ships non-compliant claims about guaranteed returns, tax treatment or fund
+performance to the public, with regulatory consequence.
+
+This asymmetry is the design premise of the entire system. It explains choices
+that would be unusual in a general-purpose retrieval system: relevance floors
+applied per retrieval leg rather than post-fusion, findings that are persisted
+but excluded from scoring rather than discarded, a deterministic (non-generative)
+adjudicator for mandated disclosure wording, and a persistence gate that refuses
+to record a grade for any run it cannot justify.
+
+\subsection{Contributions}
+
+\begin{enumerate}
+  \item A \emph{grounding taxonomy} with five tiers of decreasing evidential
+        strength, in which the tier is a first-class, queryable property of
+        every finding rather than an implementation detail
+        (Section~\ref{sec:grounding}).
+  \item A \emph{fail-closed} persistence contract, enforced not once but at
+        every upstream boundary, with the specific failure each guard prevents
+        documented at the guard (Section~\ref{sec:failclosed}).
+  \item A \emph{precedent memory} built from real reviewer decisions, with a
+        canonicalisation scheme, two independent evaluation-leakage barriers,
+        and a documented idempotency fragility arising from deriving a
+        deduplication key from a generated field (Section~\ref{sec:precedent}).
+  \item A \emph{bounded} feedback mechanism (Beta--Binomial rule reliability)
+        together with a deliberate refusal to train on the evaluation metric
+        (Section~\ref{sec:feedback}).
+  \item A \emph{deterministic applicability layer} separating regulatory
+        applicability from semantic similarity, motivated by a root-cause
+        analysis of cross-product contamination (Section~\ref{sec:applicability}).
+  \item An \emph{honest measurement} of the deployed system, including three
+        negative results (Section~\ref{sec:evaluation}).
+\end{enumerate}
+
+\section{System Overview}
+
+The pipeline is a six-node directed graph executed per submission:
+
+\begin{center}
+\code{preprocess} $\rightarrow$ \code{dispatch} $\rightarrow$ \code{analysis}
+$\rightarrow$ \code{disclosure} $\rightarrow$ \code{scoring} $\rightarrow$ \code{persist}
+\end{center}
+
+\code{preprocess} extracts text, chunks it section-aware, and resolves product
+identity (UIN, family, market segment). \code{dispatch} retrieves evidence per
+chunk. \code{analysis} grades each chunk against retrieved evidence.
+\code{disclosure} runs a separate deterministic mandatory-disclosure check.
+\code{scoring} aggregates. Persistence is gated (Section~\ref{sec:failclosed}).
+
+Retrieval is hybrid --- dense vector similarity and BM25 lexical search, fused
+by Reciprocal Rank Fusion --- over six indexes: submission chunks, rules,
+regulator source passages, v1 reviewer examples, v2 canonical precedents, and
+approved product brochures.
+
+\section{Grounding Before Generation}
+\label{sec:grounding}
+
+Each finding carries a \code{grounding} tier. The ranking is explicit in code:
+
+\begin{lstlisting}
+_TIER_RANK = {"disclosure": 5, "product_fact": 4,
+              "precedent": 3, "rule": 2, "novel": 1}
+\end{lstlisting}
+
+\begin{table}[h]
+\centering
+\caption{Grounding tiers, strongest evidence first.}
+\begin{tabular}{@{}llp{6.6cm}@{}}
+\toprule
+\textbf{Tier} & \textbf{Rank} & \textbf{Evidence} \\
+\midrule
+\code{disclosure}   & 5 & Verbatim match against a mandated disclaimer registry \\
+\code{product\_fact} & 4 & Deterministic UIN-keyed product fact card \\
+\code{precedent}    & 3 & A retrieved past human reviewer decision \\
+\code{rule}         & 2 & An active, versioned rule \\
+\code{novel}        & 1 & Model judgement, requiring an explicit regulatory basis and clearing a confidence floor \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The \code{novel} tier exists because of a measured coverage failure. In the
+first precedent-only implementation, a chunk retrieving zero precedents
+produced zero findings --- issues outside the corpus were missed entirely. The
+design note recording this also documents a second, qualitative failure: the
+system's output did not read like a reviewer. A representative bad output was
+recorded verbatim in the design document as motivation:
+
+\begin{quote}\itshape
+``The new chunk mentions tax-free maturity benefits, which is similar to the
+precedent that flagged a claim about life insurance.''
+\end{quote}
+
+This is a statement about retrieval, not about compliance. The reviewer-voice
+redesign required each finding to name what is wrong, why it is wrong, and what
+should replace it.
+
+\section{Failing Closed}
+\label{sec:failclosed}
+
+The system may not record a grade for a document it did not substantively
+evaluate. A run is blocked from persistence when: no chunks were produced;
+graph status is failed; any degradation flag is set; or any chunk failed to
+grade. Blocked runs are marked \code{needs\_review} (recoverable) or
+\code{failed} (hard error) --- never scored.
+
+The same posture is replicated at every boundary where a silent empty result
+would be indistinguishable from a clean document. Three representative cases,
+each documented at the guard:
+
+\begin{itemize}
+  \item An LLM returning an unparseable response must raise, because ``a
+        fabricated empty result would be scored as a clean (100/A) document,
+        i.e.\ the pipeline would fail OPEN.''
+  \item A response truncated at the token ceiling
+        (\code{finish\_reason='length'}) is rejected rather than partially
+        accepted, since accepting it ``would silently under-report violations''
+        and retrying cannot help.
+  \item An empty rule set raises rather than returning \code{\{\}}, because an
+        empty dict ``is indistinguishable from `zero rules configured','' and
+        the pipeline would then grade with no rule grounding while appearing
+        healthy.
+\end{itemize}
+
+\subsection{Suppression rather than deletion}
+
+A design reversal worth recording. The original specification stated that novel
+findings below the confidence floor were \emph{dropped before persistence}. The
+shipped implementation inverts this: they are persisted with
+\code{suppressed=True}, excluded from scoring, and surfaced in a separate human
+review lane. The reasoning given in code is that a dropped low-confidence
+finding is ``an undetectable false negative --- exactly the dangerous case in a
+recall-critical compliance tool.''
+
+Criticals are exempt from suppression entirely, on the grounds that ``false
+negatives on criticals are the worst failure mode for a fail-closed compliance
+tool.''
+
+This is the asymmetry of Section~1 made operational: the system prefers a
+visible, auditable false positive to an invisible false negative.
+
+\section{Precedent Memory}
+\label{sec:precedent}
+
+\subsection{Origin}
+
+The system's most consequential decision was made \emph{against} its brief. The
+project was directed to replace a ``brittle rule-based RAG with no vector
+infrastructure'' by building vector retrieval from scratch. An audit found the
+premise false --- hybrid vector and BM25 retrieval with RRF fusion had been
+present since the initial implementation. What did not exist was a corpus of
+real reviewer decisions. The design note concludes:
+
+\begin{quote}\itshape
+``Therefore: we implement the brief's \emph{intent} using the \emph{existing}
+architecture, not the brief's literal (duplicative, slightly-incompatible)
+instructions.''
+\end{quote}
+
+The genuinely additive contribution was ingesting roughly 2{,}000--3{,}000
+reviewed documents into tuples of the form \emph{(draft chunk, reviewer
+comment, anchor text, final rewrite, reviewer, severity)}.
+
+\subsection{Canonicalisation}
+
+Version 2 of the corpus is issue-centric. Rather than embedding the raw text
+pair, it embeds a \emph{signature} so that paraphrased violations still match:
+
+\begin{lstlisting}
+Issue:        {issue_type}
+Why:          {why_rationale}
+Flagged text: {highlighted_span}
+Context:      {span_context}
+\end{lstlisting}
+
+Deduplication uses a canonical hash over the normalised triple
+\emph{(issue\_type, highlighted\_span, reviewer\_comment)}, collapsing repeats
+into one row with an \code{occurrence\_count}.
+
+\subsection{An idempotency fragility}
+
+The canonical hash is derived in part from \code{issue\_type}, which is
+\emph{generated by a language model} during ingestion. Stable identifiers
+across re-ingestion therefore depend on the enrichment cache persisting between
+runs. The codebase states the consequence plainly: clearing the cache can
+re-derive a different \code{issue\_type}, producing a new identifier and a
+duplicate row. Cache persistence is documented as a hard operational
+requirement.
+
+We highlight this because it generalises: \emph{any} deduplication key derived
+from generated output inherits that generator's nondeterminism. The
+conventional assumption that a content hash is stable does not hold when the
+content is itself sampled.
+
+\subsection{Corpus hygiene and leakage}
+
+Three hygiene layers operate: a one-time migration purging pure-response
+comments (``done'', ``ok''), estimated at 12--15\,\% of a 5{,}323-row corpus; a
+runtime thin-comment filter mirroring it, to protect against future bad
+ingests; and a fallback to the v1 corpus only when v2 is empty.
+
+Evaluation leakage is blocked twice, independently: retrieval excludes
+precedents originating from the document under review, and the replay harness
+splits train/eval deterministically by source-file hash. Neither barrier alone
+is trusted.
+
+\section{Bounded Feedback and the Refusal to Optimise the Metric}
+\label{sec:feedback}
+
+Each rule carries Beta pseudo-counts $(\alpha, \beta)$; its reliability is the
+posterior mean
+\[
+\theta = \frac{\alpha}{\alpha + \beta},
+\]
+learned from reviewer accept/reject verdicts, and multiplied into the rule's
+score deduction. Four safety properties are enforced:
+
+\begin{enumerate}
+  \item Absent feedback, $\theta = 1.0$ --- a rule with no evidence keeps full
+        penalty. The system never silently under-penalises.
+  \item A reliability floor (0.3) ensures feedback can discount a rule but
+        never erase it: ``deactivating a rule is a human decision, not an
+        emergent side effect of feedback.''
+  \item The prior has strength 10, so a single verdict moves $\theta$ by at
+        most $1/(\alpha+\beta+1)$. One reviewer click cannot whipsaw a rule.
+  \item A changed verdict reverts the prior count before applying the new one.
+\end{enumerate}
+
+\subsection{The held-out reviewer score}
+
+The system separately records a reviewer's own document-level score. This value
+is \emph{never} an input to scoring or to weight updates. The stated reason,
+repeated at four independent sites in the codebase, is that training on it
+would Goodhart the metric that is supposed to demonstrate improvement. Its only
+sanctioned use is the convergence curve
+\[
+\big|\, \text{score}_{\text{system}} - \text{score}_{\text{reviewer}} \,\big|
+\]
+observed over time.
+
+We regard this as the system's most defensible design decision and its least
+common one. The temptation to optimise directly against the available human
+signal is strong, and yielding to it would have destroyed the only independent
+evidence of improvement.
+
+\subsection{What this mechanism is not}
+
+The codebase is explicit that this is not continuous learning: there is no
+approval gate, no training pipeline, and no model retraining. The corresponding
+analytics surface returns an \code{insufficient\_data} shape rather than a
+fabricated number when the underlying evidence does not exist. At the time of
+measurement the reliability audit table existed but was never written to, so
+the reliability-history panel correctly reported that it had nothing to show.
+
+\section{Applicability: Separating Regulation from Similarity}
+\label{sec:applicability}
+
+\subsection{The failure}
+
+A root-cause analysis found that product identity \emph{was} resolved before
+retrieval and product scope metadata \emph{did} exist on the corpora --- but no
+retrieval or post-retrieval step consumed it, in three separate places. Rule
+retrieval filtered on regulator category (``IRDAI'') rather than product;
+precedent retrieval passed no filter at all and additionally dropped the
+product field before validation could occur; and a degraded-mode fallback
+injected the entire active rule set into every chunk.
+
+That last point is the sharpest: the fallback converted embedding outages into
+\emph{maximum} cross-product contamination rather than reduced recall.
+
+The analysis also isolates why relevance floors could not have caught this:
+\begin{quote}\itshape
+``cosine + ts\_rank floors exist but they are \emph{relevance} floors, not
+\emph{applicability} floors --- an on-topic-but-wrong-product chunk sails over
+them.''
+\end{quote}
+
+Semantic similarity cannot express regulatory applicability. A ULIP
+risk-disclosure precedent and a term-plan risk-disclosure precedent are
+near-neighbours in embedding space and are not interchangeable in law.
+
+\subsection{The contract}
+
+Applicability is decided deterministically, before similarity is allowed to
+matter, under an explicit contract: a conflicting product category is rejected;
+untagged or unmappable items are treated as global and accepted; an unresolved
+product scope rejects nothing; a unit-linked rider widens its scope; and every
+decision --- accept or reject, with reason --- is recorded per candidate.
+
+Crucially the default is \emph{permissive}. A heuristic ingest tag must never
+over-block retrieval, because over-blocking silently removes evidence and
+manifests as a false negative.
+
+\subsection{Cross-cutting categories}
+
+Not every tag denotes a product family. In this corpus \code{child} is a
+variant of a unit-linked product \emph{and} a rider benefit attached to term
+plans; scoping it to either family would hide it from the other. Such tags are
+now named explicitly as cross-cutting rather than reaching the ``global''
+outcome by accident through the unmappable-tag path --- a distinction with no
+behavioural difference today, but one that prevents a later vocabulary fix from
+silently narrowing retrieval.
+
+\subsection{Why metadata, not embedding}
+
+Product scope is stored beside the vector, not inside the embedded text. This
+is deliberate. Embedding a product name into every precedent signature would
+cause precedents to cluster by product rather than by \emph{issue type}, which
+is what retrieval must discriminate. Categorical scoping is an exact-match
+problem and belongs in a filter; embedding is for semantic similarity. A
+practical corollary is that re-tagging a corpus costs nothing in re-embedding.
+
+\section{Deterministic Adjudication of Mandated Wording}
+\label{sec:disclosure}
+
+Mandatory disclosures are handled by a separate path: a registry of approved
+wording, a trigger layer (deterministic product-line and keyword rules, unioned
+with an optional model backstop for paraphrased obligations), and a
+\emph{deterministic} matcher.
+
+The division of labour is a legal-defensibility argument rather than a quality
+one. Whether a document \emph{incurs} an obligation is a recall problem where
+paraphrase understanding helps, and a model is used. Whether the document's
+wording \emph{satisfies} the obligation is a verbatim-match question with a
+known correct answer, and no generative model adjudicates it. The model may
+only add obligations, never remove a deterministically-established one.
+
+\subsection{A diagnostic case study}
+
+A creative visibly containing an approved sentence was reported as ``present
+but altered (similarity 0.50).'' The investigation concluded the matcher was
+not at fault: the sentence never reached it, having been dropped during text
+extraction, after which every downstream stage behaved to specification and
+compounded the error into a misleading message.
+
+Two diagnostic steps are worth reproducing. First, the finding's provenance was
+recorded as originating from the model backstop, which is assigned only when
+the deterministic trigger did \emph{not} fire --- proving the regular
+expression never saw the phrase. Second, and more striking, the similarity
+score itself was identified as a fingerprint of \emph{absence}: unrelated
+documents containing no disclaimer at all score in the 0.48--0.55 band, because
+that is the floor produced by incidental overlap of common English tokens. A
+score of 0.50 therefore indicated ``not present'' rather than ``present but
+altered.''
+
+The root cause was that the DOCX extractor iterated only document paragraphs,
+which excludes headers, footers, text boxes and table cells --- precisely where
+marketing creatives place mandated disclaimers.
+
+The remediation included a consequence beyond the reported symptom: the matcher
+now protects legally-significant tokens (\emph{not}, \emph{no}, \emph{may},
+\emph{guaranteed}, \emph{risk}, \emph{past}) from being treated as ignorable.
+Previously, a disclaimer whose meaning had been \emph{inverted} by deleting
+``not'' scored 0.96 and passed as present --- undetected tampering.
+
+\section{Measurement}
+\label{sec:evaluation}
+
+\subsection{Baseline}
+
+The only quantitative baseline recorded during development, over 9--10
+documents, is reproduced below. Its own design note names
+\code{precision\_presence} as the canary: a regression there would indicate
+novel findings hallucinating.
+
+\begin{table}[h]
+\centering
+\caption{Development baseline, 27 May 2026.}
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+precision\_presence & 0.21 \\
+recall\_presence    & 0.66 \\
+anchor\_recall      & 0.35 \\
+missed\_criticals   & 32 \\
+generated / real    & 3.0$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The recall-over-precision profile is intentional given the error asymmetry, but
+a $3\times$ generation ratio is a real reviewer-attention cost.
+
+\subsection{Deployed system}
+
+Measured on the live deployment, 31 July 2026: 29 submissions, 1{,}537
+findings, 42 completed analyses, 2{,}440 precedents, 148 active rules.
+
+\begin{table}[h]
+\centering
+\caption{Deployed characteristics.}
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+Mean analysis latency & 133{,}910\,ms \\
+Median (p50) & 128{,}520\,ms \\
+p95 & 268{,}293\,ms \\
+Findings of Medium severity & 80\,\% \\
+Grade distribution (F / D / C / B / A) & 36 / 2 / 1 / 3 / 0 \\
+Reviewer verdicts recorded & 22 of 1{,}308 (1.7\,\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Negative result 1: scope coverage}
+
+Of 2{,}440 precedents, only 41.6\,\% carry a tag that resolves to a product
+family:
+
+\begin{table}[h]
+\centering
+\caption{Precedent scope coverage.}
+\begin{tabular}{@{}lrrl@{}}
+\toprule
+\textbf{Tag} & \textbf{Count} & \textbf{\%} & \textbf{Effect} \\
+\midrule
+(untagged) & 1{,}167 & 47.8 & global \\
+Term       & 429 & 17.6 & scoped \\
+ULIP       & 333 & 13.6 & scoped \\
+Child      & 259 & 10.6 & global (cross-cutting) \\
+Pension    & 178 &  7.3 & scoped \\
+Savings    &  74 &  3.0 & scoped \\
+\midrule
+\textbf{Effectively global} & \textbf{1{,}426} & \textbf{58.4} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two observations. First, the applicability layer is correct but
+under-supplied: the majority of the corpus is exempt from the scoping it
+implements. Second, the corpus contains \emph{no} instances of the
+participating/non-participating distinction, because those ingest heuristics
+postdate the corpus. The market segmentation the business considers primary is
+therefore unexpressed at the precedent level.
+
+This also bounds an apparently attractive optimisation. Pushing the scope
+filter into SQL --- retrieving within scope rather than filtering afterwards
+--- yields less than expected when 58.4\,\% of rows must be retained
+regardless.
+
+\subsection{Negative result 2: aggregate--subscore disagreement}
+
+The deployed report surface displays an overall score of 0.0 alongside
+component scores of 35.8--99.1 for the same document. No weighting of those
+components produces 0.0. Either the aggregate is not derived from the
+components, or an undisclosed override zeroes it. The population is consistent
+with a systematic effect: 36 of 42 analyses graded F, mean score 14.2.
+
+The same document additionally reports different finding counts on different
+surfaces (53 versus 68), most plausibly the suppressed review lane being
+included in one query and excluded in another --- a direct, and predictable,
+cost of the deliberate decision in Section~\ref{sec:failclosed} to persist
+suppressed findings rather than discard them. Introducing a second class of
+finding requires every consumer to state which class it counts.
+
+\subsection{Negative result 3: rule precision}
+
+The highest-firing rules --- brand-name conventions, 45, 23 and 9 activations
+--- have been rejected by reviewers in every instance so far adjudicated (0\,\%
+precision on 4 and 2 verdicts respectively). With 22 verdicts against 1{,}308
+findings, this is a signal to investigate rather than a conclusion. But the
+direction is consistent with the $3\times$ over-generation of the development
+baseline and with Medium severity comprising 80\,\% of all findings: the system
+is producing high-volume, low-specificity output in one rule family.
+
+Notably, this was surfaced \emph{by the system's own analytics}, because
+reviewer verdicts are recorded per rule with provenance. The instrumentation
+built to demonstrate improvement was the instrumentation that revealed the
+defect.
+
+\section{Discussion}
+
+\subsection{Documentation drift as a failure mode}
+
+An audit of the codebase against its own documentation found 15 discrepancies,
+including a pipeline described as five nodes when it has six, four different
+active-rule counts across seven interface surfaces, a knowledge-base statistic
+that reports a rendering cap as a corpus size, and three load-bearing code
+comments citing design documents that never existed in version control.
+
+We include this because it is a genuine reliability concern rather than an
+editorial one. In a regulated setting, ``which model graded this document'' is
+an audit question, and the deployed system answered it two different ways on
+two different screens.
+
+\subsection{On negative results}
+
+The mechanisms that make this system safe --- per-candidate accept/reject
+provenance, held-out evaluation, honest \code{insufficient\_data} responses,
+suppressed-but-persisted findings --- are the same mechanisms that made the
+three negative results in Section~\ref{sec:evaluation} discoverable. A system
+built to look successful would have reported a mean compliance score and
+stopped.
+
+\section{Limitations}
+
+The evaluation is observational, on a single deployment, with 1.7\,\% reviewer
+adjudication coverage; precision figures are indicative only. No inter-rater
+agreement was measured. No ablation isolates the contribution of individual
+grounding tiers. The development baseline covers 9--10 documents. Cost
+telemetry was not functioning during measurement, so efficiency claims are not
+made. The system has not been compared against a human-reviewer control or a
+non-grounded baseline; such a comparison is the obvious next work.
+
+\section{Conclusion}
+
+Grounding before generation, fail-closed persistence, deterministic
+adjudication of mandated wording, bounded feedback, and a refusal to train on
+the evaluation metric together produce a compliance reviewer whose findings are
+auditable and whose failures are visible. Measurement of the deployed system
+shows the architecture is sound and the \emph{supply} to it is not: an
+applicability layer starved of tags, an aggregate score disagreeing with its
+components, and a rule family generating findings reviewers consistently
+reject. These are tractable problems, and they were found because the system
+was instrumented to be falsifiable.
+
+\begin{thebibliography}{9}
+\footnotesize
+
+\bibitem{rrf}
+G.~V. Cormack, C.~L.~A. Clarke, and S.~B\"uttcher.
+\newblock Reciprocal rank fusion outperforms Condorcet and individual rank
+  learning methods.
+\newblock In \emph{SIGIR}, 2009.
+
+\bibitem{bm25}
+S.~Robertson and H.~Zaragoza.
+\newblock The probabilistic relevance framework: BM25 and beyond.
+\newblock \emph{Foundations and Trends in Information Retrieval}, 3(4), 2009.
+
+\bibitem{rag}
+P.~Lewis et al.
+\newblock Retrieval-augmented generation for knowledge-intensive NLP tasks.
+\newblock In \emph{NeurIPS}, 2020.
+
+\bibitem{goodhart}
+M.~Strathern.
+\newblock `Improving ratings': audit in the British University system.
+\newblock \emph{European Review}, 5(3), 1997.
+
+\bibitem{irdai}
+Insurance Regulatory and Development Authority of India.
+\newblock Guidelines on advertisements, promotion and publicity of insurance
+  companies and insurance intermediaries.
+
+\end{thebibliography}
+
+\end{document}

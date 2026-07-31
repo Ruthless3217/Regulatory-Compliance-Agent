@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models.rule import Rule
 from app.models.rule_feedback import RuleFeedback
+from app.models.rule_reliability_event import RuleReliabilityEvent
 from app.models.violation import Violation
 from app.services.agents.compliance.reliability import apply_verdict, theta
 
@@ -79,17 +80,20 @@ class RuleFeedbackService:
             existing.verdict = verdict
             existing.severity_override = severity_override
             existing.comment = comment
+            feedback_row = existing
         else:
-            db.add(
-                RuleFeedback(
-                    violation_id=violation.id,
-                    rule_id=violation.rule_id,  # denormalized: survives rule unlink
-                    verdict=verdict,
-                    severity_override=severity_override,
-                    reviewer_id=reviewer_id,
-                    comment=comment,
-                )
+            feedback_row = RuleFeedback(
+                violation_id=violation.id,
+                rule_id=violation.rule_id,  # denormalized: survives rule unlink
+                verdict=verdict,
+                severity_override=severity_override,
+                reviewer_id=reviewer_id,
+                comment=comment,
             )
+            db.add(feedback_row)
+            # Flush so the new row gets its PK, which the reliability event
+            # below links to. Same transaction — the commit is still one unit.
+            db.flush()
 
         # --- bounded weight update on the responsible rule ---
         weight_updated = False
@@ -98,9 +102,16 @@ class RuleFeedbackService:
         if violation.rule_id is not None:
             rule = db.query(Rule).filter(Rule.id == violation.rule_id).first()
         if rule is not None:
+            # Snapshot BEFORE mutating — `rules.reliability_alpha/beta` is
+            # updated in place, so this is the only moment the prior value
+            # exists anywhere.
+            alpha_before = rule.reliability_alpha
+            beta_before = rule.reliability_beta
+            theta_before = theta(alpha_before, beta_before)
+
             alpha, beta = apply_verdict(
-                rule.reliability_alpha,
-                rule.reliability_beta,
+                alpha_before,
+                beta_before,
                 verdict,
                 previous_verdict=previous_verdict,
             )
@@ -108,6 +119,22 @@ class RuleFeedbackService:
             rule.reliability_beta = beta
             reliability = theta(alpha, beta)
             weight_updated = True
+
+            # Append-only history (migration 0029): without this row the
+            # before/after pair is unrecoverable and the Model-learning
+            # reliability panel can only report insufficient_data.
+            db.add(
+                RuleReliabilityEvent(
+                    rule_id=rule.id,
+                    rule_feedback_id=feedback_row.id,
+                    alpha_before=alpha_before,
+                    beta_before=beta_before,
+                    alpha_after=alpha,
+                    beta_after=beta,
+                    theta_before=theta_before,
+                    theta_after=reliability,
+                )
+            )
             logger.info(
                 f"Rule {rule.id} reliability updated by verdict '{verdict}' "
                 f"(prev={previous_verdict}): α={alpha} β={beta} θ={reliability:.3f}"

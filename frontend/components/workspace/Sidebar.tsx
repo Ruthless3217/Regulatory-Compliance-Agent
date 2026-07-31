@@ -12,6 +12,8 @@ import {
   Boxes,
   GitCompare,
   Brain,
+  Layers,
+  ScanSearch,
 } from "lucide-react";
 import { DensityToggle } from "./DensityToggle";
 import { ApiHealthDot } from "./ApiHealthDot";
@@ -48,10 +50,22 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    // Both pages are gated server-side on `rules:write` (admin + super_admin,
+    // per backend/app/auth/permissions.py). This nav gate mirrors that scope;
+    // it is a UI convenience, not the security boundary.
+    title: "Admin",
+    items: [
+      { label: "Corpus layers", href: "/admin/corpus", icon: <Layers className="h-3.5 w-3.5" /> },
+      { label: "Retrieval inspector", href: "/admin/retrieval", icon: <ScanSearch className="h-3.5 w-3.5" /> },
+    ],
+  },
+  {
     title: "Settings",
     items: [{ label: "Project settings", href: "/settings", icon: <Settings className="h-3.5 w-3.5" /> }],
   },
 ];
+
+const ADMIN_ROLES = new Set(["admin", "super_admin"]);
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -63,7 +77,7 @@ export function Sidebar() {
   const { setOpen } = useCommandPalette();
   const { me, logoutHandler } = useAuth();
   
-  const sections = SECTIONS.map(s => {
+  const sections = SECTIONS.filter(s => s.title !== "Admin" || ADMIN_ROLES.has(me?.role ?? "")).map(s => {
     if (s.title === "Library") {
       const items = s.items.filter(it => {
         if (it.label === "Generate rules" && me?.role === "user") return false;

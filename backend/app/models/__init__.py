@@ -18,6 +18,7 @@ from .audit_event import AuditEvent
 from .submission_revision import SubmissionRevision
 from .document_comment import DocumentComment
 from .rule_reliability_event import RuleReliabilityEvent
+from .corpus_layer import CorpusLayer
 
 __all__ = [
     "User",
@@ -41,4 +42,5 @@ __all__ = [
     "SubmissionRevision",
     "DocumentComment",
     "RuleReliabilityEvent",
+    "CorpusLayer",
 ]

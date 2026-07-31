@@ -38,6 +38,12 @@ import type {
   TopRulesResponse,
   UsageSummary,
   UserRow,
+  CorpusLayer,
+  CorpusLayerList,
+  CorpusLayerItems,
+  CorpusLayerDeleteResult,
+  RetrievalInspection,
+  RetrievalRejectedInspection,
 } from "./types";
 
 // Server-side fetches run inside the container and need the docker DNS name.
@@ -607,3 +613,50 @@ export const ruleAudit = async (q: string = ""): Promise<RuleAuditRow[]> => {
     after: e.after ?? {},
   }));
 };
+
+/* ---------- admin: corpus layers ----------
+ * All routes gated on `rules:write` (admin + super_admin) — a plain user gets 403. */
+export const listCorpusLayers = () => jsonFetch<CorpusLayerList>(`${base()}/admin/corpus/layers`);
+
+export const createCorpusLayer = (b: {
+  name: string;
+  kind: string;
+  description?: string;
+  source_ref?: string;
+  claim?: boolean;
+}) => jsonFetch<CorpusLayer>(`${base()}/admin/corpus/layers`, { method: "POST", body: JSON.stringify(b) });
+
+/** Enable/disable is one boolean UPDATE — retrieval sees it on the next query
+ * and nothing is ever re-embedded. */
+export const updateCorpusLayer = (id: string, b: { enabled?: boolean; description?: string }) =>
+  jsonFetch<CorpusLayer>(`${base()}/admin/corpus/layers/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(b),
+  });
+
+/** purge=false unlinks the layer and keeps its precedents (they revert to
+ * always-retrieved). purge=true DELETEs the rows — and the row IS the vector,
+ * so the embeddings go with them. Irreversible. */
+export const deleteCorpusLayer = (id: string, purge: boolean = false) =>
+  jsonFetch<CorpusLayerDeleteResult>(
+    `${base()}/admin/corpus/layers/${id}?purge=${purge}`,
+    { method: "DELETE" }
+  );
+
+export const listCorpusLayerItems = (id: string, limit: number = 50, offset: number = 0) =>
+  jsonFetch<CorpusLayerItems>(
+    `${base()}/admin/corpus/layers/${id}/items?limit=${limit}&offset=${offset}`
+  );
+
+/* ---------- admin: retrieval inspector ----------
+ * Each of these can legitimately answer {status:"no_retrieval_data", reason}
+ * instead of a story — that is a real state, not an error. Discriminate on
+ * `.status` before reading anything else. */
+export const getRunRetrieval = (runId: string) =>
+  jsonFetch<RetrievalInspection>(`${base()}/admin/retrieval/runs/${runId}`);
+
+export const getLatestSubmissionRetrieval = (submissionId: string) =>
+  jsonFetch<RetrievalInspection>(`${base()}/admin/retrieval/submissions/${submissionId}/latest`);
+
+export const getRunRejectedRetrieval = (runId: string) =>
+  jsonFetch<RetrievalRejectedInspection>(`${base()}/admin/retrieval/runs/${runId}/rejected`);

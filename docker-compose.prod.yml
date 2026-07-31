@@ -107,11 +107,22 @@ services:
       GROQ_CITATION_MODEL: ${GROQ_CITATION_MODEL:-}
       GROQ_CITATION_TPM: ${GROQ_CITATION_TPM:-12000}
       # --- RAG / embeddings ---
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      # Azure AI Foundry inference surface (AZURE_INFERENCE_*) is what
+      # RAG_EMBEDDING_PROVIDER=azure_cohere actually reads (config.py) — these
+      # were missing here (only docker-compose.yml/.shared.yml had them),
+      # so a prod deploy would have the embedder fail to authenticate.
       RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-azure_cohere}
       RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-Cohere-embed-v3-multilingual}
       RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1024}
+      AZURE_INFERENCE_ENDPOINT: ${AZURE_INFERENCE_ENDPOINT:-}
+      AZURE_INFERENCE_API_KEY: ${AZURE_INFERENCE_API_KEY:-}
+      AZURE_INFERENCE_API_VERSION: ${AZURE_INFERENCE_API_VERSION:-2024-05-01-preview}
+      AZURE_COHERE_EMBED_DEPLOYMENT: ${AZURE_COHERE_EMBED_DEPLOYMENT:-Cohere-embed-v3-multilingual}
+      # Dead today (config.py never reads these — only azure_cohere is
+      # supported); kept as a harmless pass-through in case a .env still sets
+      # them, not removed here since that's a separate cleanup.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
       COHERE_EMBEDDING_MODEL: ${COHERE_EMBEDDING_MODEL:-embed-english-v3.0}
       # --- Tracing (optional) ---
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}

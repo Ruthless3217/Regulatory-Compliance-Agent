@@ -624,3 +624,153 @@ export interface RepeatedPatterns {
   status: "computed" | "insufficient_data";
   note: string;
 }
+
+/* ---------- admin: corpus layers (backend/app/api/routes/admin_corpus.py) ----------
+ * A layer is one ingested contribution with an off switch. `enabled=false` hides
+ * its precedents from retrieval on the next query and re-enabling costs nothing —
+ * the embeddings never move. Deleting is the separate, destructive operation. */
+
+export interface CorpusLayer {
+  id: string;
+  name: string;
+  kind: string;
+  description: string | null;
+  enabled: boolean;
+  source_ref: string | null;
+  ingested_by: string | null;
+  item_count: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CorpusLayerList {
+  layers: CorpusLayer[];
+  /** Precedents belonging to no layer (the pre-0030 corpus). Always retrieved;
+   * they have no provenance and cannot be switched off. */
+  unlayered_count: number;
+  kinds: string[];
+}
+
+export interface CorpusLayerItem {
+  id: string;
+  highlighted_span: string | null;
+  reviewer_comment: string | null;
+  issue_type: string | null;
+  severity: string | null;
+  product_category: string | null;
+  ticket: string | null;
+  source_file: string | null;
+  occurrence_count: number | null;
+}
+
+export interface CorpusLayerItems {
+  total: number;
+  limit: number;
+  offset: number;
+  items: CorpusLayerItem[];
+}
+
+export interface CorpusLayerDeleteResult {
+  id: string;
+  name: string;
+  purged: boolean;
+  precedents_deleted: number;
+  precedents_orphaned: number;
+}
+
+/* ---------- admin: retrieval inspector (backend/app/api/routes/admin_retrieval.py) ---- */
+
+export interface RetrievalScope {
+  uins: string[];
+  categories: string[];
+  /** false => no product identified, so nothing could be rejected on scope (C3). */
+  resolved: boolean;
+}
+
+export interface ProductMatch {
+  uin: string;
+  product_name: string;
+  confidence: number;
+  method: string;
+  ambiguous: boolean;
+  candidates: string[];
+}
+
+/** The enriched referent behind a candidate id. `rules` rows carry rule_text /
+ * category; `precedents` rows carry issue_type / highlighted_span / source_file.
+ * null when the lookup failed or the row is gone — see `enrichment_notes`. */
+export interface RetrievalDocument {
+  rule_text?: string | null;
+  category?: string | null;
+  product_line?: string | null;
+  issue_type?: string | null;
+  highlighted_span?: string | null;
+  source_file?: string | null;
+  product_category?: string | null;
+  severity?: string | null;
+}
+
+export interface RetrievalCandidate {
+  corpus: string;
+  id: string;
+  score: number | null;
+  /** The candidate's own scope tag (rules.product_line / precedent product_category). */
+  scope_value: string | null;
+  verdict: "accepted" | "rejected" | string;
+  reason: string | null;
+  tier?: string | null;
+  chunk_id?: string | null;
+  document?: RetrievalDocument | null;
+}
+
+export interface RetrievalRunHead {
+  run_id: string;
+  submission_id: string;
+  run_number: number | null;
+  run_status: string | null;
+  degraded_reason: string | null;
+  started_at: string | null;
+}
+
+/** Runs predating migration 0022, runs that died before dispatch, and runs with
+ * zero candidates all land here with a distinct `reason`. NEVER render this as
+ * an empty table — an empty table reads as "nothing was rejected". */
+export interface RetrievalNoData extends RetrievalRunHead {
+  status: "no_retrieval_data";
+  reason: string;
+}
+
+export interface RetrievalTotals {
+  candidates_total: number | null;
+  rejected_total: number | null;
+  records_available: number;
+  /** true => the persisted acceptances are a 100-cap SAMPLE, not the population. */
+  truncated: boolean;
+  note: string | null;
+  recorded_rejected: number;
+}
+
+export interface RetrievalStory extends RetrievalRunHead {
+  status: "ok";
+  scope: RetrievalScope | null;
+  product_match: ProductMatch[] | null;
+  degraded: Record<string, unknown>;
+  totals: RetrievalTotals;
+  by_corpus_recorded: Record<string, { accepted: number; rejected: number }>;
+  /** corpus -> tier -> candidates */
+  candidates: Record<string, Record<string, RetrievalCandidate[]>>;
+  enrichment_notes: Record<string, string> | null;
+}
+
+export interface RetrievalRejectedStory extends RetrievalRunHead {
+  status: "ok";
+  scope: RetrievalScope | null;
+  rejected_total: number | null;
+  records_available: number;
+  /** reason code -> bucket. Rejections are complete, never sampled. */
+  by_reason: Record<string, { count: number; candidates: RetrievalCandidate[] }>;
+  enrichment_notes: Record<string, string> | null;
+}
+
+export type RetrievalInspection = RetrievalStory | RetrievalNoData;
+export type RetrievalRejectedInspection = RetrievalRejectedStory | RetrievalNoData;
