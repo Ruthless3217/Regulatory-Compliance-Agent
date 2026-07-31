@@ -81,9 +81,20 @@ class Violation(Base):
     fix_applied = Column(Boolean, nullable=False, default=False, server_default="false")
     fix_applied_at = Column(DateTime(timezone=True), nullable=True)
 
+    # 0031 — authorship. 'model' (an analysis run produced it) or 'reviewer' (a
+    # human flagged text the model missed). Load-bearing for model-precision
+    # math: a reviewer-authored flag is not a model prediction and must never
+    # count as one (see model_learning.py's MODEL_SOURCE filter).
+    source = Column(String(16), nullable=False, default="model", server_default="model", index=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     compliance_check = relationship("ComplianceCheck", back_populates="violations")
     rule = relationship("Rule")
     analysis_run = relationship("AnalysisRun")
+    # Author of a reviewer-authored flag, for the "added by X" badge. Costs
+    # nothing on model-authored rows: created_by is NULL there and SQLAlchemy
+    # never emits a many-to-one load for a NULL FK.
+    creator = relationship("User")

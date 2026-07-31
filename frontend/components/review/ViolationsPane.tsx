@@ -71,6 +71,7 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
   const [productFilter, setProductFilter] = React.useState("all");
   const [sectionFilter, setSectionFilter] = React.useState("all");
   const [reviewStatusFilter, setReviewStatusFilter] = React.useState("all");
+  const [sourceFilter, setSourceFilter] = React.useState("all");
   const [showSuppressed, setShowSuppressed] = React.useState(false);
   const refs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -109,6 +110,17 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
     () => reviewStatusOptions(sorted.map((v) => v.review_status)),
     [sorted]
   );
+  // 0031 — who authored the finding. Normalized to "model" so a row from a
+  // cached/older payload without `source` never lands in an Unspecified bucket.
+  const sourceOptions = React.useMemo(
+    () =>
+      distinctOptions(
+        sorted.map((v) => v.source ?? "model"),
+        "—",
+        (v) => (v === "reviewer" ? "Reviewer-added" : "Model")
+      ),
+    [sorted]
+  );
 
   const filtered = React.useMemo(
     () =>
@@ -118,9 +130,10 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
           (categoryFilter === "all" || v.category === categoryFilter) &&
           matchesFacet(v.violation_metadata?.product_name, productFilter, UNSPECIFIED) &&
           matchesFacet(v.section_title, sectionFilter, UNSPECIFIED) &&
-          matchesFacet(v.review_status, reviewStatusFilter, REVIEW_STATUS_OPEN)
+          matchesFacet(v.review_status, reviewStatusFilter, REVIEW_STATUS_OPEN) &&
+          matchesFacet(v.source ?? "model", sourceFilter, UNSPECIFIED)
       ),
-    [filter, categoryFilter, productFilter, sectionFilter, reviewStatusFilter, sorted]
+    [filter, categoryFilter, productFilter, sectionFilter, reviewStatusFilter, sourceFilter, sorted]
   );
 
   const selectFilters: SelectFilterDef[] = [
@@ -128,6 +141,7 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
     { key: "product", label: "Product", value: productFilter, options: productOptions, onChange: setProductFilter },
     { key: "section", label: "Section", value: sectionFilter, options: sectionOptions, onChange: setSectionFilter },
     { key: "review-status", label: "Review status", value: reviewStatusFilter, options: reviewStatusOpts, onChange: setReviewStatusFilter },
+    { key: "source", label: "Source", value: sourceFilter, options: sourceOptions, onChange: setSourceFilter },
   ];
 
   // Scroll selected card into view when selection changes

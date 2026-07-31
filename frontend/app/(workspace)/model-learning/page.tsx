@@ -115,7 +115,15 @@ function PipelineStrip({ funnel, err }: { funnel: LearningFunnel | null; err: st
           <div className="mt-1 text-[11px] text-muted-foreground">Applied to scoring</div>
         </div>
       </div>
+      {/* Deliberately OUTSIDE the funnel: reviewer-authored flags are findings
+          the model missed, so they are neither model output nor a model
+          prediction, and never enter any precision figure. */}
       <p className="mt-3 text-xs text-muted-foreground">
+        <span className="font-mono">{funnel?.reviewer_authored ?? "—"}</span> reviewer-added
+        flag(s) sit outside this funnel — human findings the model missed, excluded from every
+        precision number on this page.
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
         {err ?? funnel?.no_gate_warning ?? ""}
       </p>
     </section>

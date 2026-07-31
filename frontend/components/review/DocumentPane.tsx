@@ -3,8 +3,8 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Check, Loader2, Sparkles, TriangleAlert } from "lucide-react";
 import { buildParagraphs, violationsToHighlightables, type DocPiece } from "@/lib/highlightMarkup";
-import { createSubmissionComment } from "@/lib/api";
-import { normalizeSeverity } from "@/lib/format";
+import { createReviewerViolation, createSubmissionComment } from "@/lib/api";
+import { categoryLabel, normalizeSeverity } from "@/lib/format";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import { VersionHistoryPopover } from "./VersionHistoryPopover";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,26 @@ interface Props {
   readOnly?: boolean;
 }
 
-interface PendingComment {
+/** A live text selection with the floating composer open on it. `mode` picks
+ * what the reviewer is writing: a freestanding note, or a brand-new flagged
+ * issue over text the model never surfaced. */
+interface PendingSelection {
   anchorText: string;
   x: number;
   y: number;
+  mode: "comment" | "flag";
 }
+
+/** Severity/category choices for a hand-written flag. Severities are the
+ * 4-tier scale the UI buckets by (see normalizeSeverity); categories start
+ * from the canonical set and pick up anything else already on this document,
+ * so a reviewer is never forced into a category the corpus doesn't use. */
+const FLAG_SEVERITIES = ["critical", "high", "medium", "low"] as const;
+const CANONICAL_CATEGORIES = ["irdai", "sebi", "brand", "regulatory", "seo"];
+
+const FIELD_CLASS =
+  "h-8 w-full rounded-sm border border-border bg-background px-2 text-xs " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 
 /** The span currently open for editing, pinned by offset + the exact text it
  * was opened against (so a stale offset can be detected at commit time). */
@@ -48,12 +63,26 @@ export function DocumentPane({ violations, selectedViolationId, onSelect, readOn
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   const [editing, setEditing] = React.useState<EditTarget | null>(null);
-  const [pending, setPending] = React.useState<PendingComment | null>(null);
+  const [pending, setPending] = React.useState<PendingSelection | null>(null);
   const [commentBody, setCommentBody] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  // Set to a freshly-created flag's id so the effect below opens the SAME
+  // per-span editor model flags use, as soon as its <mark> is rendered.
+  const [autoEditId, setAutoEditId] = React.useState<string | null>(null);
+  const [flag, setFlag] = React.useState({
+    severity: "medium",
+    category: "irdai",
+    description: "",
+    suggestedFix: "",
+  });
 
   const violationById = React.useMemo(
     () => new Map(violations.map((v) => [v.id, v])),
+    [violations]
+  );
+
+  const categoryChoices = React.useMemo(
+    () => Array.from(new Set([...CANONICAL_CATEGORIES, ...violations.map((v) => v.category)])),
     [violations]
   );
 
@@ -85,6 +114,22 @@ export function DocumentPane({ violations, selectedViolationId, onSelect, readOn
       text: piece.text,
     });
   };
+
+  // A just-created reviewer flag has no offsets of its own — buildParagraphs
+  // re-locates it from its current_text on the next render, and this picks the
+  // resulting piece up so the reviewer lands straight in the span editor.
+  React.useEffect(() => {
+    if (!autoEditId) return;
+    for (const pieces of paragraphs) {
+      const piece = pieces.find((p) => p.violationId === autoEditId);
+      if (piece) {
+        openEditor(piece);
+        break;
+      }
+    }
+    setAutoEditId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEditId, paragraphs]);
 
   /** Splice a span replacement into the live document and persist it. */
   const commitSpan = async (target: EditTarget, replacement: string, source: RevisionSource) => {
@@ -119,11 +164,12 @@ export function DocumentPane({ violations, selectedViolationId, onSelect, readOn
     toast.success(source === "apply_fix" ? "Suggested fix applied" : "Section updated");
   };
 
-  // Freestanding reviewer comments: capture whatever text the user just
-  // selected as anchor_text and float a small composer near the selection.
+  // Any selected text — flagged or not — can become a freestanding note OR a
+  // new flagged issue. Capture it and float a small composer near it.
   const cancelPending = React.useCallback(() => {
     setPending(null);
     setCommentBody("");
+    setFlag({ severity: "medium", category: "irdai", description: "", suggestedFix: "" });
   }, []);
 
   const handleMouseUp = () => {
@@ -136,7 +182,7 @@ export function DocumentPane({ violations, selectedViolationId, onSelect, readOn
     if (!root || !sel.anchorNode || !root.contains(sel.anchorNode)) return;
 
     const rect = sel.getRangeAt(0).getBoundingClientRect();
-    setPending({ anchorText, x: rect.left + rect.width / 2, y: rect.bottom });
+    setPending({ anchorText, x: rect.left + rect.width / 2, y: rect.bottom, mode: "comment" });
     setCommentBody("");
   };
 
@@ -152,6 +198,34 @@ export function DocumentPane({ violations, selectedViolationId, onSelect, readOn
       cancelPending();
     } catch (e) {
       toast.error(`Could not add comment: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Turn the selection into a reviewer-authored violation. It lands in the
+   * same violations list as model findings, so it marks, filters, edits and
+   * exports through every existing path. */
+  const submitFlag = async () => {
+    if (!pending || !flag.description.trim() || busy) return;
+    setBusy(true);
+    try {
+      const created = await createReviewerViolation(submission.id, {
+        current_text: pending.anchorText,
+        description: flag.description.trim(),
+        severity: flag.severity,
+        category: flag.category,
+        suggested_fix: flag.suggestedFix.trim() || undefined,
+      });
+      setViolations((prev) => [...prev, created]);
+      cancelPending();
+      window.getSelection()?.removeAllRanges();
+      setAutoEditId(created.id);
+      toast.success("Issue flagged");
+    } catch (e) {
+      // The 400 for a never-analysed submission carries a readable reason —
+      // surface it rather than a generic failure.
+      toast.error(`Could not flag this text: ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -189,7 +263,15 @@ export function DocumentPane({ violations, selectedViolationId, onSelect, readOn
                     key={piece.start}
                     data-violation-id={piece.violationId}
                     data-severity={normalizeSeverity(piece.severity)}
-                    title={readOnly ? undefined : "Click to edit this section"}
+                    // Dashed underline = a reviewer wrote this flag, not the model.
+                    data-source={violationById.get(piece.violationId)?.source ?? "model"}
+                    title={
+                      violationById.get(piece.violationId)?.source === "reviewer"
+                        ? "Reviewer-added issue — click to edit this section"
+                        : readOnly
+                          ? undefined
+                          : "Click to edit this section"
+                    }
                     onClick={() => openEditor(piece)}
                   >
                     {piece.text}
@@ -203,28 +285,101 @@ export function DocumentPane({ violations, selectedViolationId, onSelect, readOn
 
       {pending && (
         <div
-          className="fixed z-50 w-72 -translate-x-1/2 rounded-md border border-border bg-background p-2 shadow-card"
+          className="fixed z-50 w-80 -translate-x-1/2 rounded-md border border-border bg-background p-2 shadow-card"
           style={{ left: pending.x, top: pending.y + 6 }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div className="micro-label mb-1 text-muted-foreground">
-            Comment on: “{pending.anchorText.length > 80 ? `${pending.anchorText.slice(0, 80)}…` : pending.anchorText}”
+          <div className="micro-label mb-1.5 text-muted-foreground">
+            “{pending.anchorText.length > 80 ? `${pending.anchorText.slice(0, 80)}…` : pending.anchorText}”
           </div>
-          <Textarea
-            autoFocus
-            value={commentBody}
-            onChange={(e) => setCommentBody(e.target.value)}
-            className="min-h-[64px] text-xs"
-            placeholder="Add a note…"
-          />
-          <div className="mt-2 flex justify-end gap-2">
-            <Button size="sm" variant="ghost" onClick={cancelPending}>
-              Cancel
-            </Button>
-            <Button size="sm" disabled={!commentBody.trim() || busy} onClick={submitComment}>
-              {busy ? "Saving…" : "Comment"}
-            </Button>
-          </div>
+
+          {/* Flagging in a historical-run view is hidden on purpose: the flag
+              would attach to the LATEST check, not the run on screen. */}
+          {!readOnly && (
+            <div className="mb-2 flex gap-1">
+              {(["comment", "flag"] as const).map((m) => (
+                <Button
+                  key={m}
+                  size="sm"
+                  variant={pending.mode === m ? "default" : "ghost"}
+                  aria-pressed={pending.mode === m}
+                  onClick={() => setPending({ ...pending, mode: m })}
+                >
+                  {m === "comment" ? "Comment" : "Flag as issue"}
+                </Button>
+              ))}
+            </div>
+          )}
+
+          {pending.mode === "comment" || readOnly ? (
+            <>
+              <Textarea
+                autoFocus
+                value={commentBody}
+                onChange={(e) => setCommentBody(e.target.value)}
+                className="min-h-[64px] text-xs"
+                placeholder="Add a note…"
+              />
+              <div className="mt-2 flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={cancelPending}>
+                  Cancel
+                </Button>
+                <Button size="sm" disabled={!commentBody.trim() || busy} onClick={submitComment}>
+                  {busy ? "Saving…" : "Comment"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mb-2 flex gap-2">
+                <select
+                  aria-label="Severity"
+                  value={flag.severity}
+                  onChange={(e) => setFlag({ ...flag, severity: e.target.value })}
+                  className={FIELD_CLASS}
+                >
+                  {FLAG_SEVERITIES.map((s) => (
+                    <option key={s} value={s}>
+                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Category"
+                  value={flag.category}
+                  onChange={(e) => setFlag({ ...flag, category: e.target.value })}
+                  className={FIELD_CLASS}
+                >
+                  {categoryChoices.map((c) => (
+                    <option key={c} value={c}>
+                      {categoryLabel(c)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Textarea
+                autoFocus
+                value={flag.description}
+                onChange={(e) => setFlag({ ...flag, description: e.target.value })}
+                className="min-h-[56px] text-xs"
+                placeholder="What's wrong with this text?"
+              />
+              <Textarea
+                value={flag.suggestedFix}
+                onChange={(e) => setFlag({ ...flag, suggestedFix: e.target.value })}
+                className="mt-1.5 min-h-[40px] text-xs"
+                placeholder="Suggested fix (optional)"
+              />
+              <div className="mt-2 flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={cancelPending}>
+                  Cancel
+                </Button>
+                <Button size="sm" disabled={!flag.description.trim() || busy} onClick={submitFlag}>
+                  {busy ? "Flagging…" : "Flag issue"}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -263,7 +418,9 @@ function EditorToolbar({ readOnly }: { readOnly?: boolean }) {
           </span>
         )}
         {!readOnly && !documentDirty && (
-          <span className="text-muted-foreground">· click a flagged section to edit it</span>
+          <span className="text-muted-foreground">
+            · click a flagged section to edit it, or select any text to comment or flag it
+          </span>
         )}
         {readOnly && <span className="text-muted-foreground">· read-only (historical run)</span>}
       </div>

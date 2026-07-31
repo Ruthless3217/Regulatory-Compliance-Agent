@@ -38,6 +38,7 @@ import type {
   TopRulesResponse,
   UsageSummary,
   UserRow,
+  Violation,
   CorpusLayer,
   CorpusLayerList,
   CorpusLayerItems,
@@ -272,6 +273,37 @@ export async function submitReviewerAction(
     body: JSON.stringify(body),
   });
 }
+/* ---------- reviewer-authored findings (migration 0031) ---------- */
+
+/** Flag a span the model never surfaced. Attaches server-side to the
+ * submission's LATEST compliance check — 400s (with a readable message) if the
+ * submission has never been analysed, since there'd be no check to attach to. */
+export async function createReviewerViolation(
+  submissionId: string,
+  body: {
+    current_text: string;
+    description: string;
+    severity: string;
+    category: string;
+    suggested_fix?: string;
+  }
+): Promise<Violation> {
+  return jsonFetch(`${base()}/compliance/submissions/${submissionId}/violations`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Delete a reviewer-authored flag (its author, or an admin). A MODEL-authored
+ * finding is refused server-side — record a Not-a-violation/Dismiss verdict
+ * instead, so the model's own output survives as the evidence its precision is
+ * measured against. */
+export async function deleteReviewerViolation(
+  violationId: string
+): Promise<{ message: string; id: string }> {
+  return jsonFetch(`${base()}/compliance/violations/${violationId}`, { method: "DELETE" });
+}
+
 // Held-out evaluation only: logs the reviewer's own document score next to
 // the system's. Never affects scoring or rule weights.
 export async function submitReviewerScore(

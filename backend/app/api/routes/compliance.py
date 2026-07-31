@@ -9,6 +9,8 @@ Endpoints:
 - GET  /compliance/check/{check_id}               - Get specific check details
 - POST /compliance/violations/{violation_id}/feedback - Reviewer verdict (back-compat accept/reject shim)
 - POST /compliance/violations/{violation_id}/actions  - Reviewer action taxonomy (correct/not_violation/dismiss)
+- POST /compliance/submissions/{submission_id}/violations - Reviewer-authored flag on text the model missed
+- DELETE /compliance/violations/{violation_id}           - Delete a reviewer-authored flag (never a model one)
 - GET  /compliance/reviewer-actions/queues            - Open reviewer-action queue entries (feedback:review)
 - POST /compliance/reviewer-actions/{feedback_id}/resolve - Resolve a queued reviewer-action entry
 - GET  /compliance/submissions/{submission_id}/runs   - Reviewer-facing run history
@@ -36,6 +38,7 @@ from app.models.rule_feedback import RuleFeedback
 from app.services.agents.compliance.engine import ComplianceEngine
 from app.services.violation_serializer import serialize_violation, latest_feedback_map
 from app.auth.dependencies import require
+from app.auth.permissions import role_has
 
 logger = logging.getLogger(__name__)
 
@@ -482,6 +485,149 @@ async def submit_violation_action(
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail=str(e))
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# --------------------------------------------------------------------------
+# Reviewer-authored findings (migration 0031)
+#
+# Lives here, not in submissions.py, because everything violation-shaped does:
+# compliance.py already owns the Violation model, the serializer, the reviewer
+# verdict/action endpoints, and the sibling /compliance/submissions/{id}/runs
+# route. submissions.py owns document CONTENT (revisions/comments/export) and
+# imports neither ComplianceCheck nor the serializer.
+#
+# Gated on `feedback:submit` — the scope every reviewer role already holds
+# (user + admin + super_admin, see auth/permissions.py). Flagging text is the
+# same act as judging a flag, so it needs no new scope.
+# --------------------------------------------------------------------------
+
+class ReviewerViolationCreate(BaseModel):
+    """A finding a reviewer wrote by hand over text the model never flagged —
+    the model's blind spots are otherwise the editor's blind spots too."""
+    current_text: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    severity: Literal["critical", "high", "medium", "low", "moderate", "informational"]
+    # Free-form on purpose: `violations.category` is String(50) and categories
+    # come from the rule corpus at runtime, so an enum here would go stale.
+    category: str = Field(..., min_length=1, max_length=50)
+    suggested_fix: Optional[str] = None
+
+
+@router.post("/submissions/{submission_id}/violations", status_code=201)
+async def create_reviewer_violation(
+    submission_id: str,
+    payload: ReviewerViolationCreate,
+    user: dict = Depends(require("feedback:submit")),
+    db: Session = Depends(get_db),
+):
+    """Flag a span of a submission as an issue the model missed.
+
+    Attaches to the submission's LATEST compliance check (violations.
+    compliance_check_id is NOT NULL). If the submission has never been
+    analysed there is no check to attach to and this 400s: fabricating a
+    minimal ComplianceCheck would invent a graded record for a document nobody
+    graded, and that phantom check would then be counted by the dashboard,
+    funnel and calibration queries as if an analysis had happened.
+    """
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    check = (
+        db.query(ComplianceCheck)
+        .filter(ComplianceCheck.submission_id == submission_id)
+        .order_by(ComplianceCheck.checked_at.desc())
+        .first()
+    )
+    if check is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This submission has not been analysed yet, so there is no "
+                "compliance check to attach a finding to. Run the analysis "
+                "first, then flag the text."
+            ),
+        )
+
+    latest_run = (
+        db.query(AnalysisRun)
+        .filter(AnalysisRun.submission_id == submission_id)
+        .order_by(AnalysisRun.run_number.desc())
+        .first()
+    )
+
+    violation = Violation(
+        compliance_check_id=check.id,
+        # No rule fired and no model produced this — both stay NULL/absent.
+        rule_id=None,
+        analysis_run_id=latest_run.id if latest_run else None,
+        category=payload.category,
+        severity=payload.severity,
+        description=payload.description,
+        current_text=payload.current_text,
+        suggested_fix=payload.suggested_fix,
+        auto_fixable="false",
+        # NOT NULL with a 0.85 model default; a human assertion is not a model
+        # probability, so record full certainty rather than a fake model score.
+        confidence=1.0,
+        source="reviewer",
+        created_by=getattr(user, "id", None),
+    )
+    db.add(violation)
+    db.commit()
+    db.refresh(violation)
+
+    from app.services.observability import audit
+    asyncio.create_task(audit.record(
+        "reviewer_violation_created", actor=user, target_type="violation",
+        target_id=str(violation.id), metadata={"submission_id": submission_id},
+    ))
+    return serialize_violation(violation)
+
+
+@router.delete("/violations/{violation_id}")
+async def delete_reviewer_violation(
+    violation_id: str,
+    user: dict = Depends(require("feedback:submit")),
+    db: Session = Depends(get_db),
+):
+    """Delete a REVIEWER-authored flag — its author, or anyone holding
+    `feedback:review` (admin/super_admin), may remove it.
+
+    A model-authored violation is never deletable through this route: it is the
+    evidence the model's own precision is measured against, and the reviewer
+    already has non-destructive verdicts for it (Not-a-violation / Dismiss).
+    """
+    violation = db.query(Violation).filter(Violation.id == violation_id).first()
+    if not violation:
+        raise HTTPException(status_code=404, detail="Violation not found")
+
+    if (violation.source or "model") != "reviewer":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Model-authored findings cannot be deleted. Record a "
+                "'Not a violation' or 'Dismiss' verdict instead."
+            ),
+        )
+
+    user_id = getattr(user, "id", None)
+    is_author = violation.created_by is not None and str(violation.created_by) == str(user_id)
+    if not is_author and not role_has(getattr(user, "role", ""), "feedback:review"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the reviewer who created this flag, or an admin, can delete it.",
+        )
+
+    db.delete(violation)
+    db.commit()
+
+    from app.services.observability import audit
+    asyncio.create_task(audit.record(
+        "reviewer_violation_deleted", actor=user, target_type="violation",
+        target_id=violation_id,
+    ))
+    return {"message": "Violation deleted", "id": violation_id}
 
 
 class ReviewerActionResolveRequest(BaseModel):

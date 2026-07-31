@@ -14,6 +14,10 @@ visible. Every endpoint says so, and returns a null/'insufficient_data'
 shape rather than a fabricated number when the underlying data doesn't
 exist yet (e.g. no reviewer-scored checks, no reliability-event rows).
 
+Every rate here is a statement about MODEL output, so every one of them counts
+only `violations.source = 'model'` (migration 0031). Reviewer-authored flags are
+surfaced as their own funnel number and never folded into a precision figure.
+
 Endpoints:
 - GET /model-learning/funnel                    - flagged -> reviewed -> applied-to-scoring counts
 - GET /model-learning/precision?by=             - reviewer-verdict precision by rule|category|severity
@@ -48,6 +52,15 @@ _POSITIVE_VERDICTS = {"accept", "correct"}
 _NEGATIVE_VERDICTS = {"reject", "not_violation"}
 _SCORING_VERDICTS = _POSITIVE_VERDICTS | _NEGATIVE_VERDICTS
 
+# Since 0031 `violations` holds two kinds of row: model predictions
+# (source='model') and flags a reviewer wrote by hand (source='reviewer').
+# EVERY rate/precision below is a statement about MODEL output, so every one of
+# them filters on this. A reviewer-authored flag is not a prediction the model
+# made — counting it would inflate precision and corrupt the exact number used
+# to judge whether the model is improving, the same way training on
+# reviewer_score would (see rule_feedback_service.py).
+MODEL_SOURCE = "model"
+
 
 def _truncate(text: Optional[str], n: int = 140) -> Optional[str]:
     if text is None:
@@ -77,7 +90,8 @@ def _verdict_counts_by_key(db: Session, by: str) -> Dict[str, Dict[str, int]]:
     if by == "rule":
         rows = (
             db.query(RuleFeedback.rule_id.label("key"), RuleFeedback.verdict, func.count(RuleFeedback.id))
-            .filter(RuleFeedback.rule_id.isnot(None))
+            .join(Violation, Violation.id == RuleFeedback.violation_id)
+            .filter(RuleFeedback.rule_id.isnot(None), Violation.source == MODEL_SOURCE)
             .group_by(RuleFeedback.rule_id, RuleFeedback.verdict)
             .all()
         )
@@ -86,6 +100,7 @@ def _verdict_counts_by_key(db: Session, by: str) -> Dict[str, Dict[str, int]]:
         rows = (
             db.query(col.label("key"), RuleFeedback.verdict, func.count(RuleFeedback.id))
             .join(Violation, Violation.id == RuleFeedback.violation_id)
+            .filter(Violation.source == MODEL_SOURCE)
             .group_by(col, RuleFeedback.verdict)
             .all()
         )
@@ -116,21 +131,32 @@ async def get_learning_funnel(
 ):
     """Flags -> Awaiting review -> Feedback collected -> Applied to scoring.
 
-    Counts only non-suppressed violations (suppressed findings never reach a
-    reviewer). 'Applied to scoring' is the subset of reviewed findings whose
-    verdict actually moved a rule's Beta-Binomial weight (correct/not_violation
-    with a linked rule; 'dismiss' never does).
+    Counts only non-suppressed, MODEL-authored violations: this funnel measures
+    what the model produced and what happened to it. Reviewer-authored flags
+    (0031) are reported separately as `reviewer_authored` — they are findings
+    the model missed, so folding them into `flagged` would credit the model with
+    a human's work and inflate every downstream ratio.
+
+    'Applied to scoring' is the subset of reviewed findings whose verdict
+    actually moved a rule's Beta-Binomial weight (correct/not_violation with a
+    linked rule; 'dismiss' never does).
     """
     flagged = (
         db.query(func.count(Violation.id))
-        .filter(Violation.suppressed == False)  # noqa: E712 - matches existing convention
+        .filter(Violation.suppressed == False, Violation.source == MODEL_SOURCE)  # noqa: E712 - matches existing convention
+        .scalar()
+        or 0
+    )
+    reviewer_authored = (
+        db.query(func.count(Violation.id))
+        .filter(Violation.suppressed == False, Violation.source != MODEL_SOURCE)  # noqa: E712
         .scalar()
         or 0
     )
     feedback_collected = (
         db.query(func.count(func.distinct(RuleFeedback.violation_id)))
         .join(Violation, Violation.id == RuleFeedback.violation_id)
-        .filter(Violation.suppressed == False)  # noqa: E712
+        .filter(Violation.suppressed == False, Violation.source == MODEL_SOURCE)  # noqa: E712
         .scalar()
         or 0
     )
@@ -139,6 +165,7 @@ async def get_learning_funnel(
         .join(Violation, Violation.id == RuleFeedback.violation_id)
         .filter(
             Violation.suppressed == False,  # noqa: E712
+            Violation.source == MODEL_SOURCE,
             RuleFeedback.rule_id.isnot(None),
             RuleFeedback.verdict.in_(_SCORING_VERDICTS),
         )
@@ -152,6 +179,9 @@ async def get_learning_funnel(
         "awaiting_review": awaiting_review,
         "feedback_collected": feedback_collected,
         "applied_to_scoring": applied_to_scoring,
+        # Findings a reviewer wrote by hand — the model's misses. Deliberately
+        # its own number, never added into `flagged`.
+        "reviewer_authored": reviewer_authored,
         "no_gate_warning": (
             "Correct / Not-a-violation verdicts update the rule's reliability "
             "weight immediately on submission — there is no approval gate "
@@ -168,7 +198,8 @@ async def get_precision(
     db: Session = Depends(get_db),
 ):
     """Reviewer-verdict precision (correct / (correct + not_violation)),
-    grouped by rule, violation category, or violation severity."""
+    grouped by rule, violation category, or violation severity. Model-authored
+    findings only — see MODEL_SOURCE."""
     grouped = _verdict_counts_by_key(db, by)
 
     rule_meta: Dict[str, Rule] = {}
@@ -203,7 +234,8 @@ async def get_precision(
         "note": (
             "Precision = correct verdicts / (correct + not_violation verdicts) "
             "reviewed so far; 'dismiss' actions carry no correctness signal "
-            "and are excluded from the denominator."
+            "and are excluded from the denominator. Reviewer-authored flags "
+            "are excluded entirely — they are not model predictions."
         ),
     }
 
@@ -382,7 +414,11 @@ async def get_repeated_patterns(
             func.count(Violation.id).label("violation_count"),
         )
         .join(ComplianceCheck, ComplianceCheck.id == Violation.compliance_check_id)
-        .filter(Violation.rule_id.isnot(None), Violation.suppressed == False)  # noqa: E712
+        .filter(
+            Violation.rule_id.isnot(None),
+            Violation.suppressed == False,  # noqa: E712
+            Violation.source == MODEL_SOURCE,
+        )
         .group_by(Violation.rule_id)
         .having(func.count(func.distinct(ComplianceCheck.submission_id)) >= min_submissions)
         .order_by(func.count(func.distinct(ComplianceCheck.submission_id)).desc())

@@ -8,7 +8,7 @@ import { categoryLabel, severityClass, truthyAutoFix, normalizeSeverity } from "
 import { cn } from "@/lib/utils";
 import { ActionTags } from "@/components/violation/ActionTags";
 import { PrecedentNote } from "@/components/violation/PrecedentNote";
-import { submitReviewerAction } from "@/lib/api";
+import { deleteReviewerViolation, submitReviewerAction } from "@/lib/api";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import type { DismissReason, NotViolationReason, ReviewerActionType, Violation } from "@/lib/types";
 
@@ -78,6 +78,24 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
 
   const [applyFixBusy, setApplyFixBusy] = React.useState(false);
   const fixApplied = violation.fix_applied === true;
+
+  // 0031 — reviewer-authored flags are the only deletable findings. A model
+  // finding is dismissed/rejected by verdict, never removed.
+  const reviewerAuthored = violation.source === "reviewer";
+  const [deleteBusy, setDeleteBusy] = React.useState(false);
+
+  const removeFlag = async () => {
+    if (deleteBusy) return;
+    setDeleteBusy(true);
+    try {
+      await deleteReviewerViolation(violation.id);
+      setViolations((prev) => prev.filter((v) => v.id !== violation.id));
+      toast.success("Flag removed");
+    } catch (e) {
+      toast.error(`Could not remove flag: ${(e as Error).message}`);
+      setDeleteBusy(false);
+    }
+  };
 
   const togglePanel = (panel: ReviewerActionType) =>
     setActivePanel((cur) => (cur === panel ? null : panel));
@@ -191,6 +209,17 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
         <div className="flex items-center gap-1.5">
           <SeverityBadge severity={violation.severity} />
           <Badge>{categoryLabel(violation.category)}</Badge>
+          {reviewerAuthored && (
+            <Badge
+              tone="primary"
+              title={
+                `Added by ${violation.created_by_username ?? "a reviewer"} — not a model finding. ` +
+                "Excluded from model-precision metrics."
+              }
+            >
+              reviewer · {violation.created_by_username ?? "added by hand"}
+            </Badge>
+          )}
           {autoFix && <Badge tone="primary">auto-fix</Badge>}
           {typeof violation.confidence === "number" && (
             <Badge tone={violation.confidence >= 0.85 ? "success" : violation.confidence >= 0.65 ? "medium" : "critical"}>
@@ -323,6 +352,17 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
         </div>
         <div className="flex items-center gap-2">
           {fixApplied && <Badge tone="success">Applied</Badge>}
+          {reviewerAuthored && (
+            <Button
+              size="sm"
+              variant="ghost"
+              title="Remove this reviewer-added flag"
+              disabled={deleteBusy}
+              onClick={(e) => { e.stopPropagation(); removeFlag(); }}
+            >
+              {deleteBusy ? "Removing…" : "Remove"}
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"

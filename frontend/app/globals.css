@@ -80,6 +80,10 @@
   mark[data-severity="high"]     { border-bottom-color: hsl(var(--sev-high)); }
   mark[data-severity="medium"]   { border-bottom-color: hsl(var(--sev-medium)); }
   mark[data-severity="low"]      { border-bottom-color: hsl(var(--sev-low)); }
+  /* 0031 — a reviewer wrote this flag, the model didn't. Same severity colour
+     (severity still means severity), dashed so the authorship is visible in
+     the document itself, not only on the sidebar card. */
+  mark[data-source="reviewer"] { border-bottom-style: dashed; }
   mark[data-selected="true"] {
     background-color: hsl(var(--primary-50));
   }

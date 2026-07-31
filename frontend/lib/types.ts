@@ -94,6 +94,13 @@ export interface Violation {
   // document via a submission_revisions entry.
   fix_applied?: boolean | null;
   fix_applied_at?: string | null;
+  // 0031 — authorship. "model" = an analysis run produced this finding;
+  // "reviewer" = a human flagged text the model never surfaced. Only
+  // reviewer-authored flags are deletable, and only they are kept out of the
+  // model-precision math on /model-learning. Absent => treat as "model".
+  source?: "model" | "reviewer" | string;
+  created_by?: string | null;
+  created_by_username?: string | null;
   // Left-joined latest reviewer verdict (rule_feedback), if any. Legacy rows
   // may still hold "accept"/"reject"; new rows hold the reviewer-action
   // taxonomy value ("correct" | "not_violation" | "dismiss").
@@ -529,6 +536,10 @@ export interface LearningFunnel {
   awaiting_review: number;
   feedback_collected: number;
   applied_to_scoring: number;
+  /** Findings a reviewer wrote by hand — the model's misses. Reported beside
+   * the funnel, never inside it, so a human's work never counts as model
+   * output. */
+  reviewer_authored: number;
   no_gate_warning: string;
   status: "computed";
 }

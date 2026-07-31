@@ -5,9 +5,12 @@ Replaces the two hand-duplicated serializers (`compliance.py`'s
 drifted apart and silently dropped already-populated columns
 (`cited_section`, `cited_page`, `cited_regulation_version`, `rule_version`).
 
-`serialize_violation` is pure (no DB access) so callers control how the
-per-violation reviewer `feedback` row is fetched — pass the result of
+`serialize_violation` issues no query of its own for the reviewer `feedback`
+row, so callers control how it's fetched — pass the result of
 `latest_feedback_map` for one bulk query instead of one query per violation.
+Its one relationship access (`v.creator`, for the author badge on
+reviewer-authored flags) is a no-op whenever `created_by` is NULL, which is
+every model-authored row.
 """
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
@@ -65,6 +68,15 @@ def serialize_violation(v: Violation, feedback: Optional[RuleFeedback] = None) -
         # 0028 — has the suggested fix already been written into the document.
         "fix_applied": bool(v.fix_applied),
         "fix_applied_at": v.fix_applied_at.isoformat() if v.fix_applied_at else None,
+        # 0031 — authorship: 'model' (an analysis run produced it) or
+        # 'reviewer' (a human flagged text the model missed). The UI badges the
+        # two differently and only a reviewer-authored flag is deletable.
+        "source": v.source or "model",
+        "created_by": str(v.created_by) if v.created_by else None,
+        # Author's display name for the "added by X" badge. No query for
+        # model-authored rows (created_by is NULL, so the relationship never
+        # loads) — one for each reviewer-authored row, which are rare.
+        "created_by_username": v.creator.username if v.creator else None,
         # Left-joined latest reviewer verdict (rule_feedback), if any.
         "reviewer_verdict": feedback.verdict if feedback else None,
         "reviewer_comment": feedback.comment if feedback else None,
