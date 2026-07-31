@@ -27,6 +27,11 @@ from app.services.violation_serializer import serialize_violation, latest_feedba
 
 logger = logging.getLogger(__name__)
 
+# Must not exceed violations.category's column width (models/violation.py).
+# Widened 50 -> 100 by migration 0032; kept here as a hard write-side clamp so
+# the pipeline degrades to a truncated label instead of losing an entire run.
+_CATEGORY_MAX_LEN = 100
+
 
 class ComplianceEngine:
     """
@@ -316,7 +321,22 @@ class ComplianceEngine:
                 # dashboard aggregations. Falls back to medium / unknown.
                 raw_sev = str(v_data.get("severity", "medium")).strip().lower()
                 sev = raw_sev if raw_sev in ALLOWED_SEV else "medium"
+                # Severity is whitelisted above; category is NOT — it is free
+                # text the model chooses (e.g. "claim settlement ratio
+                # disclosure & approval"). Unbounded, it overflows
+                # violations.category and psycopg2 raises
+                # StringDataRightTruncation on the batch INSERT, which discards
+                # EVERY violation in the run — the whole analysis is lost after
+                # all its LLM spend. Observed in production 2026-07-31: 108
+                # findings destroyed by one over-long label. Clamp to the column
+                # width so a label can never cost a run again.
                 cat = str(v_data.get("category", "unknown")).strip().lower() or "unknown"
+                if len(cat) > _CATEGORY_MAX_LEN:
+                    logger.warning(
+                        "Truncating over-long violation category (%d chars): %r",
+                        len(cat), cat,
+                    )
+                    cat = cat[:_CATEGORY_MAX_LEN].rstrip()
 
                 # Clamp confidence to [0,1]; default 0.85 when LLM doesn't supply.
                 try:

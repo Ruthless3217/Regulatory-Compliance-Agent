@@ -613,10 +613,32 @@ vocabulary, bulk text edits are a schema change performed without a migration.
 \subsection{Negative result 3: aggregate--subscore disagreement}
 
 The deployed report surface displays an overall score of 0.0 alongside
-component scores of 35.8--99.1 for the same document. No weighting of those
-components produces 0.0. Either the aggregate is not derived from the
-components, or an undisclosed override zeroes it. The population is consistent
-with a systematic effect: 36 of 42 analyses graded F, mean score 14.2.
+component scores of 35.8--99.1 for the same document, and 36 of 42 analyses
+grade F at a mean score of 14.2.
+
+Our first reading of this was that the aggregate could not be derived from the
+components. Instrumented logs from a live run refuted that, and the real
+explanation is more interesting. The aggregate is
+\[
+  \text{overall} = \mathrm{clamp}_{[0,100]}\!\left(100 - \sum_v w(v)\,c(v)\right),
+\]
+and a single observed run persisted \textbf{109 findings}. At the configured
+weights (critical 20, high 10, moderate 8, medium 5) the summed deduction
+exceeds 100 several times over, so the clamp pins the result to exactly zero.
+The subscores are computed per category over far smaller populations and are
+not saturated --- hence 0.0 beside 99.1, with no contradiction.
+
+The score is therefore not miscomputed; it is \emph{saturated}, and it
+saturates at roughly thirteen moderate findings. Above that threshold the
+metric has no discriminating power at all: a document with 15 findings and one
+with 109 are both 0.0/F. That is a worse failure than an arithmetic bug,
+because the number remains plausible while ceasing to carry information, and
+every downstream consumer --- the grade band, the dashboard average, the
+compliance report --- inherits the degeneracy silently.
+
+We record the misdiagnosis deliberately. The observable (0.0 against healthy
+subscores) is equally consistent with ``not wired up'' and with ``working and
+saturated'', and only a log line reporting the finding count separated them.
 
 The same document additionally reports different finding counts on different
 surfaces (53 versus 68), most plausibly the suppressed review lane being

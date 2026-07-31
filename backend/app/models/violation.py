@@ -12,7 +12,11 @@ class Violation(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     compliance_check_id = Column(UUID(as_uuid=True), ForeignKey("compliance_checks.id", ondelete="CASCADE"), nullable=False, index=True)
     rule_id = Column(UUID(as_uuid=True), ForeignKey("rules.id", ondelete="SET NULL"), nullable=True, index=True)
-    category = Column(String(50), nullable=False)
+    # Free text chosen by the model per finding, unlike `severity` which is
+    # allow-listed. Widened 50 -> 100 by migration 0032 after an over-long
+    # label failed the batch INSERT and discarded a whole run's findings;
+    # ComplianceEngine clamps to this width on write.
+    category = Column(String(100), nullable=False)
     severity = Column(String(20), nullable=False)
     description = Column(Text, nullable=False)
     location = Column(Text, nullable=True)

@@ -31,9 +31,17 @@ State at review time: 29 submissions · 1,537 violations · 148 active rules · 
 | Mandatory disclosure | 60.4 |
 | Product compliance | 35.8 |
 
-No weighting of those ten values produces 0.0. Either the aggregate isn't derived from the subscores, or a fail-closed/critical-override path zeroes it without saying so. Either way the headline number is unexplainable to a reviewer, and it's the number the whole product is judged on.
+**CORRECTED 2026-07-31 — my original diagnosis here was wrong.** I wrote that no weighting produces 0.0 and that the aggregate must not be derived from the subscores. Backend logs from a live run disprove that:
 
-This is systemic, not one document: the dashboard's grade distribution is **F=36, D=2, C=1, B=3, A=0** across 42 checks, and avg score 14.2. If real subscores routinely sit in the 90s, the grade band is mislabelling near-compliant documents as total failures. **Fix the aggregation or surface the override reason on the score hero.**
+```
+Persisted compliance check 9a06330c... with 109 violations, score=0.0 grade=F
+```
+
+The aggregate *is* derived: `overall = clamp[0,100](100 − Σ weight × confidence)`. With **109 findings** at weights 20/10/8/5, the deduction exceeds 100 several times over and clamps to exactly zero. Subscores are per-category over much smaller populations, so they aren't saturated — hence 0.0 next to 99.1, with no contradiction.
+
+**The real problem is saturation, not arithmetic.** The score pins to zero at roughly **13 moderate findings**. Above that it has no discriminating power: a document with 15 findings and one with 109 both read 0.0/F. That's worse than a visible bug, because the number stays plausible while carrying no information — and the grade band, dashboard average and compliance report all inherit that silently. It explains **F=36 of 42**.
+
+**Fix is volume, not the formula.** Either reduce finding volume (see the rule-precision and `product_fact` issues below), or make the aggregate robust to it — e.g. score on density or on a capped top-N by severity — so it still separates a mildly non-compliant document from a catastrophic one.
 
 ### 2. Same submission reports two different violation counts
 
