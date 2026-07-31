@@ -4,7 +4,9 @@
 %  Build:  pdflatex compliance-engine.tex   (twice, for refs)
 %  No external .bib required — references are inlined via thebibliography.
 % ============================================================================
-\documentclass[10pt,conference]{article}
+% `conference` is an IEEEtran option; article ignores it and warns. Kept as
+% plain article so this builds on a stock TeX Live with no extra class files.
+\documentclass[10pt]{article}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -139,7 +141,7 @@ _TIER_RANK = {"disclosure": 5, "product_fact": 4,
               "precedent": 3, "rule": 2, "novel": 1}
 \end{lstlisting}
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Grounding tiers, strongest evidence first.}
 \begin{tabular}{@{}llp{6.6cm}@{}}
@@ -250,8 +252,10 @@ Context:      {span_context}
 \end{lstlisting}
 
 Deduplication uses a canonical hash over the normalised triple
-\emph{(issue\_type, highlighted\_span, reviewer\_comment)}, collapsing repeats
-into one row with an \code{occurrence\_count}.
+\[
+  (\textit{issue\_type},\; \textit{highlighted\_span},\; \textit{reviewer\_comment})
+\]
+collapsing repeats into one row with an \code{occurrence\_count}.
 
 \subsection{An idempotency fragility}
 
@@ -439,7 +443,7 @@ documents, is reproduced below. Its own design note names
 \code{precision\_presence} as the canary: a regression there would indicate
 novel findings hallucinating.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Development baseline, 27 May 2026.}
 \begin{tabular}{@{}lr@{}}
@@ -463,7 +467,7 @@ a $3\times$ generation ratio is a real reviewer-attention cost.
 Measured on the live deployment, 31 July 2026: 29 submissions, 1{,}537
 findings, 42 completed analyses, 2{,}440 precedents, 148 active rules.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Deployed characteristics.}
 \begin{tabular}{@{}lr@{}}
@@ -485,7 +489,7 @@ Reviewer verdicts recorded & 22 of 1{,}308 (1.7\,\%) \\
 Of 2{,}440 precedents, only 41.6\,\% carry a tag that resolves to a product
 family:
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Precedent scope coverage.}
 \begin{tabular}{@{}lrrl@{}}
@@ -583,9 +587,9 @@ non-grounded baseline; such a comparison is the obvious next work.
 \section{Conclusion}
 
 Grounding before generation, fail-closed persistence, deterministic
-adjudication of mandated wording, bounded feedback, and a refusal to train on
-the evaluation metric together produce a compliance reviewer whose findings are
-auditable and whose failures are visible. Measurement of the deployed system
+adjudication of mandated wording, bounded feedback, and a refusal to
+train on the evaluation metric together produce a compliance reviewer
+whose findings are auditable and whose failures are visible. Measurement of the deployed system
 shows the architecture is sound and the \emph{supply} to it is not: an
 applicability layer starved of tags, an aggregate score disagreeing with its
 components, and a rule family generating findings reviewers consistently

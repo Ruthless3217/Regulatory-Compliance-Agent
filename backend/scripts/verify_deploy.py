@@ -139,15 +139,42 @@ def check_embeddings(conn):
     if not stored:
         check("embeddings", WARN, "no stamped vectors (empty or pre-0009 corpus)")
         return
-    # settings, not the live embedder: constructing one can need a network call,
-    # and the stamp written by pgvector_store is this same configured model name.
-    active = settings.rag_embedding_model
+    active, source = _expected_embedding_identity()
     off = sorted(stored - {active})
     if off:
         check("embeddings", FAIL,
-              f"corpus embedded with {off} but RAG_EMBEDDING_MODEL={active} -- retrieval fails closed")
+              f"corpus embedded with {off} but {source}={active} -- retrieval fails closed")
     else:
         check("embeddings", PASS, f"single-model {active} across {len(seen)} table(s)")
+
+
+def _expected_embedding_identity() -> tuple:
+    """(expected model stamp, the env var that determines it) — resolved the SAME
+    way the runtime guard resolves it, which is NOT `RAG_EMBEDDING_MODEL`.
+
+    pgvector_store stamps `embedding_model` from the live embedder's `.model`
+    attribute, and for the only supported provider (azure_cohere) that is the
+    Foundry DEPLOYMENT name:
+
+        AzureCohereEmbedder.__init__:
+            self.model = deployment or settings.azure_cohere_embed_deployment
+
+    `settings.rag_embedding_model` drives nothing in the retrieval path — grep
+    shows exactly two uses: its own default in config.py, and a `kb_version`
+    label written onto rule_feedback rows. Comparing against it produced a FALSE
+    FAILURE on a correctly-configured deployment whose corpus and embedder
+    agreed, which is worse than no check at all: it invites someone to "fix" a
+    healthy corpus by re-embedding 2,440 precedents.
+
+    Resolved from settings rather than by constructing the embedder, so this
+    preflight never needs Azure credentials or a network round-trip.
+    """
+    provider = (settings.rag_embedding_provider or "").strip().lower()
+    if provider == "azure_cohere":
+        return settings.azure_cohere_embed_deployment, "AZURE_COHERE_EMBED_DEPLOYMENT"
+    # No other provider is wired into the factory today; fall back to the
+    # generic label and say which var was used so a mismatch is debuggable.
+    return settings.rag_embedding_model, "RAG_EMBEDDING_MODEL"
 
 
 def check_vector_dim(conn):
