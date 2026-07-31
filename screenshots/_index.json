@@ -1,0 +1,104 @@
+[
+  {
+    "name": "00-login",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/login",
+    "note": "signed out",
+    "height_px": 1000
+  },
+  {
+    "name": "01-inbox",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance",
+    "note": "submissions inbox",
+    "height_px": 1961
+  },
+  {
+    "name": "02-new-analysis",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/new",
+    "note": "intake",
+    "height_px": 1000
+  },
+  {
+    "name": "03-dashboard",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/dashboard",
+    "note": "KPIs + charts",
+    "height_px": 2295
+  },
+  {
+    "name": "04-rules",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/rules",
+    "note": "rules library",
+    "height_px": 10147
+  },
+  {
+    "name": "05-rules-generate",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/rules/generate",
+    "note": "rule extraction wizard",
+    "height_px": 1000
+  },
+  {
+    "name": "06-knowledge-base",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/knowledge-base",
+    "note": "vector scatter",
+    "height_px": 1056
+  },
+  {
+    "name": "07-compare",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/compare",
+    "note": "compare list",
+    "height_px": 1512
+  },
+  {
+    "name": "08-compare-new",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/compare/new",
+    "note": "compare upload",
+    "height_px": 1000
+  },
+  {
+    "name": "09-settings",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/settings",
+    "note": "project settings",
+    "height_px": 1085
+  },
+  {
+    "name": "10-model-learning",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/model-learning",
+    "note": "model analytics",
+    "height_px": 1481
+  },
+  {
+    "name": "11-change-password",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/account/change-password",
+    "note": "account",
+    "height_px": 1000
+  },
+  {
+    "name": "21-report",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/submissions/df263578-afb8-4bc3-9d4d-094061ad7ba4/report",
+    "note": "Report \u2014 score hero",
+    "height_px": 1048
+  },
+  {
+    "name": "22-chat",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/submissions/df263578-afb8-4bc3-9d4d-094061ad7ba4/chat",
+    "note": "Chat",
+    "height_px": 1048
+  },
+  {
+    "name": "30-admin-inbox",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance",
+    "note": "admin landing (note Admin nav section)",
+    "height_px": 1961
+  },
+  {
+    "name": "31-admin-corpus",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/admin/corpus",
+    "note": "corpus layers",
+    "height_px": 1000
+  },
+  {
+    "name": "32-admin-retrieval",
+    "url": "http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/admin/retrieval",
+    "note": "retrieval inspector",
+    "height_px": 1000
+  }
+]
