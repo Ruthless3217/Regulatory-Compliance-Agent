@@ -17,9 +17,13 @@ const SOURCE_LABEL: Record<string, string> = {
 
 interface Props {
   submissionId: string;
+  /** Hand the restored content back so the live document view adopts it —
+   * without this the pane keeps showing the pre-restore text (the submission
+   * endpoint does not serialize current_content). */
+  onRestore?: (content: string) => void;
 }
 
-export function VersionHistoryPopover({ submissionId }: Props) {
+export function VersionHistoryPopover({ submissionId, onRestore }: Props) {
   const router = useRouter();
   const [revisions, setRevisions] = React.useState<SubmissionRevision[] | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -48,6 +52,7 @@ export function VersionHistoryPopover({ submissionId }: Props) {
         source: "restore",
         note: `Restored from revision ${rev.revision_number}`,
       });
+      onRestore?.(rev.content);
       toast.success(`Restored revision ${rev.revision_number}`);
       router.refresh();
       await load();

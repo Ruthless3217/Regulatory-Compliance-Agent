@@ -1,18 +1,23 @@
 "use client";
 import * as React from "react";
 import { toast } from "sonner";
-import { applyHighlightsAsParagraphs } from "@/lib/highlightMarkup";
+import { Check, Loader2, Sparkles, TriangleAlert } from "lucide-react";
+import { buildParagraphs, violationsToHighlightables, type DocPiece } from "@/lib/highlightMarkup";
 import { createSubmissionComment } from "@/lib/api";
+import { normalizeSeverity } from "@/lib/format";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
+import { VersionHistoryPopover } from "./VersionHistoryPopover";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { Violation } from "@/lib/types";
+import type { RevisionSource, Violation } from "@/lib/types";
 
 interface Props {
-  text: string;
   violations: Violation[];
   selectedViolationId: string | null;
   onSelect: (id: string) => void;
+  /** Historical-run view: the findings on screen are from a past run, so
+   * editing the live document from here would be misleading. */
+  readOnly?: boolean;
 }
 
 interface PendingComment {
@@ -21,19 +26,39 @@ interface PendingComment {
   y: number;
 }
 
-export function DocumentPane({ text, violations, selectedViolationId, onSelect }: Props) {
-  const { submission } = useSubmissionWorkspace();
-  const html = React.useMemo(
-    () => applyHighlightsAsParagraphs(text || "", violations),
-    [text, violations]
+/** The span currently open for editing, pinned by offset + the exact text it
+ * was opened against (so a stale offset can be detected at commit time). */
+interface EditTarget {
+  violationId: string;
+  start: number;
+  end: number;
+  text: string;
+}
+
+/** Multi-line or long spans get a textarea (Enter inserts a newline, explicit
+ * Save commits); short single-line spans get an input where Enter commits. */
+const isBlockSpan = (s: string) => s.includes("\n") || s.length > 90;
+
+export function DocumentPane({ violations, selectedViolationId, onSelect, readOnly }: Props) {
+  const { submission, documentText, applyEdit, setViolations } = useSubmissionWorkspace();
+  const paragraphs = React.useMemo(
+    () => buildParagraphs(documentText || "", violationsToHighlightables(violations)),
+    [documentText, violations]
   );
   const containerRef = React.useRef<HTMLDivElement>(null);
 
+  const [editing, setEditing] = React.useState<EditTarget | null>(null);
   const [pending, setPending] = React.useState<PendingComment | null>(null);
   const [commentBody, setCommentBody] = React.useState("");
   const [busy, setBusy] = React.useState(false);
 
-  // Toggle data-selected on the matching <mark>
+  const violationById = React.useMemo(
+    () => new Map(violations.map((v) => [v.id, v])),
+    [violations]
+  );
+
+  // Toggle data-selected on the matching <mark>. Imperative on purpose: these
+  // attributes are NOT set in JSX, so React never fights this effect over them.
   React.useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
@@ -47,12 +72,51 @@ export function DocumentPane({ text, violations, selectedViolationId, onSelect }
         setTimeout(() => { if (m) m.dataset.pulse = "false"; }, 850);
       }
     });
-  }, [selectedViolationId, html]);
+  }, [selectedViolationId, paragraphs]);
 
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    const mark = target.closest("mark[data-violation-id]") as HTMLElement | null;
-    if (mark?.dataset.violationId) onSelect(mark.dataset.violationId);
+  const openEditor = (piece: DocPiece) => {
+    if (!piece.violationId) return;
+    onSelect(piece.violationId);
+    if (readOnly) return;
+    setEditing({
+      violationId: piece.violationId,
+      start: piece.start,
+      end: piece.end,
+      text: piece.text,
+    });
+  };
+
+  /** Splice a span replacement into the live document and persist it. */
+  const commitSpan = async (target: EditTarget, replacement: string, source: RevisionSource) => {
+    const cur = documentText;
+    let next: string;
+    if (cur.slice(target.start, target.end) === target.text) {
+      next = cur.slice(0, target.start) + replacement + cur.slice(target.end);
+    } else if (cur.includes(target.text)) {
+      // Offsets went stale (another edit landed while this editor was open) —
+      // fall back to replacing the same literal text wherever it now sits.
+      // Function form: a replacement containing "$&" must stay literal.
+      next = cur.replace(target.text, () => replacement);
+    } else {
+      toast.error("The document changed under this edit — reopen the section and try again.");
+      setEditing(null);
+      return;
+    }
+    setEditing(null);
+    const ok = await applyEdit(next, source, [target.violationId]);
+    if (!ok) {
+      toast.error("Edit applied locally but not saved — use Save in the toolbar to retry.");
+      return;
+    }
+    // The revisions endpoint flips fix_applied for every applied_violation_id;
+    // mirror it so the sidebar card agrees without a reload.
+    const appliedAt = new Date().toISOString();
+    setViolations((prev) =>
+      prev.map((v) =>
+        v.id === target.violationId ? { ...v, fix_applied: true, fix_applied_at: appliedAt } : v
+      )
+    );
+    toast.success(source === "apply_fix" ? "Suggested fix applied" : "Section updated");
   };
 
   // Freestanding reviewer comments: capture whatever text the user just
@@ -63,6 +127,7 @@ export function DocumentPane({ text, violations, selectedViolationId, onSelect }
   }, []);
 
   const handleMouseUp = () => {
+    if (editing) return; // selecting inside the span editor is not an anchor
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
     const anchorText = sel.toString().trim();
@@ -93,13 +158,48 @@ export function DocumentPane({ text, violations, selectedViolationId, onSelect }
   };
 
   return (
-    <div className="relative min-h-0 flex-1 overflow-y-auto bg-background" onMouseUp={handleMouseUp}>
-      <article
-        ref={containerRef}
-        onClick={handleClick}
-        className="prose mx-auto max-w-2xl px-8 py-10 font-serif text-[15px] leading-[1.75] text-foreground [&_p]:mb-4 [&_p]:font-sans"
-        dangerouslySetInnerHTML={{ __html: html || "<p class='text-muted-foreground'>This submission has no content to display.</p>" }}
-      />
+    <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+      <EditorToolbar readOnly={readOnly} />
+
+      <div className="min-h-0 flex-1 overflow-y-auto" onMouseUp={handleMouseUp}>
+        <article
+          ref={containerRef}
+          className="prose mx-auto max-w-2xl px-8 py-10 font-serif text-[15px] leading-[1.75] text-foreground [&_p]:mb-4 [&_p]:font-sans"
+        >
+          {paragraphs.length === 0 && (
+            <p className="text-muted-foreground">This submission has no content to display.</p>
+          )}
+          {paragraphs.map((pieces) => (
+            <p key={pieces[0].start} className="whitespace-pre-wrap">
+              {pieces.map((piece) =>
+                !piece.violationId ? (
+                  <React.Fragment key={piece.start}>{piece.text}</React.Fragment>
+                ) : editing &&
+                  editing.start === piece.start &&
+                  editing.violationId === piece.violationId ? (
+                  <SpanEditor
+                    key={`edit-${piece.start}`}
+                    target={editing}
+                    violation={violationById.get(piece.violationId)}
+                    onCancel={() => setEditing(null)}
+                    onCommit={commitSpan}
+                  />
+                ) : (
+                  <mark
+                    key={piece.start}
+                    data-violation-id={piece.violationId}
+                    data-severity={normalizeSeverity(piece.severity)}
+                    title={readOnly ? undefined : "Click to edit this section"}
+                    onClick={() => openEditor(piece)}
+                  >
+                    {piece.text}
+                  </mark>
+                )
+              )}
+            </p>
+          ))}
+        </article>
+      </div>
 
       {pending && (
         <div
@@ -128,5 +228,171 @@ export function DocumentPane({ text, violations, selectedViolationId, onSelect }
         </div>
       )}
     </div>
+  );
+}
+
+/** Dirty/saved indicator + save/revert/version-history strip. */
+function EditorToolbar({ readOnly }: { readOnly?: boolean }) {
+  const {
+    submission,
+    documentDirty,
+    unsavedEdits,
+    saveState,
+    saveNow,
+    revertToSaved,
+    adoptServerText,
+  } = useSubmissionWorkspace();
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border bg-background px-4 py-1.5 text-xs">
+      <div className="flex items-center gap-2">
+        <span className="micro-label">Document</span>
+        {saveState === "saving" ? (
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" /> Saving…
+          </span>
+        ) : documentDirty ? (
+          <span className="flex items-center gap-1 text-sev-high">
+            <TriangleAlert className="h-3 w-3" />
+            {unsavedEdits || 1} unsaved change{(unsavedEdits || 1) === 1 ? "" : "s"}
+            {saveState === "error" && " · save failed"}
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <Check className="h-3 w-3" /> All changes saved
+          </span>
+        )}
+        {!readOnly && !documentDirty && (
+          <span className="text-muted-foreground">· click a flagged section to edit it</span>
+        )}
+        {readOnly && <span className="text-muted-foreground">· read-only (historical run)</span>}
+      </div>
+      <div className="flex items-center gap-2">
+        {documentDirty && (
+          <>
+            <Button size="sm" variant="outline" disabled={saveState === "saving"} onClick={saveNow}>
+              Save
+            </Button>
+            <Button size="sm" variant="ghost" onClick={revertToSaved}>
+              Discard
+            </Button>
+          </>
+        )}
+        <VersionHistoryPopover submissionId={submission.id} onRestore={adoptServerText} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * In-place editor for ONE flagged span. Pre-filled with the current text; the
+ * model's suggested_fix is one click away ("fill in the blanks"), and the
+ * reviewer can take it verbatim, edit it, or type their own.
+ */
+function SpanEditor({
+  target,
+  violation,
+  onCancel,
+  onCommit,
+}: {
+  target: EditTarget;
+  violation?: Violation;
+  onCancel: () => void;
+  onCommit: (target: EditTarget, replacement: string, source: RevisionSource) => Promise<void>;
+}) {
+  const [value, setValue] = React.useState(target.text);
+  const [busy, setBusy] = React.useState(false);
+  const block = isBlockSpan(target.text) || value.includes("\n");
+  const suggestion = violation?.suggested_fix?.trim() ?? "";
+  // Taking the suggestion verbatim is an apply_fix; anything else is the
+  // reviewer's own wording.
+  const source: RevisionSource =
+    suggestion && value.trim() === suggestion ? "apply_fix" : "manual_edit";
+
+  const save = async () => {
+    if (busy) return;
+    if (value === target.text) {
+      onCancel();
+      return;
+    }
+    setBusy(true);
+    await onCommit(target, value, source);
+    setBusy(false);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    } else if (e.key === "Enter" && !block && !e.shiftKey) {
+      e.preventDefault();
+      save();
+    }
+  };
+
+  const fieldClass =
+    "w-full rounded-sm border border-primary bg-background px-1.5 py-1 font-sans text-[14px] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+
+  return (
+    <span
+      className="my-1 inline-block w-full max-w-full align-top rounded-sm border border-primary/40 bg-primary-50/40 p-2 font-sans"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {block ? (
+        <textarea
+          autoFocus
+          rows={Math.min(12, Math.max(2, value.split("\n").length + 1))}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={onKeyDown}
+          className={fieldClass}
+        />
+      ) : (
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={onKeyDown}
+          className={fieldClass}
+          style={{ maxWidth: "100%", width: `${Math.min(Math.max(value.length + 4, 16), 70)}ch` }}
+        />
+      )}
+
+      <span className="mt-1.5 block text-[11px] leading-snug text-muted-foreground">
+        <span className="micro-label">was</span> “{target.text}”
+      </span>
+
+      <span className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5">
+          {suggestion && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || value.trim() === suggestion}
+              title={suggestion}
+              onClick={() => setValue(suggestion)}
+            >
+              <Sparkles className="mr-1 h-3 w-3" />
+              Use suggested fix
+            </Button>
+          )}
+          {!suggestion && (
+            <span className="text-[11px] text-muted-foreground">No suggested fix for this issue</span>
+          )}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground">
+            {block ? "Esc cancels" : "Enter saves · Esc cancels"}
+          </span>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button size="sm" disabled={busy || value === target.text} onClick={save}>
+            {busy ? "Saving…" : "Save"}
+          </Button>
+        </span>
+      </span>
+    </span>
   );
 }

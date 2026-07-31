@@ -44,6 +44,10 @@ export default async function SubmissionLayout({
 
   return (
     <SubmissionWorkspaceProvider
+      // Fresh provider per submission: without it React reuses this client
+      // component across an id change and the previous document's working
+      // copy (and violations) would carry over into the next submission.
+      key={submission.id}
       submission={submission}
       initialViolations={violations}
       initialScore={overallScore}

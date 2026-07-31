@@ -8,7 +8,7 @@ import { categoryLabel, severityClass, truthyAutoFix, normalizeSeverity } from "
 import { cn } from "@/lib/utils";
 import { ActionTags } from "@/components/violation/ActionTags";
 import { PrecedentNote } from "@/components/violation/PrecedentNote";
-import { submitReviewerAction, applySubmissionRevision } from "@/lib/api";
+import { submitReviewerAction } from "@/lib/api";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import type { DismissReason, NotViolationReason, ReviewerActionType, Violation } from "@/lib/types";
 
@@ -58,7 +58,7 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
   { index, violation, selected, onSelect },
   ref
 ) {
-  const { submission, setViolations } = useSubmissionWorkspace();
+  const { documentText, applyEdit, setViolations } = useSubmissionWorkspace();
   const sevClass = severityClass(violation.severity).split(" ")[0]; // border-l-*
   const autoFix = truthyAutoFix(violation.auto_fixable);
 
@@ -137,16 +137,12 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     const suggestedFix = violation.suggested_fix;
     if (!suggestedFix || fixApplied || applyFixBusy) return;
 
-    const baseText = submission.current_content ?? submission.original_content ?? "";
+    // Reads AND writes the one live working copy in context (same text the
+    // DocumentPane renders and its inline span editor writes), so back-to-back
+    // fixes compose instead of each splicing a stale base.
+    const baseText = documentText;
     const evidence = violation.current_text;
 
-    // ponytail: known ceiling — splices against the submission's content as
-    // known to THIS card at render time. Applying fixes for two different
-    // violations back-to-back in one session can clobber each other because
-    // neither knows about the other's write until the page reloads (context
-    // has no live "current document text" yet). Upgrade path: once
-    // DocumentPane/context track live current_content, read+write through it
-    // here instead of submission.current_content.
     if (!evidence || !baseText.includes(evidence)) {
       try {
         await navigator.clipboard.writeText(suggestedFix);
@@ -159,19 +155,18 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
 
     setApplyFixBusy(true);
     try {
-      const nextContent = baseText.replace(evidence, suggestedFix);
-      await applySubmissionRevision(submission.id, {
-        content: nextContent,
-        source: "apply_fix",
-        applied_violation_ids: [violation.id],
-      });
+      // Function form: a suggested fix containing "$&" must stay literal.
+      const nextContent = baseText.replace(evidence, () => suggestedFix);
+      const ok = await applyEdit(nextContent, "apply_fix", [violation.id]);
+      if (!ok) {
+        toast.error("Fix applied locally but not saved — use Save in the document toolbar to retry.");
+        return;
+      }
       const appliedAt = new Date().toISOString();
       setViolations((prev) =>
         prev.map((v) => (v.id === violation.id ? { ...v, fix_applied: true, fix_applied_at: appliedAt } : v))
       );
       toast.success("Fix applied to document");
-    } catch {
-      toast.error("Could not apply fix");
     } finally {
       setApplyFixBusy(false);
     }

@@ -158,7 +158,13 @@ async def get_submission(
         "id": str(submission.id),
         "title": submission.title,
         "content_type": submission.content_type,
+        # original_content is the immutable copy the violations were graded
+        # against; current_content is the reviewer's working copy (0025) and is
+        # NULL until someone edits. Returning both lets the review pane seed its
+        # editor from `current_content ?? original_content` in one call, instead
+        # of fetching the revision list on every mount just to find the latest.
         "original_content": submission.original_content,
+        "current_content": submission.current_content,
         "status": submission.status,
         "approval_status": submission.approval_status,
         "page_render_status": submission.page_render_status,

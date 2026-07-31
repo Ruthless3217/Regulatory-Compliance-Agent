@@ -212,10 +212,10 @@ export function ReviewTab() {
           />
         ) : (
           <DocumentPane
-            text={submission.original_content || ""}
             violations={displayViolations}
             selectedViolationId={selectedViolationId}
             onSelect={setSelectedViolationId}
+            readOnly={isHistorical}
           />
         )}
       </div>

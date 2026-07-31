@@ -1,14 +1,14 @@
 /**
- * Apply violation highlights to plain text.
+ * Locate violation highlights in plain text.
  *
- * - Output is HTML-safe (text is escaped first).
  * - Overlapping spans: the highest-severity wins; ties broken by longer length.
- * - Each <mark> carries data-violation-id and data-severity.
+ * - `buildParagraphs` turns the result into React-renderable pieces (the
+ *   caller renders the <mark>s, so nothing here builds HTML).
  *
- * This function is pure; safe to call from server or client.
+ * Everything here is pure; safe to call from server or client.
  */
 import type { Severity, Violation } from "./types";
-import { normalizeSeverity, severityOrder } from "./format";
+import { severityOrder } from "./format";
 
 export interface HighlightSpan {
   start: number;
@@ -126,39 +126,67 @@ export function resolveOverlaps(spans: HighlightSpan[]): HighlightSpan[] {
   return accepted.sort((a, b) => a.start - b.start);
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+/** One rendered run of document text. `violationId` present => it's flagged.
+ * `start`/`end` are absolute offsets into the text the piece was built from,
+ * so an editor can splice a replacement straight back in. */
+export interface DocPiece {
+  text: string;
+  start: number;
+  end: number;
+  violationId?: string;
+  severity?: string;
 }
 
-export function applyHighlights(text: string, violations: Violation[]): string {
-  const spans = findSpans(text, violationsToHighlightables(violations));
-  if (spans.length === 0) return escapeHtml(text);
-  const out: string[] = [];
+/**
+ * Split `text` into blank-line-separated paragraphs and, within each, into
+ * plain and flagged pieces — the React-rendered replacement for the old
+ * HTML-string builder (no dangerouslySetInnerHTML, so no manual escaping).
+ *
+ * Highlight survival across an edit: spans are re-found from the CURRENT text
+ * on every call, never carried over. An edit that changes a flagged phrase
+ * simply stops matching — that highlight disappears while the issue stays in
+ * the sidebar — and an edit elsewhere shifts offsets harmlessly because every
+ * other span is re-located by its own literal text. Offsets are never reused
+ * across texts, so a highlight cannot re-anchor onto unrelated content.
+ */
+export function buildParagraphs(text: string, items: Highlightable[]): DocPiece[][] {
+  const spans = findSpans(text, items); // sorted by start, non-overlapping
+  const ranges: [number, number][] = [];
+  const sep = /\n{2,}/g;
   let cursor = 0;
-  for (const span of spans) {
-    if (span.start > cursor) out.push(escapeHtml(text.slice(cursor, span.start)));
-    const inner = escapeHtml(text.slice(span.start, span.end));
-    out.push(
-      `<mark data-violation-id="${span.violationId}" data-severity="${normalizeSeverity(span.severity)}">${inner}</mark>`
-    );
-    cursor = span.end;
+  let m: RegExpExecArray | null;
+  while ((m = sep.exec(text)) !== null) {
+    ranges.push([cursor, m.index]);
+    cursor = m.index + m[0].length;
   }
-  if (cursor < text.length) out.push(escapeHtml(text.slice(cursor)));
-  return out.join("");
-}
+  ranges.push([cursor, text.length]);
 
-/** Wrap paragraphs (split on double newlines) into <p> tags for rendering. */
-export function applyHighlightsAsParagraphs(text: string, violations: Violation[]): string {
-  const html = applyHighlights(text, violations);
-  return html
-    .split(/\n\n+/)
-    .map((p) => `<p>${p.replace(/\n/g, "<br/>")}</p>`)
-    .join("");
+  const paragraphs: DocPiece[][] = [];
+  let spanIdx = 0;
+  for (const [ps, pe] of ranges) {
+    if (ps >= pe) continue;
+    while (spanIdx < spans.length && spans[spanIdx].end <= ps) spanIdx++;
+    const pieces: DocPiece[] = [];
+    let at = ps;
+    for (let i = spanIdx; i < spans.length && spans[i].start < pe; i++) {
+      // A span straddling a blank line gets clipped at the paragraph edge.
+      const st = Math.max(spans[i].start, ps);
+      const en = Math.min(spans[i].end, pe);
+      if (en <= st) continue;
+      if (st > at) pieces.push({ text: text.slice(at, st), start: at, end: st });
+      pieces.push({
+        text: text.slice(st, en),
+        start: st,
+        end: en,
+        violationId: spans[i].violationId,
+        severity: spans[i].severity,
+      });
+      at = en;
+    }
+    if (at < pe) pieces.push({ text: text.slice(at, pe), start: at, end: pe });
+    paragraphs.push(pieces);
+  }
+  return paragraphs;
 }
 
 export type { Severity };
