@@ -1,20 +1,8 @@
-"""Source-docs indexer — chunks a regulator PDF, embeds passages, stores
-them in rag_source_docs, and supports backfilling `derived_rule_ids` after
-the LLM extracts rules from those passages.
+"""Index staged regulator text and quote-level generated-rule evidence.
 
-Call sequence used by rule_generator_service:
-
-    doc_id = uuid.uuid4()
-    passages = await index_source_document(
-        document_id=doc_id, document_title=title, regulator='irdai',
-        full_text=parsed_pdf_text,
-    )                                       # returns [(passage_id, text), ...]
-
-    # ... LLM extracts rules from one or more passages ...
-
-    await link_rules_to_passage(
-        passage_id=passages[k][0], rule_ids=[r1.id, r2.id]
-    )
+Coarse document passages remain unlinked. A generated draft receives a separate
+row containing one exact source quote; approval publishes only that row after
+passage ID, document ID, and quote text are re-verified.
 """
 from __future__ import annotations
 
@@ -97,6 +85,56 @@ async def index_source_document(
         raise RAGIndexingFailed(str(e)) from e
 
 
+async def index_source_evidence_quote(
+    document_id: uuid.UUID | str,
+    document_title: str,
+    regulator: str,
+    full_text: str,
+    source_quote: str,
+    evidence_index: int,
+) -> str:
+    """Stage one exact quote as the sole publishable evidence for a rule.
+
+    The caller may not supply a paraphrase or text from another document. The
+    row starts with no derived rule IDs and therefore remains unavailable to
+    approved-source retrieval until the corresponding draft is activated.
+    """
+    quote = source_quote.strip() if isinstance(source_quote, str) else ""
+    if not quote or quote not in full_text:
+        raise RAGIndexingFailed(
+            "source_quote is not an exact verbatim substring of the source document"
+        )
+
+    embedder = get_embedder()
+    store = get_vector_store()
+    try:
+        vectors = await embedder.embed([quote])
+        if len(vectors) != 1:
+            raise RAGIndexingFailed("Evidence quote embedding returned no vector")
+        passage_id = str(uuid.uuid4())
+        await store.upsert(
+            "rag_source_docs",
+            [
+                VectorDoc(
+                    id=passage_id,
+                    embedding=vectors[0],
+                    fields={
+                        "document_id": str(document_id),
+                        "document_title": document_title,
+                        "regulator": regulator,
+                        "chunk_index": evidence_index,
+                        "page_number": None,
+                        "text": quote,
+                        "derived_rule_ids": [],
+                    },
+                )
+            ],
+        )
+        return passage_id
+    except RAGDegraded as exc:
+        raise RAGIndexingFailed(str(exc)) from exc
+
+
 async def link_rules_to_passage(
     passage_id: uuid.UUID | str, rule_ids: List[uuid.UUID | str]
 ) -> None:
@@ -135,14 +173,23 @@ async def link_rules_to_passage(
         db.close()
 
 
-async def link_rule_to_document(
+async def link_rule_to_source_quote(
+    passage_id: uuid.UUID | str,
     document_id: uuid.UUID | str,
+    source_quote: str,
     rule_id: uuid.UUID | str,
 ) -> None:
-    """Publish one approved rule's provenance across its staged passages."""
+    """Publish exactly one verified quote passage for an approved rule.
+
+    All three provenance fields must still match the staged row. This prevents
+    a stale or tampered metadata mapping from publishing unrelated text.
+    """
+    quote = source_quote.strip() if isinstance(source_quote, str) else ""
+    if not quote:
+        raise RAGIndexingFailed("Approved generated rule has no source_quote")
     db: Session = SessionLocal()
     try:
-        db.execute(
+        result = db.execute(
             text(
                 """
                 UPDATE rag_source_docs
@@ -153,15 +200,29 @@ async def link_rule_to_document(
                     )
                   )
                 )
-                WHERE document_id = CAST(:document_id AS UUID)
+                WHERE id = CAST(:passage_id AS UUID)
+                  AND document_id = CAST(:document_id AS UUID)
+                  AND text = :source_quote
                 """
             ),
-            {"rid": str(rule_id), "document_id": str(document_id)},
+            {
+                "rid": str(rule_id),
+                "passage_id": str(passage_id),
+                "document_id": str(document_id),
+                "source_quote": quote,
+            },
         )
+        if result.rowcount != 1:
+            raise RAGIndexingFailed(
+                "Exact source evidence mapping was missing; approval was refused"
+            )
         db.commit()
+    except RAGIndexingFailed:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
-        logger.error("link_rule_to_document failed: %s", e)
+        logger.error("link_rule_to_source_quote failed: %s", e)
         raise RAGIndexingFailed(str(e)) from e
     finally:
         db.close()

@@ -41,11 +41,36 @@ class RulesUnavailableError(RuntimeError):
     """
 
 
+class ExtractedRule(BaseModel):
+    """One generated rule with the exact source text that supports it."""
+
+    rule_text: str = Field(min_length=1)
+    category: str = Field(default="regulatory")
+    severity: str = Field(default="medium")
+    keywords: List[str] = Field(default_factory=list)
+    source_quote: str = Field(min_length=1)
+
+
 class RuleExtractionResult(BaseModel):
     """Schema for LLM-extracted rules from documents."""
-    rules: List[Dict[str, Any]] = Field(default_factory=list)
+    rules: List[ExtractedRule] = Field(default_factory=list)
     document_summary: str = Field(default="")
     extraction_notes: str = Field(default="")
+
+
+def _validated_source_quote(value: str, document_content: str) -> str:
+    """Return only an exact, non-empty quote from the submitted document.
+
+    Generated paraphrases are not evidence. Whitespace immediately outside the
+    quote is ignored, but the retained quote must be a contiguous verbatim
+    substring of the source text.
+    """
+    quote = value.strip() if isinstance(value, str) else ""
+    if not quote or quote not in document_content:
+        raise ValueError(
+            "Generated rule has no exact verbatim source_quote; draft was not created"
+        )
+    return quote
 
 
 class RuleGeneratorService:
@@ -198,6 +223,7 @@ class RuleGeneratorService:
             "errors": [],
             "source_doc_id": None,
             "source_passages_indexed": 0,
+            "source_evidence_indexed": 0,
         }
 
         try:
@@ -255,6 +281,10 @@ For each rule output:
 3. severity — critical | high | medium | low (default medium)
 4. keywords — 3-6 short terms a reviewer would search for
 
+5. source_quote: the shortest complete clause (usually 1-3 sentences) that
+   directly supports this rule, copied EXACTLY and VERBATIM from Document Content.
+   Never paraphrase this field. If no exact supporting quote exists, omit the rule.
+
 Return at least one rule unless the document genuinely has none.
 """
 
@@ -272,8 +302,27 @@ Return at least one rule unless the document genuinely has none.
                 system_prompt=system_prompt
             )
 
-            for rule_data in extraction_result.rules:
+            for evidence_index, extracted_rule in enumerate(extraction_result.rules):
                 try:
+                    rule_data = extracted_rule.model_dump()
+                    source_quote = _validated_source_quote(
+                        rule_data["source_quote"], document_content
+                    )
+
+                    # Each draft receives one staged row containing only its
+                    # exact supporting quote. Approval publishes this row, not
+                    # every passage belonging to the source document.
+                    from app.services.rag.indexers.source_docs_indexer import (
+                        index_source_evidence_quote,
+                    )
+                    evidence_passage_id = await index_source_evidence_quote(
+                        document_id=document_id,
+                        document_title=document_title,
+                        regulator=regulator,
+                        full_text=document_content,
+                        source_quote=source_quote,
+                        evidence_index=evidence_index,
+                    )
                     rule = self.create_rule(
                         db=db,
                         category=rule_data.get("category", "regulatory"),
@@ -285,6 +334,8 @@ Return at least one rule unless the document genuinely has none.
                         metadata={
                             "source": document_title,
                             "source_doc_id": str(document_id),
+                            "source_quote": source_quote,
+                            "source_evidence_passage_id": str(evidence_passage_id),
                             "lifecycle": "draft_pending_review",
                         },
                         product_line=product_line,
@@ -299,8 +350,10 @@ Return at least one rule unless the document genuinely has none.
                         "keywords": list(rule.keywords or []),
                         "points_deduction": float(rule.points_deduction or -5.0),
                         "product_line": rule.product_line,
+                        "source_quote": source_quote,
                     })
                     result["rules_created"] += 1
+                    result["source_evidence_indexed"] += 1
                     # Best-effort: index this new rule into rag_rules.
                     try:
                         from app.services.rag.indexers.rules_indexer import upsert_rule

@@ -82,19 +82,42 @@ def _actor_id(user) -> Optional[uuid.UUID]:
     return user.get("id") if isinstance(user, dict) else getattr(user, "id", None)
 
 
-async def _safe_link_source_document(document_id, rule_id) -> None:
-    """Best-effort publication of staged source passages after approval."""
-    if not document_id:
-        return
+async def _link_source_evidence_or_fail(metadata: dict, rule_id) -> None:
+    """Publish only the exact evidence row mapped to a generated rule.
+
+    Activation is refused when the mapping is incomplete or cannot be verified.
+    The source indexer additionally checks passage ID, document ID, and exact
+    quote text in one UPDATE, so document-wide publication is impossible.
+    """
+    document_id = metadata.get("source_doc_id")
+    passage_id = metadata.get("source_evidence_passage_id")
+    source_quote = metadata.get("source_quote")
+    has_quote = isinstance(source_quote, str) and bool(source_quote.strip())
+    if not document_id or not passage_id or not has_quote:
+        raise HTTPException(
+            status_code=409,
+            detail="Generated rule has no verified source evidence mapping",
+        )
     try:
-        from app.services.rag.indexers.source_docs_indexer import link_rule_to_document
-        await link_rule_to_document(document_id, rule_id)
+        from app.services.rag.indexers.source_docs_indexer import (
+            link_rule_to_source_quote,
+        )
+        await link_rule_to_source_quote(
+            passage_id=passage_id,
+            document_id=document_id,
+            source_quote=source_quote,
+            rule_id=rule_id,
+        )
     except Exception as exc:
-        logger.warning(
-            "Source-document approval link failed for rule %s (non-fatal): %s",
+        logger.error(
+            "Source-evidence approval link failed for rule %s: %s",
             rule_id,
             exc,
         )
+        raise HTTPException(
+            status_code=503,
+            detail="Could not verify source evidence; rule remains inactive",
+        ) from exc
 
 
 @router.post("", response_model=dict)
@@ -244,6 +267,10 @@ async def update_rule(
         and rule.superseded_by is None
     )
     if is_unpublished_draft:
+        if is_active is True:
+            # Publish the exact evidence row before changing lifecycle state.
+            # If verification fails, the draft remains untouched and inactive.
+            await _link_source_evidence_or_fail(metadata, rule.id)
         if severity is not None:
             rule.severity = severity
         if rule_text is not None:
@@ -264,8 +291,6 @@ async def update_rule(
         db.commit()
         db.refresh(rule)
         await _safe_rag_upsert(rule.id, db)
-        if rule.is_active:
-            await _safe_link_source_document(metadata.get("source_doc_id"), rule.id)
         return {
             "id": str(rule.id), "category": rule.category,
             "rule_text": rule.rule_text, "severity": rule.severity,
@@ -277,6 +302,10 @@ async def update_rule(
         # Lifecycle-only (activate/deactivate) — mutate in place.
         if is_active is not None:
             was_active = bool(rule.is_active)
+            if is_active and not was_active and rule.is_auto_generated:
+                await _link_source_evidence_or_fail(
+                    dict(rule.rule_metadata or {}), rule.id
+                )
             rule.is_active = is_active
             if is_active and not was_active:
                 rule.effective_date = datetime.now(timezone.utc)
@@ -290,11 +319,6 @@ async def update_rule(
         db.commit()
         db.refresh(rule)
         await _safe_rag_upsert(rule.id, db)
-        if rule.is_active:
-            await _safe_link_source_document(
-                (rule.rule_metadata or {}).get("source_doc_id"),
-                rule.id,
-            )
         return {
             "id": str(rule.id), "category": rule.category, "rule_text": rule.rule_text,
             "severity": rule.severity, "is_active": rule.is_active,
@@ -336,6 +360,12 @@ async def update_rule(
     )
     db.add(new_rule)
     db.flush()  # get new_rule.id
+    if new_rule.is_active and new_rule.is_auto_generated:
+        try:
+            await _link_source_evidence_or_fail(new_metadata, new_rule.id)
+        except HTTPException:
+            db.rollback()
+            raise
 
     # Supersede + retire the old version.
     rule.is_active = False
@@ -350,11 +380,6 @@ async def update_rule(
 
     # New version goes into RAG; old row stays (is_active=false → filtered out).
     await _safe_rag_upsert(new_rule.id, db)
-    if new_rule.is_active:
-        await _safe_link_source_document(
-            (new_rule.rule_metadata or {}).get("source_doc_id"),
-            new_rule.id,
-        )
 
     return {
         "id": str(new_rule.id),
