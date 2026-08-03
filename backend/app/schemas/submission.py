@@ -7,6 +7,7 @@ import uuid
 class SubmissionCreate(BaseModel):
     title: str
     content_type: str
+    product_line: str
     original_content: Optional[str] = None
 
 
@@ -14,6 +15,7 @@ class SubmissionResponse(BaseModel):
     id: str
     title: str
     content_type: str
+    product_line: Optional[str] = None
     status: str
     approval_status: str
     submitted_at: datetime

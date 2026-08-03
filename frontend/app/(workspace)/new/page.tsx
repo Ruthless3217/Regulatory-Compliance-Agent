@@ -23,6 +23,17 @@ Past performance: between 2022 and 2024 our equity-linked fund delivered an aver
 
 const ACCEPTED_EXT = ".pdf,.docx,.html,.htm,.md,.txt";
 const MAX_FILE_MB = 50;
+const PRODUCT_LINES = [
+  { key: "global", label: "Generic / all products (global rules only)" },
+  { key: "term", label: "Term insurance" },
+  { key: "ulip", label: "ULIP" },
+  { key: "savings_endowment", label: "Savings / endowment" },
+  { key: "pension_annuity", label: "Pension / annuity" },
+  { key: "rider", label: "Rider" },
+  { key: "group", label: "Group insurance" },
+  { key: "par", label: "Participating (Par)" },
+  { key: "non_par", label: "Non-participating (Non-Par)" },
+] as const;
 
 function contentTypeFor(filename: string): string {
   const n = filename.toLowerCase();
@@ -41,6 +52,7 @@ export default function NewAnalysisPage() {
   const [file, setFile] = React.useState<File | null>(null);
   const [dragOver, setDragOver] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [productLine, setProductLine] = React.useState("");
   const [scope, setScope] = React.useState<string[]>(["irdai", "brand", "sebi"]);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -50,6 +62,7 @@ export default function NewAnalysisPage() {
   const loadSample = () => {
     setTitle("Sample ULIP brochure draft");
     setText(SAMPLE);
+    setProductLine("ulip");
     toast.message("Loaded a deliberately non-compliant sample.");
   };
 
@@ -72,6 +85,10 @@ export default function NewAnalysisPage() {
 
   const submit = async (kind: "text" | "url" | "file") => {
     if (submitting) return;
+    if (!productLine) {
+      toast.error("Choose the product applicability scope first");
+      return;
+    }
     if (kind === "file") {
       if (!file) { toast.error("Pick a file first"); return; }
     } else {
@@ -89,11 +106,13 @@ export default function NewAnalysisPage() {
           ? {
               title: title.trim() || file.name,
               content_type: contentTypeFor(file.name),
+              product_line: productLine,
               file,
             }
           : {
               title: title.trim() || (kind === "url" ? url.trim() : "Untitled submission"),
               content_type: kind === "url" ? "html" : "text",
+              product_line: productLine,
               content: kind === "url" ? `URL: ${url.trim()}` : text,
             };
       const sub = await createSubmission(payload);
@@ -135,6 +154,28 @@ export default function NewAnalysisPage() {
               placeholder="e.g. Q2 ULIP brochure draft"
               className="h-10 text-base"
             />
+          </div>
+
+          <div className="mb-5">
+            <label htmlFor="product-line" className="micro-label mb-2 block">
+              Product applicability
+            </label>
+            <select
+              id="product-line"
+              value={productLine}
+              onChange={(event) => setProductLine(event.target.value)}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+              required
+            >
+              <option value="" disabled>Select the product family</option>
+              {PRODUCT_LINES.map((line) => (
+                <option key={line.key} value={line.key}>{line.label}</option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-muted-foreground">
+              This controls rule and precedent applicability. Choose Generic only
+              for content that does not refer to a specific product.
+            </p>
           </div>
 
           <Tabs defaultValue="paste">

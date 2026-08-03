@@ -106,6 +106,7 @@ export async function getSubmission(id: string): Promise<Submission> {
 export async function createSubmission(body: {
   title: string;
   content_type: string;
+  product_line: string;
   content?: string;
   file?: File;
 }): Promise<Submission> {
@@ -113,6 +114,7 @@ export async function createSubmission(body: {
   const form = new FormData();
   form.append("title", body.title);
   form.append("content_type", body.content_type);
+  form.append("product_line", body.product_line);
   if (body.content) form.append("content", body.content);
   if (body.file) form.append("file", body.file);
   const res = await fetch(`${base()}/submissions`, {

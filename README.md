@@ -285,7 +285,8 @@ Run with `python -m scripts.<name>` (inside the backend container, prefix with
 ## Typical Workflow
 
 1. **Seed & ingest**: `seed_rules` + `ingest_knowledge_base` to populate rules and precedents.
-2. **Submit document**: `POST /submissions` with your content.
+2. **Submit document**: `POST /submissions` with content and an explicit
+   `product_line` applicability scope.
 3. **Run analysis**: `POST /compliance/analyze/{id}/sync` (or `/stream` for progress).
 4. **Review results**: `GET /compliance/results/{id}` for violations and scores.
 
@@ -296,6 +297,7 @@ Run with `python -m scripts.<name>` (inside the backend container, prefix with
 curl -X POST "http://localhost:8000/submissions" \
   -F "title=Insurance Policy Draft" \
   -F "content_type=text" \
+  -F "product_line=global" \
   -F "content=This policy provides coverage for life insurance..."
 
 # 2. Analyze it (replace {id} with the submission ID from step 1)
