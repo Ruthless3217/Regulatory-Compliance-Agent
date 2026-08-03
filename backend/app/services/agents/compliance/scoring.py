@@ -85,8 +85,9 @@ class ScoringService:
         # Per-category sub-scores (display only) — same absolute model per category.
         discovered_categories = set()
         for v in enriched_violations:
-            for c in str(v.get("category", "general")).split("|"):
-                discovered_categories.add(c.strip())
+            discovered_categories.update(
+                ScoringService._category_tokens(v.get("category"))
+            )
         category_scores = {
             cat: ScoringService._calculate_category_score(enriched_violations, cat)
             for cat in discovered_categories
@@ -182,11 +183,18 @@ class ScoringService:
     def _calculate_category_score(violations: List[Dict], category: str) -> float:
         category_violations = [
             v for v in violations
-            if category == v.get("category", "") or category in v.get("category", "").split("|")
+            if category in ScoringService._category_tokens(v.get("category"))
         ]
 
         total_deduction = sum(v.get("points_deduction", 0) for v in category_violations)
         return ScoringService._score_from_deduction(total_deduction)
+
+    @staticmethod
+    def _category_tokens(raw_category: object) -> List[str]:
+        """Return canonical category tokens for discovery and score matching."""
+        raw = "general" if raw_category is None else str(raw_category)
+        tokens = [token.strip() for token in raw.split("|") if token.strip()]
+        return tokens or ["general"]
 
     @staticmethod
     def _score_from_deduction(total_deduction: float) -> float:
