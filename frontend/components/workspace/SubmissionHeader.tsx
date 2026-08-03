@@ -52,11 +52,7 @@ export function SubmissionHeader({ submission, overallScore }: Props) {
   const { setOptimisticAnalyzing, setSelectedRunId } = useSubmissionWorkspace();
 
   const id = submission.id;
-  const tab = pathname.endsWith("/report")
-    ? "report"
-    : pathname.endsWith("/chat")
-      ? "chat"
-      : "review";
+  const tab = pathname.endsWith("/report") ? "report" : "review";
 
   const score = overallScore ?? null;
 
@@ -124,9 +120,6 @@ export function SubmissionHeader({ submission, overallScore }: Props) {
               </TabsTrigger>
               <TabsTrigger value="report" asChild>
                 <Link href={`/submissions/${id}/report`}>Report</Link>
-              </TabsTrigger>
-              <TabsTrigger value="chat" asChild>
-                <Link href={`/submissions/${id}/chat`}>Chat</Link>
               </TabsTrigger>
             </TabsList>
           </Tabs>

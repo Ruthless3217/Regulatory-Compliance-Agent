@@ -1,11 +1,11 @@
 ROLE_PERMISSIONS = {
     "user": {
         "submission:create", "submission:read", "submission:delete", "analysis:run",
-        "chat:use", "comparison:use", "dashboard:view", "knowledgebase:view",
+        "comparison:use", "dashboard:view", "knowledgebase:view",
         "rules:read", "feedback:submit"
     },
     "admin": {
-        "submission:create", "submission:read", "submission:delete", "analysis:run", "chat:use",
+        "submission:create", "submission:read", "submission:delete", "analysis:run",
         "comparison:use", "dashboard:view", "knowledgebase:view", "rules:read", "feedback:submit",
         "rules:write", "rules:generate", "users:manage", "feedback:review"
     },

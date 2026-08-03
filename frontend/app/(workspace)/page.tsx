@@ -334,7 +334,7 @@ function EmptyWelcome() {
     { n: "01", title: "Paste or upload content", text: "Ad copy, brochure, landing page or social post — any length." },
     { n: "02", title: "Run a compliance pass", text: "The 5-node LangGraph workflow checks every chunk against the active rule corpus." },
     { n: "03", title: "Review & fix inline", text: "Click any highlighted phrase to see the matching rule and copy a suggested rewrite." },
-    { n: "04", title: "Export or chat", text: "Print-ready report or ask the AI assistant to rewrite passages in compliant language." },
+    { n: "04", title: "Correct and export", text: "Edit the document in place, re-run the check, then export the corrected DOCX or PDF." },
   ];
   return (
     <div className="rounded-lg border border-border bg-background p-10 shadow-card">
@@ -346,7 +346,7 @@ function EmptyWelcome() {
           </h2>
           <p className="mt-4 max-w-md text-[14px] leading-relaxed text-muted-foreground">
             Paste a piece of marketing content and within seconds you&rsquo;ll see inline-highlighted
-            violations, a 0–100 compliance score, and a chat assistant that can rewrite copy without flattening the tone.
+            violations, a 0–100 compliance score, and a suggested rewrite for every finding.
           </p>
           <div className="mt-6 flex items-center gap-3">
             <Button asChild size="hero">

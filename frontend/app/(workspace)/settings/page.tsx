@@ -129,11 +129,6 @@ export default function SettingsPage() {
               {modelsErr ? "unavailable" : models ? models.critic_llm_model : "loading…"}
             </span>
           </Row>
-          <Row label="Chat model">
-            <span className="font-mono text-xs">
-              {modelsErr ? "unavailable" : models ? models.chat_llm_model : "loading…"}
-            </span>
-          </Row>
           <Row label="RAG backend">
             <span className="font-mono text-xs">
               {ragErr ? "degraded" : rag ? rag.backend : "loading…"}

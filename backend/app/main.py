@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 from .config import settings
-from .api.routes import submissions, compliance, dashboard, model_learning, rules, chat, similar, rag_health, knowledge_base, comparisons
+from .api.routes import submissions, compliance, dashboard, model_learning, rules, similar, rag_health, knowledge_base, comparisons
 
 # Configure logging
 logging.basicConfig(
@@ -141,7 +141,7 @@ app.add_middleware(
 from .auth.middleware import AuthMiddleware
 app.add_middleware(AuthMiddleware)
 
-from .api.routes import submissions, compliance, dashboard, model_learning, rules, chat, similar, rag_health, knowledge_base, comparisons, auth, admin_console
+from .api.routes import submissions, compliance, dashboard, model_learning, rules, similar, rag_health, knowledge_base, comparisons, auth, admin_console
 
 # Include routers - Compliance Agent only
 app.include_router(auth.router)
@@ -151,7 +151,6 @@ app.include_router(compliance.router)
 app.include_router(dashboard.router)
 app.include_router(model_learning.router)
 app.include_router(rules.router)
-app.include_router(chat.router)
 app.include_router(similar.router)
 app.include_router(rag_health.router)
 app.include_router(knowledge_base.router)
@@ -193,7 +192,6 @@ async def health_models():
         # Same inherit-fallback as _resolve_profile() in llm_service.py: an
         # empty override means "use the main LLM_MODEL".
         "critic_llm_model": settings.critic_llm_model or settings.llm_model,
-        "chat_llm_model": settings.chat_llm_model or settings.llm_model,
         "disclosure_check_enabled": settings.disclosure_check_enabled,
         "product_grounding_enabled": settings.product_grounding_enabled,
     }

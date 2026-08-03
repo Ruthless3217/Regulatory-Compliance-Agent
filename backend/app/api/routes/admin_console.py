@@ -13,7 +13,7 @@ All DB access is synchronous (the app uses sync SQLAlchemy); rollups use
 ``sqlalchemy.func`` (sum/count/coalesce/max/date_trunc) and every money sum is
 wrapped in ``func.coalesce(..., 0)`` so a range with no rows returns 0, not NULL.
 Audit writes are best-effort (never raise). The console never grades documents —
-``super_admin`` is simply absent from ``analysis:run``/``chat:use``.
+``super_admin`` is simply absent from ``analysis:run``.
 """
 from __future__ import annotations
 
