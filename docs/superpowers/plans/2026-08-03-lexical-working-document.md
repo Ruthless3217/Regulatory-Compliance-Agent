@@ -6,7 +6,7 @@
 
 **Architecture:** The uploaded file is never mutated. On upload it is converted once into Lexical JSON (`mammoth` DOCX→HTML, then Lexical's `$generateNodesFromDOM`), stored in a new `lexical_state` JSONB column, and edited in a Lexical editor. Export runs the reverse (`$generateHtmlFromNodes`, then the `docx` package) server-side so exports do not depend on a browser. Compliance findings are untouched in this phase and continue to work off extracted text; re-anchoring them to Lexical nodes is Phase 2.
 
-**Tech Stack:** Next.js 15.0.3, React 19, TypeScript 5.7, Lexical 0.48, `mammoth` (DOCX→HTML), `docx` (HTML→DOCX), FastAPI, SQLAlchemy, Alembic (current head `0032_widen_violation_category`), pytest.
+**Tech Stack:** Next.js 15.0.3, React 19, TypeScript 5.7, Lexical 0.48, `mammoth` (DOCX→HTML), `docx` (HTML→DOCX), FastAPI, SQLAlchemy, Alembic (current head revision id `0032`, file `0032_widen_violation_category.py`), pytest.
 
 ## Global Constraints
 
@@ -113,12 +113,18 @@ from sqlalchemy.dialects.postgresql import JSONB
 Revision ID: 0033_lexical_state
 Revises: 0032_widen_violation_category
 """
+from typing import Union
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision = "0033_lexical_state"
-down_revision = "0032_widen_violation_category"
+# NOTE: alembic revision IDs in this repo are bare 4-digit strings, NOT
+# filenames. 0032_widen_violation_category.py declares revision = "0032".
+# Using the filename here produces "Can't locate revision identified by ..."
+# and crash-loops the backend container on startup.
+revision: str = "0033"
+down_revision: Union[str, None] = "0032"
 branch_labels = None
 depends_on = None
 

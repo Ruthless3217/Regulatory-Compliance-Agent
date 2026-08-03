@@ -29,6 +29,11 @@ export interface Submission {
   // analysis lifecycle). PDF-only; null/"skipped" for every other
   // content_type. Drives the PdfPagePane vs. text-mark DocumentPane switch.
   page_render_status?: RenderStatus | null;
+  /** Working document. Authoritative once present; the uploaded file stays
+   * immutable and is kept only as the original for audit. */
+  lexical_state?: Record<string, unknown> | null;
+  /** Seeds the editor on first open when lexical_state is still null. */
+  import_html?: string | null;
 }
 
 export interface Rule {

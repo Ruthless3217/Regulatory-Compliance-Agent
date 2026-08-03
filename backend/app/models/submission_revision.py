@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
@@ -31,6 +31,11 @@ class SubmissionRevision(Base):
     )
     revision_number = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
+    # The same edit as a Lexical editor state, plus the HTML the client
+    # serialized from it at the same instant. NULL for text-only saves and for
+    # every revision predating the editor.
+    lexical_state = Column(JSONB, nullable=True)
+    lexical_html = Column(Text, nullable=True)
     # manual_edit | apply_fix | bulk_apply_fixes | restore
     source = Column(String(30), nullable=False)
     note = Column(Text, nullable=True)

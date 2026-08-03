@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
@@ -17,6 +17,12 @@ class Submission(Base):
     # original". original_content stays immutable (grading/highlighting
     # reference); current_content is what edits/apply-fix/restore write.
     current_content = Column(Text, nullable=True)
+    # Working document. The uploaded file stays immutable; this is what the
+    # reviewer edits. NULL for every submission created before this column.
+    lexical_state = Column(JSONB, nullable=True)
+    # The same document as HTML, serialized by the client at the same instant.
+    # Export reads this; the editor reads lexical_state. Written together.
+    lexical_html = Column(Text, nullable=True)
     file_path = Column(String(1000))
     submitted_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
