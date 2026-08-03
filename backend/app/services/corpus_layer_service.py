@@ -271,3 +271,132 @@ def delete_layer(db: Session, layer_id, *, purge: bool = False) -> Dict[str, Any
         "precedents_deleted": deleted,
         "precedents_orphaned": orphaned,
     }
+
+
+# --------------------------------------------------- per-document curation ---
+#
+# Layer-level enable/purge answers "is this whole contribution any good?".
+# Curation needs the finer grain: a corpus is kept current one source document
+# at a time. Deleting the row deletes the vector with it — `precedent_cases`
+# stores the embedding as a column, so there is no second index to sweep.
+
+def list_documents(db: Session, layer_id) -> List[Dict[str, Any]]:
+    """Source documents contributing to this layer, with their row counts.
+
+    The admin thinks in documents ("drop the 2019 brochure"), not in the
+    individual reviewer comments each one produced.
+    """
+    if get_layer(db, layer_id) is None:
+        raise LookupError("Layer not found.")
+    rows = db.execute(
+        text(
+            """
+            SELECT COALESCE(source_file, '') AS source_file,
+                   COUNT(*)                  AS precedent_count,
+                   MAX(updated_at)           AS last_updated
+              FROM precedent_cases
+             WHERE source_layer_id = CAST(:id AS UUID)
+             GROUP BY COALESCE(source_file, '')
+             ORDER BY precedent_count DESC
+            """
+        ),
+        {"id": str(layer_id)},
+    ).mappings().all()
+    return [
+        {
+            "source_file": r["source_file"] or None,
+            "precedent_count": int(r["precedent_count"]),
+            "last_updated": r["last_updated"].isoformat() if r["last_updated"] else None,
+        }
+        for r in rows
+    ]
+
+
+def delete_document(db: Session, layer_id, source_file: str) -> int:
+    """Remove one source document's precedents from the layer. Irreversible.
+
+    Scoped to the layer on purpose: the same file name may legitimately appear
+    in another contribution, and a curator acting on one layer must not reach
+    into another.
+    """
+    if get_layer(db, layer_id) is None:
+        raise LookupError("Layer not found.")
+    name = (source_file or "").strip()
+    if not name:
+        raise CorpusLayerError("source_file is required.")
+    deleted = db.execute(
+        text(
+            "DELETE FROM precedent_cases"
+            " WHERE source_layer_id = CAST(:id AS UUID) AND source_file = :src"
+        ),
+        {"id": str(layer_id), "src": name},
+    ).rowcount or 0
+    if not deleted:
+        raise LookupError("No precedents for that source document in this layer.")
+    _refresh_count(db, layer_id)
+    db.commit()
+    logger.warning(
+        "corpus document PURGED: layer=%s source_file=%r — %d precedent rows "
+        "deleted (irreversible; embeddings removed with the rows)",
+        layer_id, name, deleted,
+    )
+    return deleted
+
+
+def delete_item(db: Session, layer_id, item_id) -> None:
+    """Remove one precedent from the layer. Irreversible."""
+    if get_layer(db, layer_id) is None:
+        raise LookupError("Layer not found.")
+    deleted = db.execute(
+        text(
+            "DELETE FROM precedent_cases"
+            " WHERE source_layer_id = CAST(:lid AS UUID) AND id = CAST(:iid AS UUID)"
+        ),
+        {"lid": str(layer_id), "iid": str(item_id)},
+    ).rowcount or 0
+    if not deleted:
+        raise LookupError("Precedent not found in this layer.")
+    _refresh_count(db, layer_id)
+    db.commit()
+    logger.warning(
+        "corpus precedent PURGED: layer=%s id=%s (irreversible)", layer_id, item_id
+    )
+
+
+async def add_precedents(db: Session, layer_id, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Embed and insert precedents, then stamp them into this layer.
+
+    Embedding happens inside ``upsert_precedents`` (the same path the bulk
+    ingest uses), so a document added here is retrievable on the next query
+    with no separate re-index step. The layer stamp is a follow-up UPDATE
+    because the store's INSERT does not carry ``source_layer_id`` — the same
+    two-step ``scripts/ingest_precedent_cases.py`` performs.
+
+    Raises before writing anything if the layer is unknown, so a typo'd id
+    cannot leave newly-embedded rows orphaned outside every layer.
+    """
+    if get_layer(db, layer_id) is None:
+        raise LookupError("Layer not found.")
+    if not rows:
+        return {"indexed": 0, "assigned": 0}
+
+    from app.services.rag.indexers.precedent_indexer import upsert_precedents
+
+    ids = []
+    for row in rows:
+        row.setdefault("id", str(uuid.uuid4()))
+        ids.append(str(row["id"]))
+    indexed = await upsert_precedents(rows)
+    assigned = db.execute(
+        text(
+            "UPDATE precedent_cases SET source_layer_id = CAST(:lid AS UUID)"
+            " WHERE id = ANY(CAST(:ids AS UUID[]))"
+        ),
+        {"lid": str(layer_id), "ids": ids},
+    ).rowcount or 0
+    _refresh_count(db, layer_id)
+    db.commit()
+    logger.info(
+        "corpus layer %s: %d precedents embedded, %d assigned", layer_id, indexed, assigned
+    )
+    return {"indexed": indexed, "assigned": assigned}

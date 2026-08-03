@@ -17,11 +17,18 @@ import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
 import {
   deleteCorpusLayer,
+  deleteCorpusLayerDocument,
+  listCorpusLayerDocuments,
   listCorpusLayerItems,
   listCorpusLayers,
   updateCorpusLayer,
 } from "@/lib/api";
-import type { CorpusLayer, CorpusLayerItems, CorpusLayerList } from "@/lib/types";
+import type {
+  CorpusLayer,
+  CorpusLayerDocument,
+  CorpusLayerItems,
+  CorpusLayerList,
+} from "@/lib/types";
 
 // Corpus-layer administration (backend/app/api/routes/admin_corpus.py). The
 // whole point of a layer is that switching it OFF and throwing it AWAY are
@@ -234,6 +241,99 @@ function DeleteDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Per-document curation: the grain an admin actually curates in. Removing a
+ * document deletes its precedent rows, and the embedding is a column on those
+ * rows, so retrieval stops seeing it in the same statement — no re-index. */
+function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer; onChanged: () => void }) {
+  const [docs, setDocs] = React.useState<CorpusLayerDocument[] | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [confirming, setConfirming] = React.useState<string | null>(null);
+
+  const load = React.useCallback(() => {
+    setErr(null);
+    listCorpusLayerDocuments(layer.id)
+      .then((r) => setDocs(r.documents))
+      .catch((e) => setErr((e as Error).message));
+  }, [layer.id]);
+
+  React.useEffect(load, [load]);
+
+  const remove = async (sourceFile: string) => {
+    setBusy(sourceFile);
+    try {
+      const r = await deleteCorpusLayerDocument(layer.id, sourceFile);
+      toast.success(`Removed ${r.precedents_deleted} precedents — embeddings deleted with them`);
+      setConfirming(null);
+      load();
+      onChanged();
+    } catch (e) {
+      toast.error((e as Error).message || "Remove failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Panel
+      title={`Source documents in “${layer.name}”`}
+      description="Removing a document deletes its precedents and their embeddings. Irreversible, and it takes effect on the next retrieval."
+      right={<span className="text-xs text-muted-foreground">{docs ? `${docs.length} documents` : "…"}</span>}
+    >
+      {err ? (
+        <Empty>{err}</Empty>
+      ) : !docs ? (
+        <Empty>Loading…</Empty>
+      ) : docs.length === 0 ? (
+        <Empty>No documents contribute to this layer.</Empty>
+      ) : (
+        <table className="w-full text-xs">
+          <thead>
+            <tr>
+              <Th>Source document</Th>
+              <Th>Precedents</Th>
+              <Th>Last updated</Th>
+              <Th> </Th>
+            </tr>
+          </thead>
+          <tbody>
+            {docs.map((d) => {
+              const key = d.source_file ?? "";
+              return (
+                <tr key={key} className="border-t border-border">
+                  <td className="px-3 py-2 font-mono">{d.source_file ?? "(no source file)"}</td>
+                  <td className="px-3 py-2">{d.precedent_count}</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {d.last_updated ? formatDate(d.last_updated) : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {confirming === key ? (
+                      <span className="flex items-center justify-end gap-1.5">
+                        <span className="text-muted-foreground">Delete {d.precedent_count} rows?</span>
+                        <Button size="sm" variant="destructive" disabled={busy === key || !d.source_file}
+                          onClick={() => d.source_file && remove(d.source_file)}>
+                          {busy === key ? "Removing…" : "Confirm"}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>Cancel</Button>
+                      </span>
+                    ) : (
+                      <Button size="sm" variant="outline" disabled={!d.source_file}
+                        title={d.source_file ? undefined : "Rows with no source file must be removed individually"}
+                        onClick={() => setConfirming(key)}>
+                        Remove
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </Panel>
   );
 }
 
@@ -496,7 +596,8 @@ export default function AdminCorpusPage() {
           </Panel>
 
           {openLayer && (
-            <div className="mt-5">
+            <div className="mt-5 space-y-5">
+              <DocumentsPanel layer={openLayer} onChanged={load} />
               <ItemsPanel layer={openLayer} onClose={() => setOpenLayer(null)} />
             </div>
           )}

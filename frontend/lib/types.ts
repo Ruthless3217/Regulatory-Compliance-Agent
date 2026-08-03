@@ -708,6 +708,14 @@ export interface CorpusLayerItems {
   items: CorpusLayerItem[];
 }
 
+/** One source document's contribution to a layer. The admin curates in
+ * documents ("drop the 2019 brochure"), not in individual reviewer comments. */
+export interface CorpusLayerDocument {
+  source_file: string | null;
+  precedent_count: number;
+  last_updated: string | null;
+}
+
 export interface CorpusLayerDeleteResult {
   id: string;
   name: string;

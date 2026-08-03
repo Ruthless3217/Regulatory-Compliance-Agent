@@ -10,7 +10,7 @@ it is audited with the exact row count it destroyed.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -21,6 +21,7 @@ from app.database import get_db
 from app.models.corpus_layer import CORPUS_LAYER_KINDS
 from app.services import corpus_layer_service as svc
 from app.services.observability import audit
+from app.services.rag.errors import RAGIndexingFailed
 
 router = APIRouter(prefix="/admin/corpus", tags=["Admin Corpus"])
 
@@ -160,3 +161,115 @@ async def list_layer_items(
     if svc.get_layer(db, layer_id) is None:
         raise HTTPException(status_code=404, detail="Layer not found.")
     return svc.list_items(db, layer_id, limit=limit, offset=offset)
+
+
+class AddPrecedentsIn(BaseModel):
+    # Rows in the same shape the bulk ingest builds. Embedding happens
+    # server-side, so the caller never supplies a vector.
+    precedents: List[Dict[str, Any]]
+
+
+@router.get("/layers/{layer_id}/documents")
+async def list_layer_documents(
+    layer_id: str,
+    db: Session = Depends(get_db),
+    _actor=_ADMIN,
+):
+    """Source documents in this layer, with the precedent count each produced."""
+    try:
+        return {"documents": svc.list_documents(db, layer_id)}
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Layer not found.")
+
+
+@router.delete("/layers/{layer_id}/documents")
+async def delete_layer_document(
+    layer_id: str,
+    request: Request,
+    source_file: str = Query(..., description="Exact source_file to remove from this layer."),
+    db: Session = Depends(get_db),
+    actor=_ADMIN,
+):
+    """Remove one source document's precedents. Irreversible.
+
+    The embedding is a column on the deleted row, so this removes the document
+    from retrieval in the same statement — there is no separate re-index.
+    """
+    try:
+        deleted = svc.delete_document(db, layer_id, source_file)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except svc.CorpusLayerError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    await audit.record(
+        "corpus_document_purged",
+        actor=actor,
+        request=request,
+        target_type="corpus_layer",
+        target_id=str(layer_id),
+        before={"source_file": source_file},
+        after={"precedents_deleted": deleted},
+    )
+    return {"layer_id": str(layer_id), "source_file": source_file, "precedents_deleted": deleted}
+
+
+@router.delete("/layers/{layer_id}/items/{item_id}")
+async def delete_layer_item(
+    layer_id: str,
+    item_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor=_ADMIN,
+):
+    """Remove one precedent from this layer. Irreversible."""
+    try:
+        svc.delete_item(db, layer_id, item_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    await audit.record(
+        "corpus_precedent_purged",
+        actor=actor,
+        request=request,
+        target_type="corpus_layer",
+        target_id=str(layer_id),
+        before={"precedent_id": item_id},
+        after={"precedents_deleted": 1},
+    )
+    return {"layer_id": str(layer_id), "precedent_id": item_id, "deleted": 1}
+
+
+@router.post("/layers/{layer_id}/items", status_code=201)
+async def add_layer_items(
+    layer_id: str,
+    payload: AddPrecedentsIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    actor=_ADMIN,
+):
+    """Embed and add precedents to this layer.
+
+    Retrievable on the next query: embedding happens inline through the same
+    indexer the bulk ingest uses, so there is no separate re-index step.
+    """
+    if not payload.precedents:
+        raise HTTPException(status_code=400, detail="No precedents supplied.")
+    try:
+        result = await svc.add_precedents(db, layer_id, payload.precedents)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Layer not found.")
+    except RAGIndexingFailed as e:
+        # Nothing was stamped into the layer, so a failed embed leaves no
+        # half-added document behind.
+        raise HTTPException(status_code=502, detail=f"Embedding failed: {e}")
+
+    await audit.record(
+        "corpus_precedents_added",
+        actor=actor,
+        request=request,
+        target_type="corpus_layer",
+        target_id=str(layer_id),
+        after=result,
+    )
+    return result
