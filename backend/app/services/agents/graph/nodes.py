@@ -724,25 +724,52 @@ async def preprocess_node(state: ComplianceState) -> Dict:
         # Resolve which approved product(s) this submission is about (additive;
         # a no-match leaves all downstream grounding off). Non-fatal.
         product_match: List[Dict[str, Any]] = []
+        product_unresolved: Dict[str, List[str]] = {}
+        product_resolution_failed: Optional[str] = None
         try:
             from app.config import settings as _s
             if _s.product_grounding_enabled:
                 from app.services.fact_card_service import get_fact_card_service
-                from app.services.product_resolver import resolve_products
+                from app.services.product_resolver import (
+                    resolve_products,
+                    unresolved_product_signals,
+                )
                 full_text = "\n".join(c["text"] for c in chunks_data)
+                fact_cards = get_fact_card_service()
+                if fact_cards.availability_issues:
+                    raise RuntimeError(
+                        "product grounding corpus unavailable: "
+                        + ", ".join(fact_cards.availability_issues)
+                    )
                 product_match = resolve_products(
-                    full_text, get_fact_card_service(),
+                    full_text, fact_cards,
                     max_matches=_s.product_match_max,
                     min_fuzzy_score=_s.kb_min_fuzzy_score,
                 )
+                product_unresolved = unresolved_product_signals(full_text, fact_cards)
                 if product_match:
                     logger.info("product grounding: matched %s",
                                 [m["uin"] for m in product_match])
         except Exception as e:
-            logger.warning(f"product resolution failed (non-fatal): {e}")
+            product_resolution_failed = type(e).__name__
+            logger.error(
+                "product resolution failed; routing run to needs_review: %s",
+                e,
+            )
 
         md = dict(state.get("metadata") or {})
         md["product_match"] = product_match
+        if product_resolution_failed:
+            md["degraded"] = "product_resolution_failed"
+            md["product_resolution_failed"] = product_resolution_failed
+        elif any(product_unresolved.values()):
+            md["degraded"] = "product_unresolved"
+            md["product_unresolved"] = product_unresolved
+            logger.error(
+                "product grounding: unresolved product signal(s) %s; routing "
+                "run to needs_review until fact-card coverage is complete",
+                product_unresolved,
+            )
         ambiguous_uins = _ambiguous_product_uins(product_match)
         if ambiguous_uins:
             # A UIN is the key used to inject deterministic fact cards.  When
@@ -750,7 +777,7 @@ async def preprocess_node(state: ComplianceState) -> Dict:
             # make grading depend on filename order (and can select the more
             # permissive guarantee flag).  Preserve the candidates for the
             # reviewer, but fail closed before this run can persist a grade.
-            md.setdefault("degraded", "product_ambiguous")
+            md["degraded"] = "product_ambiguous"
             md["product_ambiguous_uins"] = ambiguous_uins
             logger.error(
                 "product grounding: ambiguous UIN(s) %s; routing run to "
@@ -795,7 +822,13 @@ async def _resolve_product_grounding(state: Dict, chunks: List[Dict]) -> tuple:
     from app.config import settings
     if not settings.product_grounding_enabled:
         return [], {}
-    matches = (state.get("metadata") or {}).get("product_match") or []
+    metadata = state.get("metadata") or {}
+    matches = metadata.get("product_match") or []
+    if (
+        metadata.get("product_resolution_failed")
+        or any((metadata.get("product_unresolved") or {}).values())
+    ):
+        return [], {}
     if not matches:
         return [], {}
     ambiguous_uins = _ambiguous_product_uins(matches)
@@ -1037,6 +1070,24 @@ async def dispatch_node(state: ComplianceState) -> Dict:
     # joining violations' rule_id / cited_precedent_id onto these ids.
     _rejected = [d for d in retrieval_debug if d["verdict"] == "rejected"]
     _accepted = [d for d in retrieval_debug if d["verdict"] == "accepted"]
+    _scope_gap_rows = [
+        d for d in _rejected
+        if str(d.get("reason") or "").startswith("scope_metadata_missing:")
+    ]
+    if _scope_gap_rows:
+        unique_gaps = {
+            (str(row.get("corpus")), str(row.get("id")), str(row.get("scope_value")))
+            for row in _scope_gap_rows
+        }
+        md["scope_metadata_missing"] = {
+            "count": len(unique_gaps),
+            "examples": [
+                {"corpus": corpus, "id": item_id, "scope_value": scope_value}
+                for corpus, item_id, scope_value in sorted(unique_gaps)[:100]
+            ],
+        }
+        # Never silently grade with a materially incomplete grounded corpus.
+        md.setdefault("degraded", "scope_metadata_missing")
     md["retrieval_debug"] = {
         "scope": scope.as_dict(),
         "candidates_total": len(retrieval_debug),

@@ -15,7 +15,55 @@ from rapidfuzz import fuzz
 
 logger = logging.getLogger(__name__)
 
-_UIN_RE = re.compile(r"\b\d{3}[A-Z]\d{3}V\d{2}\b")
+_UIN_RE = re.compile(r"\b\d{3}[A-Z]\d{3}V\d{2}\b", re.IGNORECASE)
+
+
+def unresolved_product_signals(
+    text: str,
+    fact_card_service,
+) -> Dict[str, List[str]]:
+    """Find product identifiers/names that the fact-card corpus cannot ground."""
+    text = text or ""
+    products = fact_card_service.all_products()
+    known_uins = {
+        str(uin).upper()
+        for uin in (
+            set(fact_card_service.known_uins)
+            if hasattr(fact_card_service, "known_uins")
+            else {product["uin"] for product in products}
+        )
+    }
+    extracted_uins = {match.group(0).upper() for match in _UIN_RE.finditer(text)}
+    unknown_uins = sorted(extracted_uins - known_uins)
+    rider_uins_without_fact_cards = sorted(
+        extracted_uins
+        & {
+            str(uin).upper()
+            for uin in getattr(
+                fact_card_service, "rider_uins_without_fact_cards", set()
+            )
+        }
+    )
+
+    lowered = re.sub(r"\s+", " ", text).lower()
+    missing_names: List[str] = []
+    for product in getattr(fact_card_service, "declared_without_fact_cards", []):
+        names = [product.get("name") or ""] + list(product.get("aliases") or [])
+        normalized_names = [
+            re.sub(r"\s+", " ", name).strip().lower()
+            for name in names if name
+        ]
+        if any(
+            re.search(rf"(?<!\w){re.escape(name)}(?!\w)", lowered)
+            for name in normalized_names
+        ):
+            missing_names.append(product.get("name") or "")
+
+    return {
+        "unknown_uins": unknown_uins,
+        "rider_uins_without_fact_cards": rider_uins_without_fact_cards,
+        "declared_products_without_fact_cards": sorted(set(missing_names)),
+    }
 
 
 def resolve_products(
@@ -27,14 +75,19 @@ def resolve_products(
 ) -> List[Dict[str, Any]]:
     text = text or ""
     products = fact_card_service.all_products()
-    known_uins = {p["uin"] for p in products}
-    name_by_uin = {p["uin"]: (p.get("product_name") or "") for p in products}
+    known_uins = {str(p["uin"]).upper() for p in products}
+    name_by_uin = {
+        str(p["uin"]).upper(): (p.get("product_name") or "")
+        for p in products
+    }
     # Cards per UIN: >1 means product/variant records share the UIN (e.g.
     # 116L214V01 ×3). A match on such a UIN is AMBIGUOUS — surface every
     # candidate name instead of silently grading against one variant.
     candidates_by_uin: Dict[str, List[str]] = {}
     for p in products:
-        candidates_by_uin.setdefault(p["uin"], []).append(p.get("product_name") or "")
+        candidates_by_uin.setdefault(
+            str(p["uin"]).upper(), []
+        ).append(p.get("product_name") or "")
 
     def _entry(uin: str, name: str, confidence: float, method: str) -> Dict[str, Any]:
         cands = candidates_by_uin.get(uin, [])
@@ -52,7 +105,7 @@ def resolve_products(
 
     # 1. UIN regex — exact, ranked first. Preserve first-seen order in the text.
     for m in _UIN_RE.finditer(text):
-        uin = m.group(0)
+        uin = m.group(0).upper()
         if uin in known_uins and uin not in seen_uins:
             seen_uins.add(uin)
             matches.append(_entry(uin, name_by_uin.get(uin, ""), 1.0, "uin_regex"))

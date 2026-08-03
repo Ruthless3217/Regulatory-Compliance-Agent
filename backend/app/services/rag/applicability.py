@@ -7,11 +7,12 @@ builds a RetrievalScope from the resolved products and validates every
 retrieved candidate against it, so regulatory applicability is decided
 deterministically before semantic similarity is allowed to matter.
 
-Contract (RETRIEVAL_RCA.md §5): a category CONFLICT rejects (C1); untagged or
-unmappable tags are GLOBAL and accepted with a label (C2/C7); an unresolved
-scope rejects nothing but labels everything (C3); a unit-linked rider widens
-its scope to ulip (C4). Every decision is returned as a debug record so the
-retrieval debugger can show why each chunk entered or was refused (C6).
+Current fail-closed contract: explicit global and recognised cross-cutting
+tags are accepted across products; missing or unmappable scope metadata is
+rejected for audit and curation; product-scoped candidates require a resolved
+submission product and a matching category/segment. Every decision is returned
+as a debug record so the retrieval debugger explains why a candidate entered
+or was refused.
 """
 from __future__ import annotations
 
@@ -59,11 +60,8 @@ _ALIASES = {
 #           product_category=rider) added to term plans. Scoping a
 #           child-benefit precedent to ONE family would hide it from the other.
 #
-# These already behaved as global, but only because normalize_category()
-# happened to return None for them — i.e. correct by accident, via the
-# "unmappable" path. Naming them makes the intent explicit, keeps a future
-# vocabulary fix from silently narrowing retrieval, and tells SQL pushdown
-# which raw values it must retain alongside the in-scope ones.
+# These are accepted globally only because they are named here. Unknown tags
+# remain fail-closed so an ingest typo cannot silently broaden applicability.
 _CROSS_CUTTING = {"child"}
 _EXPLICIT_GLOBAL = {"global", "all_products"}
 
@@ -75,11 +73,11 @@ def is_cross_cutting(raw: Optional[str]) -> bool:
 
 def normalize_category(raw: Optional[str]) -> Optional[str]:
     """Map any known category spelling to the canonical fact-card enum.
-    Unknown/unmappable tags return None — treated as GLOBAL by the contract
-    (C7): a heuristic ingest tag must never overblock retrieval.
+    Unknown/unmappable tags return None and are rejected by the applicability
+    judge until an owner explicitly classifies them.
 
     Cross-cutting tags (see _CROSS_CUTTING) also return None: they are not
-    product categories, so they must not enter a scope comparison."""
+    product categories, but the judge recognises and accepts them explicitly."""
     if not raw:
         return None
     s = str(raw).strip().lower()
@@ -164,8 +162,6 @@ def build_scope(product_match: List[Dict[str, Any]], fact_cards: Any) -> Retriev
 
 def _judge(scope: RetrievalScope, raw_tag: Optional[str]) -> Tuple[str, str]:
     """(verdict, reason) for one candidate under the contract."""
-    if not scope.resolved:
-        return "accepted", "scope_unresolved: no product identified; nothing rejected (C3)"
     if raw_tag and str(raw_tag).strip().lower() in _EXPLICIT_GLOBAL:
         return "accepted", f"global_explicit: {raw_tag!r} applies to every product"
     if is_cross_cutting(raw_tag):
@@ -176,7 +172,15 @@ def _judge(scope: RetrievalScope, raw_tag: Optional[str]) -> Tuple[str, str]:
     cat = normalize_category(raw_tag)
     if cat is None:
         label = "untagged" if not raw_tag else f"unmappable tag {raw_tag!r}"
-        return "accepted", f"global_{'untagged' if not raw_tag else 'unknown_tag'}: {label} (C2/C7)"
+        return "rejected", (
+            f"scope_metadata_missing: {label}; explicitly classify or mark global "
+            "(C2/C7)"
+        )
+    if not scope.resolved:
+        return "rejected", (
+            f"scope_unresolved: cannot prove {cat!r} applies without a resolved "
+            "product (C3)"
+        )
     if cat in scope.categories:
         return "accepted", f"category_match: {cat}"
     return "rejected", (

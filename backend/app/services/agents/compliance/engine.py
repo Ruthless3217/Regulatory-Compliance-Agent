@@ -53,6 +53,9 @@ class ComplianceEngine:
         "rules_unavailable",
         "disclosure_unavailable",
         "product_ambiguous",
+        "product_unresolved",
+        "product_resolution_failed",
+        "scope_metadata_missing",
     }
 
     @staticmethod
@@ -74,6 +77,17 @@ class ComplianceEngine:
             return False, "no_content"
         if status == "failed":
             return False, "failed"
+        # Safety-critical product-grounding signals are checked independently
+        # of the single legacy degraded slot so another warning cannot mask
+        # them via setdefault/overwrite ordering.
+        if md.get("product_resolution_failed"):
+            return False, "product_resolution_failed"
+        if md.get("product_ambiguous_uins"):
+            return False, "product_ambiguous"
+        if any((md.get("product_unresolved") or {}).values()):
+            return False, "product_unresolved"
+        if md.get("scope_metadata_missing"):
+            return False, "scope_metadata_missing"
         degraded = md.get("degraded")
         if degraded:
             return False, degraded
@@ -88,6 +102,9 @@ class ComplianceEngine:
         "retrieval_debug", "grounding_mix", "product_match",
         "rag_degraded", "degraded", "analysis_failed_chunks",
         "product_ambiguous_uins",
+        "product_unresolved",
+        "product_resolution_failed",
+        "scope_metadata_missing",
         "disclosure_recall_degraded", "rag_rules_per_chunk", "precedents_per_chunk",
     )
 
@@ -468,6 +485,7 @@ class ComplianceEngine:
             ],
             "violation_count": counts["scored"],
             "suppressed_count": counts["suppressed"],
+            "reviewer_added_count": counts["reviewer_added"],
             "finding_count": counts["total"],
             "finding_counts": counts,
         }
