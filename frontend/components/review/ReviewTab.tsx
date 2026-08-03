@@ -2,6 +2,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { ContextRail } from "./ContextRail";
 import { DocumentPane } from "./DocumentPane";
 import { PdfPagePane } from "./PdfPagePane";
 import { ViolationsPane } from "./ViolationsPane";
@@ -148,7 +149,14 @@ export function ReviewTab() {
   const usePdfPane = pagesRendered && !editing;
 
   return (
-    <div className="grid h-full grid-cols-[1fr_400px] overflow-hidden rounded-md border border-border">
+    // Three-column grammar from the workspace design: context rail (what this
+    // was graded against), paper canvas, action rail. The column widths are
+    // fixed across every screen so the eye never re-learns the layout. The rail
+    // drops away below xl, where 264+372 of chrome would crowd the document.
+    <div className="grid h-full grid-cols-[1fr_372px] overflow-hidden rounded-md border border-border xl:grid-cols-[264px_1fr_372px]">
+      <div className="hidden xl:block">
+        <ContextRail submission={submission} violations={displayViolations} />
+      </div>
       <div className="flex h-full min-h-0 flex-col">
         {isAnalyzing && (
           <div className="border-b border-border bg-background px-4 py-2 text-xs">
