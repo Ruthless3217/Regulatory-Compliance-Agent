@@ -109,7 +109,18 @@ def _citation_to_violation(
         ),
         "description": (c.reviewer_comment or "").strip(),
         "current_text": (c.current_text or "").strip(),
-        "suggested_fix": p.get("final_text_chunk") or None,
+        # No suggested fix from a precedent. `final_text_chunk` is a fragment of
+        # the corrected version of a DIFFERENT historical document — it is
+        # evidence of how a similar issue was once resolved, not a rewrite of
+        # this passage. Offering it as one made "Apply fix" splice unrelated
+        # text over the reviewer's sentence: observed live replacing "Choice of
+        # five (5) investment portfolio strategies" with "taxes under old tax
+        # regime", and "Multiple funds to choose from" with "at".
+        #
+        # The precedent's final text is still shown, as provenance, by
+        # PrecedentNote via cited_final_text — which is where it belongs. A
+        # rewrite for THIS passage comes from the rewrite endpoint, on demand.
+        "suggested_fix": None,
         "auto_fixable": False,
         "confidence": float(c.confidence if c.confidence is not None else 0.85),
         "rule_id": None,

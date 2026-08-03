@@ -115,8 +115,25 @@ def _resolve_profile(profile: str) -> Dict[str, Any]:
         api_keys = settings.chat_llm_api_keys
         max_tokens = settings.chat_llm_max_tokens or settings.llm_max_tokens
         insecure_tls = settings.chat_llm_insecure_tls
-        use_max_completion = settings.chat_llm_use_max_completion_tokens
-        supports_temperature = settings.chat_llm_supports_temperature
+        # With CHAT_LLM_MODEL unset, every field above fell back to main — this
+        # profile IS the main deployment — so the param dialect must fall back
+        # too. It did not, and the chat flags' hard defaults (max_tokens +
+        # temperature) are exactly what an Azure gpt-5/o-series deployment
+        # rejects: /violations/{id}/rewrite 503'd with "Unsupported parameter:
+        # 'max_tokens' ... Use 'max_completion_tokens'". An explicitly chosen
+        # chat model (e.g. Groq llama) keeps its own CHAT_LLM_* flags, since
+        # those are the case the separate knobs exist for.
+        own_chat_model = bool(settings.chat_llm_model)
+        use_max_completion = (
+            settings.chat_llm_use_max_completion_tokens
+            if own_chat_model
+            else settings.llm_use_max_completion_tokens
+        )
+        supports_temperature = (
+            settings.chat_llm_supports_temperature
+            if own_chat_model
+            else settings.llm_supports_temperature
+        )
         azure_api_version = settings.chat_llm_azure_api_version or settings.llm_azure_api_version
         reasoning_effort = settings.chat_llm_reasoning_effort
     elif profile == "critic":
