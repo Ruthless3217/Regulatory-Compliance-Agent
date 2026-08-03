@@ -42,6 +42,7 @@ import type {
   CorpusLayer,
   CorpusLayerList,
   CorpusLayerItems,
+  CorpusLayerDocument,
   CorpusLayerDeleteResult,
   RetrievalInspection,
   RetrievalRejectedInspection,
@@ -304,6 +305,24 @@ export async function deleteReviewerViolation(
   violationId: string
 ): Promise<{ message: string; id: string }> {
   return jsonFetch(`${base()}/compliance/violations/${violationId}`, { method: "DELETE" });
+}
+
+/** Ask for replacement wording for one finding. Proposes only — nothing is
+ * persisted until the reviewer accepts and the text goes through the normal
+ * revision path, because every saved edit forces a re-analysis. */
+export async function rewriteViolationText(
+  violationId: string,
+  instruction?: string
+): Promise<{
+  violation_id: string;
+  original_text: string;
+  proposed_text: string;
+  instruction: string | null;
+}> {
+  return jsonFetch(`${base()}/compliance/violations/${violationId}/rewrite`, {
+    method: "POST",
+    body: JSON.stringify({ instruction: instruction?.trim() || null }),
+  });
 }
 
 // Held-out evaluation only: logs the reviewer's own document score next to
@@ -759,6 +778,35 @@ export const deleteCorpusLayer = (id: string, purge: boolean = false) =>
 export const listCorpusLayerItems = (id: string, limit: number = 50, offset: number = 0) =>
   jsonFetch<CorpusLayerItems>(
     `${base()}/admin/corpus/layers/${id}/items?limit=${limit}&offset=${offset}`
+  );
+
+/* Per-document curation. A corpus is kept current one source document at a
+ * time, so these are the finer grain beneath enable/purge. Deleting removes the
+ * embedding in the same statement — the vector is a column on the deleted row,
+ * so there is no re-index step and retrieval stops seeing it immediately. */
+export const listCorpusLayerDocuments = (id: string) =>
+  jsonFetch<{ documents: CorpusLayerDocument[] }>(
+    `${base()}/admin/corpus/layers/${id}/documents`
+  );
+
+export const deleteCorpusLayerDocument = (id: string, sourceFile: string) =>
+  jsonFetch<{ layer_id: string; source_file: string; precedents_deleted: number }>(
+    `${base()}/admin/corpus/layers/${id}/documents?source_file=${encodeURIComponent(sourceFile)}`,
+    { method: "DELETE" }
+  );
+
+export const deleteCorpusLayerItem = (id: string, itemId: string) =>
+  jsonFetch<{ layer_id: string; precedent_id: string; deleted: number }>(
+    `${base()}/admin/corpus/layers/${id}/items/${itemId}`,
+    { method: "DELETE" }
+  );
+
+/** Embeds server-side, so the caller never supplies a vector. Retrievable on
+ * the next query. */
+export const addCorpusLayerItems = (id: string, precedents: Record<string, unknown>[]) =>
+  jsonFetch<{ indexed: number; assigned: number }>(
+    `${base()}/admin/corpus/layers/${id}/items`,
+    { method: "POST", body: JSON.stringify({ precedents }) }
   );
 
 /* ---------- admin: retrieval inspector ----------

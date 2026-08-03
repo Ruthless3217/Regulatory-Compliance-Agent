@@ -8,7 +8,7 @@ import { categoryLabel, severityClass, truthyAutoFix, normalizeSeverity } from "
 import { cn } from "@/lib/utils";
 import { ActionTags } from "@/components/violation/ActionTags";
 import { PrecedentNote } from "@/components/violation/PrecedentNote";
-import { deleteReviewerViolation, submitReviewerAction } from "@/lib/api";
+import { deleteReviewerViolation, rewriteViolationText, submitReviewerAction } from "@/lib/api";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import type { DismissReason, NotViolationReason, ReviewerActionType, Violation } from "@/lib/types";
 
@@ -78,6 +78,13 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
 
   const [applyFixBusy, setApplyFixBusy] = React.useState(false);
   const fixApplied = violation.fix_applied === true;
+
+  // On-demand rewrite. Held in local state and never persisted until the
+  // reviewer accepts: a saved edit invalidates the run's findings and forces a
+  // re-analysis before export, so an unread proposal must not cost them one.
+  const [rewrite, setRewrite] = React.useState<string | null>(null);
+  const [rewriteInstruction, setRewriteInstruction] = React.useState("");
+  const [rewriteBusy, setRewriteBusy] = React.useState(false);
 
   // 0031 — reviewer-authored flags are the only deletable findings. A model
   // finding is dismissed/rejected by verdict, never removed.
@@ -151,10 +158,10 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     submitAction("dismiss", { reason: dismissReason });
   };
 
-  const applyFix = async () => {
-    const suggestedFix = violation.suggested_fix;
-    if (!suggestedFix || fixApplied || applyFixBusy) return;
-
+  /** Splice `replacement` over this finding's quoted span in the live working
+   * copy and persist it as one revision. Shared by Apply-fix and by accepting
+   * an AI rewrite — both write the same span through the same path. */
+  const spliceIntoDocument = async (replacement: string, label: string) => {
     // Reads AND writes the one live working copy in context (same text the
     // DocumentPane renders and its inline span editor writes), so back-to-back
     // fixes compose instead of each splicing a stale base.
@@ -163,28 +170,63 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
 
     if (!evidence || !baseText.includes(evidence)) {
       try {
-        await navigator.clipboard.writeText(suggestedFix);
-        toast.message("Could not auto-locate the flagged text — suggested fix copied to clipboard instead");
+        await navigator.clipboard.writeText(replacement);
+        toast.message(`Could not auto-locate the flagged text — ${label} copied to clipboard instead`);
       } catch {
         toast.error("Clipboard write failed");
       }
-      return;
+      return false;
     }
 
+    // Function form: replacement text containing "$&" must stay literal.
+    const nextContent = baseText.replace(evidence, () => replacement);
+    const ok = await applyEdit(nextContent, "apply_fix", [violation.id]);
+    if (!ok) {
+      toast.error("Applied locally but not saved — use Save in the document toolbar to retry.");
+      return false;
+    }
+    const appliedAt = new Date().toISOString();
+    setViolations((prev) =>
+      prev.map((v) => (v.id === violation.id ? { ...v, fix_applied: true, fix_applied_at: appliedAt } : v))
+    );
+    return true;
+  };
+
+  const applyFix = async () => {
+    const suggestedFix = violation.suggested_fix;
+    if (!suggestedFix || fixApplied || applyFixBusy) return;
     setApplyFixBusy(true);
     try {
-      // Function form: a suggested fix containing "$&" must stay literal.
-      const nextContent = baseText.replace(evidence, () => suggestedFix);
-      const ok = await applyEdit(nextContent, "apply_fix", [violation.id]);
-      if (!ok) {
-        toast.error("Fix applied locally but not saved — use Save in the document toolbar to retry.");
-        return;
+      if (await spliceIntoDocument(suggestedFix, "suggested fix")) {
+        toast.success("Fix applied to document");
       }
-      const appliedAt = new Date().toISOString();
-      setViolations((prev) =>
-        prev.map((v) => (v.id === violation.id ? { ...v, fix_applied: true, fix_applied_at: appliedAt } : v))
-      );
-      toast.success("Fix applied to document");
+    } finally {
+      setApplyFixBusy(false);
+    }
+  };
+
+  const requestRewrite = async () => {
+    if (rewriteBusy) return;
+    setRewriteBusy(true);
+    try {
+      const res = await rewriteViolationText(violation.id, rewriteInstruction);
+      setRewrite(res.proposed_text);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "";
+      toast.error(message || "Rewrite failed");
+    } finally {
+      setRewriteBusy(false);
+    }
+  };
+
+  const acceptRewrite = async () => {
+    if (!rewrite || applyFixBusy) return;
+    setApplyFixBusy(true);
+    try {
+      if (await spliceIntoDocument(rewrite, "rewrite")) {
+        toast.success("Rewrite applied — re-run the check before exporting");
+        setRewrite(null);
+      }
     } finally {
       setApplyFixBusy(false);
     }
@@ -316,6 +358,41 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
         <div className="mt-3 rounded-sm border border-success/40 bg-success/5 p-2">
           <div className="micro-label mb-1 text-success">Suggested fix</div>
           <p className="text-xs">{violation.suggested_fix}</p>
+        </div>
+      )}
+
+      {violation.current_text && !fixApplied && (
+        <div className="mt-3 rounded-sm border border-border p-2" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="micro-label text-muted-foreground">AI rewrite</span>
+            <Button size="sm" variant="outline" disabled={rewriteBusy} onClick={requestRewrite}>
+              {rewriteBusy ? "Rewriting…" : rewrite ? "Try again" : "Rewrite"}
+            </Button>
+          </div>
+          <input
+            value={rewriteInstruction}
+            onChange={(e) => setRewriteInstruction(e.target.value)}
+            placeholder="Optional steer, e.g. keep it under 12 words"
+            maxLength={500}
+            className="mt-2 w-full rounded-sm border border-border bg-background px-2 py-1 text-xs"
+          />
+          {rewrite && (
+            <div className="mt-2">
+              {/* Shown for approval, never auto-applied: accepting writes a
+                  revision, which invalidates the findings and blocks export
+                  until the document is re-analysed. */}
+              <div className="rounded-sm border border-primary/40 bg-primary/5 p-2 text-xs">{rewrite}</div>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <Button size="sm" disabled={applyFixBusy} onClick={acceptRewrite}>
+                  {applyFixBusy ? "Applying…" : "Accept"}
+                </Button>
+                <Button size="sm" variant="ghost" disabled={applyFixBusy} onClick={() => setRewrite(null)}>
+                  Discard
+                </Button>
+                <span className="text-[11px] text-muted-foreground">Accepting requires a re-run before export</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

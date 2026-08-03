@@ -21,7 +21,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, BackgroundTasks, Request, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -30,6 +30,8 @@ from typing import Dict, Literal, Optional, Set
 from app.api.rate_limit import llm_rate_limit
 from app.services.llm_budget import llm_budget_guard
 from app.services import export_common
+from app.models.rule import Rule
+from app.services.llm_service import LLMUnavailableError, chat_llm_service
 from app.database import get_db, SessionLocal
 from app.models.submission import Submission
 from app.models.compliance_check import ComplianceCheck
@@ -873,4 +875,94 @@ async def submit_reviewer_score(
         "reviewer_score": payload.score,
         "system_score": system_score,
         "gap": abs(system_score - payload.score) if system_score is not None else None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# On-demand AI rewrite — proposes replacement wording for one flagged span.
+# ---------------------------------------------------------------------------
+
+class RewriteRequest(BaseModel):
+    # Free-text reviewer steer ("keep it under 12 words", "keep the CTA").
+    # Optional: with none, the model just re-addresses the finding.
+    instruction: Optional[str] = Field(default=None, max_length=500)
+
+
+_REWRITE_SYSTEM = (
+    "You rewrite a flagged passage of Indian life-insurance marketing copy so it "
+    "no longer violates the stated compliance finding.\n"
+    "Rules:\n"
+    "- Return ONLY the replacement passage. No preamble, quotes, or explanation.\n"
+    "- Preserve the original meaning, tone, and approximate length. You are "
+    "correcting a compliance defect, not rewriting the campaign.\n"
+    "- Never introduce a new factual, numeric, guarantee, tax, or returns claim "
+    "that is not already in the original passage.\n"
+    "- If the passage cannot be made compliant without deleting the claim, return "
+    "the passage with the offending claim removed rather than inventing a "
+    "substitute."
+)
+
+
+@router.post(
+    "/violations/{violation_id}/rewrite",
+    dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)],
+)
+async def rewrite_violation_text(
+    violation_id: str,
+    payload: RewriteRequest = Body(default=RewriteRequest()),
+    user: dict = Depends(require("submission:create")),
+    db: Session = Depends(get_db),
+):
+    """Propose replacement wording for one finding. Writes nothing.
+
+    Deliberately does NOT create a revision: every persisted edit invalidates
+    the run's findings and forces a re-analysis before the document can be
+    exported, so a rewrite the reviewer has not read yet must not cost them
+    one. The caller applies the returned text through the normal revision
+    path if they accept it.
+    """
+    violation = db.query(Violation).filter(Violation.id == violation_id).first()
+    if not violation:
+        raise HTTPException(status_code=404, detail="Violation not found")
+
+    original = (violation.current_text or "").strip()
+    if not original:
+        raise HTTPException(
+            status_code=422,
+            detail="This finding has no quoted source text to rewrite",
+        )
+
+    rule_text = None
+    if violation.rule_id:
+        rule = db.query(Rule).filter(Rule.id == violation.rule_id).first()
+        rule_text = rule.rule_text if rule else None
+
+    parts = [f"Flagged passage:\n{original}", f"\nCompliance finding:\n{violation.description}"]
+    if rule_text:
+        parts.append(f"\nRule violated:\n{rule_text}")
+    if violation.regulator_quote:
+        parts.append(f"\nRegulator's own wording:\n{violation.regulator_quote}")
+    if violation.suggested_fix:
+        parts.append(f"\nEarlier suggestion (improve on it):\n{violation.suggested_fix}")
+    if payload.instruction:
+        parts.append(f"\nReviewer instruction (follow it):\n{payload.instruction.strip()}")
+
+    try:
+        proposed = await chat_llm_service.generate_response(
+            prompt="\n".join(parts),
+            system_prompt=_REWRITE_SYSTEM,
+            temperature=0.2,
+        )
+    except LLMUnavailableError as e:
+        raise HTTPException(status_code=503, detail=f"Rewrite unavailable: {e}")
+
+    proposed = (proposed or "").strip().strip('"').strip()
+    if not proposed:
+        raise HTTPException(status_code=502, detail="Model returned an empty rewrite")
+
+    return {
+        "violation_id": str(violation.id),
+        "original_text": original,
+        "proposed_text": proposed,
+        "instruction": payload.instruction,
     }
