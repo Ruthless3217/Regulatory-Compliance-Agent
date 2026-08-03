@@ -71,7 +71,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   if (me.role !== "super_admin") redirect("/"); // Not a super admin
 
   return (
-    <AuthProvider>
+    <AuthProvider initialMe={me}>
       <div className="min-h-screen bg-zinc-950 text-zinc-100">
         <SuperAdminSidebar />
         <div className="pl-60">

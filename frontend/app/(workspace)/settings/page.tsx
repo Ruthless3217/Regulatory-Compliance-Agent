@@ -42,17 +42,24 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+// Must match ScoringService._get_grade in
+// backend/app/services/agents/compliance/scoring.py — this table is shown to
+// reviewers as documentation of how their documents are graded, so a stale
+// copy here misinforms them about the system's actual behaviour.
 const GRADE_BANDS = [
-  { grade: "A", range: "85–100", tone: "text-success" },
-  { grade: "B", range: "70–84", tone: "text-primary" },
-  { grade: "C", range: "55–69", tone: "text-sev-medium" },
-  { grade: "D", range: "40–54", tone: "text-sev-high" },
-  { grade: "F", range: "0–39", tone: "text-sev-critical" },
+  { grade: "A", range: "90–100", tone: "text-success" },
+  { grade: "B", range: "80–89", tone: "text-primary" },
+  { grade: "C", range: "70–79", tone: "text-sev-medium" },
+  { grade: "D", range: "60–69", tone: "text-sev-high" },
+  { grade: "F", range: "0–59", tone: "text-sev-critical" },
 ];
 
-// Same category values as the /rules page's coverage cards (rules.category).
+// Keys are the literal `rules.category` values in the database. "irdai" and
+// "regulatory" are DIFFERENT categories — labelling "regulatory" as IRDAI
+// reported 23 rules where the real IRDAI count is 62.
 const RULE_CATEGORIES = [
-  { key: "regulatory", label: "IRDAI" },
+  { key: "irdai", label: "IRDAI" },
+  { key: "regulatory", label: "Regulatory (other)" },
   { key: "brand", label: "Brand" },
   { key: "sebi", label: "SEBI" },
 ];

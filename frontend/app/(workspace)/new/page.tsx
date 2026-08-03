@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageHeader, PageHeaderMeta } from "@/components/ui/page-header";
-import { createSubmission, analyzeSubmission } from "@/lib/api";
+import { createSubmission, analyzeSubmission, listRules } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
@@ -55,6 +55,18 @@ export default function NewAnalysisPage() {
   const [productLine, setProductLine] = React.useState("");
   const [scope, setScope] = React.useState<string[]>(["irdai", "brand", "sebi"]);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Real per-category counts. `limit: 1` because only `total` is wanted, and
+  // `total` is computed after the category filter — one row per request, not 150.
+  const [ruleCounts, setRuleCounts] = React.useState<Record<string, number> | null>(null);
+  React.useEffect(() => {
+    Promise.all(CATEGORIES.map((c) => listRules({ category: c.key, is_active: true, limit: 1 })))
+      .then((rs) =>
+        setRuleCounts(Object.fromEntries(CATEGORIES.map((c, i) => [c.key, rs[i].total])))
+      )
+      // No count beats a made-up count — the row just renders without one.
+      .catch(() => setRuleCounts(null));
+  }, []);
 
   const toggleScope = (k: string) =>
     setScope((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
@@ -301,21 +313,21 @@ export default function NewAnalysisPage() {
               <li>
                 <div className="flex items-baseline justify-between">
                   <span className="font-serif text-base">IRDAI</span>
-                  <span className="font-mono text-[11px] text-muted-foreground">~30 rules</span>
+                  <RuleCount n={ruleCounts?.irdai} />
                 </div>
                 <p className="mt-1 text-muted-foreground">Disclosures, ULIP risk-factor wording, claim-process language, return-projection statements, free-look terms.</p>
               </li>
               <li>
                 <div className="flex items-baseline justify-between">
                   <span className="font-serif text-base">Bajaj brand</span>
-                  <span className="font-mono text-[11px] text-muted-foreground">~20 rules</span>
+                  <RuleCount n={ruleCounts?.brand} />
                 </div>
                 <p className="mt-1 text-muted-foreground">Tone of voice, prohibited superlatives, mandated brand wordmark and taglines, terminology house style.</p>
               </li>
               <li>
                 <div className="flex items-baseline justify-between">
                   <span className="font-serif text-base">SEBI</span>
-                  <span className="font-mono text-[11px] text-muted-foreground">~15 rules</span>
+                  <RuleCount n={ruleCounts?.sebi} />
                 </div>
                 <p className="mt-1 text-muted-foreground">Investment-product wording, mutual-fund-style disclaimers, past-performance language for market-linked plans.</p>
               </li>
@@ -324,6 +336,16 @@ export default function NewAnalysisPage() {
         </aside>
       </div>
     </div>
+  );
+}
+
+/** Renders nothing until the real count is known — never an estimate. */
+function RuleCount({ n }: { n?: number }) {
+  if (n === undefined) return null;
+  return (
+    <span className="font-mono text-[11px] text-muted-foreground">
+      {n} {n === 1 ? "rule" : "rules"}
+    </span>
   );
 }
 

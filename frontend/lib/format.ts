@@ -82,12 +82,23 @@ export function formatScore(score?: number | null): string {
   return score.toFixed(1);
 }
 
+/**
+ * FALLBACK ONLY. The backend decides the letter — prefer its `grade` field
+ * (`ComplianceResults.grade`, `CheckSummary.grade`) wherever one is available
+ * and only call this when none was supplied (e.g. an aggregate like the
+ * dashboard average, which no single check graded).
+ *
+ * Thresholds are copied from the authoritative table in
+ * `backend/app/services/agents/compliance/scoring.py` (`ScoringService._get_grade`).
+ * If you change one, change both — a mismatch renders the same document as two
+ * different grades (this happened: backend F @ 48.78, UI showed D).
+ */
 export function gradeFromScore(score?: number | null): "A" | "B" | "C" | "D" | "F" {
   if (score === null || score === undefined) return "F";
-  if (score >= 85) return "A";
-  if (score >= 70) return "B";
-  if (score >= 55) return "C";
-  if (score >= 40) return "D";
+  if (score >= 90) return "A";
+  if (score >= 80) return "B";
+  if (score >= 70) return "C";
+  if (score >= 60) return "D";
   return "F";
 }
 

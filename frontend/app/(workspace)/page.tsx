@@ -5,19 +5,22 @@ import {
   CheckCircle2,
   AlertOctagon,
   ArrowUpRight,
+  Wand2,
 } from "lucide-react";
-import { listSubmissions, getDashboardSummary } from "@/lib/api";
+import { listSubmissions, getDashboardSummary, health, healthModels } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { PageHeader, PageHeaderMeta } from "@/components/ui/page-header";
 import { StatusPill, statusTone } from "@/components/ui/status-pill";
 import { StatCard } from "@/components/ui/stat-card";
 import { SectionHeader } from "@/components/ui/section-header";
-import { ScoreRing } from "@/components/ui/score-ring";
-import { Sparkline } from "@/components/ui/sparkline";
 import { formatDate } from "@/lib/format";
-import type { Submission } from "@/lib/types";
+import type { ModelsHealth, Submission } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+// The list route caps `limit` at 100 server-side, so that is the most this page
+// can show in one request.
+const PAGE_LIMIT = 100;
 
 type DashStats = {
   total_submissions?: number;
@@ -27,14 +30,19 @@ type DashStats = {
   critical_count?: number;
   auto_fix_rate?: number;
   auto_fixable_count?: number;
+  active_rules?: number;
 };
 
 export default async function SubmissionsPage() {
   let items: Submission[] = [];
+  // The server's count of everything that exists, which is NOT items.length —
+  // the list route returns one page.
+  let total = 0;
   let err: string | null = null;
   try {
-    const data = await listSubmissions();
+    const data = await listSubmissions(PAGE_LIMIT);
     items = Array.isArray(data) ? (data as unknown as Submission[]) : data.submissions ?? [];
+    total = Array.isArray(data) ? items.length : data.total ?? items.length;
   } catch (e) {
     err = (e as Error).message;
   }
@@ -46,6 +54,13 @@ export default async function SubmissionsPage() {
   } catch {
     /* dashboard fetch is best-effort */
   }
+
+  // Pipeline facts, fetched rather than asserted. A failed probe renders as
+  // "unknown"/omitted, never as a green badge.
+  const [api, models] = await Promise.all([
+    health().catch(() => null),
+    healthModels().catch(() => null),
+  ]);
 
   const reviewed = items.filter((s) => s.status === "analyzed");
   const inProgress = items.filter((s) =>
@@ -72,7 +87,7 @@ export default async function SubmissionsPage() {
         }
         meta={
           <>
-            <PageHeaderMeta label="Total" value={items.length} />
+            <PageHeaderMeta label="Total" value={total} />
             <PageHeaderMeta label="Reviewed" value={reviewed.length} />
             <PageHeaderMeta label="In progress" value={inProgress.length + waiting.length} />
             <PageHeaderMeta label="Failed" value={failed.length} />
@@ -80,12 +95,25 @@ export default async function SubmissionsPage() {
         }
       />
 
+      {total > items.length && (
+        <div className="mb-6 rounded-md border border-sev-medium/40 bg-sev-medium/5 px-4 py-3 text-sm">
+          <span className="font-medium">
+            Showing the {items.length} most recent of {total} submissions.
+          </span>{" "}
+          <span className="text-muted-foreground">
+            {total - items.length} older {total - items.length === 1 ? "submission is" : "submissions are"} not
+            listed here, and the status counts describe only the {items.length} shown. A document you
+            cannot find on this page may still exist — open it by its link or ID.
+          </span>
+        </div>
+      )}
+
       {/* KPI strip */}
       <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="Submissions / wk"
           value={stats.submissions_this_week ?? 0}
-          sub={`${items.length} total`}
+          sub={`${total} total`}
           icon={<FileText className="h-3.5 w-3.5" />}
         />
         <StatCard
@@ -102,20 +130,18 @@ export default async function SubmissionsPage() {
           }
           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
         />
+        {/* Both branches key off the same fact — whether any violation exists —
+            so the value and the subtitle can never contradict each other. */}
         <StatCard
           label="Auto-fix rate"
-          value={
-            stats.auto_fix_rate !== undefined && stats.total_violations
-              ? `${stats.auto_fix_rate}%`
-              : "—"
-          }
+          value={stats.total_violations ? `${stats.auto_fix_rate ?? 0}%` : "—"}
           sub={
-            stats.auto_fixable_count && stats.total_violations
-              ? `${stats.auto_fixable_count}/${stats.total_violations} fixable`
+            stats.total_violations
+              ? `${stats.auto_fixable_count ?? 0}/${stats.total_violations} fixable`
               : "no violations yet"
           }
           tone="primary"
-          icon={<Sparkline values={[20, 22, 19, 24, 26, 28, 27, 30, 32, 31, 34, 36]} width={64} height={20} />}
+          icon={<Wand2 className="h-3.5 w-3.5" />}
         />
         <StatCard
           label="Open critical"
@@ -132,7 +158,7 @@ export default async function SubmissionsPage() {
           {err ? (
             <ErrorPanel message={err} />
           ) : items.length === 0 ? (
-            <EmptyWelcome />
+            <EmptyWelcome activeRules={stats.active_rules} />
           ) : (
             <div className="space-y-8">
               {tables.map((t) =>
@@ -158,7 +184,7 @@ export default async function SubmissionsPage() {
         </div>
 
         {/* Sidecar */}
-        <ActivityRail items={items} />
+        <ActivityRail items={items} api={api} models={models} activeRules={stats.active_rules} />
       </div>
     </div>
   );
@@ -172,7 +198,9 @@ function DenseTable({ items }: { items: Submission[] }) {
           <tr className="border-b border-border bg-muted/30 text-left">
             <th className="px-4 py-2.5 micro-label w-[36px]">#</th>
             <th className="px-3 py-2.5 micro-label">Document</th>
-            <th className="px-3 py-2.5 micro-label w-[70px] text-center">Score</th>
+            {/* No Score column: the list route returns no score, and a column
+                that is permanently "—" reads as "every document scored nothing".
+                The score lives on the submission page, which has the check. */}
             <th className="px-3 py-2.5 micro-label w-[80px]">Type</th>
             <th className="px-3 py-2.5 micro-label w-[120px]">Status</th>
             <th className="px-3 py-2.5 micro-label w-[140px]">Submitted</th>
@@ -191,11 +219,6 @@ function DenseTable({ items }: { items: Submission[] }) {
                 </Link>
                 <div className="mt-0.5 font-mono text-[10px] text-muted-foreground truncate max-w-[420px]">
                   {s.id.slice(0, 8)}
-                </div>
-              </td>
-              <td className="px-3 py-2.5">
-                <div className="flex items-center justify-center">
-                  <ScoreRing score={null} size={36} strokeWidth={3} showGrade={false} />
                 </div>
               </td>
               <td className="px-3 py-2.5 text-muted-foreground uppercase text-[10px] tracking-[0.12em]">
@@ -222,7 +245,17 @@ function DenseTable({ items }: { items: Submission[] }) {
   );
 }
 
-function ActivityRail({ items }: { items: Submission[] }) {
+function ActivityRail({
+  items,
+  api,
+  models,
+  activeRules,
+}: {
+  items: Submission[];
+  api: { status: string; llm_available: boolean } | null;
+  models: ModelsHealth | null;
+  activeRules?: number;
+}) {
   const recent = items.slice(0, 8);
   return (
     <aside className="space-y-6">
@@ -262,23 +295,34 @@ function ActivityRail({ items }: { items: Submission[] }) {
         <div className="border-b border-border px-4 py-2.5">
           <div className="micro-label">Pipeline status</div>
         </div>
+        {/* Every row below is a fetched fact. A probe that failed is reported as
+            unreachable or omitted — nothing here is asserted from a literal.
+            The LangGraph "ready" row is gone: nothing reports that state. */}
         <ul className="space-y-2 p-4 text-[12px]">
           <li className="flex items-center justify-between">
             <span>Backend API</span>
-            <StatusPill tone="success">healthy</StatusPill>
+            {api ? (
+              <StatusPill tone={api.llm_available ? "success" : "warning"}>
+                {api.llm_available ? api.status : "LLM unavailable"}
+              </StatusPill>
+            ) : (
+              <StatusPill tone="danger">unreachable</StatusPill>
+            )}
           </li>
-          <li className="flex items-center justify-between">
-            <span>LangGraph workflow</span>
-            <StatusPill tone="info">ready</StatusPill>
-          </li>
-          <li className="flex items-center justify-between">
-            <span>Rule corpus</span>
-            <span className="font-mono text-[11px] text-muted-foreground">65 active</span>
-          </li>
-          <li className="flex items-center justify-between">
-            <span>Model</span>
-            <span className="font-mono text-[11px] text-muted-foreground">llama-3.3-70b</span>
-          </li>
+          {activeRules !== undefined && (
+            <li className="flex items-center justify-between">
+              <span>Rule corpus</span>
+              <span className="font-mono text-[11px] text-muted-foreground">{activeRules} active</span>
+            </li>
+          )}
+          {models && (
+            <li className="flex items-center justify-between">
+              <span>Model</span>
+              <span className="font-mono text-[11px] text-muted-foreground">
+                {models.llm_provider} · {models.llm_model}
+              </span>
+            </li>
+          )}
         </ul>
       </section>
 
@@ -329,7 +373,7 @@ function ErrorPanel({ message }: { message: string }) {
   );
 }
 
-function EmptyWelcome() {
+function EmptyWelcome({ activeRules }: { activeRules?: number }) {
   const steps = [
     { n: "01", title: "Paste or upload content", text: "Ad copy, brochure, landing page or social post — any length." },
     { n: "02", title: "Run a compliance pass", text: "The 5-node LangGraph workflow checks every chunk against the active rule corpus." },
@@ -357,20 +401,17 @@ function EmptyWelcome() {
             </Button>
           </div>
 
-          <div className="mt-8 grid grid-cols-3 gap-3 border-t border-border pt-6 text-[11px]">
-            <div>
-              <div className="font-mono text-foreground text-base">~30</div>
-              <div className="micro-label">IRDAI rules</div>
+          {/* The per-regulator "~30 / ~20 / ~15" tiles were invented numbers and
+              are gone. This page knows the real corpus size and nothing else,
+              so it says that and links out for the breakdown. */}
+          {activeRules !== undefined && (
+            <div className="mt-8 border-t border-border pt-6 text-[11px]">
+              <div className="font-mono text-base text-foreground">{activeRules}</div>
+              <div className="micro-label">
+                active rules — <Link href="/rules" className="underline hover:text-foreground">see the breakdown</Link>
+              </div>
             </div>
-            <div>
-              <div className="font-mono text-foreground text-base">~20</div>
-              <div className="micro-label">Brand rules</div>
-            </div>
-            <div>
-              <div className="font-mono text-foreground text-base">~15</div>
-              <div className="micro-label">SEBI rules</div>
-            </div>
-          </div>
+          )}
         </div>
 
         <ol className="space-y-5 border-l border-border pl-6">

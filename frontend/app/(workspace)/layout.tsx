@@ -31,7 +31,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   if (me.role === "super_admin") redirect("/super_admin");
 
   return (
-    <AuthProvider>
+    <AuthProvider initialMe={me}>
       <CommandPaletteProvider>
         <div className="min-h-screen">
           <Sidebar />

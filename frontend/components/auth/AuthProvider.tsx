@@ -17,9 +17,18 @@ const AuthContext = createContext<AuthContextType>({
   logoutHandler: () => {},
 });
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [me, setMe] = useState<Me | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export function AuthProvider({
+  children,
+  initialMe = null,
+}: {
+  children: ReactNode;
+  /** User already resolved server-side by the layout. Seeding it means the very
+   * first paint knows the role, so role-gated nav ships in the served HTML
+   * instead of popping in after the client /auth/me round-trip. */
+  initialMe?: Me | null;
+}) {
+  const [me, setMe] = useState<Me | null>(initialMe);
+  const [isLoading, setIsLoading] = useState(initialMe === null);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -30,7 +39,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const user = await getMe();
         setMe(user);
       } catch {
-        setMe(null);
+        // Keep the last known user. Clearing here would blank the role-gated nav
+        // mid-session on one flaky /auth/me. A genuinely dead session is caught
+        // by the server layouts, which re-check on every navigation and redirect
+        // to /login — they are the auth authority, not this refetch.
       } finally {
         setIsLoading(false);
       }

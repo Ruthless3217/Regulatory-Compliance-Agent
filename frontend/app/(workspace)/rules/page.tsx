@@ -7,14 +7,25 @@ import type { Rule } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const REGULATORS: { key: string; label: string }[] = [
-  { key: "regulatory", label: "IRDAI / Regulatory" },
-  { key: "brand", label: "Brand" },
-  { key: "sebi", label: "SEBI" },
-];
+// Display casing only. Buckets are derived from the categories the data
+// actually contains, NOT from a fixed list — a hardcoded list silently drops
+// every category nobody remembered to add (it was hiding `irdai`, `legal` and
+// `financial`, i.e. 79 of 150 active rules, under a header reading "Active 150").
+const CATEGORY_LABELS: Record<string, string> = {
+  irdai: "IRDAI",
+  sebi: "SEBI",
+  regulatory: "Regulatory (other)",
+};
+
+function categoryLabel(key: string): string {
+  if (!key) return "Uncategorised";
+  return CATEGORY_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
+}
 
 export default async function RulesPage() {
   let rules: Rule[] = [];
+  // Server-side counts, so a rule beyond the 500 fetched is still counted here.
+  let serverTotal = 0;
   let err: string | null = null;
   try {
     const [active, inactive] = await Promise.all([
@@ -22,6 +33,7 @@ export default async function RulesPage() {
       listRules({ limit: 500, is_active: false }),
     ]);
     rules = [...(active.rules ?? []), ...(inactive.rules ?? [])];
+    serverTotal = (active.total ?? 0) + (inactive.total ?? 0);
   } catch (e) {
     err = (e as Error).message;
   }
@@ -35,10 +47,17 @@ export default async function RulesPage() {
   ).length;
   const scopedActive = activeCount - unclassifiedActive - explicitGlobalActive;
 
-  const coverage = REGULATORS.map((r) => ({
-    ...r,
-    count: rules.filter((x) => (x.category ?? "").toLowerCase() === r.key && x.is_active).length,
-  }));
+  // Group the active rules by their own category, so the cards sum to
+  // activeCount by construction and no rule can fall outside a bucket.
+  const byCategory = new Map<string, number>();
+  for (const r of rules) {
+    if (!r.is_active) continue;
+    const key = (r.category ?? "").toLowerCase().trim();
+    byCategory.set(key, (byCategory.get(key) ?? 0) + 1);
+  }
+  const coverage = [...byCategory.entries()]
+    .map(([key, count]) => ({ key, label: categoryLabel(key), count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
   return (
     <div className="mx-auto max-w-6xl px-8 py-8">
@@ -72,11 +91,21 @@ export default async function RulesPage() {
           <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">No rules yet</div>
           <h2 className="text-xl font-semibold">Seed the rule corpus to begin.</h2>
           <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
-            Run <span className="font-mono">python -m scripts.seed_rules</span> inside the backend container to populate ~65 rules across IRDAI, brand, and SEBI.
+            Run <span className="font-mono">python -m scripts.seed_rules</span> inside the backend container to populate the rule corpus.
           </p>
         </div>
       ) : (
         <>
+          {serverTotal > rules.length && (
+            <div className="mb-5 rounded-md border border-sev-medium/40 bg-sev-medium/5 px-4 py-3 text-sm">
+              <span className="font-medium">
+                Showing {rules.length} of {serverTotal} rules.
+              </span>
+              <span className="ml-1 text-muted-foreground">
+                The counts on this page describe only the {rules.length} loaded.
+              </span>
+            </div>
+          )}
           {unclassifiedActive > 0 && (
             <div className="mb-5 rounded-md border border-sev-high/40 bg-sev-high/5 px-4 py-3 text-sm">
               <span className="font-medium">{unclassifiedActive} active rules have no product scope.</span>
@@ -85,7 +114,7 @@ export default async function RulesPage() {
               </span>
             </div>
           )}
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="mb-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {coverage.map((c) => (
               <div key={c.key} className="rounded-lg border border-border bg-background p-4 shadow-card">
                 <div className="micro-label">{c.label}</div>
@@ -94,6 +123,10 @@ export default async function RulesPage() {
               </div>
             ))}
           </div>
+          <p className="mb-6 text-[11px] text-muted-foreground">
+            {coverage.length} categories, {coverage.reduce((n, c) => n + c.count, 0)} active rules — every
+            active rule is counted in exactly one card above.
+          </p>
           <RulesTable initialRules={rules} />
         </>
       )}

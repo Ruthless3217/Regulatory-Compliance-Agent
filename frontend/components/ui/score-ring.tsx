@@ -1,8 +1,12 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { gradeFromScore } from "@/lib/format";
 
 interface Props {
   score: number | null | undefined;
+  /** Letter decided by the backend. Always pass it when you have one — the
+   *  server is authoritative and we only compute a fallback without it. */
+  grade?: string | null;
   size?: number;
   strokeWidth?: number;
   label?: string;
@@ -17,20 +21,13 @@ function bandColor(score: number) {
   return "hsl(var(--sev-critical))";
 }
 
-function grade(score: number) {
-  if (score >= 85) return "A";
-  if (score >= 70) return "B";
-  if (score >= 55) return "C";
-  if (score >= 40) return "D";
-  return "F";
-}
-
 /**
  * Circular score ring (0-100). Track in muted, arc in band color.
  * Center: serif grade + mono score, or just the number.
  */
 export function ScoreRing({
   score,
+  grade,
   size = 88,
   strokeWidth = 6,
   label,
@@ -73,7 +70,7 @@ export function ScoreRing({
           {showGrade ? (
             <>
               <span className={cn("font-serif leading-none", labelTone)} style={{ fontSize: size * 0.42 }}>
-                {score === null || score === undefined ? "—" : grade(s)}
+                {grade || (score === null || score === undefined ? "—" : gradeFromScore(s))}
               </span>
               {score !== null && score !== undefined && (
                 <span className="font-mono text-[10px] text-muted-foreground mt-0.5">{s.toFixed(0)}</span>

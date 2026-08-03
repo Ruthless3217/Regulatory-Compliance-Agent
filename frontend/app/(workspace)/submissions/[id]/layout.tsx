@@ -59,9 +59,13 @@ export default async function SubmissionLayout({
       analysisMessage={analysisMessage}
       initialFindingsStale={findingsStale}
     >
-      {/* Pin to viewport so Review/Chat tabs get exact remaining height for
-          internal pane scroll. Report tab manages its own scroll via overflow. */}
-      <div className="flex h-screen flex-col">
+      {/* Pin to the height the workspace <main> actually hands us — the viewport
+          minus the 3rem TopBar (app/(workspace)/layout.tsx) — so Review/Chat tabs
+          get exact remaining height for internal pane scroll. h-screen here made
+          the page 3rem taller than the viewport and pushed the bottom of every
+          pane below the fold. Report tab manages its own scroll via overflow.
+          The 3rem must track TopBar's h-12; <main>'s min-h uses the same calc. */}
+      <div className="flex h-[calc(100vh-3rem)] flex-col">
         <SubmissionHeader
           submission={submission}
           overallScore={overallScore}

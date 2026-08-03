@@ -46,7 +46,7 @@ function RunPicker() {
   );
 }
 
-export function SubmissionHeader({ submission, overallScore }: Props) {
+export function SubmissionHeader({ submission, overallScore, grade }: Props) {
   const pathname = usePathname() ?? "";
   const router = useRouter();
   const { setOptimisticAnalyzing, setSelectedRunId } = useSubmissionWorkspace();
@@ -96,7 +96,7 @@ export function SubmissionHeader({ submission, overallScore }: Props) {
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </Link>
-          <ScoreRing score={score} size={48} strokeWidth={4} />
+          <ScoreRing score={score} grade={grade} size={48} strokeWidth={4} />
           <div className="min-w-0 border-l border-border pl-4">
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               <span className="font-mono">Submission</span>
