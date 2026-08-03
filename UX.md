@@ -1,171 +1,218 @@
-# UX Review — Deployed Compliance Workspace
+# UX flow — Regulatory Compliance Agent
 
-**Reviewed:** 2026-07-31 · `http://bajajlife-marketing-ai.bajajlifeinsurance.com/compliance/`
-**Build:** v1.0 · `dev` · signed in as `grader1` (non-admin)
-**Method:** Playwright, 1600×1000 viewport, full-page screenshots of every reachable route — all 16 in [`screenshots/`](screenshots/).
+Written for redesign. Describes what each screen is *for*, what the user is
+deciding on it, and which states it must render. The previous contents of this
+file — a defect audit of the deployed build — remain in git history at `4531a2f`;
+items still outstanding are listed under "Known defects" at the end.
 
-> **Note:** these screenshots contain real submission titles, real violation text, and reviewer identity. This repo pushes to GitHub — treat accordingly.
-
-The reviewer-workspace deploy **is live**: the sidebar carries **Model learning**, the review pane shows the **Correct / Not a violation / Dismiss** taxonomy, and the severity + category/product/section/review-status filters are present.
-
-State at review time: 29 submissions · 1,537 violations · 148 active rules · avg score 14.2 (Grade F) · 42 checks.
+The product reviews life-insurance marketing copy against IRDAI/SEBI
+obligations, brand policy and product facts. Its governing property is that it
+**fails closed**: anything it cannot substantively evaluate is routed to a human
+rather than recorded as compliant. Several screen states exist only to express
+that, and they are not decoration — see "States the design must not drop".
 
 ---
 
-## P0 — Numbers the product contradicts itself on
+## 1. Who uses it
 
-### 1. Overall score is 0.0 while every subscore is 35–99
+| Role | What they do | Screens |
+|---|---|---|
+| **Reviewer** (`user`) | Uploads copy, reads findings, corrects the document, exports | Inbox, New analysis, Review, Report, Dashboard, Compare, Knowledge base, Rules (read-only) |
+| **Compliance admin** (`admin`) | All of the above, plus curates rules and the precedent corpus | + Rules authoring, Rule generation, Corpus admin, Retrieval inspector, Model learning |
+| **Super admin** (`super_admin`) | Runs the platform. Deliberately *cannot* run an analysis | Console: users, usage, runs, sessions, audit, rule audit |
 
-`/submissions/{id}/report` (`21-submission-report.png`) shows **Overall F 0.0** — and directly beneath it:
+Super admin holds no `analysis:run` and no `submission:read`. That separation is
+intentional — whoever administers the system does not also grade documents — so
+the console is a genuinely different surface, not the same shell with extra tabs.
 
-| Category | Score |
-|---|---|
-| Channel marketing clarification | 99.1 |
-| Premium payment timing | 97.0 |
-| Claim settlement ratio | 96.9 |
-| Annuity payout sufficiency | 96.8 |
-| Regulatory | 94.6 |
-| Missing terms & conditions | 94.1 |
-| Application process claims | 93.1 |
-| Brand | 83.2 |
-| Mandatory disclosure | 60.4 |
-| Product compliance | 35.8 |
+---
 
-**CORRECTED 2026-07-31 — my original diagnosis here was wrong.** I wrote that no weighting produces 0.0 and that the aggregate must not be derived from the subscores. Backend logs from a live run disprove that:
+## 2. The spine
+
+The primary flow, and the one the redesign should optimise:
 
 ```
-Persisted compliance check 9a06330c... with 109 violations, score=0.0 grade=F
+Login → Inbox → New analysis → (analysis runs) → Review → correct → re-run → Report → Export
 ```
 
-The aggregate *is* derived: `overall = clamp[0,100](100 − Σ weight × confidence)`. With **109 findings** at weights 20/10/8/5, the deduction exceeds 100 several times over and clamps to exactly zero. Subscores are per-category over much smaller populations, so they aren't saturated — hence 0.0 next to 99.1, with no contradiction.
+Everything else branches off it:
 
-**The real problem is saturation, not arithmetic.** The score pins to zero at roughly **13 moderate findings**. Above that it has no discriminating power: a document with 15 findings and one with 109 both read 0.0/F. That's worse than a visible bug, because the number stays plausible while carrying no information — and the grade band, dashboard average and compliance report all inherit that silently. It explains **F=36 of 42**.
-
-**Fix is volume, not the formula.** Either reduce finding volume (see the rule-precision and `product_fact` issues below), or make the aggregate robust to it — e.g. score on density or on a capped top-N by severity — so it still separates a mildly non-compliant document from a catastrophic one.
-
-### 2. Same submission reports two different violation counts
-
-For `df263578`:
-- **Review tab** filter bar: `All 53` (Critical 7 · High 0 · Medium 44 · Low 2)
-- **Report tab**: `TOTAL VIOLATIONS 68` · Critical 7
-- **Chat tab** header: `68 violations`
-
-53 vs 68 — a 15-row gap, consistent Critical count. Almost certainly the `suppressed` "needs review" lane being counted in one query and filtered in the other. Whichever is right, a reviewer who cross-checks the tabs loses trust immediately. **Pick one definition and label it** ("53 scored + 15 needs-review").
-
-### 3. Score column is empty for every analysed submission
-
-Inbox (`01-inbox.png`): 16 rows all `analyzed`, and the **SCORE column shows `–` on every single one**. The dashboard simultaneously computes avg 14.2 across 42 checks, and the report page renders a score for the same document. The list simply isn't reading the value it has. This is the highest-frequency screen in the app and its most important column is blank.
-
-### 4. Active-rule count is stated four different ways
-
-| Surface | Count |
-|---|---|
-| Sidebar "Rule coverage" | 30 / 20 / 15 = **65** |
-| Inbox "Pipeline status" | **65 active** |
-| New analysis "What we check" | ~30 / ~20 / ~15 |
-| **Project settings "Rule corpus"** | 23 / 33 / 15 = **71** |
-| **Rules library** header | 23 / 33 / 15 = **71** |
-| **Dashboard** "Active rules" | **148** |
-| **Knowledge base** "Rules indexed for retrieval" | **149** |
-
-Four different totals across seven surfaces. The 65 group is hardcoded, 71 is live per-category, 148 is a live unfiltered count, and 149 is the RAG index count. The 148/149 gap is its own question — one rule is in the retrieval index but not counted active (or vice versa), which is exactly the kind of drift that makes a rule fire when it shouldn't. The sidebar is on *every* screen, so the wrong number is the most visible one. **Single source, or drop the sidebar widget.**
-
-### 5. Model identity contradicts itself
-
-- Inbox "Pipeline status" → Model: **`llama-3.3-70b`**
-- Project settings → Model: **`gpt-5.4-nano (azure)`**, Critic: `gpt-5.4-nano`, Chat: `gpt-5.4-nano`
-
-Settings now reads live from the backend; the inbox panel is stale hardcoded text naming a model this deployment doesn't use. On a regulated system, "which model graded this" is an audit question — it must not have two answers.
+- **Rules / Corpus / Retrieval inspector** — why the system said what it said, and how to change it
+- **Dashboard / Model learning** — how the system performs over time
+- **Compare** — a separate two-document tool, not part of the review spine
 
 ---
 
-## P1 — Broken or misleading affordances
+## 3. Layout grammar
 
-### 6. "Apply fix" is offered on every violation while auto-fixable is 0
+Fixed across every screen in the spine, so the eye never re-learns the layout:
 
-Report shows `AUTO-FIXABLE 0` and the dashboard `AUTO-FIX RATE 0% · 0/1537 fixable` — yet every violation card renders an **Apply fix** button. Inbox states it worse: `AUTO-FIX RATE 0% — no violations yet` when there are 1,537. Either the button works (then the metric is wrong) or it doesn't (then don't show it).
+- **52px global bar** — product, primary nav, account
+- **60px document bar** — document identity, run picker, tab (Review / Report), re-run, export
+- **Three-column body: `264px | 1fr | 372px`** — context rail, paper canvas, action rail
 
-### 7. Knowledge base reports the projection cap as if it were the corpus size
+Column widths do not change between screens. Below `xl` the context rail drops;
+the canvas and action rail never do.
 
-`06-knowledge-base.png`. The page itself is **fine** — loads in 3.2s, UMAP scatter renders cleanly, precedent search is present. (An earlier pass timed out at 20s; on retry it was fast, so treat that as transient, not a defect.)
-
-The problem is the headline stat: **`PRECEDENTS 2,000 — reviewer decisions`**. That 2,000 is not the corpus size, it's the render cap — `viz_points_per_index: int = 2000` (`backend/app/config.py:265`), applied at `backend/app/services/vector_projection.py:88`. The true precedent count is whatever the corpus holds; the card presents a hardcoded plotting limit as a business metric, labelled "reviewer decisions". Any suspiciously round total on that card is the cap, not the data. **Query the real count for the stat card and keep the cap on the scatter only** (noting "showing 2,000 of N").
-
-### 8. Rules library is one unpaginated 10,000px scroll
-
-`04-rules.png` is **10,147px tall** — ~200 rows, no pagination, no virtualisation, no grouping. Finding a rule means scrolling for a full screen-height per ~15 rules. This is the library reviewers are supposed to consult when they disagree with a flag.
-
-### 9. "Run with" scope chips do nothing
-
-New analysis exposes IRDAI / Brand / SEBI toggles, then admits underneath: *"scope is informational in v1 — the backend evaluates all active rules."* A control that visibly does nothing trains users to distrust every other control. **Remove it or wire it up.**
-
-### 10. Reviewer verdict row is clipped
-
-In the review sidebar the verdict row reads `Correct · Not a violation · Dismiss · App…` — the fourth action is cut off at the panel edge (`20-submission-review.png`). The new taxonomy is the centrepiece of this release and its last button is unreachable at this width.
-
-### 11. Category radar chart is illegible
-
-Dashboard "Violations by category" renders ~60 overlapping labels into a solid blob of text (`03-dashboard.png`). Nothing is readable. A radar with 60 axes is the wrong chart — a ranked bar chart of the top 10 would carry the same information.
-
-### 12. Pipeline described as "5 nodes" — it has 6
-
-Both settings and the new-analysis header say `LangGraph · 5 nodes`. The deployed graph is preprocess → dispatch → analysis → disclosure → scoring (+ critic) — the documented architecture is 6-node. Stale copy.
+Palette and type already exist as CSS custom properties in
+`frontend/app/globals.css` and match the design system exactly (`--primary`
+`#003694`, `--sev-critical` `#E61A3F`, `--success` `#25935F`, `--sev-high`
+`#F3711B`, canvas `--surface` `#EEF1F5`). **Do not re-pick colours** — read the
+tokens.
 
 ---
 
-## P2 — Performance and polish
+## 4. Screens
 
-### 13. Analysis takes over two minutes; p95 is four and a half
+### 4.1 Login — `/login`
+Single card: username, password. Failure messages are specific and already
+written — unrecognised device (403), invalid credentials (401), temporarily
+locked (429), service unavailable. First login can force a password change at
+`/account/change-password`.
 
-From Model learning (`10-model-learning.png`), across 38 runs:
-- **Avg 133,910 ms (2m 14s)**
-- **p50 128,520 ms · p95 268,293 ms (4m 28s)**
+### 4.2 Inbox — `/`
+Landing for a reviewer. Submissions newest first, with status and score. Entry
+points: open a submission, or start a new analysis. The empty state carries the
+four-step explanation of what the product does — it is the only onboarding
+surface, so it earns real space.
 
-The new-analysis page promises *"a 0–100 score in under a minute for typical copy."* It's 2× that at the median. Either fix the copy or the latency.
+### 4.3 New analysis — `/new`
+Upload a file or paste content. **Product line is mandatory** — an untagged
+document used to be graded against every product's corpus, so the form must not
+allow it to be skipped or silently defaulted. Shows upload, conversion and
+analysis progress, with explicit error states.
 
-### 14. Cost tracking reads $0.0000
+### 4.4 Review — `/submissions/[id]` — *the centrepiece*
+Where a reviewer spends their time. Three columns:
 
-`AVG COST $0.0000` over 38 completed runs. Token/cost rollup isn't landing in `analysis_runs`, so there's no spend visibility on a paid Azure pipeline.
+- **Context rail (264px)** — what this was graded against: rule scope with
+  per-category counts, and how many findings cite a past reviewer decision.
+- **Paper canvas** — the document, with a **View / Edit** toggle:
+  - *View*: faithful rasterized page render with violation boxes positioned on
+    the page. Read-only. This is what the document actually looks like.
+  - *Edit*: extracted text, editable, violation highlights anchored to character
+    offsets. Clicking a finding scrolls to and highlights its span.
+  - The toggle exists because a rasterized page cannot be edited in place. These
+    two modes must not be merged.
+- **Action rail (372px)** — findings: severity, category, confidence, rule,
+  explanation, suggested fix; filters (severity, category, product, section,
+  review status, source); Previous/Next with an "N of M · K reviewed" count.
 
-### 15. Chat opens to a screen and a half of blank space
+Per finding a reviewer can **Correct**, mark **Not a violation**, **Dismiss**,
+**Apply fix**, or request an **AI rewrite** (proposed first, applied only on
+Accept). The verdict row must survive a 372px column without clipping — it
+previously did not.
 
-The empty state is one centred sentence with ~700px of void beneath it. The quick-prompts (Quote violation / Suggest rewrite / Explain rule) sit disabled at the very bottom with *"Pick a violation in the Review tab to enable"* — the useful affordances are the least visible thing on the page.
+### 4.5 Report — `/submissions/[id]/report`
+Print-oriented summary: KPI strip (scored / needs review / reviewer-added /
+critical / auto-fixable / est. fix time), findings grouped by severity, and a
+separate **reviewer-added** section stated as *not* retroactively changing the
+score. Exports to PDF.
 
-### 16. Document pane renders raw Markdown
+### 4.6 Dashboard — `/dashboard`
+Portfolio view: submissions, scored findings, needs-review, reviewer-added,
+average score, active rules; volume and score trends; findings by category and
+severity; top firing rules.
 
-The review pane shows literal `## GEO Content for…`, `## FOLD 1 -` instead of rendered headings. Source was a DOCX. Minor, but it's the primary reading surface.
+### 4.7 Rules — `/rules`, `/rules/generate`
+Library of active rules, paginated at 50. Admins author, edit, activate and
+retire. Generation extracts draft rules from a regulator document; a draft
+**cannot be activated without verified source evidence**, and that refusal is a
+first-class state, not an error toast.
+
+### 4.8 Knowledge base — `/knowledge-base`
+The precedent corpus: past reviewer decisions the system reasons from.
+
+### 4.9 Corpus admin — `/admin/corpus`
+Two grains, and the screen has to make both obvious:
+
+- **Layers** — a whole ingested contribution. Enable/disable is cheap and
+  reversible (nothing is re-embedded). Purge is irreversible.
+- **Source documents within a layer** — the grain an admin actually curates in
+  ("drop the 2019 brochure, add today's circular"). Per-document precedent
+  counts, remove a document, add new ones.
+
+Deleting removes the embeddings in the same operation — the vector is a column
+on the deleted row. The destructive path must say so plainly and be hard to
+trigger by accident. Today the per-document panel only appears *after* opening a
+layer; the redesign should make that second grain discoverable without a
+click-through.
+
+### 4.10 Retrieval inspector — `/admin/retrieval`
+Explains one run: what each corpus offered, what the applicability guard
+accepted, what it refused, and the verbatim reason. Its most important cases are
+the *refused* ones — a run that failed closed is exactly what a curator opens it
+for. It must never present "no data" for a run that simply refused everything,
+and it must never silently omit a submission from its picker.
+
+### 4.11 Model learning — `/model-learning`
+Reviewer verdicts converted into rule reliability over time. Model-improvement
+feedback is kept separate from document comments and the audit trail.
+
+### 4.12 Compare — `/compare`, `/compare/new`, `/compare/[id]`
+Two-document diff with a pixel-faithful overlay and a text redline fallback. Its
+own viewer shell, deliberately not the review grammar.
+
+### 4.13 Settings — `/settings`
+Model and RAG configuration; read-only health.
+
+### 4.14 Super-admin console — `/super_admin/*`
+Users, usage, runs, sessions, audit, rule audit. Dense tables. A different
+visual register from the reviewer workspace is appropriate here.
 
 ---
 
-## What's genuinely good
+## 5. States the design must not drop
 
-- **Model learning is honest.** Calibration says *"blocked — needs at least one reviewer-scored check"* and reliability history says *"No reliability-event rows exist for this rule yet"* rather than inventing a trend. The pipeline strip (1308 Flags → 1286 Awaiting review → 22 Feedback collected → **no gate** → 7 Applied to scoring) states plainly that verdicts hit scoring weights with no approval step. That's the right posture for a regulated system.
-- **Violation cards carry real evidence** — rule, severity, confidence %, chunk index, verbatim flagged text, and a concrete rewrite instruction. The reasoning is specific and auditable, not generic.
-- **Role gating works.** `/super_admin` redirected `grader1` to the inbox rather than erroring or leaking.
-- **Settings now reads live config** (model, embedder, RAG backend, disclosure/product-grounding flags) instead of the previous hardcoded literals.
+Not edge cases — this is the product's correctness showing through.
 
----
-
-## What the data says about rule quality
-
-Model learning's precision table is the most actionable thing in the app:
-
-| Rule | Correct | Not-a-violation | Precision |
-|---|---|---|---|
-| Tone must be confident-yet-warm… | 0 | 4 | **0%** |
-| The brand name must appear as 'Bajaj Life Insuranc…' | 0 | 2 | **0%** |
-| Use ₹ symbol with non-breaking space… | 1 | 0 | 100% |
-
-Cross-referenced with the dashboard's top-violated rules, the **brand-name rules are the highest-firing rules in the system** (45 + 23 + 9 hits) — and reviewers have rejected every one they've judged. Combined with Medium severity being 80% of all 1,537 violations, the corpus is generating high-volume, low-precision noise. The sample is tiny (22 verdicts on 1,308 flags — 98% still awaiting review), so this is a signal to investigate, not a conclusion.
+1. **Needs review / failed** — a document the system refused to grade. No score.
+   Must never render as clean, or as "0/F".
+2. **Findings stale** — the document was edited after the analysis. The findings
+   on screen describe a superseded version, export is blocked, a re-run is
+   required. Persistent, non-dismissible.
+3. **Degraded reason** — *why* a run was refused (product ambiguous, product
+   unresolved, scope metadata missing, rules unavailable). Show the reason, not a
+   generic failure.
+4. **Suppressed vs scored vs reviewer-added** — three mutually exclusive
+   populations. Every count states which one it means.
+5. **Render skipped/failed** — no page images; the text pane is a fallback and
+   should say so rather than look identical to success.
+6. **Truncated lists** — when a list is capped, say so. A missing item must never
+   read as an absent item.
 
 ---
 
-## Suggested order
+## 6. Suggested redesign order
 
-1. Score aggregation (#1) — nothing else matters if the headline grade is wrong
-2. Violation count mismatch (#2) + empty score column (#3) — cheap, high trust impact
-3. Rule count + model identity (#4, #5) — hardcoded values vs live data; chase the 148 vs 149 gap specifically
-4. Clipped verdict row (#10) — blocks the new feature at common widths
-5. Knowledge base precedent count (#7), rules pagination (#8)
-6. Auto-fix honesty (#6), dead scope chips (#9), stale node count (#12)
-7. Radar chart (#11), latency copy (#13), cost rollup (#14)
+Ordered by how much reviewer time each screen holds, and by dependency — earlier
+items establish the grammar later ones reuse.
+
+1. **Review** (`/submissions/[id]`) — the centrepiece and the hardest.
+   Establishes the three-column grammar, the finding card, severity treatment and
+   the View/Edit toggle. Everything else inherits from it.
+2. **Report** (`/submissions/[id]/report`) — reuses the finding card in a print register.
+3. **Inbox** (`/`) — first screen after login; sets list/status/score patterns.
+4. **New analysis** (`/new`) — short, but where the mandatory product-line decision is made.
+5. **Dashboard** (`/dashboard`) — charts and stat tiles; inherits severity colours.
+6. **Rules** (`/rules`, `/rules/generate`) — dense table plus authoring flow.
+7. **Corpus admin** (`/admin/corpus`) — two grains, destructive operations, needs real care.
+8. **Retrieval inspector** (`/admin/retrieval`) — dense diagnostic; lowest traffic, highest density.
+
+Compare, Model learning, Settings and the super-admin console follow after, or
+stay as they are.
+
+---
+
+## 7. Known defects still open
+
+- Category radar chart on the report is illegible at its rendered size.
+- "Run with" scope chips are decorative — they do nothing.
+- Cost telemetry reads $0.0000; the instrumentation is not wired.
+- Analysis is ~2 min median, 4.5 min p95 — the progress UI has to carry that
+  wait honestly.
+- Knowledge base reports the projection cap as though it were corpus size.
+
+Fixed since the earlier audit: verdict-row clipping, unpaginated rules list, raw
+Markdown in the document pane, empty retrieval inspector, chat panel removed from
+the reviewer flow, and DOCX documents now rendering as real pages.
