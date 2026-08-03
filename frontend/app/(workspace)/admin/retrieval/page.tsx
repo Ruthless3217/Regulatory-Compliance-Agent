@@ -63,6 +63,17 @@ function classifyNoData(reason: string): NoDataKind {
   return "unknown";
 }
 
+/** Statuses whose analysis has finished, so a run row exists to inspect.
+ * `needs_review` and `failed` are included on purpose: a run that fails closed
+ * still records why retrieval refused what it refused, and that is the reason
+ * this page exists. In-flight statuses have no completed run yet. */
+const INSPECTABLE_STATUSES = new Set<string>([
+  "analyzed",
+  "needs_review",
+  "waiting_for_review",
+  "failed",
+]);
+
 const NO_DATA_COPY: Record<NoDataKind, { title: string; tone: "muted" | "warning" | "danger"; body: string }> = {
   pre_observability: {
     title: "Nothing was recorded — this run predates retrieval observability",
@@ -699,13 +710,22 @@ export default function AdminRetrievalPage() {
       .then((r) => {
         const subs = r.submissions || [];
         setSubmissions(subs);
-        // Open on the newest analysed submission so the page has content — an
-        // empty inspector reads as "retrieval recorded nothing". GET
-        // /submissions has no ORDER BY, so pick by date, not by position. No
-        // analysed submission (or none at all) leaves the empty state alone;
-        // a pending one has no retrieval story to show.
+        // Open on the newest submission whose analysis actually reached a
+        // terminal state, so the page has content — an empty inspector reads
+        // as "retrieval recorded nothing".
+        //
+        // Deliberately NOT just "analyzed". retrieval_debug is written by
+        // dispatch_node, which runs on every run that did not crash, and a
+        // run that fails closed still persists its run row and metadata
+        // (engine.py close_run on the refuse-to-persist path) with its
+        // submission marked needs_review. Those refused runs are the ones this
+        // page exists to explain, so filtering to "analyzed" hid exactly the
+        // documents a curator opens the inspector for.
+        //
+        // Still-running states are excluded: they have no completed run yet.
+        // GET /submissions has no ORDER BY, so pick by date, not by position.
         const latest = subs
-          .filter((s) => s.status === "analyzed")
+          .filter((s) => INSPECTABLE_STATUSES.has(s.status))
           .sort((a, b) => (b.submitted_at ?? "").localeCompare(a.submitted_at ?? ""))[0];
         if (latest) onSubmission(latest.id);
       })
