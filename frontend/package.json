@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint --no-cache",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:anchor": "node scripts/check-finding-anchor.mjs"
   },
   "dependencies": {
     "@lexical/html": "^0.48.0",

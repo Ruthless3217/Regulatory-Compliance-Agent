@@ -97,6 +97,14 @@ def serialize_violation(v: Violation, feedback: Optional[RuleFeedback] = None) -
         "section_title": v.section_title,
         "anchor_page": v.anchor_page,
         "anchor_bbox": v.anchor_bbox,
+        # 0034 — Lexical anchor: node key + offsets within that node, plus a
+        # fingerprint of the surrounding text so the editor can relocate the
+        # span after Lexical re-keys nodes. NULL on every pre-Lexical finding,
+        # where the client falls back to the current_text/offset match.
+        "anchor_node_key": v.anchor_node_key,
+        "anchor_offset_start": v.anchor_offset_start,
+        "anchor_offset_end": v.anchor_offset_end,
+        "anchor_fingerprint": v.anchor_fingerprint,
         # 0028 — has the suggested fix already been written into the document.
         "fix_applied": bool(v.fix_applied),
         "fix_applied_at": v.fix_applied_at.isoformat() if v.fix_applied_at else None,

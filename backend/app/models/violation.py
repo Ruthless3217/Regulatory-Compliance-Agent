@@ -80,6 +80,17 @@ class Violation(Base):
     anchor_page = Column(Integer, nullable=True)
     anchor_bbox = Column(JSONB, nullable=True)
 
+    # 0034 — Lexical anchor. `location`/`current_text` locate a finding by
+    # character offset into the extracted text, which drifts the moment a
+    # reviewer edits in the Lexical editor. These pin it to a node and offsets
+    # *within* that node; the fingerprint (see services/lexical_anchor.py)
+    # relocates the span when Lexical re-keys nodes. All nullable — every
+    # existing violation has none and keeps the text-offset behaviour.
+    anchor_node_key = Column(String(64), nullable=True)
+    anchor_offset_start = Column(Integer, nullable=True)
+    anchor_offset_end = Column(Integer, nullable=True)
+    anchor_fingerprint = Column(String(128), nullable=True)
+
     # 0028 — has this finding's suggested_fix already been written into the
     # document via a submission_revisions entry?
     fix_applied = Column(Boolean, nullable=False, default=False, server_default="false")
