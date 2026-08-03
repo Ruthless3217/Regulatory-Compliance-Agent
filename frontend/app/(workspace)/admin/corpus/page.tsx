@@ -17,7 +17,9 @@ import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
 import {
   deleteCorpusLayer,
+  deleteCorpusDocument,
   deleteCorpusLayerDocument,
+  listCorpusDocuments,
   listCorpusLayerDocuments,
   listCorpusLayerItems,
   listCorpusLayers,
@@ -247,25 +249,30 @@ function DeleteDialog({
 /** Per-document curation: the grain an admin actually curates in. Removing a
  * document deletes its precedent rows, and the embedding is a column on those
  * rows, so retrieval stops seeing it in the same statement — no re-index. */
-function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer; onChanged: () => void }) {
+function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer | null; onChanged: () => void }) {
   const [docs, setDocs] = React.useState<CorpusLayerDocument[] | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [confirming, setConfirming] = React.useState<string | null>(null);
+  const layerId = layer?.id ?? null;
 
   const load = React.useCallback(() => {
     setErr(null);
-    listCorpusLayerDocuments(layer.id)
-      .then((r) => setDocs(r.documents))
-      .catch((e) => setErr((e as Error).message));
-  }, [layer.id]);
+    // layer === null is the corpus-wide view. It is the important one: rows
+    // ingested before layers existed carry no layer at all, so a layer-scoped
+    // list shows nothing on a corpus that has never been layered.
+    const request = layerId ? listCorpusLayerDocuments(layerId) : listCorpusDocuments();
+    request.then((r) => setDocs(r.documents)).catch((e) => setErr((e as Error).message));
+  }, [layerId]);
 
   React.useEffect(load, [load]);
 
   const remove = async (sourceFile: string) => {
     setBusy(sourceFile);
     try {
-      const r = await deleteCorpusLayerDocument(layer.id, sourceFile);
+      const r = layerId
+        ? await deleteCorpusLayerDocument(layerId, sourceFile)
+        : await deleteCorpusDocument(sourceFile);
       toast.success(`Removed ${r.precedents_deleted} precedents — embeddings deleted with them`);
       setConfirming(null);
       load();
@@ -279,8 +286,12 @@ function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer; onChanged: (
 
   return (
     <Panel
-      title={`Source documents in “${layer.name}”`}
-      description="Removing a document deletes its precedents and their embeddings. Irreversible, and it takes effect on the next retrieval."
+      title={layer ? `Source documents in “${layer.name}”` : "Source documents"}
+      description={
+        layer
+          ? "Removing a document deletes its precedents and their embeddings. Irreversible, and it takes effect on the next retrieval."
+          : "Every source document in the precedent corpus, layered or not. Removing one deletes its precedents and their embeddings across the whole corpus. Irreversible, and it takes effect on the next retrieval."
+      }
       right={<span className="text-xs text-muted-foreground">{docs ? `${docs.length} documents` : "…"}</span>}
     >
       {err ? (
@@ -288,7 +299,7 @@ function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer; onChanged: (
       ) : !docs ? (
         <Empty>Loading…</Empty>
       ) : docs.length === 0 ? (
-        <Empty>No documents contribute to this layer.</Empty>
+        <Empty>{layer ? "No documents contribute to this layer." : "The precedent corpus is empty."}</Empty>
       ) : (
         <table className="w-full text-xs">
           <thead>
@@ -595,12 +606,15 @@ export default function AdminCorpusPage() {
             )}
           </Panel>
 
-          {openLayer && (
-            <div className="mt-5 space-y-5">
-              <DocumentsPanel layer={openLayer} onChanged={load} />
-              <ItemsPanel layer={openLayer} onClose={() => setOpenLayer(null)} />
-            </div>
-          )}
+          {/* Always mounted. Document curation is the primary operation here and
+              must not require a layer to exist first — a corpus ingested before
+              layers has none, so gating this behind an opened layer made the
+              whole feature unreachable. Scoped to the open layer when there is
+              one, corpus-wide otherwise. */}
+          <div className="mt-5 space-y-5">
+            <DocumentsPanel layer={openLayer} onChanged={load} />
+            {openLayer && <ItemsPanel layer={openLayer} onClose={() => setOpenLayer(null)} />}
+          </div>
         </>
       )}
 

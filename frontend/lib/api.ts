@@ -795,6 +795,18 @@ export const listCorpusLayerDocuments = (id: string) =>
     `${base()}/admin/corpus/layers/${id}/documents`
   );
 
+/* Corpus-wide. Rows ingested before layers existed have source_layer_id NULL,
+ * so the layer-scoped routes reach none of them — in a mature corpus that is
+ * most of the rows. These operate on documents regardless of layer. */
+export const listCorpusDocuments = () =>
+  jsonFetch<{ documents: CorpusLayerDocument[] }>(`${base()}/admin/corpus/documents`);
+
+export const deleteCorpusDocument = (sourceFile: string) =>
+  jsonFetch<{ source_file: string; precedents_deleted: number }>(
+    `${base()}/admin/corpus/documents?source_file=${encodeURIComponent(sourceFile)}`,
+    { method: "DELETE" }
+  );
+
 export const deleteCorpusLayerDocument = (id: string, sourceFile: string) =>
   jsonFetch<{ layer_id: string; source_file: string; precedents_deleted: number }>(
     `${base()}/admin/corpus/layers/${id}/documents?source_file=${encodeURIComponent(sourceFile)}`,

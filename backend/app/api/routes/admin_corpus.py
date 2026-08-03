@@ -273,3 +273,48 @@ async def add_layer_items(
         after=result,
     )
     return result
+
+
+# ------------------------------------------------------ corpus-wide documents
+#
+# The layer-scoped routes above cannot reach rows ingested before layers
+# existed, and in a mature corpus that is most of them (source_layer_id IS
+# NULL). Documents are the grain an admin curates in, so they get a top-level
+# surface that does not require a layer to exist first.
+
+@router.get("/documents")
+async def list_corpus_documents(db: Session = Depends(get_db), _actor=_ADMIN):
+    """Every source document in the precedent corpus, layered or not."""
+    return {"documents": svc.list_documents(db, None)}
+
+
+@router.delete("/documents")
+async def delete_corpus_document(
+    request: Request,
+    source_file: str = Query(..., description="Exact source_file to remove from the corpus."),
+    db: Session = Depends(get_db),
+    actor=_ADMIN,
+):
+    """Remove one source document from the WHOLE corpus. Irreversible.
+
+    Deletes across every layer and the unlayered rows alike. The embedding is a
+    column on each deleted row, so the document leaves retrieval in the same
+    statement — there is no separate re-index.
+    """
+    try:
+        deleted = svc.delete_document(db, None, source_file)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except svc.CorpusLayerError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    await audit.record(
+        "corpus_document_purged",
+        actor=actor,
+        request=request,
+        target_type="corpus",
+        target_id=source_file,
+        before={"source_file": source_file, "scope": "corpus-wide"},
+        after={"precedents_deleted": deleted},
+    )
+    return {"source_file": source_file, "precedents_deleted": deleted}

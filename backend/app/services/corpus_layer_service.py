@@ -280,27 +280,33 @@ def delete_layer(db: Session, layer_id, *, purge: bool = False) -> Dict[str, Any
 # at a time. Deleting the row deletes the vector with it — `precedent_cases`
 # stores the embedding as a column, so there is no second index to sweep.
 
-def list_documents(db: Session, layer_id) -> List[Dict[str, Any]]:
-    """Source documents contributing to this layer, with their row counts.
+def list_documents(db: Session, layer_id=None) -> List[Dict[str, Any]]:
+    """Source documents in the corpus, with their row counts.
 
     The admin thinks in documents ("drop the 2019 brochure"), not in the
     individual reviewer comments each one produced.
+
+    ``layer_id=None`` covers the WHOLE corpus. That is the important case, not a
+    convenience: a corpus ingested before layers existed has every row at
+    ``source_layer_id IS NULL``, so layer-scoped curation can reach none of it.
+    Documents are the primary grain here; layers are a grouping on top.
     """
-    if get_layer(db, layer_id) is None:
+    scoped = layer_id is not None
+    if scoped and get_layer(db, layer_id) is None:
         raise LookupError("Layer not found.")
     rows = db.execute(
         text(
-            """
+            f"""
             SELECT COALESCE(source_file, '') AS source_file,
                    COUNT(*)                  AS precedent_count,
                    MAX(updated_at)           AS last_updated
               FROM precedent_cases
-             WHERE source_layer_id = CAST(:id AS UUID)
+             {"WHERE source_layer_id = CAST(:id AS UUID)" if scoped else ""}
              GROUP BY COALESCE(source_file, '')
              ORDER BY precedent_count DESC
             """
         ),
-        {"id": str(layer_id)},
+        {"id": str(layer_id)} if scoped else {},
     ).mappings().all()
     return [
         {
@@ -313,32 +319,38 @@ def list_documents(db: Session, layer_id) -> List[Dict[str, Any]]:
 
 
 def delete_document(db: Session, layer_id, source_file: str) -> int:
-    """Remove one source document's precedents from the layer. Irreversible.
+    """Remove one source document's precedents. Irreversible.
 
-    Scoped to the layer on purpose: the same file name may legitimately appear
-    in another contribution, and a curator acting on one layer must not reach
-    into another.
+    With a ``layer_id`` the delete is scoped to that layer, because the same
+    file name may legitimately appear in another contribution and a curator
+    acting on one layer must not reach into another.
+
+    With ``layer_id=None`` it removes that document from the whole corpus. That
+    is the only way to curate rows ingested before layers existed, which is most
+    of a mature corpus.
     """
-    if get_layer(db, layer_id) is None:
+    scoped = layer_id is not None
+    if scoped and get_layer(db, layer_id) is None:
         raise LookupError("Layer not found.")
     name = (source_file or "").strip()
     if not name:
         raise CorpusLayerError("source_file is required.")
     deleted = db.execute(
         text(
-            "DELETE FROM precedent_cases"
-            " WHERE source_layer_id = CAST(:id AS UUID) AND source_file = :src"
+            "DELETE FROM precedent_cases WHERE source_file = :src"
+            + (" AND source_layer_id = CAST(:id AS UUID)" if scoped else "")
         ),
-        {"id": str(layer_id), "src": name},
+        {"src": name, **({"id": str(layer_id)} if scoped else {})},
     ).rowcount or 0
     if not deleted:
-        raise LookupError("No precedents for that source document in this layer.")
-    _refresh_count(db, layer_id)
+        raise LookupError("No precedents for that source document.")
+    if scoped:
+        _refresh_count(db, layer_id)
     db.commit()
     logger.warning(
         "corpus document PURGED: layer=%s source_file=%r — %d precedent rows "
         "deleted (irreversible; embeddings removed with the rows)",
-        layer_id, name, deleted,
+        layer_id if scoped else "ALL (corpus-wide)", name, deleted,
     )
     return deleted
 

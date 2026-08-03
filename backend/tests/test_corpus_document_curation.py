@@ -90,6 +90,40 @@ def test_delete_item_missing_raises(layer):
         svc.delete_item(_Db(rowcount=0), layer, uuid.uuid4())
 
 
+def test_corpus_wide_list_is_not_layer_scoped(monkeypatch):
+    """The case that matters: a corpus ingested before layers has none.
+
+    Every row carries source_layer_id NULL, so a layer-scoped query returns
+    nothing and the whole curation surface is unreachable.
+    """
+    monkeypatch.setattr(svc, "get_layer", lambda db, lid: None)
+    db = _Db(rows=[dict(source_file="a.pdf", precedent_count=2440, last_updated=None)])
+    docs = svc.list_documents(db, None)
+    assert docs[0]["precedent_count"] == 2440
+    sql, params = db.calls[0]
+    assert "source_layer_id" not in sql, "corpus-wide list must not filter by layer"
+    assert params == {}
+
+
+def test_corpus_wide_delete_spans_every_layer(monkeypatch):
+    monkeypatch.setattr(svc, "get_layer", lambda db, lid: None)
+    db = _Db(rowcount=2440)
+    assert svc.delete_document(db, None, "a.pdf") == 2440
+    sql, params = db.calls[0]
+    assert sql.startswith("DELETE FROM precedent_cases WHERE source_file = :src")
+    assert "source_layer_id" not in sql
+    assert params == {"src": "a.pdf"}
+    assert db.commits == 1
+
+
+def test_corpus_wide_delete_still_rejects_blank_and_misses(monkeypatch):
+    monkeypatch.setattr(svc, "get_layer", lambda db, lid: None)
+    with pytest.raises(svc.CorpusLayerError):
+        svc.delete_document(_Db(rowcount=9), None, "  ")
+    with pytest.raises(LookupError):
+        svc.delete_document(_Db(rowcount=0), None, "absent.pdf")
+
+
 def test_unknown_layer_raises_before_touching_rows(monkeypatch):
     monkeypatch.setattr(svc, "get_layer", lambda db, lid: None)
     db = _Db(rowcount=5)
