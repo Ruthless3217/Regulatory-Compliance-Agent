@@ -194,6 +194,7 @@ export type ScoreBreakdown = Record<string, number | string>;
 export interface FindingCounts {
   scored: number;
   suppressed: number;
+  reviewer_added: number;
   total: number;
 }
 
@@ -208,6 +209,7 @@ export interface ComplianceResults {
   violations: Violation[];
   violation_count?: number;
   suppressed_count?: number;
+  reviewer_added_count?: number;
   finding_count?: number;
   finding_counts?: FindingCounts;
   status?: SubmissionStatus;
@@ -228,6 +230,7 @@ export interface CheckSummary {
   violations: Violation[];
   violation_count?: number;
   suppressed_count?: number;
+  reviewer_added_count?: number;
   finding_count?: number;
   finding_counts?: FindingCounts;
 }
@@ -300,9 +303,11 @@ export interface SSEAnalyzeScore {
 export interface TimeseriesPoint {
   period: string;
   submission_count: number;
+  check_count: number;
   avg_score: number | null;
   violation_count: number;
   suppressed_count: number;
+  reviewer_added_count: number;
   finding_count: number;
 }
 
@@ -516,7 +521,7 @@ export interface AuditRow {
   actor: string;
   event_type: string;
   target?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 export interface RuleAuditRow {
@@ -524,8 +529,8 @@ export interface RuleAuditRow {
   timestamp: string;
   actor: string;
   rule_id: string;
-  before: Record<string, any>;
-  after: Record<string, any>;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
 }
 
 export interface RagHealth {

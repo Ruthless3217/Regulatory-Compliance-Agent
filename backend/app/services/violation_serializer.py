@@ -20,26 +20,33 @@ from app.models.rule_feedback import RuleFeedback
 
 
 def finding_counts(violations: List) -> Dict[str, int]:
-    """Return explicit scored/suppressed/total finding counts.
+    """Return mutually exclusive scored/review/reviewer/total counts.
 
-    Suppressed rows are intentionally persisted for audit and human review but
-    do not affect the score. Returning one unlabeled violation_count made
-    different screens disagree depending on whether their query included that
-    review lane, so every consumer now derives all three counts together.
+    Only unsuppressed model-authored rows participated in the persisted score.
+    Reviewer-added flags are created after grading and therefore need their own
+    count; including them as scored made dashboards drift from check.scores.
     """
     total = len(violations)
-    suppressed = sum(
-        1
-        for violation in violations
-        if bool(
-            violation.get("suppressed")
-            if isinstance(violation, dict)
-            else getattr(violation, "suppressed", False)
-        )
+
+    def field(violation, name, default=None):
+        if isinstance(violation, dict):
+            return violation.get(name, default)
+        return getattr(violation, name, default)
+
+    reviewer_added = sum(
+        1 for violation in violations
+        if (field(violation, "source", "model") or "model") == "reviewer"
     )
+    suppressed = sum(
+        1 for violation in violations
+        if (field(violation, "source", "model") or "model") != "reviewer"
+        and bool(field(violation, "suppressed", False))
+    )
+    scored = total - reviewer_added - suppressed
     return {
-        "scored": total - suppressed,
+        "scored": scored,
         "suppressed": suppressed,
+        "reviewer_added": reviewer_added,
         "total": total,
     }
 

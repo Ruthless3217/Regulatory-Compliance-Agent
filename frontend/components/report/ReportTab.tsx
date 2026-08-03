@@ -20,19 +20,43 @@ export function ReportTab() {
     analysisMessage,
   } = useSubmissionWorkspace();
 
-  const scoredViolations = React.useMemo(
-    () => violations.filter((v) => !v.suppressed),
-    [violations]
-  );
-  const needsReview = React.useMemo(
-    () => violations.filter((v) => v.suppressed),
-    [violations]
-  );
-  const groups = React.useMemo(() => {
-    const m: Record<string, typeof violations> = { critical: [], high: [], medium: [], low: [] };
-    for (const v of scoredViolations) m[normalizeSeverity(v.severity)].push(v);
-    return m;
-  }, [scoredViolations]);
+  const {
+    scoredViolations,
+    needsReview,
+    reviewerAdded,
+    groups,
+    reviewerGroups,
+  } = React.useMemo(() => {
+    const scored: typeof violations = [];
+    const review: typeof violations = [];
+    const added: typeof violations = [];
+    const modelGroups: Record<string, typeof violations> = {
+      critical: [], high: [], medium: [], low: [],
+    };
+    const humanGroups: Record<string, typeof violations> = {
+      critical: [], high: [], medium: [], low: [],
+    };
+
+    for (const violation of violations) {
+      const severity = normalizeSeverity(violation.severity);
+      if (violation.source === "reviewer") {
+        added.push(violation);
+        humanGroups[severity].push(violation);
+      } else if (violation.suppressed) {
+        review.push(violation);
+      } else {
+        scored.push(violation);
+        modelGroups[severity].push(violation);
+      }
+    }
+    return {
+      scoredViolations: scored,
+      needsReview: review,
+      reviewerAdded: added,
+      groups: modelGroups,
+      reviewerGroups: humanGroups,
+    };
+  }, [violations]);
 
   // Inject print stylesheet only on this route
   React.useEffect(() => {
@@ -77,8 +101,16 @@ export function ReportTab() {
           </span>
         </div>
       )}
+      {reviewerAdded.length > 0 && (
+        <div className="mx-8 mt-5 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+          <span className="font-medium">{reviewerAdded.length} findings were added by reviewers after grading.</span>
+          <span className="ml-1 text-muted-foreground">
+            They remain auditable below but do not retroactively change this score.
+          </span>
+        </div>
+      )}
       <div className="flex items-center justify-between px-8 py-4 no-print">
-        <h2 className="font-serif text-lg">Violations</h2>
+        <h2 className="font-serif text-lg">Scored violations</h2>
         <ExportPdfButton />
       </div>
       {scoredViolations.length === 0 ? (
@@ -93,6 +125,19 @@ export function ReportTab() {
         SEVERITIES.map((s) => (
           <ViolationGroup key={s} severity={s} violations={groups[s]} />
         ))
+      )}
+      {reviewerAdded.length > 0 && (
+        <section className="mt-6 border-t border-border">
+          <div className="px-8 py-4">
+            <h2 className="font-serif text-lg">Reviewer-added findings</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Post-score human findings, reported separately from model-scored output.
+            </p>
+          </div>
+          {SEVERITIES.map((s) => (
+            <ViolationGroup key={"reviewer-" + s} severity={s} violations={reviewerGroups[s]} />
+          ))}
+        </section>
       )}
     </div>
   );

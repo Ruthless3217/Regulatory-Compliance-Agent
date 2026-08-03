@@ -86,6 +86,7 @@ export function VolumeTrend({ points }: { points: TimeseriesPoint[] }) {
     Submissions: p.submission_count,
     "Scored findings": p.violation_count,
     "Needs review": p.suppressed_count,
+    "Reviewer-added": p.reviewer_added_count,
   }));
   return (
     <ChartCard title="Activity volume" subtitle="Submissions, scored findings, and the human-review lane">
@@ -103,6 +104,7 @@ export function VolumeTrend({ points }: { points: TimeseriesPoint[] }) {
             <Bar dataKey="Submissions" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} maxBarSize={28} />
             <Bar dataKey="Scored findings" fill="hsl(var(--sev-high))" radius={[3, 3, 0, 0]} maxBarSize={28} />
             <Bar dataKey="Needs review" fill="hsl(var(--sev-medium))" radius={[3, 3, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="Reviewer-added" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} maxBarSize={28} />
           </BarChart>
         </ResponsiveContainer>
       )}

@@ -358,6 +358,7 @@ async def get_compliance_results(
         # separately instead of silently changing totals between surfaces.
         "violation_count": counts["scored"],
         "suppressed_count": counts["suppressed"],
+        "reviewer_added_count": counts["reviewer_added"],
         "finding_count": counts["total"],
         "finding_counts": counts,
     }
@@ -560,9 +561,9 @@ async def create_reviewer_violation(
             ),
         )
 
-    latest_run = (
+    check_run = (
         db.query(AnalysisRun)
-        .filter(AnalysisRun.submission_id == submission_id)
+        .filter(AnalysisRun.compliance_check_id == check.id)
         .order_by(AnalysisRun.run_number.desc())
         .first()
     )
@@ -571,7 +572,7 @@ async def create_reviewer_violation(
         compliance_check_id=check.id,
         # No rule fired and no model produced this — both stay NULL/absent.
         rule_id=None,
-        analysis_run_id=latest_run.id if latest_run else None,
+        analysis_run_id=check_run.id if check_run else None,
         category=payload.category,
         severity=payload.severity,
         description=payload.description,

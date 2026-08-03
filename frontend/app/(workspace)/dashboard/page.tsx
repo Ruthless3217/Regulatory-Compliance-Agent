@@ -26,6 +26,7 @@ interface Summary {
     total_violations?: number;
     scored_violations?: number;
     suppressed_findings?: number;
+    reviewer_added_findings?: number;
     total_findings?: number;
     active_rules?: number;
     average_score?: number;
@@ -102,6 +103,7 @@ export default async function DashboardPage() {
             <PageHeaderMeta label="Submissions" value={stats.total_submissions ?? 0} />
             <PageHeaderMeta label="Scored findings" value={stats.scored_violations ?? stats.total_violations ?? 0} />
             <PageHeaderMeta label="Needs review" value={stats.suppressed_findings ?? 0} />
+            <PageHeaderMeta label="Reviewer-added" value={stats.reviewer_added_findings ?? 0} />
             <PageHeaderMeta label="Avg score" value={avgScore.toFixed(1)} />
             <PageHeaderMeta label="Active rules" value={stats.active_rules ?? 0} />
           </>
@@ -141,7 +143,10 @@ export default async function DashboardPage() {
               <StatCard
                 label="Scored findings"
                 value={stats.scored_violations ?? stats.total_violations ?? 0}
-                sub={String(stats.suppressed_findings ?? 0) + " additional findings need review"}
+                sub={
+                  String(stats.suppressed_findings ?? 0) + " need review; " +
+                  String(stats.reviewer_added_findings ?? 0) + " reviewer-added"
+                }
                 icon={<AlertOctagon className="h-3.5 w-3.5" />}
               />
               <StatCard

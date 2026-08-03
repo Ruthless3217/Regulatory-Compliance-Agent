@@ -7,8 +7,14 @@ interface Props {
 }
 
 export function KPIStrip({ violations }: Props) {
-  const scored = violations.filter((v) => !v.suppressed);
-  const needsReview = violations.filter((v) => v.suppressed);
+  const scored: Violation[] = [];
+  const needsReview: Violation[] = [];
+  const reviewerAdded: Violation[] = [];
+  for (const violation of violations) {
+    if (violation.source === "reviewer") reviewerAdded.push(violation);
+    else if (violation.suppressed) needsReview.push(violation);
+    else scored.push(violation);
+  }
   const total = scored.length;
   const critical = scored.filter((v) => v.severity.toLowerCase() === "critical").length;
   const autoFix = scored.filter((v) => truthyAutoFix(v.auto_fixable)).length;
@@ -16,18 +22,19 @@ export function KPIStrip({ violations }: Props) {
   const fixWords = scored
     .map((v) => (v.suggested_fix ? v.suggested_fix.trim().split(/\s+/).length : 0))
     .reduce((a, b) => a + b, 0);
-  const minutes = Math.max(1, Math.round(fixWords / 12));
+  const minutes = scored.length === 0 ? 0 : Math.max(1, Math.round(fixWords / 12));
 
   const cells: { label: string; value: string; tone?: string }[] = [
     { label: "Scored findings", value: String(total) },
     { label: "Needs review", value: String(needsReview.length), tone: needsReview.length > 0 ? "text-sev-medium" : undefined },
+    { label: "Reviewer-added", value: String(reviewerAdded.length), tone: reviewerAdded.length > 0 ? "text-primary" : undefined },
     { label: "Critical", value: String(critical), tone: critical > 0 ? "text-sev-critical" : undefined },
     { label: "Auto-fixable", value: String(autoFix), tone: autoFix > 0 ? "text-success" : undefined },
     { label: "Est. fix time", value: String(minutes) + " min" },
   ];
 
   return (
-    <div className="grid grid-cols-2 border-b border-border md:grid-cols-5">
+    <div className="grid grid-cols-2 border-b border-border md:grid-cols-6">
       {cells.map((c) => (
         <div key={c.label} className="border-r border-border px-6 py-5 last:border-r-0">
           <div className="micro-label mb-1">{c.label}</div>

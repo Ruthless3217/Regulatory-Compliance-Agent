@@ -5,6 +5,7 @@ interface Stats {
   total_submissions?: number;
   total_violations?: number;
   suppressed_findings?: number;
+  reviewer_added_findings?: number;
   active_rules?: number;
   average_score?: number;
   total_checks?: number;
@@ -34,7 +35,10 @@ export function KPICards({ stats }: Props) {
       <StatCard
         label="Scored findings"
         value={stats.total_violations ?? 0}
-        sub={String(stats.suppressed_findings ?? 0) + " additional findings need review"}
+        sub={
+          String(stats.suppressed_findings ?? 0) + " need review; " +
+          String(stats.reviewer_added_findings ?? 0) + " reviewer-added"
+        }
         delta={{ value: 4, positive: false, suffix: "%" }}
         spark={spark(7)}
         icon={<AlertOctagon className="h-3.5 w-3.5" />}
