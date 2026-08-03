@@ -147,6 +147,10 @@ export function ReviewTab() {
   // for the rest. Re-testing content_type here would re-close that gate.
   const pagesRendered = submission.page_render_status === "completed";
   const [editing, setEditing] = React.useState(false);
+  // Findings the editor could not place after edits. Surfaced rather than
+  // dropped: a finding that is simply missing from the document reads as
+  // "resolved", which is the opposite of what happened.
+  const [unlocated, setUnlocated] = React.useState<Array<{ id: string; reason: string }>>([]);
   // Nothing to toggle to when there are no page images — stay on the text pane.
   const usePdfPane = pagesRendered && !editing;
 
@@ -220,6 +224,19 @@ export function ReviewTab() {
           </div>
         )}
 
+        {unlocated.length > 0 && !isAnalyzing && (
+          <div className="border-b border-border bg-sev-medium/5 px-4 py-2 text-xs">
+            <span className="font-medium">
+              {unlocated.length} finding{unlocated.length === 1 ? "" : "s"} could no longer be
+              located in the edited text.
+            </span>
+            <span className="ml-1 text-muted-foreground">
+              They are still listed on the right and still count — the text they quoted has been
+              changed enough that highlighting it would be a guess. Re-run to re-anchor them.
+            </span>
+          </div>
+        )}
+
         {findingsStale && !isAnalyzing && (
           <div className="border-b border-border bg-sev-high/5 px-4 py-2 text-xs">
             <span className="font-medium">Document edited since the last analysis.</span>
@@ -282,6 +299,10 @@ export function ReviewTab() {
             initialHtml={submission.import_html}
             readOnly={isHistorical}
             onChange={setLexicalDoc}
+            violations={displayViolations}
+            selectedViolationId={selectedViolationId}
+            onSelectViolation={setSelectedViolationId}
+            onUnlocatedFindings={setUnlocated}
           />
         ) : (
           <DocumentPane

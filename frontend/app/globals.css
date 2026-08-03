@@ -96,3 +96,25 @@
     animation: pulse-select 800ms ease-in-out;
   }
 }
+
+/* Compliance findings on the editable document.
+   Set by FindingDecorationsPlugin as attributes on the rendered paragraph —
+   never as editor content, so nothing here reaches the exported DOCX. */
+@layer components {
+  [data-finding-id] {
+    border-left: 2px solid transparent;
+    padding-left: 0.75rem;
+    margin-left: -0.75rem;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+  [data-finding-severity="critical"] { border-left-color: hsl(var(--sev-critical)); }
+  [data-finding-severity="high"]     { border-left-color: hsl(var(--sev-high)); }
+  [data-finding-severity="medium"]   { border-left-color: hsl(var(--sev-medium)); }
+  [data-finding-severity="low"]      { border-left-color: hsl(var(--sev-low)); }
+  [data-finding-id]:hover            { background: hsl(var(--muted)); }
+  [data-finding-selected="true"] {
+    background: hsl(var(--primary-50));
+    border-left-width: 3px;
+  }
+}

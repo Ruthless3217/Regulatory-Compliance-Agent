@@ -17,6 +17,11 @@ import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { TablePlugin } from "@lexical/react/LexicalTablePlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 
+import { EditorToolbar } from "./EditorToolbar";
+import { SlashCommandPlugin } from "./SlashCommandPlugin";
+import { FindingDecorationsPlugin } from "./FindingDecorationsPlugin";
+import type { Violation } from "@/lib/types";
+
 const NODES = [
   HeadingNode, QuoteNode, ListNode, ListItemNode,
   TableNode, TableRowNode, TableCellNode, AutoLinkNode, LinkNode,
@@ -46,11 +51,23 @@ export function LexicalDocument({
   initialHtml,
   readOnly = false,
   onChange,
+  violations,
+  selectedViolationId,
+  onSelectViolation,
+  onUnlocatedFindings,
 }: {
   initialState?: Record<string, unknown> | null;
   initialHtml?: string | null;
   readOnly?: boolean;
   onChange?: (doc: { state: SerializedEditorState; html: string }) => void;
+  /** Findings to draw on the document. Decorations only — never editor content,
+   * so they cannot reach the exported DOCX. */
+  violations?: Violation[];
+  selectedViolationId?: string | null;
+  onSelectViolation?: (id: string) => void;
+  /** Findings whose text could no longer be located after editing. Reported so
+   * the UI can say so rather than silently omitting them. */
+  onUnlocatedFindings?: (unlocated: Array<{ id: string; reason: string }>) => void;
 }) {
   const config = {
     namespace: "compliance-document",
@@ -65,6 +82,11 @@ export function LexicalDocument({
 
   return (
     <LexicalComposer initialConfig={config}>
+      {/* Toolbar sits outside the scroll container so it stays put while the
+          document scrolls. Hidden when read-only: a historical run is a record,
+          not a draft, and offering formatting buttons that do nothing is worse
+          than offering none. */}
+      {!readOnly && <EditorToolbar />}
       <div className="relative min-h-0 flex-1 overflow-y-auto px-8 py-6">
         <RichTextPlugin
           contentEditable={<ContentEditable className="outline-none" />}
@@ -75,6 +97,15 @@ export function LexicalDocument({
         <ListPlugin />
         <LinkPlugin />
         <TablePlugin />
+        {!readOnly && <SlashCommandPlugin />}
+        {violations && violations.length > 0 && (
+          <FindingDecorationsPlugin
+            violations={violations}
+            selectedViolationId={selectedViolationId ?? null}
+            onSelect={onSelectViolation}
+            onResolved={onUnlocatedFindings}
+          />
+        )}
         {onChange && (
           <OnChangePlugin
             ignoreSelectionChange
