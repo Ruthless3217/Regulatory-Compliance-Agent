@@ -40,65 +40,79 @@ export function ContextRail({
   );
 
   return (
-    <aside className="flex h-full min-h-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface px-4 py-4">
-      <section>
-        <h2 className="micro-label mb-2 text-muted-foreground">Graded against</h2>
-        <div className="inline-flex rounded-sm border border-border bg-background px-2 py-0.5 font-mono text-[11px]">
+    // A rail, not a panel: one hairline against the canvas, no card of its own.
+    // Everything inside is sized to live within the 264px track — long values
+    // truncate rather than push the column into the document beside it.
+    <aside className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-y-auto border-r border-border bg-surface px-3 py-3">
+      <section className="min-w-0">
+        <h2 className="micro-label mb-1">Graded against</h2>
+        <span
+          className="inline-block max-w-full truncate rounded-sm border border-border bg-background px-1.5 py-px align-bottom font-mono text-[11px]"
+          title={submission.product_line || "no product scope"}
+        >
           {submission.product_line || "no product scope"}
-        </div>
+        </span>
         {!submission.product_line && (
-          <p className="mt-1.5 text-[11px] text-muted-foreground">
-            Uploaded before a scope was required, so retrieval could not narrow to a product family.
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+            Uploaded before scopes were required — retrieval could not narrow to a product family.
           </p>
         )}
       </section>
 
-      <section>
+      <section className="min-w-0">
         {/* Categories, not scope. These are free text on the finding, so the
             list can run to dozens of near-unique labels — showing every one
             turns the rail into noise. The tail is counted, never hidden. */}
-        <h2 className="micro-label mb-2 text-muted-foreground">Findings by category</h2>
+        <h2 className="micro-label mb-1">Findings by category</h2>
         {scopes.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No findings yet.</p>
+          <p className="text-[11px] text-muted-foreground">No findings yet.</p>
         ) : (
           <>
-            <ul className="space-y-1">
+            <ul>
               {scopes.slice(0, TOP_CATEGORIES).map(([name, count]) => (
-                <li key={name} className="flex items-baseline justify-between gap-2 text-xs">
+                <li
+                  key={name}
+                  className="flex items-baseline justify-between gap-2 py-px text-[11px] leading-tight"
+                >
                   <span className="truncate text-foreground" title={categoryLabel(name)}>
                     {categoryLabel(name)}
                   </span>
-                  <span className="font-mono text-[11px] text-muted-foreground">{count}</span>
+                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                    {count}
+                  </span>
                 </li>
               ))}
             </ul>
             {scopes.length > TOP_CATEGORIES && (
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
+              <p
+                className="mt-1 text-[11px] leading-snug text-muted-foreground"
+                title="Filter by category in the findings list to see them."
+              >
                 +{scopes.length - TOP_CATEGORIES} more{" "}
-                {scopes.length - TOP_CATEGORIES === 1 ? "category" : "categories"}, covering{" "}
-                {scopes.slice(TOP_CATEGORIES).reduce((n, [, c]) => n + c, 0)} findings. Filter by
-                category on the right to see them.
+                {scopes.length - TOP_CATEGORIES === 1 ? "category" : "categories"} (
+                {scopes.slice(TOP_CATEGORIES).reduce((n, [, c]) => n + c, 0)} findings) — filter on
+                the right.
               </p>
             )}
           </>
         )}
       </section>
 
-      <section>
-        <h2 className="micro-label mb-2 text-muted-foreground">Precedent memory</h2>
-        <p className="text-xs text-muted-foreground">
-          {grounded > 0 ? (
-            <>
-              <span className="font-medium text-foreground">{grounded}</span> of {violations.length}{" "}
-              findings cite a past reviewer decision. Precedents are always used — they are how a
-              finding gets its reasoning.
-            </>
-          ) : (
-            <>
-              No finding here cites a past reviewer decision. Precedents are always used, so this
-              means none matched, not that they were switched off.
-            </>
-          )}
+      <section className="min-w-0">
+        <h2 className="micro-label mb-1">Precedent memory</h2>
+        {/* Fact first: the count carries the answer, the line under it only
+            says what the count means. The full rationale stays on hover. */}
+        <p className="font-mono text-sm leading-none text-foreground">
+          {grounded}
+          <span className="text-muted-foreground">/{violations.length}</span>
+        </p>
+        <p
+          className="mt-1 text-[11px] leading-snug text-muted-foreground"
+          title="Precedents are always used — they are how a finding gets its reasoning. A finding with no citation found no match; it does not mean precedent search was switched off."
+        >
+          {grounded > 0
+            ? "cite a past reviewer decision."
+            : "cite a past reviewer decision — none matched."}
         </p>
       </section>
     </aside>

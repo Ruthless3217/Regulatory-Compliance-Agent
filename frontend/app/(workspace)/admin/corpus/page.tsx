@@ -38,6 +38,7 @@ import type {
 // that difference obvious, not bury both behind one "delete" button.
 
 const ITEMS_PAGE = 25;
+const DOCS_PAGE = 25;
 
 function Panel({
   title,
@@ -251,6 +252,10 @@ function DeleteDialog({
  * rows, so retrieval stops seeing it in the same statement — no re-index. */
 function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer | null; onChanged: () => void }) {
   const [docs, setDocs] = React.useState<CorpusLayerDocument[] | null>(null);
+  // A corpus of a few thousand precedents spans hundreds of source documents.
+  // Rendering every row produced a 20,000px page — the list has to page.
+  const [docPage, setDocPage] = React.useState(0);
+  const [docQuery, setDocQuery] = React.useState("");
   const [err, setErr] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [confirming, setConfirming] = React.useState<string | null>(null);
@@ -266,6 +271,17 @@ function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer | null; onCha
   }, [layerId]);
 
   React.useEffect(load, [load]);
+
+  const visibleDocs = React.useMemo(() => {
+    const q = docQuery.trim().toLowerCase();
+    const all = docs ?? [];
+    return q ? all.filter((d) => (d.source_file ?? "").toLowerCase().includes(q)) : all;
+  }, [docs, docQuery]);
+  const docPageCount = Math.max(1, Math.ceil(visibleDocs.length / DOCS_PAGE));
+  // Clamp rather than reset: deleting the last row on the last page would
+  // otherwise strand the curator on an empty page.
+  const currentDocPage = Math.min(docPage, docPageCount - 1);
+  const pageDocs = visibleDocs.slice(currentDocPage * DOCS_PAGE, currentDocPage * DOCS_PAGE + DOCS_PAGE);
 
   const remove = async (sourceFile: string) => {
     setBusy(sourceFile);
@@ -292,7 +308,19 @@ function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer | null; onCha
           ? "Removing a document deletes its precedents and their embeddings. Irreversible, and it takes effect on the next retrieval."
           : "Every source document in the precedent corpus, layered or not. Removing one deletes its precedents and their embeddings across the whole corpus. Irreversible, and it takes effect on the next retrieval."
       }
-      right={<span className="text-xs text-muted-foreground">{docs ? `${docs.length} documents` : "…"}</span>}
+      right={
+        <div className="flex items-center gap-2">
+          <input
+            value={docQuery}
+            onChange={(e) => { setDocQuery(e.target.value); setDocPage(0); }}
+            placeholder="Filter by file name…"
+            className="h-7 w-52 rounded-sm border border-border bg-background px-2 text-xs"
+          />
+          <span className="text-xs text-muted-foreground">
+            {docs ? `${visibleDocs.length} of ${docs.length}` : "…"}
+          </span>
+        </div>
+      }
     >
       {err ? (
         <Empty>{err}</Empty>
@@ -311,7 +339,7 @@ function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer | null; onCha
             </tr>
           </thead>
           <tbody>
-            {docs.map((d) => {
+            {pageDocs.map((d) => {
               const key = d.source_file ?? "";
               return (
                 <tr key={key} className="border-t border-border">
@@ -343,6 +371,24 @@ function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer | null; onCha
             })}
           </tbody>
         </table>
+      )}
+      {docs && visibleDocs.length > DOCS_PAGE && (
+        <nav aria-label="Document pagination" className="mt-3 flex items-center justify-between gap-2 text-xs">
+          <span className="text-muted-foreground">
+            {currentDocPage * DOCS_PAGE + 1}–{currentDocPage * DOCS_PAGE + pageDocs.length} of{" "}
+            {visibleDocs.length}
+            {docQuery.trim() ? ` matching “${docQuery.trim()}”` : ""}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Button size="sm" variant="outline" disabled={currentDocPage === 0}
+              onClick={() => setDocPage(currentDocPage - 1)}>Previous</Button>
+            <span aria-live="polite" className="text-muted-foreground">
+              Page {currentDocPage + 1} of {docPageCount}
+            </span>
+            <Button size="sm" variant="outline" disabled={currentDocPage >= docPageCount - 1}
+              onClick={() => setDocPage(currentDocPage + 1)}>Next</Button>
+          </span>
+        </nav>
       )}
     </Panel>
   );

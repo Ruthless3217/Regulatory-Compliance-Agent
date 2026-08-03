@@ -225,15 +225,23 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
       data-pulse={selected ? "true" : "false"}
       onClick={onSelect}
       className={cn(
-        "group relative border border-border border-l-2 bg-background p-4 cursor-pointer transition-colors",
+        // break-words is inherited, so one declaration here covers every
+        // descendant that renders unbroken machine text (match_method,
+        // evidence spans, rule ids, precedent filenames) without each block
+        // needing its own class.
+        "group relative border border-border border-l-2 bg-background p-4 cursor-pointer transition-colors break-words",
         "hover:bg-muted/40",
         sevClass,
         selected && "bg-primary-50",
         verdict === "dismiss" && "opacity-50"
       )}
     >
+      {/* The badge row is the pane's overflow source: a non-wrapping flex row
+          of up to six nowrap badges has a min-content width well past 340px,
+          and min-width:auto stopped it shrinking — so it pushed the chunk/index
+          block off the right edge. flex-wrap + min-w-0 lets it fold. */}
       <div className="mb-2 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <SeverityBadge severity={violation.severity} />
           <Badge>{categoryLabel(violation.category)}</Badge>
           {reviewerAuthored && (
@@ -273,7 +281,7 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
             </Badge>
           )}
         </div>
-        <div className="font-mono text-xs text-muted-foreground">
+        <div className="shrink-0 whitespace-nowrap font-mono text-xs text-muted-foreground">
           {typeof violation.chunk_index === "number" && (
             <span className="mr-2">chunk {violation.chunk_index}</span>
           )}

@@ -171,12 +171,14 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
     <div className="flex h-full min-h-0 min-w-0 flex-col border-l border-border bg-background">
       <FilterChipBar counts={counts} value={filter} onChange={setFilter} selectFilters={selectFilters} />
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <span className="text-[11px] text-muted-foreground">
+        <span className="min-w-0 text-[11px] text-muted-foreground">
           {filtered.length === 0
             ? "No findings"
-            : `${cursor === -1 ? "—" : cursor + 1} of ${filtered.length} · ${reviewedCount} reviewed`}
+            : cursor === -1
+              ? `None selected · ${filtered.length} findings · ${reviewedCount} reviewed`
+              : `${cursor + 1} of ${filtered.length} · ${reviewedCount} reviewed`}
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
             className="rounded-sm border border-border px-2 py-1 text-[11px] disabled:opacity-40"

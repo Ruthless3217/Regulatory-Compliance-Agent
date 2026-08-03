@@ -67,6 +67,13 @@ const SECTIONS: Section[] = [
 
 const ADMIN_ROLES = new Set(["admin", "super_admin"]);
 
+// The submission review screen brings its own 264px context rail and a document
+// bar that carries navigation (back arrow to "/", Review/Report tabs), per the
+// reference design — no persistent app sidebar there. Two 360px+ left rails left
+// the document ~530px of 1920. Both the sidebar and its content offset read this
+// one predicate, so the width and the padding can never disagree.
+const hidesSidebar = (pathname: string) => pathname.startsWith("/submissions/");
+
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -76,7 +83,9 @@ export function Sidebar() {
   const pathname = usePathname() ?? "/";
   const { setOpen } = useCommandPalette();
   const { me, logoutHandler } = useAuth();
-  
+
+  if (hidesSidebar(pathname)) return null;
+
   const sections = SECTIONS.filter(s => s.title !== "Admin" || ADMIN_ROLES.has(me?.role ?? "")).map(s => {
     if (s.title === "Library") {
       const items = s.items.filter(it => {
@@ -203,4 +212,11 @@ export function Sidebar() {
       </div>
     </aside>
   );
+}
+
+/** Content offset for the fixed sidebar. Keep in step with its w-60 above:
+ * a mismatch either hides content under the sidebar or leaves a dead gap. */
+export function SidebarOffset({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() ?? "/";
+  return <div className={hidesSidebar(pathname) ? undefined : "pl-60"}>{children}</div>;
 }

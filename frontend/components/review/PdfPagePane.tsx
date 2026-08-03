@@ -83,8 +83,10 @@ export function PdfPagePane({ submissionId, violations, selectedViolationId, onS
   }, [selectedViolationId]);
 
   return (
-    <div ref={containerRef} className="min-h-0 flex-1 overflow-y-auto bg-background p-4">
-      <div className="mx-auto max-w-3xl space-y-4">
+    // The document is the subject of this screen: the pane spends its width on
+    // the page, not on padding, and no max-width caps it short of the column.
+    <div ref={containerRef} className="min-h-0 flex-1 overflow-y-auto bg-background p-2">
+      <div className="space-y-3">
         {pages.map((n) => (
           <PdfPageTile
             key={n}
@@ -130,7 +132,15 @@ function PdfPageTile({
   const pct = (v: number, dim: number) => `${(v / dim) * 100}%`;
 
   return (
-    <div className="relative w-full border border-border bg-background shadow-sm">
+    // The tile fills the pane (w-full) and stops at the image's own pixel size
+    // so a wide monitor gets a big page, never a blurry upscaled one. Boxes are
+    // unaffected: the <img> is still `block w-full` of this element with no
+    // padding between them, so this box and the rendered image are the same
+    // rectangle, and the percentages below stay percentages of the image.
+    <div
+      className="relative mx-auto w-full border border-border bg-background shadow-sm"
+      style={{ maxWidth: natural?.w }}
+    >
       <img
         src={submissionPageImageUrl(submissionId, n)}
         alt={`Page ${n}`}

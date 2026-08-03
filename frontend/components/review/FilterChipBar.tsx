@@ -43,9 +43,17 @@ const SELECT_CLASS =
   "transition-colors hover:border-foreground hover:text-foreground " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 
+const CHIP_CLASS =
+  "inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 text-xs transition-colors";
+
 export function FilterChipBar({ counts, value, onChange, selectFilters }: Props) {
+  // Secondary facets collapse by default — five selects cost three rows in a
+  // ~370px pane. The count keeps a hidden active filter from being invisible.
+  const [showSelects, setShowSelects] = React.useState(false);
+  const activeSelects = (selectFilters ?? []).filter((f) => f.value !== "all");
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-background px-4 py-3">
+    <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-background px-3 py-2">
       {ORDER.map((c) => {
         const active = c.key === value;
         const n = counts[c.key] ?? 0;
@@ -55,7 +63,7 @@ export function FilterChipBar({ counts, value, onChange, selectFilters }: Props)
             type="button"
             onClick={() => onChange(c.key)}
             className={cn(
-              "inline-flex items-center gap-2 rounded-sm border px-2.5 py-1 text-xs transition-colors",
+              CHIP_CLASS,
               active
                 ? "border-foreground bg-foreground text-background"
                 : "border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground"
@@ -73,27 +81,54 @@ export function FilterChipBar({ counts, value, onChange, selectFilters }: Props)
       })}
 
       {selectFilters && selectFilters.length > 0 && (
-        // w-full breaks the selects onto their own line under the chips; auto-fit
-        // fills as many even columns as fit (2 in the 400px pane) instead of
-        // packing content-sized selects greedily.
-        <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-1.5">
-          {selectFilters.map((f) => (
-            <select
-              key={f.key}
-              value={f.value}
-              onChange={(e) => f.onChange(e.target.value)}
-              className={cn(SELECT_CLASS, f.value !== "all" && "border-foreground text-foreground")}
-              aria-label={f.label}
-            >
-              <option value="all">All {f.label.toLowerCase()}</option>
-              {f.options.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
+        <>
+          <button
+            type="button"
+            onClick={() => setShowSelects((s) => !s)}
+            aria-expanded={showSelects}
+            title={
+              activeSelects.length > 0
+                ? `Active: ${activeSelects.map((f) => f.label).join(", ")}`
+                : "Category, product, section, review status, source"
+            }
+            className={cn(
+              CHIP_CLASS,
+              activeSelects.length > 0
+                ? "border-foreground bg-primary-50 text-foreground"
+                : "border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground"
+            )}
+          >
+            <span>Filters</span>
+            {activeSelects.length > 0 && (
+              <span className="font-mono">{activeSelects.length} active</span>
+            )}
+            <span aria-hidden className="font-mono">{showSelects ? "−" : "+"}</span>
+          </button>
+
+          {/* w-full breaks the selects onto their own line under the chips; auto-fit
+              fills as many even columns as fit (2 in the 400px pane) instead of
+              packing content-sized selects greedily. */}
+          {showSelects && (
+            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-1.5">
+              {selectFilters.map((f) => (
+                <select
+                  key={f.key}
+                  value={f.value}
+                  onChange={(e) => f.onChange(e.target.value)}
+                  className={cn(SELECT_CLASS, f.value !== "all" && "border-foreground text-foreground")}
+                  aria-label={f.label}
+                >
+                  <option value="all">All {f.label.toLowerCase()}</option>
+                  {f.options.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
               ))}
-            </select>
-          ))}
-        </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
