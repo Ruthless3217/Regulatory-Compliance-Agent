@@ -41,7 +41,9 @@ Retrieval System in Insurance Marketing}}
   \small \textit{Draft --- internal review}
 }
 
-\date{31 July 2026}
+\date{31 July 2026\\[2pt]
+  \small Revised 3 August 2026 --- remedies added; all measurements remain
+  as of 31 July 2026 and are not re-measured}
 
 \begin{document}
 \maketitle
@@ -80,6 +82,15 @@ substantive contribution: the mechanisms that make this system safe are
 inseparable from the mechanisms that make its failures visible, and an
 engineering literature that publishes only confirmed root causes overstates how
 legible production failures are.
+
+Three of the four limitations have since been addressed, and we report the
+remedies alongside the findings rather than revising the findings away: the
+saturating score was replaced with a strictly decreasing one, ambiguous product
+identity now fails closed, and product scope became mandatory at every point
+where corpus and documents enter the system --- which in turn made it affordable
+to invert the applicability layer's permissive default, the single most
+consequential reversal in the system's history. All measurements in this paper
+predate those changes and are reported as of 31~July~2026.
 \end{abstract}
 
 \section{Introduction}
@@ -372,27 +383,59 @@ Semantic similarity cannot express regulatory applicability. A ULIP
 risk-disclosure precedent and a term-plan risk-disclosure precedent are
 near-neighbours in embedding space and are not interchangeable in law.
 
-\subsection{The contract}
+\subsection{The contract, and its reversal}
 
 Applicability is decided deterministically, before similarity is allowed to
-matter, under an explicit contract: a conflicting product category is rejected;
-untagged or unmappable items are treated as global and accepted; an unresolved
-product scope rejects nothing; a unit-linked rider widens its scope; and every
-decision --- accept or reject, with reason --- is recorded per candidate.
+matter, and every decision --- accept or reject, with reason --- is recorded per
+candidate. The \emph{default}, however, has since been inverted, and the
+reversal is worth reporting in full because the original reasoning was sound and
+still lost.
 
-Crucially the default is \emph{permissive}. A heuristic ingest tag must never
-over-block retrieval, because over-blocking silently removes evidence and
-manifests as a false negative.
+As first shipped, the default was \emph{permissive}: a conflicting product
+category was rejected, but untagged or unmappable items were treated as global
+and accepted, and an unresolved product scope rejected nothing. The argument was
+that a heuristic ingest tag must never over-block retrieval, because
+over-blocking silently removes evidence and manifests as a false negative --- the
+expensive error under the error asymmetry that motivates this system.
+
+That argument holds only if untagged items are \emph{rare}. Negative result~1
+(Section~\ref{sec:scopecoverage}) measured that they are the majority: under a
+permissive default, 58.4\,\% of precedents and 95.3\,\% of rules were exempt from
+the layer entirely. The permissive default was not admitting a trickle of
+edge cases; it was routing most of the corpus around the mechanism while the
+mechanism reported itself correct.
+
+The contract is now fail-closed. Explicitly global and named cross-cutting tags
+are accepted across products; a candidate whose scope metadata is missing or
+unmappable is \emph{rejected} and surfaced for curation; and a product-scoped
+candidate requires a resolved submission product. A run that accumulates such
+rejections is marked \code{scope\_metadata\_missing} and routed to human review
+rather than graded against a knowingly incomplete corpus.
+
+The trade is deliberate and is not free: the system now over-blocks where it
+used to over-admit, and the failure it converts into is a visible refusal to
+grade rather than an invisible false negative. That is the same preference
+expressed everywhere else in this design --- but it became affordable only once
+the supply problem was being fixed at the source (mandatory scope on rule
+creation and on submission intake), because fail-closed retrieval over an
+untagged corpus refuses almost everything.
 
 \subsection{Cross-cutting categories}
 
 Not every tag denotes a product family. In this corpus \code{child} is a
 variant of a unit-linked product \emph{and} a rider benefit attached to term
 plans; scoping it to either family would hide it from the other. Such tags are
-now named explicitly as cross-cutting rather than reaching the ``global''
-outcome by accident through the unmappable-tag path --- a distinction with no
-behavioural difference today, but one that prevents a later vocabulary fix from
-silently narrowing retrieval.
+named explicitly as cross-cutting rather than reaching the ``global'' outcome by
+accident through the unmappable-tag path.
+
+When written, that distinction had no behavioural consequence: both routes
+ended in acceptance, and naming them apart was insurance against a later
+vocabulary fix silently narrowing retrieval. The fail-closed reversal above
+collected on that insurance immediately. The two routes now diverge --- named
+cross-cutting tags are still accepted globally, unmappable ones are rejected ---
+so a tag that had been correct \emph{by accident} would have started failing
+closed the day the default changed. The cheap explicitness bought a behavioural
+guarantee before anyone knew which behaviour it would need to guarantee.
 
 \subsection{Why metadata, not embedding}
 
@@ -447,6 +490,7 @@ Previously, a disclaimer whose meaning had been \emph{inverted} by deleting
 ``not'' scored 0.96 and passed as present --- undetected tampering.
 
 \section{Measurement}
+\label{sec:measurement}
 \label{sec:evaluation}
 
 \subsection{Baseline}
@@ -500,6 +544,7 @@ Reviewer verdicts recorded & 22 of 1{,}308 (1.7\,\%) \\
 \end{table}
 
 \subsection{Negative result 1: scope coverage}
+\label{sec:scopecoverage}
 
 Of 2{,}440 precedents, only 41.6\,\% carry a tag that resolves to a product
 family:
@@ -558,6 +603,23 @@ into SQL --- retrieving within scope rather than filtering afterwards --- buys
 little when 58.4\,\% of precedents and 95.3\,\% of rules must be retained
 regardless. The optimisation was designed, costed against this measurement, and
 deliberately not shipped.
+
+\paragraph{Remedy.} Because this is a supply failure, it was fixed at the points
+where supply enters. An explicit product scope is now mandatory when a rule is
+created or activated, when a document is submitted for review, and on every row
+of the seed corpus; an omitted scope is rejected at the API boundary rather than
+being silently interpreted as ``applies to everything''. Re-seeding supersedes
+an existing rule whose scope changed rather than mutating the row that
+historical findings cite, so the corpus can be corrected without rewriting the
+provenance of past grades.
+
+This closes the intake, not the backlog. Legacy rows remain nullable until
+curated, so the 95.3\,\% figure above describes a corpus that is no longer being
+\emph{added to} in that state rather than one that has been repaired. We report
+no post-remediation coverage number: the curation pass has not run, and
+re-measuring before it does would report the intake fix as though it were a
+corpus fix. That ordering --- mechanism, then supply, then measurement --- is
+the same discipline that made the original negative result meaningful.
 
 \subsection{Negative result 2: a text substitution that reached production}
 \label{sec:brand}
@@ -640,12 +702,41 @@ We record the misdiagnosis deliberately. The observable (0.0 against healthy
 subscores) is equally consistent with ``not wired up'' and with ``working and
 saturated'', and only a log line reporting the finding count separated them.
 
-The same document additionally reports different finding counts on different
-surfaces (53 versus 68), most plausibly the suppressed review lane being
-included in one query and excluded in another --- a direct, and predictable,
-cost of the deliberate decision in Section~\ref{sec:failclosed} to persist
+\paragraph{Remedy.} The clamp has since been replaced with a soft tail: the
+score is linear in the accumulated deduction to 50, and thereafter decays
+hyperbolically,
+\[
+  s(d) = \begin{cases}
+    100 - d, & d \le 50\\[2pt]
+    \dfrac{50}{1 + (d-50)/100}, & d > 50,
+  \end{cases}
+\]
+which is strictly decreasing over the whole domain and approaches zero without
+attaining it. A 15-finding document and a 109-finding document therefore no
+longer receive the same number. The scoring policy is versioned
+(\code{absolute-soft-tail-v2}, recorded per run) precisely so that scores
+produced before and after this change are never silently compared.
+
+We note that the fix does not \emph{restore} discriminating power at the tail so
+much as relocate it: differences among heavily-violating documents are now
+expressed in a compressed range, and whether reviewers can act on a distinction
+between 4.2 and 3.1 is untested.
+
+\paragraph{Remedy, second defect.} The same document additionally reported
+different finding counts on different surfaces (53 versus 68) --- the suppressed
+review lane being included in one query and excluded in another, a direct and
+predictable cost of the decision in Section~\ref{sec:failclosed} to persist
 suppressed findings rather than discard them. Introducing a second class of
 finding requires every consumer to state which class it counts.
+
+A third class has since been introduced: reviewer-\emph{added} findings, raised
+by a human after grading, which must not retroactively alter a persisted score.
+Rather than let each surface re-derive its own lane arithmetic, the counts are
+now computed once as three mutually exclusive populations --- scored, suppressed,
+reviewer-added --- and every consumer reports the population it means. The
+general lesson is the one the first defect already taught: it is not enough for
+each surface to be individually correct about which findings it counts; the
+partition itself has to live in one place.
 
 \subsection{Negative result 4: rule precision}
 
@@ -685,6 +776,27 @@ bugfixes. The same repository already applied the stricter posture elsewhere
 --- the disclaimer registry treats a duplicate identifier as a load error and
 fails closed --- so the defect is better characterised as an \emph{inconsistently
 applied} principle than a missing one.
+
+\paragraph{Remedy.} The second option was taken. A UIN resolving to more than
+one fact card now routes the run to human review rather than selecting a
+variant, and the ambiguous identifiers are preserved on the run for the
+reviewer. The loader still returns a last-sorted card for compatibility, but the
+collision is loud rather than silent, and the grading path no longer depends on
+which answer sorted last.
+
+Two adjacent gaps closed with it, both of the same shape --- an identifier the
+corpus cannot actually answer. A rider UIN mentioned by a parent plan but
+carrying no card of its own proves compatibility, not the rider's own
+guardrails, and now fails closed instead of injecting whichever parent loaded
+first. A product the business declares but which has no fact card at all is
+detected by name and likewise routed to review. In each case the failure being
+prevented is identical: grading a document against a product the system cannot
+prove it is about.
+
+The generalisation we draw is that ``fail closed'' had been implemented as a
+property of \emph{individual guards} rather than of the identity layer. Each new
+way of not knowing which product a document concerns required its own guard,
+and each was found separately, in production.
 
 \subsection{Three quality gates that were defined and then bypassed}
 
@@ -853,6 +965,22 @@ quoted in this paper only as \emph{targets}. The acceptance test that would
 have measured them was never written, so we have no basis to report whether any
 was met, and we do not.
 
+\paragraph{Measurements predate the remedies.} Every figure in
+Section~\ref{sec:measurement} was taken on 31~July~2026, before the changes
+reported in the \emph{Remedy} paragraphs. None has been re-measured, and we
+deliberately do not restate any of them as though it had been. This matters
+asymmetrically: the applicability reversal and the mandatory-scope requirement
+change what is retrieved and what is refused, so the deployed system's recall,
+its rate of routing to human review, and its grade distribution should all be
+expected to differ --- in directions we can argue for but have not observed. The
+soft-tail score in particular guarantees that grades produced after the change
+are not comparable with the 36-of-42 F distribution reported above, which is why
+the scoring policy is versioned per run.
+
+A re-measurement after the corpus curation pass is the obvious next work, and
+until it exists the honest reading of this paper is that it documents a system's
+diagnosis thoroughly and its treatment only by intention.
+
 \section{Conclusion}
 
 Grounding before generation, fail-closed persistence, deterministic
@@ -864,6 +992,22 @@ applicability layer starved of tags, an aggregate score disagreeing with its
 components, and a rule family generating findings reviewers consistently
 reject. These are tractable problems, and they were found because the system
 was instrumented to be falsifiable.
+
+Tractable proved accurate. The saturating score was replaced with a strictly
+decreasing one, ambiguous product identity was made to fail closed, and scope
+became mandatory wherever rules and documents enter the system. The last of
+these then permitted the reversal we consider the most instructive result here:
+the applicability layer's permissive default, adopted for a correct reason ---
+never over-block evidence --- was inverted once measurement showed that the
+majority of the corpus was taking the permissive path. A default is a claim
+about a distribution, and this one was never checked against the distribution it
+described.
+
+What remains unfinished is the part that would tell us whether any of it worked.
+The corpus curation the mandatory-scope requirement enables has not run, and
+nothing has been re-measured. We end, therefore, where the method demands rather
+than where the narrative would prefer: with a diagnosis we trust, remedies we
+can argue for, and no evidence yet that they helped.
 
 \begin{thebibliography}{9}
 \footnotesize
