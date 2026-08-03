@@ -2,6 +2,9 @@
 import * as React from "react";
 import { applySubmissionRevision, listSubmissionRevisions, listSubmissionRuns } from "@/lib/api";
 import type { SerializedEditorState } from "lexical";
+
+/** The three views of the working document, always written together. */
+export type LexicalDoc = { state: SerializedEditorState; html: string; text: string };
 import type { RevisionSource, RunSummary, ScoreBreakdown, Submission, Violation } from "@/lib/types";
 
 export type SaveState = "idle" | "saving" | "error";
@@ -72,8 +75,13 @@ interface Ctx {
   // edits in the Lexical editor; sent with the next save. State and HTML are
   // never set apart — export renders the HTML, the editor reloads the state,
   // and a mismatch would show the reviewer one document and export another.
-  lexicalDoc: { state: SerializedEditorState; html: string } | null;
-  setLexicalDoc: (d: { state: SerializedEditorState; html: string }) => void;
+  lexicalDoc: LexicalDoc | null;
+  setLexicalDoc: (d: LexicalDoc) => void;
+  /** Editor content differs from the last persisted revision. */
+  lexicalDirty: boolean;
+  /** Persist the editor's current content as a revision. Autosave calls this
+   * on idle; the toolbar's Save calls it directly. */
+  saveLexical: () => Promise<boolean>;
 }
 
 const Context = React.createContext<Ctx | null>(null);
@@ -104,9 +112,20 @@ export function SubmissionWorkspaceProvider({
   children,
 }: ProviderProps) {
   const [findingsStale, setFindingsStale] = React.useState(initialFindingsStale);
-  const [lexicalDoc, setLexicalDoc] = React.useState<
-    { state: SerializedEditorState; html: string } | null
-  >(null);
+  const [lexicalDoc, setLexicalDocState] = React.useState<LexicalDoc | null>(null);
+  // What was last persisted, so "dirty" means "differs from the server" rather
+  // than "the editor emitted something". Lexical fires onChange on load too.
+  const savedLexicalRef = React.useRef<string | null>(null);
+  const [lexicalDirty, setLexicalDirty] = React.useState(false);
+  const lexicalDocRef = React.useRef<LexicalDoc | null>(null);
+
+  const setLexicalDoc = React.useCallback((d: LexicalDoc) => {
+    lexicalDocRef.current = d;
+    setLexicalDocState(d);
+    setLexicalDirty(savedLexicalRef.current !== null && savedLexicalRef.current !== d.html);
+    // First emission after load is the seeded document, not an edit.
+    if (savedLexicalRef.current === null) savedLexicalRef.current = d.html;
+  }, []);
   const [violations, setViolations] = React.useState<Violation[]>(initialViolations);
   const [selectedViolationId, setSelectedViolationId] = React.useState<string | null>(null);
   const [overallScore, setOverallScore] = React.useState<number | null>(initialScore);
@@ -213,6 +232,35 @@ export function SubmissionWorkspaceProvider({
     [persist]
   );
 
+  /** Persist the editor's content as a revision.
+   *
+   * Without this the rich editor had no save at all: onChange only wrote to
+   * context, and Save/Discard live in the legacy text pane, which a DOCX or PDF
+   * submission never renders. A reviewer's edits reached the server only as a
+   * side effect of Apply fix, and were otherwise lost on navigation.
+   */
+  const saveLexical = React.useCallback(async () => {
+    const doc = lexicalDocRef.current;
+    if (!doc) return false;
+    if (savedLexicalRef.current === doc.html) return true;
+    const ok = await persist(doc.text, "manual_edit");
+    if (ok) {
+      savedLexicalRef.current = doc.html;
+      setLexicalDirty(false);
+    }
+    return ok;
+  }, [persist]);
+
+  // Autosave on idle. The design specifies it ("Unsaved keystrokes — autosave
+  // in 2s"), and it is the difference between an editor and a scratchpad.
+  // Debounced rather than per-keystroke because every revision marks the run's
+  // findings stale, so one revision per burst of typing is the correct grain.
+  React.useEffect(() => {
+    if (!lexicalDirty) return;
+    const t = setTimeout(() => { void saveLexical(); }, 2000);
+    return () => clearTimeout(t);
+  }, [lexicalDirty, lexicalDoc, saveLexical]);
+
   const saveNow = React.useCallback(
     () => persist(textRef.current, "manual_edit"),
     [persist]
@@ -293,10 +341,15 @@ export function SubmissionWorkspaceProvider({
       findingsStale,
       lexicalDoc,
       setLexicalDoc,
+      lexicalDirty,
+      saveLexical,
     }),
     [
       findingsStale,
       lexicalDoc,
+      setLexicalDoc,
+      lexicalDirty,
+      saveLexical,
       submission,
       documentText,
       savedText,

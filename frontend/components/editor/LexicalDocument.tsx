@@ -75,7 +75,7 @@ export function LexicalDocument({
   /** Seed source is fetched from this submission when there is no saved state. */
   submissionId: string;
   readOnly?: boolean;
-  onChange?: (doc: { state: SerializedEditorState; html: string }) => void;
+  onChange?: (doc: { state: SerializedEditorState; html: string; text: string }) => void;
   /** Findings to draw on the document. Decorations only — never editor content,
    * so they cannot reach the exported DOCX. */
   violations?: Violation[];
@@ -133,6 +133,10 @@ export function LexicalDocument({
                 onChange({
                   state: editorState.toJSON(),
                   html: $generateHtmlFromNodes(editor, null),
+                  // The plain-text projection the revision stores as `content`.
+                  // Findings, search and the fallback exports all read it, so
+                  // it must be produced from the same state as the other two.
+                  text: $getRoot().getTextContent(),
                 });
               });
             }}

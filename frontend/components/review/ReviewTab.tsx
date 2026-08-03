@@ -134,6 +134,9 @@ export function ReviewTab() {
     setSelectedRunId,
     findingsStale,
     setLexicalDoc,
+    lexicalDirty,
+    saveLexical,
+    saveState,
   } = useSubmissionWorkspace();
 
   const isAnalyzing =
@@ -430,6 +433,29 @@ export function ReviewTab() {
               Edit
             </Button>
           </div>
+          {hasEditor && !isHistorical && (
+            <span className="ml-2 flex items-center gap-2 text-[11px]">
+              {saveState === "saving" ? (
+                <span className="text-muted-foreground">Saving…</span>
+              ) : saveState === "error" ? (
+                <>
+                  <span className="text-sev-critical">Not saved</span>
+                  <Button size="sm" variant="outline" onClick={() => void saveLexical()}>
+                    Retry
+                  </Button>
+                </>
+              ) : lexicalDirty ? (
+                <>
+                  <span className="text-muted-foreground">Unsaved — autosaving</span>
+                  <Button size="sm" variant="ghost" onClick={() => void saveLexical()}>
+                    Save now
+                  </Button>
+                </>
+              ) : (
+                <span className="text-muted-foreground">Saved</span>
+              )}
+            </span>
+          )}
           <span className="text-[11px] text-muted-foreground">
             {submission.page_render_status === "failed"
               ? "Page render failed — showing extracted text"
