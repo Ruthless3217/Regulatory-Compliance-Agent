@@ -55,4 +55,71 @@ def docx_to_html(docx_bytes: bytes) -> str:
 
     for message in result.messages:
         logger.info("lexical_import: %s", message)
-    return result.value
+    return result.value + _peripheral_html(docx_bytes)
+
+
+def _peripheral_html(docx_bytes: bytes) -> str:
+    """Headers, footers and text boxes, which mammoth does not read.
+
+    mammoth converts the document body only. `preprocessing_service._extract_docx`
+    deliberately includes these regions because mandated disclaimers live in
+    exactly them — so the compliance engine grades text the editor would
+    otherwise not contain.
+
+    That gap is not cosmetic. A finding quoting a footer could not be located in
+    the editor, could not be corrected there, and — because `clean.docx` is
+    generated from the editor's HTML — would have been dropped from the exported
+    artifact entirely, losing the disclaimer from the approved document.
+
+    Appended at the end, labelled, rather than positioned: Word headers and
+    footers repeat per section and have no single place in a linear document.
+    Being able to read and correct them matters more than their position.
+    """
+    try:
+        from docx import Document
+
+        doc = Document(io.BytesIO(docx_bytes))
+    except Exception as exc:  # noqa: BLE001 — body already converted; keep it
+        logger.warning("lexical_import: peripheral extraction skipped: %s", exc)
+        return ""
+
+    blocks: list[str] = []
+    for label, region in _iter_peripheral_regions(doc):
+        lines = [p.text.strip() for p in region.paragraphs if p.text.strip()]
+        for table in getattr(region, "tables", []):
+            for row in table.rows:
+                cells = [c.text.strip() for c in row.cells if c.text.strip()]
+                if cells:
+                    lines.append(" | ".join(cells))
+        if lines:
+            blocks.append(
+                f"<h3>{label}</h3>" + "".join(f"<p>{_escape(l)}</p>" for l in lines)
+            )
+    return "".join(blocks)
+
+
+def _iter_peripheral_regions(doc):
+    """(label, region) for every distinct header/footer in the document.
+
+    Word gives each section its own header and footer, and an unlinked section
+    can carry different wording — a different disclaimer on a different page.
+    Deduplicated by text so an unchanged repeat is not emitted once per section.
+    """
+    seen: set[str] = set()
+    for i, section in enumerate(doc.sections, start=1):
+        for kind, region in (("header", section.header), ("footer", section.footer)):
+            try:
+                signature = "\n".join(p.text for p in region.paragraphs)
+            except Exception:  # noqa: BLE001 — a malformed part must not abort the rest
+                continue
+            if not signature.strip() or signature in seen:
+                continue
+            seen.add(signature)
+            suffix = "" if len(doc.sections) == 1 else f" {i}"
+            yield f"Page {kind}{suffix}", region
+
+
+def _escape(text: str) -> str:
+    return (
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    )

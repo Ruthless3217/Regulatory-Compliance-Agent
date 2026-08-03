@@ -11,6 +11,9 @@ import type { Submission, Violation } from "@/lib/types";
  * workspace already holds, so the rail costs no extra request and stays
  * correct for documents analysed long before it existed.
  */
+/** How many category rows the rail shows before collapsing the tail. */
+const TOP_CATEGORIES = 6;
+
 export function ContextRail({
   submission,
   violations,
@@ -39,23 +42,45 @@ export function ContextRail({
   return (
     <aside className="flex h-full min-h-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface px-4 py-4">
       <section>
-        <h2 className="micro-label mb-2 text-muted-foreground">Rule scope</h2>
-        {submission.product_line && (
-          <div className="mb-2 inline-flex rounded-sm border border-border bg-background px-2 py-0.5 font-mono text-[11px]">
-            {submission.product_line}
-          </div>
+        <h2 className="micro-label mb-2 text-muted-foreground">Graded against</h2>
+        <div className="inline-flex rounded-sm border border-border bg-background px-2 py-0.5 font-mono text-[11px]">
+          {submission.product_line || "no product scope"}
+        </div>
+        {!submission.product_line && (
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            Uploaded before a scope was required, so retrieval could not narrow to a product family.
+          </p>
         )}
+      </section>
+
+      <section>
+        {/* Categories, not scope. These are free text on the finding, so the
+            list can run to dozens of near-unique labels — showing every one
+            turns the rail into noise. The tail is counted, never hidden. */}
+        <h2 className="micro-label mb-2 text-muted-foreground">Findings by category</h2>
         {scopes.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No findings to scope yet.</p>
+          <p className="text-xs text-muted-foreground">No findings yet.</p>
         ) : (
-          <ul className="space-y-1">
-            {scopes.map(([name, count]) => (
-              <li key={name} className="flex items-baseline justify-between gap-2 text-xs">
-                <span className="truncate text-foreground">{categoryLabel(name)}</span>
-                <span className="font-mono text-[11px] text-muted-foreground">{count}</span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="space-y-1">
+              {scopes.slice(0, TOP_CATEGORIES).map(([name, count]) => (
+                <li key={name} className="flex items-baseline justify-between gap-2 text-xs">
+                  <span className="truncate text-foreground" title={categoryLabel(name)}>
+                    {categoryLabel(name)}
+                  </span>
+                  <span className="font-mono text-[11px] text-muted-foreground">{count}</span>
+                </li>
+              ))}
+            </ul>
+            {scopes.length > TOP_CATEGORIES && (
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                +{scopes.length - TOP_CATEGORIES} more{" "}
+                {scopes.length - TOP_CATEGORIES === 1 ? "category" : "categories"}, covering{" "}
+                {scopes.slice(TOP_CATEGORIES).reduce((n, [, c]) => n + c, 0)} findings. Filter by
+                category on the right to see them.
+              </p>
+            )}
+          </>
         )}
       </section>
 
