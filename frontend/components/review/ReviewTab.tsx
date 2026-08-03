@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { LexicalDocument } from "@/components/editor/LexicalDocument";
 import { ContextRail } from "./ContextRail";
+import { SplitOriginalView } from "./SplitOriginalView";
 import { DocumentPane } from "./DocumentPane";
 import { PdfPagePane } from "./PdfPagePane";
 import { ViolationsPane } from "./ViolationsPane";
@@ -146,13 +147,18 @@ export function ReviewTab() {
   // format it can lay out (PDF, and DOCX via Gotenberg) and reports "skipped"
   // for the rest. Re-testing content_type here would re-close that gate.
   const pagesRendered = submission.page_render_status === "completed";
-  const [editing, setEditing] = React.useState(false);
+  // View (faithful render) | Split (original beside the editor) | Edit.
+  // Split exists because "what did the original say?" is an audit question the
+  // reviewer must be able to answer without leaving the document.
+  const [mode, setMode] = React.useState<"view" | "split" | "edit">("view");
+  const editing = mode !== "view";
   // Findings the editor could not place after edits. Surfaced rather than
   // dropped: a finding that is simply missing from the document reads as
   // "resolved", which is the opposite of what happened.
   const [unlocated, setUnlocated] = React.useState<Array<{ id: string; reason: string }>>([]);
   // Nothing to toggle to when there are no page images — stay on the text pane.
   const usePdfPane = pagesRendered && !editing;
+  const hasEditor = !!(submission.lexical_state || submission.import_html);
 
   return (
     // Three-column grammar from the workspace design: context rail (what this
@@ -251,19 +257,27 @@ export function ReviewTab() {
           <div className="flex items-center gap-1">
             <Button
               size="sm"
-              variant={usePdfPane ? "outline" : "ghost"}
+              variant={mode === "view" ? "outline" : "ghost"}
               disabled={!pagesRendered}
               title={pagesRendered ? undefined : "No page images for this document"}
-              onClick={() => setEditing(false)}
+              onClick={() => setMode("view")}
             >
               View
             </Button>
             <Button
               size="sm"
-              variant={usePdfPane ? "ghost" : "outline"}
+              variant={mode === "split" ? "outline" : "ghost"}
+              onClick={() => setMode("split")}
+              title="The uploaded original beside the editable text"
+            >
+              Split
+            </Button>
+            <Button
+              size="sm"
+              variant={mode === "edit" ? "outline" : "ghost"}
               disabled={isHistorical}
               title={isHistorical ? "Historical runs are read-only" : undefined}
-              onClick={() => setEditing(true)}
+              onClick={() => setMode("edit")}
             >
               Edit
             </Button>
@@ -281,14 +295,40 @@ export function ReviewTab() {
           </span>
         </div>
 
-        {usePdfPane ? (
+        {mode === "split" ? (
+          <SplitOriginalView
+            submissionId={submission.id}
+            pageRenderStatus={submission.page_render_status}
+            originalText={submission.original_content}
+          >
+            {hasEditor ? (
+              <LexicalDocument
+                initialState={submission.lexical_state}
+                initialHtml={submission.import_html}
+                readOnly={isHistorical}
+                onChange={setLexicalDoc}
+                violations={displayViolations}
+                selectedViolationId={selectedViolationId}
+                onSelectViolation={setSelectedViolationId}
+                onUnlocatedFindings={setUnlocated}
+              />
+            ) : (
+              <DocumentPane
+                violations={displayViolations}
+                selectedViolationId={selectedViolationId}
+                onSelect={setSelectedViolationId}
+                readOnly={isHistorical}
+              />
+            )}
+          </SplitOriginalView>
+        ) : usePdfPane ? (
           <PdfPagePane
             submissionId={submission.id}
             violations={displayViolations}
             selectedViolationId={selectedViolationId}
             onSelect={setSelectedViolationId}
           />
-        ) : submission.lexical_state || submission.import_html ? (
+        ) : hasEditor ? (
           // Rich editing on the working document. The uploaded file stays
           // immutable; this edits the Lexical state and export renders from it.
           // Findings are still anchored to extracted-text offsets, which drift

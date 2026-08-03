@@ -8,7 +8,8 @@ import { categoryLabel, severityClass, truthyAutoFix, normalizeSeverity } from "
 import { cn } from "@/lib/utils";
 import { ActionTags } from "@/components/violation/ActionTags";
 import { PrecedentNote } from "@/components/violation/PrecedentNote";
-import { deleteReviewerViolation, rewriteViolationText, submitReviewerAction } from "@/lib/api";
+import { deleteReviewerViolation, submitReviewerAction } from "@/lib/api";
+import { RewritePreview } from "@/components/editor/RewritePreview";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import type { DismissReason, NotViolationReason, ReviewerActionType, Violation } from "@/lib/types";
 
@@ -79,12 +80,10 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
   const [applyFixBusy, setApplyFixBusy] = React.useState(false);
   const fixApplied = violation.fix_applied === true;
 
-  // On-demand rewrite. Held in local state and never persisted until the
-  // reviewer accepts: a saved edit invalidates the run's findings and forces a
-  // re-analysis before export, so an unread proposal must not cost them one.
-  const [rewrite, setRewrite] = React.useState<string | null>(null);
-  const [rewriteInstruction, setRewriteInstruction] = React.useState("");
-  const [rewriteBusy, setRewriteBusy] = React.useState(false);
+  // On-demand rewrite. RewritePreview holds the proposals; nothing is
+  // persisted until the reviewer accepts, because a saved edit invalidates the
+  // run's findings and forces a re-analysis before export.
+  const [rewriteOpen, setRewriteOpen] = React.useState(false);
 
   // 0031 — reviewer-authored flags are the only deletable findings. A model
   // finding is dismissed/rejected by verdict, never removed.
@@ -205,27 +204,13 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     }
   };
 
-  const requestRewrite = async () => {
-    if (rewriteBusy) return;
-    setRewriteBusy(true);
-    try {
-      const res = await rewriteViolationText(violation.id, rewriteInstruction);
-      setRewrite(res.proposed_text);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "";
-      toast.error(message || "Rewrite failed");
-    } finally {
-      setRewriteBusy(false);
-    }
-  };
-
-  const acceptRewrite = async () => {
-    if (!rewrite || applyFixBusy) return;
+  const acceptRewrite = async (replacement: string) => {
+    if (!replacement || applyFixBusy) return;
     setApplyFixBusy(true);
     try {
-      if (await spliceIntoDocument(rewrite, "rewrite")) {
+      if (await spliceIntoDocument(replacement, "rewrite")) {
         toast.success("Rewrite applied — re-run the check before exporting");
-        setRewrite(null);
+        setRewriteOpen(false);
       }
     } finally {
       setApplyFixBusy(false);
@@ -362,36 +347,18 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
       )}
 
       {violation.current_text && !fixApplied && (
-        <div className="mt-3 rounded-sm border border-border p-2" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between gap-2">
-            <span className="micro-label text-muted-foreground">AI rewrite</span>
-            <Button size="sm" variant="outline" disabled={rewriteBusy} onClick={requestRewrite}>
-              {rewriteBusy ? "Rewriting…" : rewrite ? "Try again" : "Rewrite"}
+        <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+          {rewriteOpen ? (
+            <RewritePreview
+              violationId={violation.id}
+              originalText={violation.current_text}
+              onAccept={acceptRewrite}
+              onDismiss={() => setRewriteOpen(false)}
+            />
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setRewriteOpen(true)}>
+              AI rewrite
             </Button>
-          </div>
-          <input
-            value={rewriteInstruction}
-            onChange={(e) => setRewriteInstruction(e.target.value)}
-            placeholder="Optional steer, e.g. keep it under 12 words"
-            maxLength={500}
-            className="mt-2 w-full rounded-sm border border-border bg-background px-2 py-1 text-xs"
-          />
-          {rewrite && (
-            <div className="mt-2">
-              {/* Shown for approval, never auto-applied: accepting writes a
-                  revision, which invalidates the findings and blocks export
-                  until the document is re-analysed. */}
-              <div className="rounded-sm border border-primary/40 bg-primary/5 p-2 text-xs">{rewrite}</div>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <Button size="sm" disabled={applyFixBusy} onClick={acceptRewrite}>
-                  {applyFixBusy ? "Applying…" : "Accept"}
-                </Button>
-                <Button size="sm" variant="ghost" disabled={applyFixBusy} onClick={() => setRewrite(null)}>
-                  Discard
-                </Button>
-                <span className="text-[11px] text-muted-foreground">Accepting requires a re-run before export</span>
-              </div>
-            </div>
           )}
         </div>
       )}
