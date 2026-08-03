@@ -305,9 +305,19 @@ async def create_revision(
         note=body.note,
         applied_violation_ids=body.applied_violation_ids or None,
         created_by=getattr(user, "id", None),
+        lexical_state=body.lexical_state,
+        lexical_html=body.lexical_html,
     )
     db.add(revision)
     submission.current_content = body.content
+
+    # The working document moves with the revision. Only overwrite when the
+    # client actually sent one, so a text-only save cannot blank it. State and
+    # HTML are two views of one document — write both or neither, or export
+    # would render a version the editor never shows.
+    if body.lexical_state is not None:
+        submission.lexical_state = body.lexical_state
+        submission.lexical_html = body.lexical_html
 
     # Flip fix_applied on every violation this revision resolved, so the
     # reviewer UI's "Applied" badge/disabled-button state survives reload

@@ -37,6 +37,11 @@ class SubmissionRevisionCreate(BaseModel):
     source: RevisionSource
     note: Optional[str] = None
     applied_violation_ids: Optional[List[uuid.UUID]] = None
+    # Lexical editor state for this revision, and the HTML the client
+    # serialized from it at the same instant. Optional: a text-only edit path
+    # (and every pre-existing client) still posts just `content`.
+    lexical_state: Optional[dict] = None
+    lexical_html: Optional[str] = None
 
 
 class SubmissionRevisionResponse(BaseModel):
