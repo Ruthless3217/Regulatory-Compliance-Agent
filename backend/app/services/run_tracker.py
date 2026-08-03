@@ -80,7 +80,15 @@ async def close_run(db: Session, run: AnalysisRun, final_state: dict, user=None)
     if final_state.get("run_metadata"):
         run.run_metadata = final_state["run_metadata"]
 
-    run.degraded_reason = final_state.get("error") if status == "failed" else None
+    # Keep the reason whenever the engine gave one, whatever the status.
+    #
+    # This used to be `if status == "failed" else None`, which discarded it for
+    # exactly the case that needs it most: "needs_review" is not a crash, it is
+    # a deliberate refusal with a named cause (product_unresolved,
+    # scope_metadata_missing, product_ambiguous, rules_unavailable...). Dropping
+    # it left the reviewer with an unexplained empty document and left the
+    # retrieval inspector reporting degraded_reason=None on a refused run.
+    run.degraded_reason = (final_state.get("error") or None) if status != "completed" else None
 
     db.commit()
     

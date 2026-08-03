@@ -16,6 +16,7 @@ import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { TablePlugin } from "@lexical/react/LexicalTablePlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
+import { getSubmissionImportHtml } from "@/lib/api";
 
 import { EditorToolbar } from "./EditorToolbar";
 import { SlashCommandPlugin } from "./SlashCommandPlugin";
@@ -32,25 +33,37 @@ const NODES = [
 /** Seeds the editor from imported HTML exactly once. Runs only when there is
  * no saved state — after the first save, lexical_state is authoritative and
  * re-seeding would discard the reviewer's edits. */
-function SeedFromHtml({ html }: { html: string }) {
+function SeedFromImport({ submissionId }: { submissionId: string }) {
   const [editor] = useLexicalComposerContext();
   const seeded = React.useRef(false);
   React.useEffect(() => {
     if (seeded.current) return;
     seeded.current = true;
-    editor.update(() => {
-      const dom = new DOMParser().parseFromString(html, "text/html");
-      const nodes = $generateNodesFromDOM(editor, dom);
-      $getRoot().clear().select();
-      $insertNodes(nodes);
-    });
-  }, [editor, html]);
+    let cancelled = false;
+    // Fetched, not passed in: converting a long document takes seconds, and
+    // doing it inside GET /submissions/{id} made opening one time out.
+    getSubmissionImportHtml(submissionId)
+      .then(({ html }) => {
+        if (cancelled || !html) return;
+        editor.update(() => {
+          const dom = new DOMParser().parseFromString(html, "text/html");
+          const nodes = $generateNodesFromDOM(editor, dom);
+          $getRoot().clear().select();
+          $insertNodes(nodes);
+        });
+      })
+      .catch(() => {
+        // Non-fatal: the editor stays empty and the reviewer can still switch
+        // to View or Split. Failing loudly here would strand them entirely.
+      });
+    return () => { cancelled = true; };
+  }, [editor, submissionId]);
   return null;
 }
 
 export function LexicalDocument({
   initialState,
-  initialHtml,
+  submissionId,
   readOnly = false,
   onChange,
   violations,
@@ -59,7 +72,8 @@ export function LexicalDocument({
   onUnlocatedFindings,
 }: {
   initialState?: Record<string, unknown> | null;
-  initialHtml?: string | null;
+  /** Seed source is fetched from this submission when there is no saved state. */
+  submissionId: string;
   readOnly?: boolean;
   onChange?: (doc: { state: SerializedEditorState; html: string }) => void;
   /** Findings to draw on the document. Decorations only — never editor content,
@@ -124,7 +138,7 @@ export function LexicalDocument({
             }}
           />
         )}
-        {!initialState && initialHtml && <SeedFromHtml html={initialHtml} />}
+        {!initialState && <SeedFromImport submissionId={submissionId} />}
       </div>
     </LexicalComposer>
   );

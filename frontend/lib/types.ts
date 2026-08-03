@@ -32,8 +32,10 @@ export interface Submission {
   /** Working document. Authoritative once present; the uploaded file stays
    * immutable and is kept only as the original for audit. */
   lexical_state?: Record<string, unknown> | null;
-  /** Seeds the editor on first open when lexical_state is still null. */
-  import_html?: string | null;
+  /** True when an import source exists to seed the editor from. The HTML
+   * itself is NOT here — converting a long document costs seconds, so it is
+   * fetched from /import-html only when the editor actually needs it. */
+  has_import_source?: boolean;
 }
 
 export interface Rule {

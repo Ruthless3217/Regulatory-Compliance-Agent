@@ -262,7 +262,7 @@ export function ReviewTab() {
   const [unlocated, setUnlocated] = React.useState<Array<{ id: string; reason: string }>>([]);
   // Nothing to toggle to when there are no page images — stay on the text pane.
   const usePdfPane = pagesRendered && !editing;
-  const hasEditor = !!(submission.lexical_state || submission.import_html);
+  const hasEditor = !!(submission.lexical_state || submission.has_import_source);
 
   // --- Collapsible rails ----------------------------------------------------
   const [contextOpen, setContextOpen] = useRailOpen("review.rail.context");
@@ -452,7 +452,7 @@ export function ReviewTab() {
             {hasEditor ? (
               <LexicalDocument
                 initialState={submission.lexical_state}
-                initialHtml={submission.import_html}
+                submissionId={submission.id}
                 readOnly={isHistorical}
                 onChange={setLexicalDoc}
                 violations={displayViolations}
@@ -484,7 +484,7 @@ export function ReviewTab() {
           // with no working document keeps the offset-highlighted pane below.
           <LexicalDocument
             initialState={submission.lexical_state}
-            initialHtml={submission.import_html}
+            submissionId={submission.id}
             readOnly={isHistorical}
             onChange={setLexicalDoc}
             violations={displayViolations}

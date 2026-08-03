@@ -107,6 +107,12 @@ export async function listSubmissions(
   const qs = limit ? `?limit=${limit}` : "";
   return jsonFetch(`${base()}/submissions${qs}`);
 }
+/** Seed HTML for the editor. Its own request because converting a long
+ * DOCX/PDF takes seconds — it used to be computed inside GET /submissions/{id},
+ * which made simply opening a document time out. */
+export async function getSubmissionImportHtml(id: string): Promise<{ html: string | null }> {
+  return jsonFetch(`${base()}/submissions/${id}/import-html`);
+}
 export async function getSubmission(id: string): Promise<Submission> {
   return jsonFetch(`${base()}/submissions/${id}`);
 }

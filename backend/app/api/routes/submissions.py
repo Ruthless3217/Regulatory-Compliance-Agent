@@ -10,6 +10,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, UploadFile, File, Form, Query, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -222,9 +223,14 @@ async def get_submission(
         # `import_html` seeds the editor the first time, and is None for any
         # submission with no importable upload (which keeps the text pane).
         "lexical_state": submission.lexical_state,
-        "import_html": (
-            None if submission.lexical_state
-            else lexical_document_service.build_import_html(submission)
+        # NOT the import HTML. Converting a long DOCX/PDF costs seconds of CPU,
+        # and computing it here made opening a submission slow enough to time
+        # out — while blocking the event loop for every other request, because
+        # build_import_html is synchronous and this handler is async. The editor
+        # fetches it from /import-html only when it actually needs to seed.
+        "has_import_source": (
+            submission.lexical_state is None
+            and lexical_document_service.can_import(submission)
         ),
         "status": submission.status,
         "product_line": submission.product_line,
@@ -232,6 +238,31 @@ async def get_submission(
         "page_render_status": submission.page_render_status,
         "submitted_at": submission.submitted_at.isoformat()
     }
+
+
+@router.get("/{submission_id}/import-html")
+async def get_submission_import_html(
+    submission_id: str,
+    user: dict = Depends(require("submission:read")),
+    db: Session = Depends(get_db),
+):
+    """HTML to seed the editor the first time this submission is opened.
+
+    Its own endpoint, and off the event loop, because converting a long
+    document takes seconds: inline in GET /submissions/{id} it made simply
+    opening a document time out, and blocked every other request on the worker
+    while it ran. Only the editor calls this, and only when there is no saved
+    working document to load instead.
+    """
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if submission.lexical_state is not None:
+        # The saved state is authoritative; re-seeding would discard edits.
+        return {"html": None, "reason": "submission already has a working document"}
+
+    html = await run_in_threadpool(lexical_document_service.build_import_html, submission)
+    return {"html": html}
 
 
 @router.get("/{submission_id}/pages/{n}")

@@ -15,6 +15,25 @@ from app.services.lexical_import import LexicalImportError, docx_to_html, pdf_to
 
 logger = logging.getLogger(__name__)
 
+# The formats with an importable source. One list, so `can_import` can never
+# answer yes to something `build_import_html` then refuses.
+_IMPORTABLE_CONTENT_TYPES = ("docx", "pdf")
+
+
+def can_import(submission: Submission) -> bool:
+    """Whether an import is possible, WITHOUT doing it.
+
+    `GET /submissions/{id}` needs to tell the editor there is something to seed
+    from. It must not convert the document to find out: that is seconds of CPU
+    for a long file, and answering a yes/no question by doing the work is how
+    opening a submission started timing out.
+    """
+    return (
+        submission.content_type in _IMPORTABLE_CONTENT_TYPES
+        and bool(submission.file_path)
+        and os.path.exists(submission.file_path)
+    )
+
 
 def build_import_html(submission: Submission) -> Optional[str]:
     """HTML to seed this submission's editor, or None if it has no importable
@@ -24,7 +43,7 @@ def build_import_html(submission: Submission) -> Optional[str]:
     not, and its export will not look like the original. See the fidelity note
     in ``lexical_import``.
     """
-    if submission.content_type not in ("docx", "pdf") or not submission.file_path:
+    if submission.content_type not in _IMPORTABLE_CONTENT_TYPES or not submission.file_path:
         return None
     if not os.path.exists(submission.file_path):
         logger.warning("lexical import: upload missing for %s", submission.id)
