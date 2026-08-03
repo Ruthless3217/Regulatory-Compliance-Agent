@@ -10,6 +10,7 @@ import logging
 import uuid
 from typing import Iterable, List, Optional
 
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.rule import Rule
@@ -72,8 +73,25 @@ async def upsert_rules(rules: Iterable[Rule]) -> None:
 
 
 async def upsert_all_active_rules(db: Session) -> int:
-    """Backfill: re-index every active rule. Idempotent."""
-    rules = db.query(Rule).filter(Rule.is_active == True).all()  # noqa: E712
+    """Reconcile the vector index with active/effective leaf rule versions."""
+    retired_ids = [
+        str(row[0])
+        for row in db.query(Rule.id).filter(
+            or_(Rule.is_active == False, Rule.superseded_by.isnot(None))
+        ).all()
+    ]
+    if retired_ids:
+        store = get_vector_store()
+        try:
+            await store.delete("rag_rules", retired_ids)
+        except RAGDegraded as e:
+            raise RAGIndexingFailed(str(e)) from e
+
+    rules = db.query(Rule).filter(
+        Rule.is_active == True,
+        Rule.superseded_by.is_(None),
+        or_(Rule.effective_date.is_(None), Rule.effective_date <= func.now()),
+    ).all()  # noqa: E712
     await upsert_rules(rules)
     return len(rules)
 

@@ -133,3 +133,35 @@ async def link_rules_to_passage(
         raise RAGIndexingFailed(str(e)) from e
     finally:
         db.close()
+
+
+async def link_rule_to_document(
+    document_id: uuid.UUID | str,
+    rule_id: uuid.UUID | str,
+) -> None:
+    """Publish one approved rule's provenance across its staged passages."""
+    db: Session = SessionLocal()
+    try:
+        db.execute(
+            text(
+                """
+                UPDATE rag_source_docs
+                SET derived_rule_ids = (
+                  SELECT ARRAY(
+                    SELECT DISTINCT unnest(
+                      derived_rule_ids || ARRAY[CAST(:rid AS UUID)]
+                    )
+                  )
+                )
+                WHERE document_id = CAST(:document_id AS UUID)
+                """
+            ),
+            {"rid": str(rule_id), "document_id": str(document_id)},
+        )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error("link_rule_to_document failed: %s", e)
+        raise RAGIndexingFailed(str(e)) from e
+    finally:
+        db.close()

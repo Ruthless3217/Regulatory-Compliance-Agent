@@ -4,7 +4,9 @@ Handles CRUD operations and active rule retrieval for the compliance engine.
 """
 import logging
 import uuid
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -13,6 +15,21 @@ from app.services.llm_service import llm_service
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+_ALLOWED_PRODUCT_LINES = {
+    "global", "term", "ulip", "rider", "group", "savings_endowment",
+    "pension_annuity", "par", "non_par",
+}
+
+
+def _normalize_product_line(value: Optional[str]) -> str:
+    """Require an explicit supported scope at the service boundary."""
+    normalized = (value or "").strip().lower()
+    if normalized not in _ALLOWED_PRODUCT_LINES:
+        raise ValueError(
+            "product_line must be an explicit supported scope or global"
+        )
+    return normalized
 
 
 class RulesUnavailableError(RuntimeError):
@@ -57,7 +74,11 @@ class RuleGeneratorService:
         still returns ``{}``.
         """
         try:
-            query = db.query(Rule).filter(Rule.is_active == True)
+            query = db.query(Rule).filter(
+                Rule.is_active == True,
+                Rule.superseded_by.is_(None),
+                or_(Rule.effective_date.is_(None), Rule.effective_date <= func.now()),
+            )
 
             if project_id:
                 query = query.filter(
@@ -92,7 +113,9 @@ class RuleGeneratorService:
         try:
             query = db.query(Rule).filter(
                 Rule.is_active == True,
-                Rule.category == category
+                Rule.category == category,
+                Rule.superseded_by.is_(None),
+                or_(Rule.effective_date.is_(None), Rule.effective_date <= func.now()),
             )
             if project_id:
                 query = query.filter(
@@ -119,6 +142,7 @@ class RuleGeneratorService:
         is_active: bool = True,
     ) -> Rule:
         """Create a new compliance rule."""
+        product_line = _normalize_product_line(product_line)
         # project_id is accepted for forward-compat but the Rule model has no
         # such column yet — silently drop it instead of breaking the insert.
         _ = project_id
@@ -135,6 +159,7 @@ class RuleGeneratorService:
             is_auto_generated=is_auto,
             product_line=product_line,
             jurisdiction=jurisdiction,
+            effective_date=datetime.now(timezone.utc) if is_active else None,
         )
         db.add(rule)
         db.commit()
@@ -159,9 +184,9 @@ class RuleGeneratorService:
         source passages into the RAG store so generated rules can carry a
         verbatim citation back to the regulator passage that produced them.
 
-        ``product_line``/``jurisdiction``, when given, are stamped onto every
-        rule extracted from this document (the whole document is scoped to one
-        product/jurisdiction; per-rule overrides aren't extracted by the LLM).
+        Required product_line and optional jurisdiction are stamped onto every
+        rule extracted from this document. The whole document has one scope;
+        per-rule overrides are not extracted by the LLM.
         """
         logger.info(f"Starting rule generation from document: {document_title}")
 
@@ -174,6 +199,12 @@ class RuleGeneratorService:
             "source_doc_id": None,
             "source_passages_indexed": 0,
         }
+
+        try:
+            product_line = _normalize_product_line(product_line)
+        except ValueError as exc:
+            result["errors"].append(str(exc))
+            return result
 
         if not document_content or len(document_content) < 50:
             result["errors"].append("Document content too short or empty")
@@ -241,7 +272,6 @@ Return at least one rule unless the document genuinely has none.
                 system_prompt=system_prompt
             )
 
-            created_rule_ids: List[uuid.UUID] = []
             for rule_data in extraction_result.rules:
                 try:
                     rule = self.create_rule(
@@ -261,7 +291,6 @@ Return at least one rule unless the document genuinely has none.
                         jurisdiction=jurisdiction,
                         is_active=False,
                     )
-                    created_rule_ids.append(rule.id)
                     result["rules"].append({
                         "id": str(rule.id),
                         "category": rule.category,
@@ -282,19 +311,6 @@ Return at least one rule unless the document genuinely has none.
                     logger.error(f"Failed to save rule: {e}")
                     result["rules_failed"] += 1
                     result["errors"].append(str(e))
-
-            # 3. Coarse-grained backfill: associate every passage of this
-            # document with every rule extracted from it. The chat layer
-            # then quotes the most-similar passage at query time. A
-            # finer-grained per-passage attribution can replace this if/when
-            # the LLM is asked to cite the source passage index per rule.
-            if indexed_passages and created_rule_ids:
-                try:
-                    from app.services.rag.indexers.source_docs_indexer import link_rules_to_passage
-                    for passage_id, _ in indexed_passages:
-                        await link_rules_to_passage(passage_id, created_rule_ids)
-                except Exception as e:
-                    logger.warning(f"RAG link_rules_to_passage failed (non-fatal): {e}")
 
             result["success"] = result["rules_created"] > 0
             logger.info(f"Generated {result['rules_created']} rules from document")

@@ -6,6 +6,7 @@ Handles CRUD for compliance rules and AI-based rule generation from documents.
 import logging
 import os
 import uuid
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
@@ -36,6 +37,22 @@ _ALLOWED_PRODUCT_LINES = {
 }
 
 
+def _validated_product_line(value: Optional[str]) -> str:
+    """Return a canonical, explicit scope or reject the write.
+
+    NULL used to mean global at retrieval time, which made every omitted tag
+    silently cross-product. Legacy rows may remain nullable until curated, but
+    every new/activated version must state its applicability.
+    """
+    normalized = (value or "").strip().lower()
+    if normalized not in _ALLOWED_PRODUCT_LINES:
+        raise HTTPException(
+            status_code=400,
+            detail="product_line must be an explicit supported scope or global",
+        )
+    return normalized
+
+
 def safe_extension(filename: str) -> str:
     """Return a safe, whitelisted file extension (with leading dot) derived
     from `filename`, or '' if unknown/absent. Path components are stripped."""
@@ -61,6 +78,25 @@ async def _safe_rag_delete(rule_id) -> None:
         logger.warning(f"RAG delete failed for rule {rule_id} (non-fatal): {e}")
 
 
+def _actor_id(user) -> Optional[uuid.UUID]:
+    return user.get("id") if isinstance(user, dict) else getattr(user, "id", None)
+
+
+async def _safe_link_source_document(document_id, rule_id) -> None:
+    """Best-effort publication of staged source passages after approval."""
+    if not document_id:
+        return
+    try:
+        from app.services.rag.indexers.source_docs_indexer import link_rule_to_document
+        await link_rule_to_document(document_id, rule_id)
+    except Exception as exc:
+        logger.warning(
+            "Source-document approval link failed for rule %s (non-fatal): %s",
+            rule_id,
+            exc,
+        )
+
+
 @router.post("", response_model=dict)
 async def create_rule(
     rule: RuleCreate,
@@ -68,6 +104,7 @@ async def create_rule(
     db: Session = Depends(get_db)
 ):
     """Create a new compliance rule manually."""
+    product_line = _validated_product_line(rule.product_line)
     new_rule = rule_generator_service.create_rule(
         db=db,
         category=rule.category,
@@ -75,7 +112,8 @@ async def create_rule(
         severity=rule.severity,
         keywords=rule.keywords,
         points_deduction=rule.points_deduction,
-        product_line=rule.product_line,
+        created_by=_actor_id(user),
+        product_line=product_line,
         jurisdiction=rule.jurisdiction,
     )
     await _safe_rag_upsert(new_rule.id, db)
@@ -172,6 +210,21 @@ async def update_rule(
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
 
+    if rule.superseded_by is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="This rule version is superseded; edit the current leaf version",
+        )
+
+    if product_line is not None:
+        product_line = _validated_product_line(product_line)
+    will_be_active = rule.is_active if is_active is None else is_active
+    if will_be_active:
+        # Every active version needs an explicit applicability decision. This
+        # also covers content edits, which create an active successor version.
+        effective_scope = product_line if product_line is not None else rule.product_line
+        product_line = _validated_product_line(effective_scope)
+
     is_content_change = (
         (severity is not None and severity != rule.severity)
         or (rule_text is not None and rule_text != rule.rule_text)
@@ -201,10 +254,18 @@ async def update_rule(
             rule.is_active = is_active
         if rule.is_active:
             metadata["lifecycle"] = "reviewed_active"
+            metadata["approved_at"] = datetime.now(timezone.utc).isoformat()
+            actor_id = _actor_id(user)
+            if actor_id:
+                metadata["approved_by"] = str(actor_id)
+            if rule.effective_date is None:
+                rule.effective_date = datetime.now(timezone.utc)
         rule.rule_metadata = metadata
         db.commit()
         db.refresh(rule)
         await _safe_rag_upsert(rule.id, db)
+        if rule.is_active:
+            await _safe_link_source_document(metadata.get("source_doc_id"), rule.id)
         return {
             "id": str(rule.id), "category": rule.category,
             "rule_text": rule.rule_text, "severity": rule.severity,
@@ -215,10 +276,25 @@ async def update_rule(
     if not is_content_change:
         # Lifecycle-only (activate/deactivate) — mutate in place.
         if is_active is not None:
+            was_active = bool(rule.is_active)
             rule.is_active = is_active
+            if is_active and not was_active:
+                rule.effective_date = datetime.now(timezone.utc)
+                lifecycle_metadata = dict(rule.rule_metadata or {})
+                lifecycle_metadata["lifecycle"] = "reviewed_active"
+                lifecycle_metadata["approved_at"] = datetime.now(timezone.utc).isoformat()
+                actor_id = _actor_id(user)
+                if actor_id:
+                    lifecycle_metadata["approved_by"] = str(actor_id)
+                rule.rule_metadata = lifecycle_metadata
         db.commit()
         db.refresh(rule)
         await _safe_rag_upsert(rule.id, db)
+        if rule.is_active:
+            await _safe_link_source_document(
+                (rule.rule_metadata or {}).get("source_doc_id"),
+                rule.id,
+            )
         return {
             "id": str(rule.id), "category": rule.category, "rule_text": rule.rule_text,
             "severity": rule.severity, "is_active": rule.is_active,
@@ -226,14 +302,22 @@ async def update_rule(
         }
 
     # Content change → create a new version row.
+    new_metadata = dict(rule.rule_metadata or {})
+    if will_be_active:
+        new_metadata["lifecycle"] = "reviewed_active"
+        new_metadata["approved_at"] = datetime.now(timezone.utc).isoformat()
+        actor_id = _actor_id(user)
+        if actor_id:
+            new_metadata["approved_by"] = str(actor_id)
+
     new_rule = Rule(
         category=rule.category,
         rule_text=rule_text if rule_text is not None else rule.rule_text,
         severity=severity if severity is not None else rule.severity,
         keywords=rule.keywords,
         pattern=rule.pattern,
-        is_active=is_active if is_active is not None else True,
-        rule_metadata=rule.rule_metadata,
+        is_active=will_be_active,
+        rule_metadata=new_metadata,
         points_deduction=rule.points_deduction,
         created_by=rule.created_by,
         is_auto_generated=rule.is_auto_generated,
@@ -266,6 +350,11 @@ async def update_rule(
 
     # New version goes into RAG; old row stays (is_active=false → filtered out).
     await _safe_rag_upsert(new_rule.id, db)
+    if new_rule.is_active:
+        await _safe_link_source_document(
+            (new_rule.rule_metadata or {}).get("source_doc_id"),
+            new_rule.id,
+        )
 
     return {
         "id": str(new_rule.id),
@@ -281,17 +370,37 @@ async def update_rule(
 
 @router.delete("/{rule_id}")
 async def delete_rule(rule_id: str, user: dict = Depends(require("rules:write")), db: Session = Depends(get_db)):
-    """Delete a rule."""
+    """Discard an unpublished draft or retire a published rule.
+
+    Published/versioned rows remain for violation provenance; only a draft
+    that never participated in grading is safe to remove physically.
+    """
     rule = db.query(Rule).filter(Rule.id == rule_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
 
-    db.delete(rule)
+    metadata = dict(rule.rule_metadata or {})
+    is_unpublished_draft = (
+        not rule.is_active
+        and rule.is_auto_generated
+        and metadata.get("lifecycle") == "draft_pending_review"
+        and rule.superseded_by is None
+    )
+    if is_unpublished_draft:
+        db.delete(rule)
+        action = "deleted"
+    else:
+        rule.is_active = False
+        metadata["lifecycle"] = "retired"
+        metadata["retired_at"] = datetime.now(timezone.utc).isoformat()
+        rule.rule_metadata = metadata
+        db.add(rule)
+        action = "retired"
     db.commit()
 
     await _safe_rag_delete(rule_id)
 
-    return {"message": "Rule deleted", "id": rule_id}
+    return {"message": f"Rule {action}", "id": rule_id, "action": action}
 
 
 @router.post("/generate-from-document", dependencies=[Depends(llm_rate_limit)])
@@ -310,12 +419,7 @@ async def generate_rules_from_document(
     """
     from app.config import settings
 
-    product_line = product_line.strip().lower()
-    if product_line not in _ALLOWED_PRODUCT_LINES:
-        raise HTTPException(
-            status_code=400,
-            detail="product_line must be an explicit supported scope or global",
-        )
+    product_line = _validated_product_line(product_line)
 
     # Get content
     document_content = content or ""
@@ -363,12 +467,10 @@ async def generate_rules_from_document(
         )
         document_content = document_content[:_MAX_DOC_CHARS]
 
-    # v1 has no auth; created_by is nullable on the rules table. Passing None
-    # avoids the FK to a non-existent system-user row.
     result = await rule_generator_service.generate_rules_from_text(
         document_content=document_content,
         document_title=title,
-        created_by_user_id=None,
+        created_by_user_id=_actor_id(user),
         db=db,
         instructions=instructions,
         product_line=product_line,

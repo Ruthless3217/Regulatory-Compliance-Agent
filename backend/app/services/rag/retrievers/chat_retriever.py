@@ -13,10 +13,12 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.violation import Violation
+from app.models.rule import Rule
 from app.services.rag.errors import RAGDegraded, RAGEmbedFailed
 from app.services.rag.factory import get_embedder, get_vector_store
 from app.services.rag.ports import SearchHit
@@ -45,6 +47,46 @@ class ChatContext:
 
 def _hit_to_dict(h: SearchHit) -> Dict[str, Any]:
     return {"id": h.id, "score": h.score, **h.fields}
+
+
+def _approved_source_passages(
+    hits: List[SearchHit],
+    db: Session,
+) -> List[SearchHit]:
+    """Keep passages linked to at least one active/effective leaf rule."""
+    candidate_ids = set()
+    for hit in hits:
+        for rule_id in (hit.fields.get("derived_rule_ids") or []):
+            try:
+                candidate_ids.add(uuid.UUID(str(rule_id)))
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Ignoring invalid derived rule id on source passage %s: %r",
+                    hit.id,
+                    rule_id,
+                )
+    if not candidate_ids:
+        return []
+    rows = (
+        db.query(Rule.id)
+        .filter(
+            Rule.id.in_(candidate_ids),
+            Rule.is_active == True,
+            Rule.superseded_by.is_(None),
+            or_(Rule.effective_date.is_(None), Rule.effective_date <= func.now()),
+        )
+        .all()
+    )
+    approved_ids = {
+        str(row[0] if isinstance(row, (tuple, list)) else getattr(row, "id", row))
+        for row in rows
+    }
+    return [
+        hit for hit in hits
+        if approved_ids & {
+            str(rule_id) for rule_id in (hit.fields.get("derived_rule_ids") or [])
+        }
+    ]
 
 
 class ChatRetriever:
@@ -103,7 +145,10 @@ class ChatRetriever:
                     index="rag_source_docs",
                     query_text=query,
                     query_vector=qvec,
-                    top_k=top_k_source_passages,
+                    # Pending passages are filtered after retrieval. Pull a
+                    # wider candidate set so drafts do not crowd out approved
+                    # evidence before that safety filter runs.
+                    top_k=max(20, top_k_source_passages * 5),
                     recall_pool=settings.rag_recall_pool,
                     rrf_k=settings.rag_rrf_k,
                 )
@@ -126,6 +171,16 @@ class ChatRetriever:
         rules_hits, chunks_hits, passages_hits, product_hits = await asyncio.gather(
             get_rules(), get_chunks(), get_passages(), get_product_docs()
         )
+        try:
+            passages_hits = _approved_source_passages(
+                passages_hits, db
+            )[:top_k_source_passages]
+        except Exception as exc:
+            logger.warning(
+                "Approved source-passage filter failed closed: %s",
+                exc,
+            )
+            passages_hits = []
 
         # `degraded` reflects loss of COMPLIANCE grounding (rules/chunks/source
         # passages). Product-doc passages enrich product-fact/wording answers
