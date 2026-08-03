@@ -344,7 +344,7 @@ class Settings(BaseSettings):
     # (analysis_runs.scoring_policy_version, migration 0029) so a later change
     # to the scoring formula/weights can't silently make historic run scores
     # incomparable without a record of which policy produced them.
-    scoring_policy_version: str = "1.0"
+    scoring_policy_version: str = "absolute-soft-tail-v2"
 
     class Config:
         env_file = ".env"
