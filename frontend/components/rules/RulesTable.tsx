@@ -26,6 +26,8 @@ type Cat = (typeof CATEGORIES)[number];
 type Sev = (typeof SEVERITIES)[number];
 type Active = "all" | "active" | "inactive";
 
+const PAGE_SIZE = 50;
+
 export function RulesTable({ initialRules }: Props) {
   const { me } = useAuth();
   const canEdit = me?.role !== "user";
@@ -34,6 +36,7 @@ export function RulesTable({ initialRules }: Props) {
   const [cat, setCat] = React.useState<Cat>("all");
   const [sev, setSev] = React.useState<Sev>("all");
   const [act, setAct] = React.useState<Active>("active");
+  const [page, setPage] = React.useState(0);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editText, setEditText] = React.useState("");
   const [editScope, setEditScope] = React.useState("");
@@ -47,14 +50,30 @@ export function RulesTable({ initialRules }: Props) {
     return true;
   });
 
+  // Clamp rather than reset: deleting the last row on the last page must not
+  // strand the view on an empty page.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount - 1);
+  const start = current * PAGE_SIZE;
+  const visible = filtered.slice(start, start + PAGE_SIZE);
+
   const setBusy = (id: string, busy: boolean) =>
     setPending((p) => {
       const next = new Set(p);
-      busy ? next.add(id) : next.delete(id);
+      if (busy) next.add(id);
+      else next.delete(id);
       return next;
     });
 
   const toggle = async (r: Rule) => {
+    if (
+      !r.is_active &&
+      !PRODUCT_SCOPES.includes((r.product_line ?? "") as (typeof PRODUCT_SCOPES)[number])
+    ) {
+      startEdit(r);
+      toast.error("Choose an explicit product scope before activating this legacy rule");
+      return;
+    }
     setBusy(r.id, true);
     try {
       await updateRule(r.id, { is_active: !r.is_active });
@@ -117,13 +136,23 @@ export function RulesTable({ initialRules }: Props) {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Chips label="Category" options={CATEGORIES} value={cat} onChange={(v) => setCat(v as Cat)} />
-        <Chips label="Severity" options={SEVERITIES} value={sev} onChange={(v) => setSev(v as Sev)} />
+        <Chips
+          label="Category"
+          options={CATEGORIES}
+          value={cat}
+          onChange={(v) => { setCat(v as Cat); setPage(0); }}
+        />
+        <Chips
+          label="Severity"
+          options={SEVERITIES}
+          value={sev}
+          onChange={(v) => { setSev(v as Sev); setPage(0); }}
+        />
         <Chips
           label="Status"
           options={["all", "active", "inactive"] as const}
           value={act}
-          onChange={(v) => setAct(v as Active)}
+          onChange={(v) => { setAct(v as Active); setPage(0); }}
         />
       </div>
 
@@ -147,7 +176,7 @@ export function RulesTable({ initialRules }: Props) {
                 </td>
               </tr>
             ) : (
-              filtered.map((r) => (
+              visible.map((r) => (
                 <tr key={r.id} className="border-b border-border last:border-0 align-top">
                   <td className="px-4 py-3"><Badge>{categoryLabel(r.category)}</Badge></td>
                   <td className="px-4 py-3"><SeverityBadge severity={r.severity} /></td>
@@ -230,7 +259,36 @@ export function RulesTable({ initialRules }: Props) {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">{filtered.length} of {rules.length} rules</p>
+      <nav aria-label="Rules pagination" className="mt-2 flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          {filtered.length === 0
+            ? `0 of ${rules.length} rules`
+            : `${start + 1}–${start + visible.length} of ${filtered.length} filtered (${rules.length} total)`}
+        </p>
+        {pageCount > 1 && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(current - 1)}
+              disabled={current === 0}
+            >
+              Previous
+            </Button>
+            <span className="text-xs text-muted-foreground" aria-live="polite">
+              Page {current + 1} of {pageCount}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(current + 1)}
+              disabled={current >= pageCount - 1}
+            >
+              Next
+            </Button>
+          </div>
+        )}
+      </nav>
     </div>
   );
 }

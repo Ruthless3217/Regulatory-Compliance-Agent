@@ -658,12 +658,6 @@ export default function AdminRetrievalPage() {
   const [rejected, setRejected] = React.useState<RetrievalRejectedInspection | null>(null);
   const [rejectedErr, setRejectedErr] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    listSubmissions()
-      .then((r) => setSubmissions(r.submissions || []))
-      .catch((e) => setSubsErr((e as Error).message));
-  }, []);
-
   const inspect = React.useCallback(async (fetcher: () => Promise<RetrievalInspection>) => {
     setLoading(true);
     setStoryErr(null);
@@ -685,11 +679,32 @@ export default function AdminRetrievalPage() {
     }
   }, []);
 
-  const onSubmission = (id: string) => {
-    setSubId(id);
-    setRunIdInput("");
-    if (id) inspect(() => getLatestSubmissionRetrieval(id));
-  };
+  const onSubmission = React.useCallback(
+    (id: string) => {
+      setSubId(id);
+      setRunIdInput("");
+      if (id) inspect(() => getLatestSubmissionRetrieval(id));
+    },
+    [inspect]
+  );
+
+  React.useEffect(() => {
+    listSubmissions()
+      .then((r) => {
+        const subs = r.submissions || [];
+        setSubmissions(subs);
+        // Open on the newest analysed submission so the page has content — an
+        // empty inspector reads as "retrieval recorded nothing". GET
+        // /submissions has no ORDER BY, so pick by date, not by position. No
+        // analysed submission (or none at all) leaves the empty state alone;
+        // a pending one has no retrieval story to show.
+        const latest = subs
+          .filter((s) => s.status === "analyzed")
+          .sort((a, b) => (b.submitted_at ?? "").localeCompare(a.submitted_at ?? ""))[0];
+        if (latest) onSubmission(latest.id);
+      })
+      .catch((e) => setSubsErr((e as Error).message));
+  }, [onSubmission]);
 
   return (
     <div className="mx-auto max-w-7xl px-8 py-8">

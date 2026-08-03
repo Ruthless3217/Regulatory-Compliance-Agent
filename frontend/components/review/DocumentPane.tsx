@@ -54,6 +54,43 @@ interface EditTarget {
  * Save commits); short single-line spans get an input where Enter commits. */
 const isBlockSpan = (s: string) => s.includes("\n") || s.length > 90;
 
+/**
+ * Document text is Markdown: DOCX extraction emits "## Title" for every Word
+ * heading (preprocessing_service._extract_docx) and .md uploads are stored
+ * verbatim — so an ATX marker must render as a heading, not as literal "##".
+ *
+ * Only whole-paragraph headings are promoted, and only the leading marker is
+ * hidden: every <mark> here is anchored by ABSOLUTE offsets into the raw
+ * document (buildParagraphs → piece.start/end, spliced back by commitSpan), so
+ * this stays a display-only transform that never touches a piece's offsets and
+ * never rewrites a flagged piece's text.
+ *
+ * ponytail: headings only, done by regex rather than react-markdown. Handing
+ * the raw text to react-markdown would return its own DOM and destroy the
+ * offset-anchored <mark>s (highlighting, click-to-edit, scroll-to-selection).
+ * Bold/lists/tables therefore still render raw — extraction never emits them.
+ * Upgrade path if .md uploads need full fidelity: a remark plugin that splits
+ * mdast text nodes at span offsets (node.position.*.offset are source offsets)
+ * and emits the <mark>s, replacing buildParagraphs.
+ */
+const HEADING_RE = /^(#{1,6})\s+/;
+/** Index 0 = not a heading, so the level doubles as the tag lookup. */
+const BLOCK_TAGS = ["p", "h1", "h2", "h3", "h4", "h5", "h6"] as const;
+
+/** Heading level of a paragraph, or 0. Requires a single-line paragraph whose
+ * first piece is unflagged — a marker inside a flagged span is left literal so
+ * the <mark> keeps matching the text its editor will splice. */
+function headingLevel(pieces: DocPiece[]): number {
+  const m = pieces[0].text.match(HEADING_RE);
+  if (!m || pieces[0].violationId) return 0;
+  if (pieces.some((p) => p.text.includes("\n"))) return 0;
+  return m[1].length;
+}
+
+const headingClass = (level: number) =>
+  "mb-2 mt-6 font-sans font-semibold first:mt-0 " +
+  (level === 1 ? "text-[22px]" : level === 2 ? "text-[19px]" : "text-[16px]");
+
 export function DocumentPane({ violations, selectedViolationId, onSelect, readOnly }: Props) {
   const { submission, documentText, applyEdit, setViolations } = useSubmissionWorkspace();
   const paragraphs = React.useMemo(
@@ -243,43 +280,53 @@ export function DocumentPane({ violations, selectedViolationId, onSelect, readOn
           {paragraphs.length === 0 && (
             <p className="text-muted-foreground">This submission has no content to display.</p>
           )}
-          {paragraphs.map((pieces) => (
-            <p key={pieces[0].start} className="whitespace-pre-wrap">
-              {pieces.map((piece) =>
-                !piece.violationId ? (
-                  <React.Fragment key={piece.start}>{piece.text}</React.Fragment>
-                ) : editing &&
-                  editing.start === piece.start &&
-                  editing.violationId === piece.violationId ? (
-                  <SpanEditor
-                    key={`edit-${piece.start}`}
-                    target={editing}
-                    violation={violationById.get(piece.violationId)}
-                    onCancel={() => setEditing(null)}
-                    onCommit={commitSpan}
-                  />
-                ) : (
-                  <mark
-                    key={piece.start}
-                    data-violation-id={piece.violationId}
-                    data-severity={normalizeSeverity(piece.severity)}
-                    // Dashed underline = a reviewer wrote this flag, not the model.
-                    data-source={violationById.get(piece.violationId)?.source ?? "model"}
-                    title={
-                      violationById.get(piece.violationId)?.source === "reviewer"
-                        ? "Reviewer-added issue — click to edit this section"
-                        : readOnly
-                          ? undefined
-                          : "Click to edit this section"
-                    }
-                    onClick={() => openEditor(piece)}
-                  >
-                    {piece.text}
-                  </mark>
-                )
-              )}
-            </p>
-          ))}
+          {paragraphs.map((pieces) => {
+            const level = headingLevel(pieces);
+            const Block = BLOCK_TAGS[level];
+            return (
+              <Block
+                key={pieces[0].start}
+                className={level ? headingClass(level) : "whitespace-pre-wrap"}
+              >
+                {pieces.map((piece, i) =>
+                  !piece.violationId ? (
+                    <React.Fragment key={piece.start}>
+                      {/* Hide the ATX marker; the piece's own offsets are untouched. */}
+                      {i === 0 && level ? piece.text.replace(HEADING_RE, "") : piece.text}
+                    </React.Fragment>
+                  ) : editing &&
+                    editing.start === piece.start &&
+                    editing.violationId === piece.violationId ? (
+                    <SpanEditor
+                      key={`edit-${piece.start}`}
+                      target={editing}
+                      violation={violationById.get(piece.violationId)}
+                      onCancel={() => setEditing(null)}
+                      onCommit={commitSpan}
+                    />
+                  ) : (
+                    <mark
+                      key={piece.start}
+                      data-violation-id={piece.violationId}
+                      data-severity={normalizeSeverity(piece.severity)}
+                      // Dashed underline = a reviewer wrote this flag, not the model.
+                      data-source={violationById.get(piece.violationId)?.source ?? "model"}
+                      title={
+                        violationById.get(piece.violationId)?.source === "reviewer"
+                          ? "Reviewer-added issue — click to edit this section"
+                          : readOnly
+                            ? undefined
+                            : "Click to edit this section"
+                      }
+                      onClick={() => openEditor(piece)}
+                    >
+                      {piece.text}
+                    </mark>
+                  )
+                )}
+              </Block>
+            );
+          })}
         </article>
       </div>
 

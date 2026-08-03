@@ -319,8 +319,10 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5" title="Your verdict tunes this rule's weight">
+      {/* Wraps: Button is whitespace-nowrap, so at the pane's ~400px default
+          the verdict row used to overflow the card and clip "Apply fix". */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5" title="Your verdict tunes this rule's weight">
           <span className="micro-label text-muted-foreground">Verdict</span>
           <Button
             variant={verdict === "correct" ? "default" : "ghost"}
@@ -350,7 +352,7 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
             Dismiss
           </Button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {fixApplied && <Badge tone="success">Applied</Badge>}
           {reviewerAuthored && (
             <Button

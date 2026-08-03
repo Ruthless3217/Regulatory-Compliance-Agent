@@ -35,8 +35,11 @@ const ORDER: { key: Key; label: string; dotClass?: string }[] = [
   { key: "low", label: "Low", dotClass: "bg-sev-low" },
 ];
 
+// w-full/min-w-0: a <select> is intrinsically as wide as its widest <option>
+// (long section titles, "All review status"), which otherwise blows out the
+// grid track and makes the row wrap raggedly in the ~400px pane.
 const SELECT_CLASS =
-  "h-[26px] rounded-sm border border-border bg-background px-2 text-xs text-muted-foreground " +
+  "h-[26px] w-full min-w-0 rounded-sm border border-border bg-background px-2 text-xs text-muted-foreground " +
   "transition-colors hover:border-foreground hover:text-foreground " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 
@@ -70,8 +73,10 @@ export function FilterChipBar({ counts, value, onChange, selectFilters }: Props)
       })}
 
       {selectFilters && selectFilters.length > 0 && (
-        <>
-          <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+        // w-full breaks the selects onto their own line under the chips; auto-fit
+        // fills as many even columns as fit (2 in the 400px pane) instead of
+        // packing content-sized selects greedily.
+        <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-1.5">
           {selectFilters.map((f) => (
             <select
               key={f.key}
@@ -88,7 +93,7 @@ export function FilterChipBar({ counts, value, onChange, selectFilters }: Props)
               ))}
             </select>
           ))}
-        </>
+        </div>
       )}
     </div>
   );
