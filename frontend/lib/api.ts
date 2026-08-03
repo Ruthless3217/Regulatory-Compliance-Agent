@@ -110,7 +110,15 @@ export async function listSubmissions(
 /** Seed HTML for the editor. Its own request because converting a long
  * DOCX/PDF takes seconds — it used to be computed inside GET /submissions/{id},
  * which made simply opening a document time out. */
-export async function getSubmissionImportHtml(id: string): Promise<{ html: string | null }> {
+export async function getSubmissionImportHtml(
+  id: string
+): Promise<{
+  html: string | null;
+  /** imported | unavailable (nothing to import) | failed (conversion error).
+   * `reason` is reviewer-facing prose, so it can be rendered directly. */
+  status: "imported" | "unavailable" | "failed";
+  reason: string | null;
+}> {
   return jsonFetch(`${base()}/submissions/${id}/import-html`);
 }
 export async function getSubmission(id: string): Promise<Submission> {

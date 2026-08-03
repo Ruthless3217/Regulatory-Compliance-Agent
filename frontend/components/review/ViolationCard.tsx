@@ -10,6 +10,7 @@ import { ActionTags } from "@/components/violation/ActionTags";
 import { PrecedentNote } from "@/components/violation/PrecedentNote";
 import { deleteReviewerViolation, submitReviewerAction } from "@/lib/api";
 import { RewritePreview } from "@/components/editor/RewritePreview";
+import { normalize } from "@/components/editor/findingAnchor";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import type { DismissReason, NotViolationReason, ReviewerActionType, Severity, Violation } from "@/lib/types";
 
@@ -107,6 +108,10 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
 
   const [applyFixBusy, setApplyFixBusy] = React.useState(false);
   const fixApplied = violation.fix_applied === true;
+  // No quoted span means the fix adds wording rather than replacing any — the
+  // document-level disclosure case. The reviewer is told which it is before
+  // and after the click, never left to infer it.
+  const insertOnly = !violation.current_text?.trim();
 
   // On-demand rewrite. RewritePreview holds the proposals; nothing is
   // persisted until the reviewer accepts, because a saved edit invalidates the
@@ -185,6 +190,21 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     submitAction("dismiss", { reason: dismissReason });
   };
 
+  /** Persist `nextContent` as one apply_fix revision and mark this finding
+   * applied. The tail shared by replacing a span and by appending wording. */
+  const commitEdit = async (nextContent: string) => {
+    const ok = await applyEdit(nextContent, "apply_fix", [violation.id]);
+    if (!ok) {
+      toast.error("Applied locally but not saved — use Save in the document toolbar to retry.");
+      return false;
+    }
+    const appliedAt = new Date().toISOString();
+    setViolations((prev) =>
+      prev.map((v) => (v.id === violation.id ? { ...v, fix_applied: true, fix_applied_at: appliedAt } : v))
+    );
+    return true;
+  };
+
   /** Splice `replacement` over this finding's quoted span in the live working
    * copy and persist it as one revision. Shared by Apply-fix and by accepting
    * an AI rewrite — both write the same span through the same path. */
@@ -207,16 +227,22 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
 
     // Function form: replacement text containing "$&" must stay literal.
     const nextContent = baseText.replace(evidence, () => replacement);
-    const ok = await applyEdit(nextContent, "apply_fix", [violation.id]);
-    if (!ok) {
-      toast.error("Applied locally but not saved — use Save in the document toolbar to retry.");
+    return commitEdit(nextContent);
+  };
+
+  /** A disclosure obligation is document-level: the approved wording is
+   * missing, not wrong, so the finding quotes no span and there is nothing to
+   * replace. Append it instead — but never twice, because a duplicated
+   * mandated disclaimer is its own compliance problem. */
+  const appendToDocument = async (wording: string) => {
+    const baseText = documentText;
+    const addition = wording.trim();
+    if (normalize(baseText).includes(normalize(addition))) {
+      toast.message("Already present — this wording is in the document, nothing was added");
       return false;
     }
-    const appliedAt = new Date().toISOString();
-    setViolations((prev) =>
-      prev.map((v) => (v.id === violation.id ? { ...v, fix_applied: true, fix_applied_at: appliedAt } : v))
-    );
-    return true;
+    const head = baseText.replace(/\s+$/, "");
+    return commitEdit(head ? `${head}\n\n${addition}` : addition);
   };
 
   const applyFix = async () => {
@@ -224,7 +250,11 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     if (!suggestedFix || fixApplied || applyFixBusy) return;
     setApplyFixBusy(true);
     try {
-      if (await spliceIntoDocument(suggestedFix, "suggested fix")) {
+      if (insertOnly) {
+        if (await appendToDocument(suggestedFix)) {
+          toast.success("Approved wording added to the end of the document");
+        }
+      } else if (await spliceIntoDocument(suggestedFix, "suggested fix")) {
         toast.success("Fix applied to document");
       }
     } finally {
@@ -385,7 +415,9 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
 
       {violation.suggested_fix && (
         <div className="mt-3 rounded-sm border border-success/40 bg-success/5 p-2">
-          <div className="micro-label mb-1 text-success">Suggested replacement</div>
+          <div className="micro-label mb-1 text-success">
+            {insertOnly ? "Approved wording to add" : "Suggested replacement"}
+          </div>
           <p className="text-xs">{violation.suggested_fix}</p>
         </div>
       )}
@@ -456,10 +488,17 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
           <Button
             size="sm"
             variant="outline"
+            title={
+              insertOnly
+                ? "Adds the approved wording to the end of the document — nothing is replaced"
+                : "Replaces the flagged passage with the suggested wording"
+            }
             onClick={(e) => { e.stopPropagation(); applyFix(); }}
             disabled={!violation.suggested_fix || fixApplied || applyFixBusy}
           >
-            {applyFixBusy ? "Applying…" : "Apply fix"}
+            {applyFixBusy
+              ? insertOnly ? "Adding…" : "Applying…"
+              : insertOnly ? "Add to end of document" : "Apply fix"}
           </Button>
         </div>
       </div>

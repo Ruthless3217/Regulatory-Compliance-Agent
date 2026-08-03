@@ -485,6 +485,7 @@ export function ReviewTab() {
                 selectedViolationId={selectedViolationId}
                 onSelectViolation={selectViolation}
                 onUnlocatedFindings={setUnlocated}
+                pagesRendered={pagesRendered}
               />
             ) : (
               <DocumentPane
@@ -508,6 +509,11 @@ export function ReviewTab() {
           // Findings are still anchored to extracted-text offsets, which drift
           // once this editor is used — re-anchoring is Phase 2, so a submission
           // with no working document keeps the offset-highlighted pane below.
+          //
+          // `has_import_source` only promises the upload *looks* importable, so
+          // this can mount over a conversion that then fails; the editor says so
+          // rather than showing a blank page, and needs pagesRendered to know
+          // whether View is one of the ways out it can offer.
           <LexicalDocument
             initialState={submission.lexical_state}
             submissionId={submission.id}
@@ -517,6 +523,7 @@ export function ReviewTab() {
             selectedViolationId={selectedViolationId}
             onSelectViolation={selectViolation}
             onUnlocatedFindings={setUnlocated}
+            pagesRendered={pagesRendered}
           />
         ) : (
           <DocumentPane

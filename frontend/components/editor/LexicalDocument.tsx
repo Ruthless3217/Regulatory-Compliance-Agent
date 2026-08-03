@@ -30,10 +30,27 @@ const NODES = [
   ImageNode,
 ];
 
+/** Why the editor holds no imported document.
+ *
+ * `unavailable` is a property of the document (a scanned PDF, an empty file, a
+ * missing upload); `failed` is a conversion that broke. `reason` is the
+ * backend's reviewer-facing sentence. */
+type SeedFailure = { status: string; reason: string | null };
+
 /** Seeds the editor from imported HTML exactly once. Runs only when there is
  * no saved state — after the first save, lexical_state is authoritative and
- * re-seeding would discard the reviewer's edits. */
-function SeedFromImport({ submissionId }: { submissionId: string }) {
+ * re-seeding would discard the reviewer's edits.
+ *
+ * Reports failure rather than swallowing it: an empty editable page is the
+ * same picture whether the import worked on a blank document, had nothing to
+ * import, or broke — and the reviewer was left to guess which. */
+function SeedFromImport({
+  submissionId,
+  onFailure,
+}: {
+  submissionId: string;
+  onFailure: (failure: SeedFailure) => void;
+}) {
   const [editor] = useLexicalComposerContext();
   const seeded = React.useRef(false);
   React.useEffect(() => {
@@ -43,8 +60,19 @@ function SeedFromImport({ submissionId }: { submissionId: string }) {
     // Fetched, not passed in: converting a long document takes seconds, and
     // doing it inside GET /submissions/{id} made opening one time out.
     getSubmissionImportHtml(submissionId)
-      .then(({ html }) => {
-        if (cancelled || !html) return;
+      .then((res) => {
+        if (cancelled) return;
+        // The route also returns status/reason; the shared api helper still
+        // types its result as {html} alone (that module is owned elsewhere).
+        const { html, status, reason } = res as {
+          html: string | null;
+          status?: string;
+          reason?: string | null;
+        };
+        if (!html) {
+          onFailure({ status: status ?? "failed", reason: reason ?? null });
+          return;
+        }
         editor.update(() => {
           const dom = new DOMParser().parseFromString(html, "text/html");
           const nodes = $generateNodesFromDOM(editor, dom);
@@ -52,13 +80,50 @@ function SeedFromImport({ submissionId }: { submissionId: string }) {
           $insertNodes(nodes);
         });
       })
-      .catch(() => {
-        // Non-fatal: the editor stays empty and the reviewer can still switch
-        // to View or Split. Failing loudly here would strand them entirely.
+      .catch((e: unknown) => {
+        if (!cancelled) onFailure({ status: "failed", reason: (e as Error).message });
       });
     return () => { cancelled = true; };
-  }, [editor, submissionId]);
+  }, [editor, submissionId, onFailure]);
   return null;
+}
+
+/** Shown in place of the document the editor could not seed.
+ *
+ * States the cause and the ways out, because the reviewer's next move differs:
+ * a scanned PDF will never be editable here, while a conversion failure may
+ * survive a re-upload. Both leave the original readable in View/Split, which
+ * is what they actually need to keep reviewing. */
+function ImportFailureNotice({
+  failure,
+  pagesRendered,
+}: {
+  failure: SeedFailure;
+  pagesRendered?: boolean;
+}) {
+  const unavailable = failure.status === "unavailable";
+  return (
+    <div
+      role="status"
+      className="mb-4 rounded-sm border border-border bg-sev-medium/5 px-3 py-2 text-[13px] leading-relaxed"
+    >
+      <p className="font-medium">
+        {unavailable
+          ? "There is nothing to import into the editor."
+          : "This document could not be converted for editing."}
+      </p>
+      <p className="mt-1 text-muted-foreground">
+        {failure.reason ?? "The conversion failed and reported no detail."}
+      </p>
+      <p className="mt-1 text-muted-foreground">
+        This page is blank because nothing was imported. The uploaded original is unchanged and
+        still readable in {pagesRendered ? "View (rendered pages) or Split" : "Split"}, and the
+        findings on the right were graded on the extracted text, so they still apply. Anything you
+        type here starts an empty working document — an export would then be built from it instead
+        of the original wording.
+      </p>
+    </div>
+  );
 }
 
 export function LexicalDocument({
@@ -70,11 +135,15 @@ export function LexicalDocument({
   selectedViolationId,
   onSelectViolation,
   onUnlocatedFindings,
+  pagesRendered,
 }: {
   initialState?: Record<string, unknown> | null;
   /** Seed source is fetched from this submission when there is no saved state. */
   submissionId: string;
   readOnly?: boolean;
+  /** Whether page images exist, i.e. whether View is a way out when the import
+   * fails. Only read for that message. */
+  pagesRendered?: boolean;
   onChange?: (doc: { state: SerializedEditorState; html: string; text: string }) => void;
   /** Findings to draw on the document. Decorations only — never editor content,
    * so they cannot reach the exported DOCX. */
@@ -85,6 +154,7 @@ export function LexicalDocument({
    * the UI can say so rather than silently omitting them. */
   onUnlocatedFindings?: (unlocated: Array<{ id: string; reason: string }>) => void;
 }) {
+  const [seedFailure, setSeedFailure] = React.useState<SeedFailure | null>(null);
   const config = {
     namespace: "compliance-document",
     editable: !readOnly,
@@ -104,6 +174,9 @@ export function LexicalDocument({
           than offering none. */}
       {!readOnly && <EditorToolbar />}
       <div className="relative min-h-0 flex-1 overflow-y-auto px-8 py-6">
+        {seedFailure && (
+          <ImportFailureNotice failure={seedFailure} pagesRendered={pagesRendered} />
+        )}
         <RichTextPlugin
           contentEditable={<ContentEditable className="outline-none" />}
           placeholder={null}
@@ -142,7 +215,9 @@ export function LexicalDocument({
             }}
           />
         )}
-        {!initialState && <SeedFromImport submissionId={submissionId} />}
+        {!initialState && (
+          <SeedFromImport submissionId={submissionId} onFailure={setSeedFailure} />
+        )}
       </div>
     </LexicalComposer>
   );

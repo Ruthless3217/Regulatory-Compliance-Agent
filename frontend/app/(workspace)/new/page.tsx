@@ -48,7 +48,6 @@ export default function NewAnalysisPage() {
   const router = useRouter();
   const [title, setTitle] = React.useState("");
   const [text, setText] = React.useState("");
-  const [url, setUrl] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const [dragOver, setDragOver] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
@@ -95,7 +94,7 @@ export default function NewAnalysisPage() {
     if (!title.trim()) setTitle(f.name.replace(/\.[^.]+$/, ""));
   };
 
-  const submit = async (kind: "text" | "url" | "file") => {
+  const submit = async (kind: "text" | "file") => {
     if (submitting) return;
     if (!productLine) {
       toast.error("Choose the product applicability scope first");
@@ -103,13 +102,9 @@ export default function NewAnalysisPage() {
     }
     if (kind === "file") {
       if (!file) { toast.error("Pick a file first"); return; }
-    } else {
-      let content = text;
-      if (kind === "url") {
-        if (!url.trim()) { toast.error("Enter a URL"); return; }
-        content = `URL: ${url.trim()}`;
-      }
-      if (!content.trim()) { toast.error("Paste content first"); return; }
+    } else if (!text.trim()) {
+      toast.error("Paste content first");
+      return;
     }
     setSubmitting(true);
     try {
@@ -122,10 +117,10 @@ export default function NewAnalysisPage() {
               file,
             }
           : {
-              title: title.trim() || (kind === "url" ? url.trim() : "Untitled submission"),
-              content_type: kind === "url" ? "html" : "text",
+              title: title.trim() || "Untitled submission",
+              content_type: "text",
               product_line: productLine,
-              content: kind === "url" ? `URL: ${url.trim()}` : text,
+              content: text,
             };
       const sub = await createSubmission(payload);
       await analyzeSubmission(sub.id);
@@ -194,7 +189,6 @@ export default function NewAnalysisPage() {
             <TabsList>
               <TabsTrigger value="paste">Paste text</TabsTrigger>
               <TabsTrigger value="upload">Upload file</TabsTrigger>
-              <TabsTrigger value="url">Pull from URL</TabsTrigger>
             </TabsList>
 
             <TabsContent value="paste" className="pt-5">
@@ -282,27 +276,6 @@ export default function NewAnalysisPage() {
               </div>
             </TabsContent>
 
-            <TabsContent value="url" className="pt-5">
-              <Input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://www.bajajlifeinsurance.com/…"
-                className="h-10"
-              />
-              <p className="mt-2 text-xs text-muted-foreground">
-                The page is fetched server-side, converted to plain text, then chunked for analysis.
-              </p>
-              <ScopeChips scope={scope} toggle={toggleScope} />
-              <div className="mt-6 flex items-center gap-3">
-                <Button onClick={() => submit("url")} disabled={submitting} size="hero">
-                  {submitting ? "Submitting…" : "Run compliance pass →"}
-                </Button>
-                <Button asChild variant="ghost" size="hero">
-                  <Link href="/">Cancel</Link>
-                </Button>
-              </div>
-            </TabsContent>
           </Tabs>
         </section>
 

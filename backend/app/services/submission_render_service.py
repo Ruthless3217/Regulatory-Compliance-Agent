@@ -11,13 +11,10 @@ Gotenberg/LibreOffice route) before rasterizing, so the reviewer sees the real
 document instead of falling back to the extracted-text pane. Any other
 content_type — or a missing/unreadable file — is `page_render_status='skipped'`.
 
-Anchor computation (mapping a violation to a page/bbox via `positioned_words`) is
-deliberately NOT done here — see `preprocessing_service.py`, which flattens PDF
-text across pages before chunking with no page boundary kept. Building a
-text-to-page mapper as a side effect of this task would be speculative; that's
-a followup once something actually needs `violation.anchor_page/anchor_bbox`.
-`submission_positioned_words()` below just exposes the reusable extraction for
-whenever that followup lands.
+Anchor computation (mapping a violation to a page/bbox) rides along here, in
+`violation_anchor_service`: this job is the only place that holds the rendered
+PDF, and the geometry it needs is the same `positioned_words` output. It runs
+after the pages are on disk and never raises — see `run_render`.
 """
 import os
 import shutil
@@ -28,6 +25,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models.submission import Submission
 from app.services.pdf_render_service import render_pages, positioned_words, to_pdf, PositionedWord
+from app.services.violation_anchor_service import anchor_submission_violations
 
 logger = logging.getLogger(__name__)
 
@@ -65,19 +63,31 @@ def run_render(submission_id: str) -> None:
             db.commit()
             return
 
+        pdf_path = None
         try:
-            _render(str(submission.id), submission.file_path, submission.content_type)
+            pdf_path = _render(str(submission.id), submission.file_path, submission.content_type)
             submission.page_render_status = "completed"
         except Exception as e:  # noqa: BLE001 — render must never crash the worker
             logger.error("Page render failed for submission %s: %s", submission_id, e, exc_info=True)
             submission.page_render_status = "failed"
         db.commit()
+
+        # Anchor after the status is committed, so an anchor-side DB failure can
+        # never roll the render status back. This anchors whatever findings exist
+        # right now, and nothing more: a render kicked off at upload time usually
+        # finds none, and an analysis that lands while this job is running writes
+        # findings this pass has already gone past. Those stay NULL until the next
+        # render (re-upload, or the skipped-render self-heal in GET /submissions),
+        # which is a stale box the viewer simply doesn't draw — not a wrong one.
+        if pdf_path:
+            anchor_submission_violations(db, submission_id, pdf_path)
     finally:
         db.close()
 
 
-def _render(submission_id: str, file_path: str, content_type: str) -> None:
-    """Rasterize every page of `file_path` into `renders_dir`.
+def _render(submission_id: str, file_path: str, content_type: str) -> str:
+    """Rasterize every page of `file_path` into `renders_dir`, returning the PDF
+    that was rasterized — the input itself, or the converted copy for a DOCX.
 
     A non-PDF is converted first; `to_pdf` writes its output inside `base` so
     the rmtree below also disposes of the previous run's converted copy.
@@ -89,13 +99,15 @@ def _render(submission_id: str, file_path: str, content_type: str) -> None:
     os.makedirs(base, exist_ok=True)
     pdf_path = to_pdf(file_path, content_type, base, "source")
     render_pages(pdf_path, base, settings.pixel_render_page_cap)
+    return pdf_path
 
 
 def submission_positioned_words(file_path: str) -> List[PositionedWord]:
     """Words-with-bboxes for a submission's PDF (reusing Compare's extractor).
 
-    Not called by `run_render` today — kept as the reusable seam for a future
-    anchor pass (see module docstring). Raises the same way `positioned_words`
-    does for a non-PDF/unreadable path; callers should guard as needed.
+    The anchor pass calls `pdf_render_service.positioned_words` directly (it
+    would import this module in a cycle otherwise); this stays as the named
+    seam for callers on this side. Raises the same way `positioned_words` does
+    for a non-PDF/unreadable path; callers should guard as needed.
     """
     return positioned_words(file_path)

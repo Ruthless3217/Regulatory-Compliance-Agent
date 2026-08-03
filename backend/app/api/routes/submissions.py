@@ -253,16 +253,28 @@ async def get_submission_import_html(
     opening a document time out, and blocked every other request on the worker
     while it ran. Only the editor calls this, and only when there is no saved
     working document to load instead.
+
+    Always answers with {html, status, reason}. `status` is what the editor
+    reacts to — `imported`, `unavailable` (nothing to import) or `failed` (the
+    conversion broke) — because `has_import_source` on GET /submissions/{id} is
+    only a cheap "this looks importable" and cannot promise the conversion
+    succeeds. A scanned PDF or a corrupt DOCX passes that check and arrives
+    here as a failure, and a bare `html: null` left the reviewer facing a blank
+    editable page with no way to tell what had happened.
     """
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
     if submission.lexical_state is not None:
         # The saved state is authoritative; re-seeding would discard edits.
-        return {"html": None, "reason": "submission already has a working document"}
+        return {
+            "html": None,
+            "status": "unavailable",
+            "reason": "This submission already has a saved working document.",
+        }
 
-    html = await run_in_threadpool(lexical_document_service.build_import_html, submission)
-    return {"html": html}
+    result = await run_in_threadpool(lexical_document_service.import_html, submission)
+    return result._asdict()
 
 
 @router.get("/{submission_id}/pages/{n}")
