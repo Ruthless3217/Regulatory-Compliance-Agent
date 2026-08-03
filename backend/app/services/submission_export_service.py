@@ -23,6 +23,7 @@ four times, instead of a second HTML-rendering pipeline.
 """
 import io
 import logging
+import os
 import zipfile
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -92,10 +93,23 @@ def _clean_docx(submission: Submission) -> bytes:
     Generated from the working Lexical document when one exists — the uploaded
     file is the immutable original and is never edited. Submissions predating
     the editor have no working document and fall back to the plain-text rebuild.
+
+    A DOCX upload is also handed over as the export's template, so the corrected
+    document comes back in the format it went in as. It is read, never written
+    (same guard shape as ``lexical_document_service.build_import_html``).
     """
-    if submission.lexical_html:
-        return lexical_html_to_docx(submission.lexical_html, submission.title or "Submission")
-    return _rebuilt_clean_docx(submission)
+    if not submission.lexical_html:
+        return _rebuilt_clean_docx(submission)
+    template = (
+        submission.file_path
+        if submission.content_type == "docx"
+        and submission.file_path
+        and os.path.exists(submission.file_path)
+        else None
+    )
+    return lexical_html_to_docx(
+        submission.lexical_html, submission.title or "Submission", template
+    )
 
 
 def _annotated_docx(submission: Submission, violations: List[Violation]) -> bytes:

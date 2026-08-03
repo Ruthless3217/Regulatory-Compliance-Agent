@@ -98,8 +98,9 @@
 }
 
 /* Compliance findings on the editable document.
-   Set by FindingDecorationsPlugin as attributes on the rendered paragraph —
-   never as editor content, so nothing here reaches the exported DOCX. */
+   Set by FindingDecorationsPlugin as attributes on rendered elements and as
+   overlays measured over them — never as editor content, so nothing here
+   reaches the exported DOCX. */
 @layer components {
   [data-finding-id] {
     border-left: 2px solid transparent;
@@ -116,5 +117,49 @@
   [data-finding-selected="true"] {
     background: hsl(var(--primary-50));
     border-left-width: 3px;
+  }
+  /* Edited, unverified: only a fingerprint match survived the reviewer's
+     rewrite, so the flagged words are unknown and all we can point at is the
+     paragraph. Dashed, because a guess must not look as certain as a match. */
+  [data-finding-anchor="paragraph"] { border-left-style: dashed; }
+
+  /* The located span itself. Absolutely positioned inside the scroll
+     container, so it scrolls with the text it marks; zero-sized layer, so it
+     is only a coordinate origin and takes part in no layout. */
+  .finding-overlay-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+  }
+  .finding-span {
+    position: absolute;
+    /* The document stays editable underneath: no mark is ever in the event
+       path, so typing, selection and caret placement are untouched. Selection
+       of the finding is hit-tested against these rects instead. */
+    pointer-events: none;
+    border-radius: 2px;
+    /* Tints the words rather than covering them — the mark paints over live
+       text, and multiply keeps the glyphs at full contrast. */
+    mix-blend-mode: multiply;
+    border-bottom: 2px solid hsl(var(--sev-low));
+    background: hsl(var(--sev-low) / 0.10);
+  }
+  .finding-span[data-finding-severity="critical"] {
+    border-bottom-color: hsl(var(--sev-critical));
+    background: hsl(var(--sev-critical) / 0.12);
+  }
+  .finding-span[data-finding-severity="high"] {
+    border-bottom-color: hsl(var(--sev-high));
+    background: hsl(var(--sev-high) / 0.12);
+  }
+  .finding-span[data-finding-severity="medium"] {
+    border-bottom-color: hsl(var(--sev-medium));
+    background: hsl(var(--sev-medium) / 0.12);
+  }
+  .finding-span[data-finding-selected="true"] {
+    border-bottom-width: 3px;
+    background: hsl(var(--primary-50));
   }
 }

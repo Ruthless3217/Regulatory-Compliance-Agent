@@ -3,10 +3,11 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronLeft, RotateCw, Download, Trash2 } from "lucide-react";
+import { ChevronLeft, RotateCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScoreRing } from "@/components/ui/score-ring";
+import { SubmissionExportPopover } from "@/components/review/SubmissionExportPopover";
 import { StatusPill, statusTone } from "@/components/ui/status-pill";
 import { analyzeSubmission, deleteSubmission } from "@/lib/api";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
@@ -128,12 +129,12 @@ export function SubmissionHeader({ submission, overallScore, grade }: Props) {
             <RotateCw className="h-3.5 w-3.5" />
             <span className="ml-1.5">Re-run</span>
           </Button>
-          <Button asChild variant="ghost" size="sm" title="Open the printable report">
-            <Link href={`/submissions/${id}/report`}>
-              <Download className="h-3.5 w-3.5" />
-              <span className="ml-1.5">Export</span>
-            </Link>
-          </Button>
+          {/* Downloads the document. This used to be a Link to the report
+              page — it navigated instead of exporting, duplicated the Report
+              tab beside it, and left SubmissionExportPopover (the only thing
+              that can produce clean.docx) mounted nowhere, so the corrected
+              document was unreachable from the UI. */}
+          <SubmissionExportPopover submissionId={id} />
           <Button variant="ghost" size="icon" onClick={del} title="Delete submission" className="text-muted-foreground hover:text-sev-critical">
             <Trash2 className="h-3.5 w-3.5" />
           </Button>

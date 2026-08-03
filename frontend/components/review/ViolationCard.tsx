@@ -11,13 +11,41 @@ import { PrecedentNote } from "@/components/violation/PrecedentNote";
 import { deleteReviewerViolation, submitReviewerAction } from "@/lib/api";
 import { RewritePreview } from "@/components/editor/RewritePreview";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
-import type { DismissReason, NotViolationReason, ReviewerActionType, Violation } from "@/lib/types";
+import type { DismissReason, NotViolationReason, ReviewerActionType, Severity, Violation } from "@/lib/types";
 
 interface Props {
-  index: number;
+  /** Position in the visible list — renders as #NN. Omit when the finding is
+   * not in that list (selected from the document, or suppressed), so the card
+   * never shows a number that indexes nothing. */
+  index?: number;
   violation: Violation;
   selected: boolean;
   onSelect: () => void;
+}
+
+/** The design's "p. 17 · para 2" line, from whichever anchors a real finding
+ * actually carries. chunk_index is the last resort: text-extracted documents
+ * have no page anchor, and a row with no locator at all reads as unplaced. */
+export function locationLine(v: Violation): string | null {
+  const parts: string[] = [];
+  if (typeof v.anchor_page === "number") parts.push(`p. ${v.anchor_page}`);
+  const where = v.section_title?.trim() || v.location?.trim();
+  if (where) parts.push(where);
+  if (parts.length === 0 && typeof v.chunk_index === "number") parts.push(`chunk ${v.chunk_index}`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** The design's "IRDAI-ULIP-014 · cl. 14(3), p. 22" line. cited_section is
+ * stored already labelled ("Section 41"), so it is not re-prefixed. */
+function ruleLine(v: Violation): string | null {
+  const parts = [
+    v.rule_id,
+    v.cited_section,
+    typeof v.cited_page === "number" ? `p. ${v.cited_page}` : null,
+  ]
+    .map((p) => p?.trim())
+    .filter((p): p is string => !!p);
+  return parts.length ? parts.join(" · ") : null;
 }
 
 // Legacy rows from the old binary accept/reject shim map onto the taxonomy
@@ -281,15 +309,23 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
             </Badge>
           )}
         </div>
-        <div className="shrink-0 whitespace-nowrap font-mono text-xs text-muted-foreground">
-          {typeof violation.chunk_index === "number" && (
-            <span className="mr-2">chunk {violation.chunk_index}</span>
-          )}
-          #{String(index + 1).padStart(2, "0")}
+        <div className="shrink-0 whitespace-nowrap font-mono text-xs text-muted-foreground [&:empty]:hidden">
+          {typeof index === "number" && `#${String(index + 1).padStart(2, "0")}`}
         </div>
       </div>
 
+      {/* Where it is, then what it says, then what it cites — the reading order
+          of the design's detail panel. Each line is dropped when the finding
+          carries no such field rather than rendered as an empty label. */}
+      {locationLine(violation) && (
+        <p className="mb-1 font-mono text-[11px] text-muted-foreground">{locationLine(violation)}</p>
+      )}
+
       <p className="text-sm leading-snug">{violation.description}</p>
+
+      {ruleLine(violation) && (
+        <p className="mt-1 font-mono text-[11px] text-muted-foreground">{ruleLine(violation)}</p>
+      )}
 
       <ActionTags violation={violation} className="mt-2 flex flex-wrap items-center gap-1.5" />
 
@@ -349,7 +385,7 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
 
       {violation.suggested_fix && (
         <div className="mt-3 rounded-sm border border-success/40 bg-success/5 p-2">
-          <div className="micro-label mb-1 text-success">Suggested fix</div>
+          <div className="micro-label mb-1 text-success">Suggested replacement</div>
           <p className="text-xs">{violation.suggested_fix}</p>
         </div>
       )}
@@ -522,3 +558,67 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     </div>
   );
 });
+
+const SEV_DOT: Record<Severity, string> = {
+  critical: "bg-sev-critical",
+  high: "bg-sev-high",
+  medium: "bg-sev-medium",
+  low: "bg-sev-low",
+};
+
+/** review_status is null until a reviewer acts, so an absent verdict is "open"
+ * rather than unknown. */
+function verdictLabel(v: Violation): string {
+  switch (normalizeVerdict(v.reviewer_verdict)) {
+    case "correct":
+      return "corrected";
+    case "not_violation":
+      return "not a violation";
+    case "dismiss":
+      return "dismissed";
+    default:
+      return "open";
+  }
+}
+
+/**
+ * One finding as a single dense line — severity, location, title, state. The
+ * unselected majority of the rail. Everything is nowrap + truncate so a long
+ * section title or description can never widen the 372px column.
+ */
+export function ViolationRow({ violation, onSelect }: { violation: Violation; onSelect: () => void }) {
+  const where = locationLine(violation);
+  const state = verdictLabel(violation);
+  return (
+    <button
+      type="button"
+      data-violation-id={violation.id}
+      onClick={onSelect}
+      title={violation.description}
+      className={cn(
+        "flex w-full items-center gap-2 border-b border-border px-3 py-1.5 text-left text-xs",
+        "transition-colors hover:bg-muted/40",
+        violation.suppressed && "opacity-70"
+      )}
+    >
+      <span
+        className={cn("h-1.5 w-1.5 shrink-0 rounded-full", SEV_DOT[normalizeSeverity(violation.severity)])}
+        title={normalizeSeverity(violation.severity)}
+      />
+      {where && (
+        <span className="max-w-[35%] shrink-0 truncate font-mono text-[11px] text-muted-foreground">
+          {where}
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate">{violation.description}</span>
+      <span
+        className={cn(
+          "shrink-0 text-[10px] uppercase tracking-micro",
+          state === "open" ? "text-muted-foreground/60" : "text-muted-foreground"
+        )}
+      >
+        {state}
+      </span>
+    </button>
+  );
+}

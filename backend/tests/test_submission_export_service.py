@@ -189,6 +189,48 @@ def test_clean_docx_leaves_the_uploaded_file_untouched(tmp_path):
     assert path.read_bytes() == before
 
 
+def test_clean_docx_uses_the_upload_as_the_export_template(tmp_path):
+    """"Put a docx in, get the same docx back" — the upload's own styling and
+    page setup have to come back out with the corrected text."""
+    from docx.shared import Inches, Pt
+
+    path = tmp_path / "upload.docx"
+    src = Document()
+    src.styles["Heading 2"].font.name = "Garamond"
+    src.styles["Heading 2"].font.size = Pt(20)
+    src.sections[0].left_margin = Inches(1.75)
+    src.sections[0].footer.paragraphs[0].text = "Insurance is the subject matter of solicitation."
+    src.add_paragraph("Guaranteed returns.")
+    src.save(str(path))
+
+    sub = _submission(
+        "Guaranteed returns.",
+        content_type="docx",
+        file_path=str(path),
+        lexical_html="<h2>Charges</h2><p>Returns are not guaranteed.</p>",
+    )
+    out = Document(io.BytesIO(ses._clean_docx(sub)))
+    assert out.styles["Heading 2"].font.name == "Garamond"
+    assert out.sections[0].left_margin == Inches(1.75)
+    assert "solicitation" in "\n".join(p.text for p in out.sections[0].footer.paragraphs)
+    body = "\n".join(p.text for p in out.paragraphs)
+    assert "Returns are not guaranteed." in body
+    assert "Guaranteed returns." not in body
+
+
+def test_clean_docx_ignores_a_missing_or_non_docx_upload(tmp_path):
+    """A pasted-text submission has no template; a stale file_path is not one
+    either. Both still export."""
+    for overrides in (
+        dict(content_type="html", file_path=str(tmp_path / "not.docx")),
+        dict(content_type="docx", file_path=str(tmp_path / "gone.docx")),
+        dict(content_type="docx", file_path=None),
+    ):
+        sub = _submission("x", lexical_html="<h2>Charges</h2>", **overrides)
+        body = "\n".join(p.text for p in Document(io.BytesIO(ses._clean_docx(sub))).paragraphs)
+        assert "Charges" in body, overrides
+
+
 def test_clean_docx_without_a_working_document_still_rebuilds_from_text():
     """Every submission predating the editor has lexical_html NULL."""
     sub = _submission("First paragraph.", lexical_html=None)

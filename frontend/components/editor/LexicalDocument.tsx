@@ -20,11 +20,13 @@ import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { EditorToolbar } from "./EditorToolbar";
 import { SlashCommandPlugin } from "./SlashCommandPlugin";
 import { FindingDecorationsPlugin } from "./FindingDecorationsPlugin";
+import { ImageNode } from "./ImageNode";
 import type { Violation } from "@/lib/types";
 
 const NODES = [
   HeadingNode, QuoteNode, ListNode, ListItemNode,
   TableNode, TableRowNode, TableCellNode, AutoLinkNode, LinkNode,
+  ImageNode,
 ];
 
 /** Seeds the editor from imported HTML exactly once. Runs only when there is

@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { FilterChipBar, type FilterKey, type SelectFilterDef, type SelectFilterOption } from "./FilterChipBar";
-import { ViolationCard } from "./ViolationCard";
+import { ViolationCard, ViolationRow } from "./ViolationCard";
 import { severityOrder, normalizeSeverity, categoryLabel } from "@/lib/format";
 import type { Violation } from "@/lib/types";
 
@@ -73,7 +73,7 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
   const [reviewStatusFilter, setReviewStatusFilter] = React.useState("all");
   const [sourceFilter, setSourceFilter] = React.useState("all");
   const [showSuppressed, setShowSuppressed] = React.useState(false);
-  const refs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
   // Suppressed (sub-confidence-floor / structural) findings are kept out of the
   // score and the severity filter — surfaced in a separate "Needs review" lane.
@@ -144,12 +144,19 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
     { key: "source", label: "Source", value: sourceFilter, options: sourceOptions, onChange: setSourceFilter },
   ];
 
-  // Scroll selected card into view when selection changes
+  // The detail card lives at the top of this scroller, so selecting anything —
+  // a row here, a highlight in the document — means scrolling back up to it.
   React.useEffect(() => {
-    if (!selectedViolationId) return;
-    const el = refs.current[selectedViolationId];
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (selectedViolationId) scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [selectedViolationId]);
+
+  // Resolved against every violation, not just `filtered`: a finding selected
+  // from the document (or a suppressed one) must still open in full even when
+  // the current filter hides its row.
+  const selectedViolation = React.useMemo(
+    () => violations.find((v) => v.id === selectedViolationId) ?? null,
+    [violations, selectedViolationId]
+  );
 
   // Step through what is actually on screen, not the unfiltered set — landing
   // on a card the current filter hides would look like a dead button.
@@ -166,6 +173,9 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
   // review_status is null until a reviewer acts (rule_feedback_service only
   // ever writes "actioned"), so a non-null value means reviewed.
   const reviewedCount = filtered.filter((v) => (v.review_status ?? "").trim() !== "").length;
+
+  // The dense list is everything except the one already open in full above it.
+  const others = filtered.filter((v) => v.id !== selectedViolationId);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col border-l border-border bg-background">
@@ -197,54 +207,56 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
           </button>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="space-y-3 p-4">
-          {filtered.length === 0 ? (
-            <div className="rounded-md border border-border bg-background p-8 text-center text-sm text-muted-foreground">
-              No violations in this filter.
-            </div>
-          ) : (
-            filtered.map((v, i) => (
-              <ViolationCard
-                key={v.id}
-                index={i}
-                violation={v}
-                selected={v.id === selectedViolationId}
-                onSelect={() => setSelectedViolationId(v.id)}
-                ref={(el) => { refs.current[v.id] = el; }}
-              />
-            ))
-          )}
+      {/* One finding in full at the top, every other one as a dense line. The
+          detail card is the only place a finding's evidence, verdict actions
+          and rewrite live — the rows exist to get you to it. */}
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        {selectedViolation ? (
+          <div className="p-3">
+            <ViolationCard
+              index={cursor === -1 ? undefined : cursor}
+              violation={selectedViolation}
+              selected
+              onSelect={() => setSelectedViolationId(selectedViolation.id)}
+            />
+          </div>
+        ) : (
+          <p className="border-b border-border px-3 py-3 text-xs text-muted-foreground">
+            No finding selected. Pick one below to see its rule, the regulator&rsquo;s wording and the
+            suggested replacement.
+          </p>
+        )}
 
-          {suppressed.length > 0 && (
-            <div className="mt-2 border-t border-dashed border-border pt-3">
-              <button
-                type="button"
-                onClick={() => setShowSuppressed((s) => !s)}
-                className="flex w-full items-center justify-between text-left text-xs font-medium text-muted-foreground hover:text-foreground"
-              >
-                <span>
-                  Needs review ({suppressed.length}) — low-confidence or structural; not counted in the score
-                </span>
-                <span className="font-mono">{showSuppressed ? "−" : "+"}</span>
-              </button>
-              {showSuppressed && (
-                <div className="mt-3 space-y-3 opacity-80">
-                  {suppressed.map((v, i) => (
-                    <ViolationCard
-                      key={v.id}
-                      index={i}
-                      violation={v}
-                      selected={v.id === selectedViolationId}
-                      onSelect={() => setSelectedViolationId(v.id)}
-                      ref={(el) => { refs.current[v.id] = el; }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        {filtered.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">
+            No violations in this filter.
+          </div>
+        ) : (
+          others.map((v) => (
+            <ViolationRow key={v.id} violation={v} onSelect={() => setSelectedViolationId(v.id)} />
+          ))
+        )}
+
+        {suppressed.length > 0 && (
+          <div className="border-t border-dashed border-border">
+            <button
+              type="button"
+              onClick={() => setShowSuppressed((s) => !s)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <span>
+                Needs review ({suppressed.length}) — low-confidence or structural; not counted in the score
+              </span>
+              <span className="font-mono">{showSuppressed ? "−" : "+"}</span>
+            </button>
+            {showSuppressed &&
+              suppressed
+                .filter((v) => v.id !== selectedViolationId)
+                .map((v) => (
+                  <ViolationRow key={v.id} violation={v} onSelect={() => setSelectedViolationId(v.id)} />
+                ))}
+          </div>
+        )}
       </div>
     </div>
   );

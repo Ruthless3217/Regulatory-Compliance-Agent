@@ -1,26 +1,22 @@
 "use client";
 import * as React from "react";
 import { categoryLabel } from "@/lib/format";
-import type { Submission, Violation } from "@/lib/types";
+import type { Violation } from "@/lib/types";
 
 /** Left rail of the review workspace's three-column grammar
  * (264px context rail | paper canvas | action rail).
  *
- * It answers "what was this graded against?" — the question a reviewer asks
- * before trusting a finding. Everything here is derived from data the
- * workspace already holds, so the rail costs no extra request and stays
- * correct for documents analysed long before it existed.
+ * It answers "what did this run actually find, and on what evidence?" —
+ * shape of the findings, and how many of them are grounded in a past
+ * reviewer decision. Everything here is derived from data the workspace
+ * already holds, so the rail costs no extra request and stays correct for
+ * documents analysed long before it existed. The product line it used to
+ * repeat lives in the document bar above.
  */
 /** How many category rows the rail shows before collapsing the tail. */
 const TOP_CATEGORIES = 6;
 
-export function ContextRail({
-  submission,
-  violations,
-}: {
-  submission: Submission;
-  violations: Violation[];
-}) {
+export function ContextRail({ violations }: { violations: Violation[] }) {
   const scopes = React.useMemo(() => {
     const counts = new Map<string, number>();
     for (const v of violations) {
@@ -44,21 +40,6 @@ export function ContextRail({
     // Everything inside is sized to live within the 264px track — long values
     // truncate rather than push the column into the document beside it.
     <aside className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-y-auto border-r border-border bg-surface px-3 py-3">
-      <section className="min-w-0">
-        <h2 className="micro-label mb-1">Graded against</h2>
-        <span
-          className="inline-block max-w-full truncate rounded-sm border border-border bg-background px-1.5 py-px align-bottom font-mono text-[11px]"
-          title={submission.product_line || "no product scope"}
-        >
-          {submission.product_line || "no product scope"}
-        </span>
-        {!submission.product_line && (
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-            Uploaded before scopes were required — retrieval could not narrow to a product family.
-          </p>
-        )}
-      </section>
-
       <section className="min-w-0">
         {/* Categories, not scope. These are free text on the finding, so the
             list can run to dozens of near-unique labels — showing every one

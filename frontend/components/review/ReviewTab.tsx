@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { LexicalDocument } from "@/components/editor/LexicalDocument";
 import { ContextRail } from "./ContextRail";
@@ -13,7 +14,110 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import { useSSEStream } from "@/lib/sse";
 import { diffRun, getCheck } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type { RunDiff, Violation } from "@/lib/types";
+
+/** A rail's open/closed flag, remembered across navigation.
+ *
+ * It always renders open and adopts the stored value in an effect: the server
+ * has no localStorage, so reading it during render would hand React a first
+ * client tree that differs from the one it hydrates against. Same shape as
+ * DensityToggle, which reads its persisted value the same way. */
+function useRailOpen(key: string) {
+  const [open, setOpen] = React.useState(true);
+
+  React.useEffect(() => {
+    try {
+      setOpen(window.localStorage.getItem(key) !== "collapsed");
+    } catch {
+      /* storage blocked — the rail just starts open every time */
+    }
+  }, [key]);
+
+  const set = React.useCallback(
+    (next: boolean) => {
+      setOpen(next);
+      try {
+        window.localStorage.setItem(key, next ? "open" : "collapsed");
+      } catch {
+        /* storage blocked — collapsing still works, it just isn't remembered */
+      }
+    },
+    [key]
+  );
+
+  return [open, set] as const;
+}
+
+/** One of the two side rails, collapsible to a 2rem strip so the reviewer can
+ * give the document the full width while editing or comparing.
+ *
+ * Collapsed, the rail's content is hidden rather than unmounted — the findings
+ * pane keeps its filters and scroll position across a collapse — and the strip
+ * still carries the toggle (plus `badge`, the finding count), so the rail can
+ * always be brought back from where it went. */
+function CollapsibleRail({
+  side,
+  label,
+  open,
+  onToggle,
+  badge,
+  children,
+}: {
+  side: "left" | "right";
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  // The rail bodies draw their own hairline against the canvas; the strip and
+  // the header row continue it so the column edge is never broken.
+  const edge = side === "left" ? "border-r" : "border-l";
+  // The chevron points the way the rail will move.
+  const Chevron = open === (side === "left") ? ChevronLeft : ChevronRight;
+  const action = `${open ? "Collapse" : "Expand"} ${label}`;
+
+  const toggle = (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={action}
+      title={action}
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+    >
+      <Chevron className="h-3.5 w-3.5" />
+    </button>
+  );
+
+  return (
+    <div
+      className={cn(
+        "flex h-full min-h-0 min-w-0 flex-col bg-surface",
+        !open && cn("items-center gap-1.5 border-border py-1.5", edge)
+      )}
+    >
+      {open ? (
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-between gap-2 border-b border-border px-2 py-1",
+            edge
+          )}
+        >
+          <span className="micro-label truncate">{label}</span>
+          {toggle}
+        </div>
+      ) : (
+        <>
+          {toggle}
+          {badge}
+        </>
+      )}
+      <div className={open ? "min-h-0 flex-1" : "hidden"}>{children}</div>
+    </div>
+  );
+}
 
 export function ReviewTab() {
   const router = useRouter();
@@ -160,14 +264,58 @@ export function ReviewTab() {
   const usePdfPane = pagesRendered && !editing;
   const hasEditor = !!(submission.lexical_state || submission.import_html);
 
+  // --- Collapsible rails ----------------------------------------------------
+  const [contextOpen, setContextOpen] = useRailOpen("review.rail.context");
+  const [findingsOpen, setFindingsOpen] = useRailOpen("review.rail.findings");
+
+  // Every selection goes through here so a finding picked in the document
+  // always lands somewhere visible — selecting one and seeing nothing happen is
+  // the whole failure mode of a collapsible findings rail. It opens the rail in
+  // the same batch as the selection, not in an effect: the pane's own
+  // scroll-to-selection effect is a child's, so it runs *before* any effect of
+  // this component, and would scroll a still-hidden pane to no effect.
+  const selectViolation = React.useCallback(
+    (id: string | null) => {
+      setSelectedViolationId(id);
+      if (id) setFindingsOpen(true);
+    },
+    [setSelectedViolationId, setFindingsOpen]
+  );
+
+  // The count the pane itself headlines (suppressed findings are a separate
+  // lane there), so the strip and the open rail can never disagree.
+  const findingCount = displayViolations.filter((v) => !v.suppressed).length;
+
+  // Tailwind needs whole class names, so the templates are spelled out rather
+  // than composed. This is the only place the track widths live, which is what
+  // keeps the columns and the rails they hold from drifting apart.
+  const gridCols = cn(
+    findingsOpen ? "grid-cols-[1fr_372px]" : "grid-cols-[1fr_2rem]",
+    contextOpen
+      ? findingsOpen
+        ? "xl:grid-cols-[264px_1fr_372px]"
+        : "xl:grid-cols-[264px_1fr_2rem]"
+      : findingsOpen
+        ? "xl:grid-cols-[2rem_1fr_372px]"
+        : "xl:grid-cols-[2rem_1fr_2rem]"
+  );
+
   return (
-    // Three-column grammar from the workspace design: context rail (what this
-    // was graded against), paper canvas, action rail. The column widths are
-    // fixed across every screen so the eye never re-learns the layout. The rail
-    // drops away below xl, where 264+372 of chrome would crowd the document.
-    <div className="grid h-full grid-cols-[1fr_372px] overflow-hidden rounded-md border border-border xl:grid-cols-[264px_1fr_372px]">
-      <div className="hidden xl:block">
-        <ContextRail submission={submission} violations={displayViolations} />
+    // Three-column grammar from the workspace design: context rail, paper
+    // canvas, action rail. The widths are fixed across every screen so the eye
+    // never re-learns the layout — until the reviewer collapses a rail to a
+    // 2rem strip and hands that width to the document. The context rail drops
+    // away entirely below xl, where 264+372 of chrome would crowd the document.
+    <div className={cn("grid h-full overflow-hidden rounded-md border border-border", gridCols)}>
+      <div className="hidden min-h-0 xl:block">
+        <CollapsibleRail
+          side="left"
+          label="Context"
+          open={contextOpen}
+          onToggle={() => setContextOpen(!contextOpen)}
+        >
+          <ContextRail violations={displayViolations} />
+        </CollapsibleRail>
       </div>
       <div className="flex h-full min-h-0 flex-col">
         {isAnalyzing && (
@@ -309,14 +457,14 @@ export function ReviewTab() {
                 onChange={setLexicalDoc}
                 violations={displayViolations}
                 selectedViolationId={selectedViolationId}
-                onSelectViolation={setSelectedViolationId}
+                onSelectViolation={selectViolation}
                 onUnlocatedFindings={setUnlocated}
               />
             ) : (
               <DocumentPane
                 violations={displayViolations}
                 selectedViolationId={selectedViolationId}
-                onSelect={setSelectedViolationId}
+                onSelect={selectViolation}
                 readOnly={isHistorical}
               />
             )}
@@ -326,7 +474,7 @@ export function ReviewTab() {
             submissionId={submission.id}
             violations={displayViolations}
             selectedViolationId={selectedViolationId}
-            onSelect={setSelectedViolationId}
+            onSelect={selectViolation}
           />
         ) : hasEditor ? (
           // Rich editing on the working document. The uploaded file stays
@@ -341,23 +489,40 @@ export function ReviewTab() {
             onChange={setLexicalDoc}
             violations={displayViolations}
             selectedViolationId={selectedViolationId}
-            onSelectViolation={setSelectedViolationId}
+            onSelectViolation={selectViolation}
             onUnlocatedFindings={setUnlocated}
           />
         ) : (
           <DocumentPane
             violations={displayViolations}
             selectedViolationId={selectedViolationId}
-            onSelect={setSelectedViolationId}
+            onSelect={selectViolation}
             readOnly={isHistorical}
           />
         )}
       </div>
-      <ViolationsPane
-        violations={displayViolations}
-        selectedViolationId={selectedViolationId}
-        setSelectedViolationId={setSelectedViolationId}
-      />
+      <CollapsibleRail
+        side="right"
+        label="Findings"
+        open={findingsOpen}
+        onToggle={() => setFindingsOpen(!findingsOpen)}
+        badge={
+          // Collapsed, the count is all that is left of the findings — without
+          // it the rail hides how much work is still outstanding.
+          <span
+            className="rounded-sm bg-muted px-1 font-mono text-[10px] text-foreground"
+            title={`${findingCount} finding${findingCount === 1 ? "" : "s"}`}
+          >
+            {findingCount}
+          </span>
+        }
+      >
+        <ViolationsPane
+          violations={displayViolations}
+          selectedViolationId={selectedViolationId}
+          setSelectedViolationId={selectViolation}
+        />
+      </CollapsibleRail>
     </div>
   );
 }

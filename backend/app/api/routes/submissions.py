@@ -11,10 +11,12 @@ import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, UploadFile, File, Form, Query, Response
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.database import get_db
+from app.models.analysis_run import AnalysisRun
 from app.models.submission import Submission
 from app.models.submission_revision import SubmissionRevision
 from app.models.document_comment import DocumentComment
@@ -561,6 +563,208 @@ async def export_submission(
         media_type=_EXPORT_MEDIA[kind],
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Approval — the sign-off the workflow ended without.
+#
+# `approval_status` was read by two responses and written by no route, so
+# "approved" was a value nobody could set. Approval is only worth recording if
+# it is hard to record carelessly, so every gate below refuses with 409 and
+# says which one refused. Only the criticals gate is overridable, and only
+# with a reason that goes into the audit trail.
+# ---------------------------------------------------------------------------
+
+# A degraded ('needs_review') or hard-failed run persists NO check, so an
+# OLDER check survives on the submission. Approving on it would sign off
+# findings the newest attempt could not reproduce.
+NON_GRADEABLE_STATUSES = {"needs_review", "failed"}
+
+# Quoted from the product design, and from POST /analyze/{id}/scoped's own
+# docstring — the scoped route deliberately writes NULL score/grade.
+SCOPED_RUN_REFUSAL = (
+    "A partial re-run cannot produce a document score, and does not pretend to. "
+    "Approval requires a whole-document run."
+)
+
+
+class ApprovalRequest(BaseModel):
+    # Required only when unresolved critical findings remain. Recorded verbatim
+    # in the audit event — an override with no stated reason is not an override,
+    # it is just an approval with the check switched off.
+    override_reason: Optional[str] = None
+
+
+def _latest_run_is_scoped(db: Session, check) -> bool:
+    """Was the run that produced this check a partial one? Same lookup
+    POST /analyze/{id}/scoped uses to stamp `scoped: true` on it."""
+    run = (
+        db.query(AnalysisRun)
+        .filter(AnalysisRun.compliance_check_id == check.id)
+        .order_by(AnalysisRun.run_number.desc())
+        .first()
+    )
+    return bool((getattr(run, "run_metadata", None) or {}).get("scoped"))
+
+
+def _unresolved_criticals(db: Session, check) -> list:
+    """Critical findings nobody has answered: live (not suppressed below the
+    confidence floor), model-authored (a reviewer's own flag is not something
+    the model is asking the reviewer to resolve), and with no verdict on it."""
+    return [
+        v for v in export_common.check_violations(db, check)
+        if export_common.normalize_severity(v.severity) == "critical"
+        and not v.suppressed
+        and (v.source or "model") == "model"
+        and v.review_status is None
+    ]
+
+
+def _approval_gate(db: Session, submission: Submission) -> dict:
+    """Everything both approval routes need: the check being approved, every
+    blocker standing in the way, and the criticals an override can clear.
+
+    Order is deliberate — POST /approve reports the first blocker, and "there
+    is nothing to approve" has to be said before "what you would approve is
+    only part of the document".
+    """
+    check = export_common.latest_check(db, submission.id)
+    blockers = []
+
+    if check is None or (check.status or "completed") != "completed":
+        blockers.append((
+            "no_analysis", False,
+            "There is no completed analysis to approve — run the compliance "
+            "check on this submission first",
+        ))
+    if (submission.status or "") in NON_GRADEABLE_STATUSES:
+        blockers.append((
+            "not_gradeable", False,
+            f"Submission is '{submission.status}' — the last analysis could not "
+            "be graded, so there is no result to sign off",
+        ))
+    if export_common.findings_are_stale(db, submission.id):
+        blockers.append((
+            "stale_findings", False,
+            "Document edited since the last analysis — re-run the compliance "
+            "check before approving",
+        ))
+    if check is not None and _latest_run_is_scoped(db, check):
+        blockers.append(("scoped_run", False, SCOPED_RUN_REFUSAL))
+
+    criticals = _unresolved_criticals(db, check)
+    if criticals:
+        blockers.append((
+            "unresolved_criticals", True,
+            f"{len(criticals)} unresolved critical finding(s) — approving with "
+            "criticals outstanding requires an explicit override_reason",
+        ))
+
+    return {
+        "check": check,
+        "criticals": criticals,
+        "blockers": [
+            {"code": code, "overridable": overridable, "message": message}
+            for code, overridable, message in blockers
+        ],
+    }
+
+
+@router.post("/{submission_id}/approve")
+async def approve_submission(
+    submission_id: str,
+    body: ApprovalRequest = Body(default=ApprovalRequest()),
+    user: dict = Depends(require("submission:create")),
+    db: Session = Depends(get_db),
+):
+    """Record a human sign-off on the current document + its current findings.
+
+    Refuses (409) a stale document, a partial run, an ungradeable submission,
+    and unresolved criticals — the last of which an `override_reason` can
+    clear, and nothing else can.
+    """
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    gate = _approval_gate(db, submission)
+    reason = ((body.override_reason if body else None) or "").strip()
+
+    for blocker in gate["blockers"]:
+        if blocker["overridable"] and reason:
+            continue
+        raise HTTPException(status_code=409, detail=blocker["message"])
+
+    previous = submission.approval_status
+    submission.approval_status = "approved"
+    db.commit()
+
+    check_id = str(gate["check"].id) if gate["check"] else None
+    approver = str(user.id) if getattr(user, "id", None) else None
+    approved_at = datetime.now(timezone.utc).isoformat()
+
+    # `submissions` has no approved_by/approved_at column and this feature ships
+    # no migration (two are already unapplied on the deployed system), so the
+    # audit row IS the record of who signed off and when. Awaited, not
+    # fire-and-forget: an approval whose audit event silently never ran is an
+    # approval nobody can defend.
+    from app.services.observability import audit
+    await audit.record(
+        "submission_approval_override" if reason else "submission_approved",
+        actor=user,
+        target_type="submission",
+        target_id=str(submission.id),
+        before={"approval_status": previous},
+        after={"approval_status": "approved"},
+        metadata={
+            "check_id": check_id,
+            "approved_by": approver,
+            "approved_at": approved_at,
+            "override_reason": reason or None,
+            "unresolved_critical_count": len(gate["criticals"]),
+        },
+    )
+
+    return {
+        "id": str(submission.id),
+        "approval_status": submission.approval_status,
+        "check_id": check_id,
+        "approved_by": approver,
+        "approved_at": approved_at,
+        "overridden": bool(reason),
+        "override_reason": reason or None,
+        "unresolved_critical_count": len(gate["criticals"]),
+    }
+
+
+@router.get("/{submission_id}/approval")
+async def get_approval_state(
+    submission_id: str,
+    user: dict = Depends(require("submission:read")),
+    db: Session = Depends(get_db),
+):
+    """Whether approval is possible right now and, if not, exactly why — so the
+    UI can say what to fix instead of just greying the button out.
+
+    `can_approve` answers "would a plain POST /approve succeed"; when the only
+    blocker left is unresolved criticals, `requires_override` says so and the
+    button becomes "approve with a reason" rather than disabled.
+    """
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    gate = _approval_gate(db, submission)
+    blockers = gate["blockers"]
+    return {
+        "id": str(submission.id),
+        "approval_status": submission.approval_status,
+        "can_approve": not blockers,
+        "requires_override": bool(blockers) and all(b["overridable"] for b in blockers),
+        "blockers": blockers,
+        "unresolved_critical_count": len(gate["criticals"]),
+        "check_id": str(gate["check"].id) if gate["check"] else None,
+    }
 
 
 @router.delete("/{submission_id}")
