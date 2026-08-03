@@ -29,6 +29,7 @@ from app.schemas.submission import (
 from app.services.submission_render_service import RENDERABLE_CONTENT_TYPES, renders_dir, run_render
 from app.services import submission_export_service
 from app.services import export_common
+from app.services import lexical_document_service
 from app.services.gotenberg_client import GotenbergError
 
 logger = logging.getLogger(__name__)
@@ -213,6 +214,14 @@ async def get_submission(
         # of fetching the revision list on every mount just to find the latest.
         "original_content": submission.original_content,
         "current_content": submission.current_content,
+        # Working document. `lexical_state` is authoritative once present;
+        # `import_html` seeds the editor the first time, and is None for any
+        # submission with no importable upload (which keeps the text pane).
+        "lexical_state": submission.lexical_state,
+        "import_html": (
+            None if submission.lexical_state
+            else lexical_document_service.build_import_html(submission)
+        ),
         "status": submission.status,
         "product_line": submission.product_line,
         "approval_status": submission.approval_status,
