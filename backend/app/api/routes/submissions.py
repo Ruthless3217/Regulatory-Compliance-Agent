@@ -100,9 +100,11 @@ async def create_submission(
 
         content_type = detected_type
 
-    # Pixel page rendering (Compare's renderer, reused) is PDF-only — matches
-    # render_orchestrator's constraint. Anything else needs no render pass.
-    will_render = content_type == "pdf" and file_path is not None
+    # Render every format that has a page layout — PDF directly, DOCX through
+    # Gotenberg. Gating on "pdf" here left DOCX uploads stamped "skipped" and
+    # showing flat extracted text until the self-heal in get_submission caught
+    # them on first open. RENDERABLE_CONTENT_TYPES is the one list.
+    will_render = content_type in RENDERABLE_CONTENT_TYPES and file_path is not None
 
     submission = Submission(
         title=title,

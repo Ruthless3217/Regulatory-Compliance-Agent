@@ -2,6 +2,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { LexicalDocument } from "@/components/editor/LexicalDocument";
 import { ContextRail } from "./ContextRail";
 import { DocumentPane } from "./DocumentPane";
 import { PdfPagePane } from "./PdfPagePane";
@@ -27,6 +28,7 @@ export function ReviewTab() {
     selectedRunId,
     setSelectedRunId,
     findingsStale,
+    setLexicalDoc,
   } = useSubmissionWorkspace();
 
   const isAnalyzing =
@@ -268,6 +270,18 @@ export function ReviewTab() {
             violations={displayViolations}
             selectedViolationId={selectedViolationId}
             onSelect={setSelectedViolationId}
+          />
+        ) : submission.lexical_state || submission.import_html ? (
+          // Rich editing on the working document. The uploaded file stays
+          // immutable; this edits the Lexical state and export renders from it.
+          // Findings are still anchored to extracted-text offsets, which drift
+          // once this editor is used — re-anchoring is Phase 2, so a submission
+          // with no working document keeps the offset-highlighted pane below.
+          <LexicalDocument
+            initialState={submission.lexical_state}
+            initialHtml={submission.import_html}
+            readOnly={isHistorical}
+            onChange={setLexicalDoc}
           />
         ) : (
           <DocumentPane

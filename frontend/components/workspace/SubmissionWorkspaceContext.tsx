@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { applySubmissionRevision, listSubmissionRevisions, listSubmissionRuns } from "@/lib/api";
+import type { SerializedEditorState } from "lexical";
 import type { RevisionSource, RunSummary, ScoreBreakdown, Submission, Violation } from "@/lib/types";
 
 export type SaveState = "idle" | "saving" | "error";
@@ -67,6 +68,12 @@ interface Ctx {
   // locally the moment a revision is saved so the reviewer is told immediately
   // rather than after a refresh. The export block itself is enforced backend-side.
   findingsStale: boolean;
+  // Latest rich-editor content, both views together. Null until the reviewer
+  // edits in the Lexical editor; sent with the next save. State and HTML are
+  // never set apart — export renders the HTML, the editor reloads the state,
+  // and a mismatch would show the reviewer one document and export another.
+  lexicalDoc: { state: SerializedEditorState; html: string } | null;
+  setLexicalDoc: (d: { state: SerializedEditorState; html: string }) => void;
 }
 
 const Context = React.createContext<Ctx | null>(null);
@@ -97,6 +104,9 @@ export function SubmissionWorkspaceProvider({
   children,
 }: ProviderProps) {
   const [findingsStale, setFindingsStale] = React.useState(initialFindingsStale);
+  const [lexicalDoc, setLexicalDoc] = React.useState<
+    { state: SerializedEditorState; html: string } | null
+  >(null);
   const [violations, setViolations] = React.useState<Violation[]>(initialViolations);
   const [selectedViolationId, setSelectedViolationId] = React.useState<string | null>(null);
   const [overallScore, setOverallScore] = React.useState<number | null>(initialScore);
@@ -167,6 +177,10 @@ export function SubmissionWorkspaceProvider({
           content,
           source,
           applied_violation_ids: appliedViolationIds?.length ? appliedViolationIds : undefined,
+          // Both or neither — the backend mirrors them onto the submission as
+          // a pair, and only when state is present.
+          lexical_state: lexicalDoc?.state,
+          lexical_html: lexicalDoc?.html,
         });
         // A persisted revision is exactly what makes the backend call the
         // findings stale, so reflect it now instead of after a refresh.
@@ -186,7 +200,7 @@ export function SubmissionWorkspaceProvider({
         return false;
       }
     },
-    [submission.id]
+    [submission.id, lexicalDoc]
   );
 
   const applyEdit = React.useCallback(
@@ -277,9 +291,12 @@ export function SubmissionWorkspaceProvider({
       selectedRunId,
       setSelectedRunId,
       findingsStale,
+      lexicalDoc,
+      setLexicalDoc,
     }),
     [
       findingsStale,
+      lexicalDoc,
       submission,
       documentText,
       savedText,

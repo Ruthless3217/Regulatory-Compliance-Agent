@@ -150,6 +150,12 @@ export async function applySubmissionRevision(
     source: RevisionSource;
     note?: string;
     applied_violation_ids?: string[];
+    // Two views of the working document, written together. `content` stays the
+    // plain-text projection findings and search still read.
+    // Serialized Lexical editor state. Typed loosely here so lib/api stays
+    // free of an editor dependency; the workspace context holds the real type.
+    lexical_state?: unknown;
+    lexical_html?: string;
   }
 ): Promise<SubmissionRevision> {
   return jsonFetch(`${base()}/submissions/${submissionId}/revisions`, {
