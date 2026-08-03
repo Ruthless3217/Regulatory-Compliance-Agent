@@ -317,12 +317,18 @@ function ScopePanel({ story }: { story: RetrievalStory }) {
         <>
           {!scope.resolved && (
             <p className="mb-3 rounded-sm border border-sev-medium/30 bg-sev-medium/5 px-3 py-2 text-xs text-sev-medium">
-              No product was identified for this submission, so the scope guard was inert — every
-              candidate was accepted by default (C3). A zero rejection count below means &ldquo;the
-              filter never ran&rdquo;, not &ldquo;the filter found nothing wrong&rdquo;.
+              Neither an exact product nor a valid declared family resolved this scope.
+              Product-scoped candidates were rejected and the run must be reviewed; a zero
+              rejection count means no scoped candidate entered the pool.
             </p>
           )}
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-md border border-border bg-surface px-3 py-2">
+              <div className="micro-label">Declared family</div>
+              <div className="mt-1 text-xs">
+                {scope.declared_product_line ?? "none"}
+              </div>
+            </div>
             <div className="rounded-md border border-border bg-surface px-3 py-2">
               <div className="micro-label">Categories</div>
               <div className="mt-1 flex flex-wrap gap-1">

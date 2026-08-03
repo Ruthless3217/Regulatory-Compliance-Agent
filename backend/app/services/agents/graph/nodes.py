@@ -726,6 +726,7 @@ async def preprocess_node(state: ComplianceState) -> Dict:
         product_match: List[Dict[str, Any]] = []
         product_unresolved: Dict[str, List[str]] = {}
         product_resolution_failed: Optional[str] = None
+        fact_cards = None
         try:
             from app.config import settings as _s
             if _s.product_grounding_enabled:
@@ -759,6 +760,14 @@ async def preprocess_node(state: ComplianceState) -> Dict:
 
         md = dict(state.get("metadata") or {})
         md["product_match"] = product_match
+        if not product_resolution_failed:
+            scope_signals = _submission_scope_signals(
+                md.get("declared_product_line"),
+                product_match,
+                fact_cards,
+            )
+            if scope_signals:
+                product_unresolved["submission_scope"] = scope_signals
         if product_resolution_failed:
             md["degraded"] = "product_resolution_failed"
             md["product_resolution_failed"] = product_resolution_failed
@@ -809,6 +818,44 @@ def _ambiguous_product_uins(matches: List[Dict[str, Any]]) -> List[str]:
         for match in (matches or [])
         if match.get("ambiguous") and match.get("uin")
     })
+
+
+def _submission_scope_signals(
+    declared_product_line: Optional[str],
+    product_match: List[Dict[str, Any]],
+    fact_cards: Any,
+) -> List[str]:
+    """Return fail-closed issues for missing/conflicting submission scope."""
+    from app.services.rag.applicability import build_scope, normalize_category
+
+    declared = (declared_product_line or "").strip().lower()
+    declared_is_global = declared in {"global", "all_products"}
+    declared_category = normalize_category(declared)
+
+    if not product_match:
+        if declared_is_global or declared_category:
+            return []
+        return [
+            "no product was resolved and no supported product_line was declared"
+        ]
+
+    actual_scope = build_scope(product_match, fact_cards)
+    detected_uins = sorted(
+        {str(match.get("uin")) for match in product_match if match.get("uin")}
+    )
+    if declared_is_global:
+        return [
+            "declared global scope conflicts with detected product UIN(s): "
+            + ", ".join(detected_uins)
+        ]
+    if declared and not declared_category:
+        return [f"unsupported declared product_line: {declared}"]
+    if declared_category and declared_category not in actual_scope.categories:
+        return [
+            f"declared {declared_category} conflicts with detected scope "
+            f"{sorted(actual_scope.categories)}"
+        ]
+    return []
 
 
 async def _resolve_product_grounding(state: Dict, chunks: List[Dict]) -> tuple:
@@ -939,7 +986,11 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         build_scope, validate_precedents, validate_rules,
     )
     _md_in = state.get("metadata") or {}
-    scope = build_scope(_md_in.get("product_match") or [], get_fact_card_service())
+    scope = build_scope(
+        _md_in.get("product_match") or [],
+        get_fact_card_service(),
+        declared_product_line=_md_in.get("declared_product_line"),
+    )
     product_line_by_id: Dict[str, Any] = {
         r["id"]: r.get("product_line")
         for r_list in rules_serializable.values() for r in r_list

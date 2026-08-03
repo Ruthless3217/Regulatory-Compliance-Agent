@@ -94,12 +94,14 @@ class RetrievalScope:
     uins: FrozenSet[str] = field(default_factory=frozenset)
     categories: FrozenSet[str] = field(default_factory=frozenset)
     resolved: bool = False
+    declared_product_line: Optional[str] = None
 
     def as_dict(self) -> Dict[str, Any]:
         return {
             "uins": sorted(self.uins),
             "categories": sorted(self.categories),
             "resolved": self.resolved,
+            "declared_product_line": self.declared_product_line,
         }
 
 
@@ -131,7 +133,11 @@ def derive_segments(card: Dict[str, Any]) -> FrozenSet[str]:
     return frozenset(segs)
 
 
-def build_scope(product_match: List[Dict[str, Any]], fact_cards: Any) -> RetrievalScope:
+def build_scope(
+    product_match: List[Dict[str, Any]],
+    fact_cards: Any,
+    declared_product_line: Optional[str] = None,
+) -> RetrievalScope:
     """Scope from the librarian's resolved products + their fact cards.
 
     The scope is the union of the fact-card product categories and the derived
@@ -155,8 +161,23 @@ def build_scope(product_match: List[Dict[str, Any]], fact_cards: Any) -> Retriev
             if cat:
                 cats.add(cat)
             cats |= derive_segments(card)
+    declared = (declared_product_line or "").strip().lower()
+    # A family declaration is authoritative only when no exact product was
+    # detected. If both exist, preprocessing verifies they agree before this
+    # scope is consumed. Explicit global means genuinely product-neutral copy
+    # and deliberately admits global/cross-cutting evidence only.
+    if not uins:
+        declared_category = normalize_category(declared)
+        if declared_category:
+            cats.add(declared_category)
+    declaration_resolves = bool(
+        declared in _EXPLICIT_GLOBAL or normalize_category(declared)
+    )
     return RetrievalScope(
-        uins=frozenset(uins), categories=frozenset(cats), resolved=bool(uins)
+        uins=frozenset(uins),
+        categories=frozenset(cats),
+        resolved=bool(uins) or declaration_resolves,
+        declared_product_line=declared or None,
     )
 
 

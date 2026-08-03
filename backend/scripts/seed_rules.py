@@ -52,7 +52,7 @@ def _scoped_successor(existing: Rule, product_line: str) -> Rule:
     )
 
 
-def seed_file(db, path: Path) -> tuple[int, int]:
+def seed_file(db, path: Path) -> tuple[int, int, int]:
     data = load_yaml(path)
     category = data["category"]
     source = data.get("generation_source", f"seed/{path.stem}")
@@ -75,6 +75,7 @@ def seed_file(db, path: Path) -> tuple[int, int]:
 
     inserted = 0
     versioned = 0
+    retired = 0
     for r in rules:
         text = r["rule_text"]
         product_line = r["product_line"]
@@ -120,8 +121,24 @@ def seed_file(db, path: Path) -> tuple[int, int]:
         candidates.append(new_rule)
         inserted += 1
 
+    # A requirement may intentionally shrink from several product scopes to
+    # fewer scopes. Retire leaf rows for scopes no longer declared by the seed;
+    # leaving them active would keep applying a requirement the source removed.
+    for text, scopes in desired_scopes.items():
+        for existing in existing_by_text.get(text, []):
+            if not existing.is_active or existing.product_line in scopes:
+                continue
+            metadata = dict(existing.rule_metadata or {})
+            metadata.update({
+                "lifecycle": "retired",
+                "retired_reason": "seed_scope_removed",
+            })
+            existing.rule_metadata = metadata
+            existing.is_active = False
+            retired += 1
+
     db.commit()
-    return inserted, versioned
+    return inserted, versioned, retired
 
 
 try:
@@ -137,17 +154,20 @@ def main() -> None:
     try:
         total = 0
         total_versioned = 0
+        total_retired = 0
         for yml in sorted(SEEDS_DIR.glob("*.yaml")):
-            inserted, versioned = seed_file(db, yml)
+            inserted, versioned, retired = seed_file(db, yml)
             print(
                 f"  {yml.name}: inserted {inserted}, "
-                f"scope-versioned {versioned} rules"
+                f"scope-versioned {versioned}, retired {retired} rules"
             )
             total += inserted
             total_versioned += versioned
+            total_retired += retired
         print(
             f"Done. Inserted {total} and scope-versioned "
-            f"{total_versioned} rules across all seed files."
+            f"{total_versioned} and retired {total_retired} rules "
+            "across all seed files."
         )
     finally:
         db.close()

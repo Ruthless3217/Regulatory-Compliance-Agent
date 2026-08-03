@@ -105,6 +105,7 @@ class ComplianceEngine:
         "product_unresolved",
         "product_resolution_failed",
         "scope_metadata_missing",
+        "declared_product_line",
         "disclosure_recall_degraded", "rag_rules_per_chunk", "precedents_per_chunk",
     )
 
@@ -208,7 +209,9 @@ class ComplianceEngine:
                 "scores": {},
                 "status": "running",
                 "messages": [],
-                "metadata": {},
+                "metadata": {
+                    "declared_product_line": submission.product_line,
+                },
                 "user_feedback": None
             }
 
