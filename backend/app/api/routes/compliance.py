@@ -5,6 +5,8 @@ Endpoints:
 - POST /compliance/analyze/{submission_id}        - Trigger compliance analysis (background)
 - POST /compliance/analyze/{submission_id}/sync   - Synchronous analysis
 - POST /compliance/analyze/{submission_id}/stream - SSE-streamed analysis with progress
+- POST /compliance/analyze/{submission_id}/scoped - Partial re-run over named sections/chunks
+- GET  /compliance/submissions/{submission_id}/scopes - Section titles a scoped run can name
 - GET  /compliance/results/{submission_id}        - Get analysis results
 - GET  /compliance/check/{check_id}               - Get specific check details
 - POST /compliance/violations/{violation_id}/feedback - Reviewer verdict (back-compat accept/reject shim)
@@ -25,7 +27,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, BackgroundTasks, Re
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from typing import Dict, Literal, Optional, Set
+from typing import Dict, List, Literal, Optional, Set
 
 from app.api.rate_limit import llm_rate_limit
 from app.services.llm_budget import llm_budget_guard
@@ -149,6 +151,211 @@ async def analyze_submission_sync(
         # Log the detail server-side; don't leak internals to the client (audit).
         logger.error(f"Sync analysis failed for {submission_id}: {e}")
         raise HTTPException(status_code=500, detail="Analysis failed; see server logs.")
+
+
+# --------------------------------------------------------------------------
+# Scoped (partial) re-analysis
+#
+# A reviewer who edited two paragraphs re-checks those two paragraphs. The hour
+# of review already spent on the rest of the document is not currency to pay for
+# it. From the product design, and not negotiable:
+#
+#   "A partial re-run cannot produce a document score, and does not pretend to.
+#    Approval requires a whole-document run."
+# --------------------------------------------------------------------------
+
+class ScopedAnalyzeRequest(BaseModel):
+    section_titles: Optional[List[str]] = None   # re-run only these sections
+    chunk_indexes: Optional[List[int]] = None    # or only these chunks
+
+
+@router.post("/analyze/{submission_id}/scoped", dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)])
+async def analyze_submission_scoped(
+    submission_id: str,
+    payload: ScopedAnalyzeRequest,
+    request: Request,
+    user: dict = Depends(require("analysis:run")),
+    db: Session = Depends(get_db),
+):
+    """Re-check only part of a document, keeping the review already recorded on
+    the rest.
+
+    Findings INSIDE the scope are replaced by this run's findings. Findings
+    OUTSIDE it survive as the same rows — same `violations.id`, so every
+    rule_feedback verdict keyed on them still resolves, and same
+    `review_status`. They are re-parented onto the new check rather than
+    copied: a copy would be a new id and an orphaned verdict.
+
+    The resulting check carries NO overall_score and NO grade. Part of a
+    document cannot be graded as the document, so the number is left NULL
+    instead of being computed over a fragment, and the run itself is stamped
+    `scoped: true` + its scope so no later reader can mistake it for a full one.
+
+    ponytail: the analysis pass itself is still whole-document — the scope is
+    applied to the RESULTS, not to the LLM work. Narrowing the work needs the
+    chunk filter plumbed through the orchestrator/graph nodes; the reviewer-
+    visible contract (verdicts kept, no partial grade) does not depend on it.
+    """
+    if not payload.section_titles and not payload.chunk_indexes:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "A scoped re-analysis needs a scope: give section_titles and/or "
+                "chunk_indexes. A scoped run with no scope is a full run, and "
+                "must be requested as one explicitly via "
+                "POST /compliance/analyze/{submission_id}/sync."
+            ),
+        )
+
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    prior_check = (
+        db.query(ComplianceCheck)
+        .filter(ComplianceCheck.submission_id == submission_id)
+        .order_by(ComplianceCheck.checked_at.desc())
+        .first()
+    )
+    if prior_check is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This submission has not been analysed yet, so there is no review "
+                "to preserve and nothing to re-check in part. Run a full analysis "
+                "first."
+            ),
+        )
+
+    titles = set(payload.section_titles or ())
+    indexes = set(payload.chunk_indexes or ())
+
+    def _in_scope(v: Violation) -> bool:
+        return v.section_title in titles or v.chunk_index in indexes
+
+    # Snapshot the out-of-scope rows BEFORE the run — these are the ones the
+    # reviewer already ruled on, and the ones this run may not spend.
+    preserved = [
+        v
+        for v in db.query(Violation).filter(Violation.compliance_check_id == prior_check.id).all()
+        if not _in_scope(v)
+    ]
+
+    session_id = getattr(getattr(request, "state", None), "session_id", None)
+    try:
+        check = await ComplianceEngine.analyze_submission(
+            submission_id, db, user=user, session_id=session_id
+        )
+    except Exception as e:
+        logger.error(f"Scoped analysis failed for {submission_id}: {e}")
+        raise HTTPException(status_code=500, detail="Analysis failed; see server logs.")
+
+    if check is None:
+        # Degraded ('needs_review') or hard failure ('failed'): nothing was
+        # persisted, so nothing was replaced — and nothing may be discarded.
+        db.refresh(submission)
+        return {
+            "status": submission.status,
+            "submission_id": submission_id,
+            "scoped": True,
+            "message": (
+                "Scoped re-analysis could not be graded; the existing findings "
+                "and reviewer verdicts are unchanged."
+            ),
+        }
+
+    # Keep only the in-scope half of the fresh run, then re-parent the reviewed
+    # half of the old one onto it.
+    replaced = 0
+    for v in db.query(Violation).filter(Violation.compliance_check_id == check.id).all():
+        if _in_scope(v):
+            replaced += 1
+        else:
+            db.delete(v)
+    for v in preserved:
+        v.compliance_check_id = check.id
+        db.add(v)
+
+    # "A partial re-run cannot produce a document score, and does not pretend
+    # to." The engine scores every run it persists; a scoped run gives that
+    # number back rather than passing a fragment off as the document.
+    check.overall_score = None
+    check.grade = None
+
+    scope = {"section_titles": payload.section_titles, "chunk_indexes": payload.chunk_indexes}
+    run = (
+        db.query(AnalysisRun)
+        .filter(AnalysisRun.compliance_check_id == check.id)
+        .order_by(AnalysisRun.run_number.desc())
+        .first()
+    )
+    if run is not None:
+        # Rebound, not mutated in place: plain JSONB is not change-tracked.
+        run.run_metadata = {**(run.run_metadata or {}), "scoped": True, "scope": scope}
+        db.add(run)
+
+    db.commit()
+
+    return {
+        "status": "completed",
+        "submission_id": submission_id,
+        "check_id": str(check.id),
+        "scoped": True,
+        "scope": scope,
+        # Explicitly null, and explicitly so in the response: approval requires
+        # a whole-document run.
+        "overall_score": None,
+        "grade": None,
+        "replaced_count": replaced,
+        "preserved_count": len(preserved),
+        "message": (
+            f"Partial re-analysis: {replaced} finding(s) replaced inside the scope, "
+            f"{len(preserved)} left untouched outside it. This run is not a document "
+            f"grade — approval requires a whole-document run."
+        ),
+    }
+
+
+@router.get("/submissions/{submission_id}/scopes")
+async def list_submission_scopes(
+    submission_id: str,
+    user: dict = Depends(require("submission:read")),
+    db: Session = Depends(get_db),
+):
+    """The section titles a scoped re-analysis can actually name, with the
+    finding count in each — so a UI offers real scopes instead of free text."""
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    check = (
+        db.query(ComplianceCheck)
+        .filter(ComplianceCheck.submission_id == submission_id)
+        .order_by(ComplianceCheck.checked_at.desc())
+        .first()
+    )
+    if check is None:
+        return {"submission_id": submission_id, "check_id": None, "scopes": [], "untitled_count": 0}
+
+    counts: Dict[str, int] = {}
+    untitled = 0
+    for v in db.query(Violation).filter(Violation.compliance_check_id == check.id).all():
+        if v.section_title:
+            counts[v.section_title] = counts.get(v.section_title, 0) + 1
+        else:
+            untitled += 1
+
+    return {
+        "submission_id": submission_id,
+        "check_id": str(check.id),
+        "scopes": [
+            {"section_title": t, "count": n}
+            for t, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        ],
+        # Findings with no section title can't be named as a scope — target
+        # those by chunk_index instead.
+        "untitled_count": untitled,
+    }
 
 
 def _sse(event: str, data) -> bytes:
@@ -752,6 +959,10 @@ def _run_summary(r: AnalysisRun) -> dict:
         "started_at": r.started_at.isoformat() if r.started_at else None,
         "finished_at": r.finished_at.isoformat() if r.finished_at else None,
         "scoring_policy_version": r.scoring_policy_version,
+        # A partial run's check carries no score by design; surface WHY here so
+        # the history can't be read as a full grade that happens to be missing.
+        "scoped": bool((r.run_metadata or {}).get("scoped")),
+        "scope": (r.run_metadata or {}).get("scope"),
     }
 
 
