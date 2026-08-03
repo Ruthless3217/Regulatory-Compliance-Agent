@@ -532,8 +532,16 @@ function CandidatesPanel({ story }: { story: RetrievalStory }) {
     [corpora, story.candidates]
   );
 
+  // Keep the reviewer's tab if it still exists; only fall back to the first
+  // one. `corpora` is a fresh Object.keys array on every render, so `groups`
+  // gets a new identity every render and this effect re-runs every render —
+  // an unconditional setOpen(groups[0]) therefore undid every click, which
+  // read as "the tabs don't switch". Making the effect idempotent fixes it
+  // whatever the dependency identity does.
   React.useEffect(() => {
-    setOpen(groups.length > 0 ? groups[0].key : null);
+    setOpen((prev) =>
+      prev && groups.some((g) => g.key === prev) ? prev : groups[0]?.key ?? null
+    );
   }, [groups]);
 
   return (
@@ -585,8 +593,10 @@ function RejectedPanel({
   const byReason = data && data.status === "ok" ? data.by_reason : null;
   const codes = React.useMemo(() => Object.keys(byReason || {}), [byReason]);
 
+  // Same idempotence rule as CandidatesPanel: a selection that is still valid
+  // survives a re-run, so this can never undo the reviewer's click.
   React.useEffect(() => {
-    setOpen(codes.length > 0 ? codes[0] : null);
+    setOpen((prev) => (prev && codes.includes(prev) ? prev : codes[0] ?? null));
   }, [codes]);
 
   return (
