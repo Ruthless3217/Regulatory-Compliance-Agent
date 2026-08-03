@@ -1,7 +1,9 @@
 """Submission export — the 9 downloadable artifacts behind
 ``GET /submissions/{id}/export/{kind}``.
 
-* ``clean.docx`` / ``clean.pdf`` — the current document text, no markup.
+* ``clean.docx`` / ``clean.pdf`` — the corrected document. For a DOCX upload
+  this is the original file with accepted edits written into it, so formatting
+  survives; only a non-DOCX source falls back to a plain-text rebuild.
 * ``annotated.docx`` / ``annotated.pdf`` — the current text with violation
   highlights (same spans ``export_common.find_spans`` computes for the
   reviewer document viewer) plus a numbered findings table.
@@ -20,6 +22,7 @@ four times, instead of a second HTML-rendering pipeline.
 """
 import io
 import logging
+import os
 import zipfile
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -68,7 +71,88 @@ def _header(doc: Document, title: str, subtitle: str = "") -> None:
         doc.add_paragraph(subtitle)
 
 
-def _clean_docx(submission: Submission) -> bytes:
+def _edited_original_docx(submission: Submission) -> Optional[bytes]:
+    """The uploaded DOCX with accepted edits applied, or None if not possible.
+
+    Rebuilding the document from extracted text (``_rebuilt_clean_docx`` below)
+    discards fonts, tables, images, headers, and page structure — everything the
+    reviewer is asked to preserve. So when the upload really is a DOCX, edit
+    that file instead of regenerating one.
+
+    Paragraphs are aligned by text against the extraction the reviewer edited.
+    Untouched paragraphs are not written to at all, so anything python-docx
+    cannot model (tables, images, headers/footers, section breaks) survives
+    byte-for-byte. Returns None when the alignment is not trustworthy, and the
+    caller falls back to the rebuild rather than emitting a mangled document.
+    """
+    if submission.content_type != "docx" or not submission.file_path:
+        return None
+    if not os.path.exists(submission.file_path):
+        logger.warning("clean.docx: upload missing for %s, rebuilding", submission.id)
+        return None
+
+    current = ec.document_text(submission)
+    if not current:
+        return None
+    original = submission.original_content or ""
+    if current == original:
+        # Never edited — the upload already is the answer.
+        with open(submission.file_path, "rb") as f:
+            return f.read()
+
+    try:
+        doc = Document(submission.file_path)
+    except Exception as e:  # noqa: BLE001 — a corrupt upload must not fail the export
+        logger.warning("clean.docx: cannot open upload for %s (%s), rebuilding", submission.id, e)
+        return None
+
+    old_paras = [original[s:e].strip() for s, e in ec.iter_paragraphs(original)]
+    new_paras = [current[s:e].strip() for s, e in ec.iter_paragraphs(current)]
+    # Only paragraph-for-paragraph rewrites can be mapped back onto runs;
+    # an edit that adds or removes whole paragraphs has no anchor in the
+    # original file, so hand those to the rebuild.
+    if len(old_paras) != len(new_paras):
+        return None
+
+    body = [p for p in doc.paragraphs if p.text.strip()]
+    changed = {i for i, (o, n) in enumerate(zip(old_paras, new_paras)) if o != n}
+    by_text: dict[str, list] = {}
+    for para in body:
+        by_text.setdefault(para.text.strip(), []).append(para)
+
+    for i in sorted(changed):
+        targets = by_text.get(old_paras[i]) or []
+        if len(targets) != 1:
+            # Absent, or ambiguous because the same text repeats — writing to
+            # the wrong paragraph is worse than falling back.
+            return None
+        _replace_paragraph_text(targets[0], new_paras[i])
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def _replace_paragraph_text(paragraph, text: str) -> None:
+    """Set a paragraph's text, keeping its style and first run's formatting.
+
+    ponytail: run-level formatting *within* an edited paragraph collapses to
+    the first run's (bold/italic spanning part of the sentence is lost for that
+    paragraph only). Unedited paragraphs are never touched. Upgrade path is a
+    character-offset diff mapped onto runs, if reviewers report losing
+    mid-sentence emphasis on text they corrected.
+    """
+    runs = paragraph.runs
+    if not runs:
+        paragraph.add_run(text)
+        return
+    runs[0].text = text
+    for run in runs[1:]:
+        run.text = ""
+
+
+def _rebuilt_clean_docx(submission: Submission) -> bytes:
+    """Plain-text reflow. Only for uploads with no DOCX to preserve."""
     doc = Document()
     _header(doc, submission.title or "Submission")
     text = ec.document_text(submission)
@@ -79,6 +163,10 @@ def _clean_docx(submission: Submission) -> bytes:
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
+
+
+def _clean_docx(submission: Submission) -> bytes:
+    return _edited_original_docx(submission) or _rebuilt_clean_docx(submission)
 
 
 def _annotated_docx(submission: Submission, violations: List[Violation]) -> bytes:

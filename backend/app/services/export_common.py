@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.models.compliance_check import ComplianceCheck
 from app.models.rule_feedback import RuleFeedback
 from app.models.submission import Submission
+from app.models.submission_revision import SubmissionRevision
 from app.models.violation import Violation
 from app.services.pdf_render_service import to_pdf
 
@@ -51,6 +52,34 @@ def latest_check(db: Session, submission_id) -> Optional[ComplianceCheck]:
         .order_by(ComplianceCheck.checked_at.desc())
         .first()
     )
+
+
+def findings_are_stale(db: Session, submission_id) -> bool:
+    """True when the document was edited after the newest analysis ran.
+
+    Derived from the two timestamps rather than stored: a `stale` column would
+    need every edit path (manual edit, apply_fix, bulk_apply_fixes, restore) to
+    remember to set it, and any that forgot would ship findings that silently
+    describe a superseded document.
+
+    A submission that was never analysed is not stale — there is nothing to
+    contradict. Rows predating migration 0026 can carry a NULL timestamp on
+    either side; treat that as not-stale rather than blocking every legacy
+    export.
+    """
+    check = latest_check(db, submission_id)
+    if check is None or check.checked_at is None:
+        return False
+    newest_edit = (
+        db.query(SubmissionRevision.created_at)
+        .filter(SubmissionRevision.submission_id == submission_id)
+        .order_by(SubmissionRevision.created_at.desc())
+        .limit(1)
+        .scalar()
+    )
+    if newest_edit is None:
+        return False
+    return newest_edit > check.checked_at
 
 
 def check_violations(db: Session, check: Optional[ComplianceCheck]) -> List[Violation]:

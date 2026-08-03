@@ -6,8 +6,10 @@ code `render_orchestrator` uses to build Compare's overlay — instead of buildi
 a second one. There is only one side here (no diff/overlay math): this just gets
 page PNGs on disk for whichever PDF-sourced submission is opened for review.
 
-PDF-only, mirroring `render_orchestrator.run_render`: any other content_type (or
-a missing/unreadable file) is `page_render_status='skipped'`.
+PDF and DOCX. A DOCX is converted through `pdf_render_service.to_pdf` (the
+Gotenberg/LibreOffice route) before rasterizing, so the reviewer sees the real
+document instead of falling back to the extracted-text pane. Any other
+content_type — or a missing/unreadable file — is `page_render_status='skipped'`.
 
 Anchor computation (mapping a violation to a page/bbox via `positioned_words`) is
 deliberately NOT done here — see `preprocessing_service.py`, which flattens PDF
@@ -25,9 +27,12 @@ from typing import List
 from app.config import settings
 from app.database import SessionLocal
 from app.models.submission import Submission
-from app.services.pdf_render_service import render_pages, positioned_words, PositionedWord
+from app.services.pdf_render_service import render_pages, positioned_words, to_pdf, PositionedWord
 
 logger = logging.getLogger(__name__)
+
+# Formats with a page layout `to_pdf` can produce. Anything else is skipped.
+RENDERABLE_CONTENT_TYPES = ("pdf", "docx")
 
 
 def renders_dir(submission_id: str) -> str:
@@ -51,7 +56,7 @@ def run_render(submission_id: str) -> None:
             return
 
         renderable = (
-            submission.content_type == "pdf"
+            submission.content_type in RENDERABLE_CONTENT_TYPES
             and bool(submission.file_path)
             and os.path.exists(submission.file_path)
         )
@@ -61,7 +66,7 @@ def run_render(submission_id: str) -> None:
             return
 
         try:
-            _render(str(submission.id), submission.file_path)
+            _render(str(submission.id), submission.file_path, submission.content_type)
             submission.page_render_status = "completed"
         except Exception as e:  # noqa: BLE001 — render must never crash the worker
             logger.error("Page render failed for submission %s: %s", submission_id, e, exc_info=True)
@@ -71,13 +76,19 @@ def run_render(submission_id: str) -> None:
         db.close()
 
 
-def _render(submission_id: str, file_path: str) -> None:
-    """Rasterize every page of `file_path` (already a PDF) into `renders_dir`."""
+def _render(submission_id: str, file_path: str, content_type: str) -> None:
+    """Rasterize every page of `file_path` into `renders_dir`.
+
+    A non-PDF is converted first; `to_pdf` writes its output inside `base` so
+    the rmtree below also disposes of the previous run's converted copy.
+    """
     base = renders_dir(submission_id)
     # Rebuild cleanly so a re-run never mixes stale images with fresh ones.
     if os.path.isdir(base):
         shutil.rmtree(base, ignore_errors=True)
-    render_pages(file_path, base, settings.pixel_render_page_cap)
+    os.makedirs(base, exist_ok=True)
+    pdf_path = to_pdf(file_path, content_type, base, "source")
+    render_pages(pdf_path, base, settings.pixel_render_page_cap)
 
 
 def submission_positioned_words(file_path: str) -> List[PositionedWord]:

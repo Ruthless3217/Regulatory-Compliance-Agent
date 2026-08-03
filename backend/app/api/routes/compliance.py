@@ -29,6 +29,7 @@ from typing import Dict, Literal, Optional, Set
 
 from app.api.rate_limit import llm_rate_limit
 from app.services.llm_budget import llm_budget_guard
+from app.services import export_common
 from app.database import get_db, SessionLocal
 from app.models.submission import Submission
 from app.models.compliance_check import ComplianceCheck
@@ -361,6 +362,10 @@ async def get_compliance_results(
         "reviewer_added_count": counts["reviewer_added"],
         "finding_count": counts["total"],
         "finding_counts": counts,
+        # True once the document is edited after this analysis: the findings
+        # below describe a superseded version, so the workspace blocks export
+        # and prompts a re-run.
+        "findings_stale": export_common.findings_are_stale(db, submission_id),
     }
 
 

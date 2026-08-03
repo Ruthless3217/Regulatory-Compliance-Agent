@@ -26,8 +26,9 @@ from app.schemas.submission import (
     DocumentCommentCreate,
     DocumentCommentUpdate,
 )
-from app.services.submission_render_service import renders_dir, run_render
+from app.services.submission_render_service import RENDERABLE_CONTENT_TYPES, renders_dir, run_render
 from app.services import submission_export_service
+from app.services import export_common
 from app.services.gotenberg_client import GotenbergError
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,20 @@ ALLOWED_CONTENT_TYPES = {
     "text/markdown": "markdown",
     "text/plain": "text",
 }
+ALLOWED_PRODUCT_LINES = {
+    "global", "term", "ulip", "rider", "group", "savings_endowment",
+    "pension_annuity", "par", "non_par",
+}
+
+
+def _validated_product_line(value: Optional[str]) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized not in ALLOWED_PRODUCT_LINES:
+        raise HTTPException(
+            status_code=400,
+            detail="product_line must be an explicit supported scope or global",
+        )
+    return normalized
 
 
 @router.post("")
@@ -48,6 +63,7 @@ async def create_submission(
     background_tasks: BackgroundTasks,
     title: str = Form(...),
     content_type: str = Form(default="text"),
+    product_line: str = Form(...),
     content: Optional[str] = Form(default=None),
     file: Optional[UploadFile] = File(default=None),
     user: dict = Depends(require("submission:create")),
@@ -58,6 +74,7 @@ async def create_submission(
     Accepts either raw text content or a file upload.
     """
     file_path = None
+    product_line = _validated_product_line(product_line)
 
     # Handle file upload
     if file and file.filename:
@@ -92,6 +109,7 @@ async def create_submission(
         original_content=content,
         file_path=file_path,
         status="uploaded",
+        product_line=product_line,
         page_render_status="processing" if will_render else "skipped",
         submitted_by=getattr(user, "id", None),
     )
@@ -111,6 +129,7 @@ async def create_submission(
         "title": submission.title,
         "content_type": submission.content_type,
         "status": submission.status,
+        "product_line": submission.product_line,
         "page_render_status": submission.page_render_status,
         "submitted_at": submission.submitted_at.isoformat()
     }
@@ -135,6 +154,7 @@ async def list_submissions(
                 "title": s.title,
                 "content_type": s.content_type,
                 "status": s.status,
+                "product_line": s.product_line,
                 "approval_status": s.approval_status,
                 "submitted_at": s.submitted_at.isoformat()
             }
@@ -146,6 +166,7 @@ async def list_submissions(
 @router.get("/{submission_id}")
 async def get_submission(
     submission_id: str,
+    background_tasks: BackgroundTasks,
     user: dict = Depends(require("submission:read")),
     db: Session = Depends(get_db)
 ):
@@ -153,6 +174,18 @@ async def get_submission(
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+
+    # Everything uploaded before DOCX rendering existed is stamped "skipped" and
+    # would otherwise stay on the extracted-text pane forever. Re-render those
+    # once, on first open, rather than shipping a one-off backfill script.
+    if (
+        submission.page_render_status == "skipped"
+        and submission.content_type in RENDERABLE_CONTENT_TYPES
+        and submission.file_path
+    ):
+        submission.page_render_status = "pending"
+        db.commit()
+        background_tasks.add_task(run_render, str(submission.id))
 
     return {
         "id": str(submission.id),
@@ -166,6 +199,7 @@ async def get_submission(
         "original_content": submission.original_content,
         "current_content": submission.current_content,
         "status": submission.status,
+        "product_line": submission.product_line,
         "approval_status": submission.approval_status,
         "page_render_status": submission.page_render_status,
         "submitted_at": submission.submitted_at.isoformat()
@@ -470,6 +504,15 @@ async def export_submission(
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+
+    # An export must never pair a corrected document with the findings of the
+    # version before the correction. Enforced here, not only in the UI banner,
+    # because the export URL is directly reachable.
+    if export_common.findings_are_stale(db, submission.id):
+        raise HTTPException(
+            status_code=409,
+            detail="Document edited since the last analysis — re-run the compliance check before exporting",
+        )
 
     try:
         data = submission_export_service.build_export(db, submission, kind)

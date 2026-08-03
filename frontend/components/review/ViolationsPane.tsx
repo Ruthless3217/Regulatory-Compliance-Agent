@@ -151,9 +151,50 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [selectedViolationId]);
 
+  // Step through what is actually on screen, not the unfiltered set — landing
+  // on a card the current filter hides would look like a dead button.
+  const cursor = filtered.findIndex((v) => v.id === selectedViolationId);
+  const step = (delta: number) => {
+    if (filtered.length === 0) return;
+    // No selection yet: Next opens the first card, Previous the last.
+    const next = cursor === -1
+      ? (delta > 0 ? 0 : filtered.length - 1)
+      : cursor + delta;
+    if (next < 0 || next >= filtered.length) return;
+    setSelectedViolationId(filtered[next].id);
+  };
+  // review_status is null until a reviewer acts (rule_feedback_service only
+  // ever writes "actioned"), so a non-null value means reviewed.
+  const reviewedCount = filtered.filter((v) => (v.review_status ?? "").trim() !== "").length;
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col border-l border-border bg-background">
       <FilterChipBar counts={counts} value={filter} onChange={setFilter} selectFilters={selectFilters} />
+      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <span className="text-[11px] text-muted-foreground">
+          {filtered.length === 0
+            ? "No findings"
+            : `${cursor === -1 ? "—" : cursor + 1} of ${filtered.length} · ${reviewedCount} reviewed`}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="rounded-sm border border-border px-2 py-1 text-[11px] disabled:opacity-40"
+            disabled={filtered.length === 0 || cursor === 0}
+            onClick={() => step(-1)}
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            className="rounded-sm border border-border px-2 py-1 text-[11px] disabled:opacity-40"
+            disabled={filtered.length === 0 || cursor === filtered.length - 1}
+            onClick={() => step(1)}
+          >
+            Next
+          </button>
+        </div>
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="space-y-3 p-4">
           {filtered.length === 0 ? (

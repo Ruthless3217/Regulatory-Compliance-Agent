@@ -62,6 +62,11 @@ interface Ctx {
   // null = viewing the latest run (no explicit selection).
   selectedRunId: string | null;
   setSelectedRunId: (id: string | null) => void;
+  // True once the document is edited after the newest analysis: the findings on
+  // screen describe a superseded version. Server-derived on load, then set
+  // locally the moment a revision is saved so the reviewer is told immediately
+  // rather than after a refresh. The export block itself is enforced backend-side.
+  findingsStale: boolean;
 }
 
 const Context = React.createContext<Ctx | null>(null);
@@ -74,6 +79,7 @@ interface ProviderProps {
   initialScores?: ScoreBreakdown | null;
   analysisStatus?: string | null;
   analysisMessage?: string | null;
+  initialFindingsStale?: boolean;
   children: React.ReactNode;
 }
 
@@ -87,8 +93,10 @@ export function SubmissionWorkspaceProvider({
   initialScores = null,
   analysisStatus = null,
   analysisMessage = null,
+  initialFindingsStale = false,
   children,
 }: ProviderProps) {
+  const [findingsStale, setFindingsStale] = React.useState(initialFindingsStale);
   const [violations, setViolations] = React.useState<Violation[]>(initialViolations);
   const [selectedViolationId, setSelectedViolationId] = React.useState<string | null>(null);
   const [overallScore, setOverallScore] = React.useState<number | null>(initialScore);
@@ -160,6 +168,9 @@ export function SubmissionWorkspaceProvider({
           source,
           applied_violation_ids: appliedViolationIds?.length ? appliedViolationIds : undefined,
         });
+        // A persisted revision is exactly what makes the backend call the
+        // findings stale, so reflect it now instead of after a refresh.
+        setFindingsStale(true);
         // Only the save carrying the newest text may declare the doc clean —
         // an older POST resolving late must not mark newer edits as saved.
         if (textRef.current === content) {
@@ -265,8 +276,10 @@ export function SubmissionWorkspaceProvider({
       runs,
       selectedRunId,
       setSelectedRunId,
+      findingsStale,
     }),
     [
+      findingsStale,
       submission,
       documentText,
       savedText,

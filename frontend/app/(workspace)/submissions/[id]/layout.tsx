@@ -27,9 +27,11 @@ export default async function SubmissionLayout({
   let scores: ScoreBreakdown | null = null;
   let analysisStatus: string | null = null;
   let analysisMessage: string | null = null;
+  let findingsStale = false;
   try {
     const res = await getComplianceResults(id);
     violations = res.violations ?? [];
+    findingsStale = res.findings_stale ?? false;
     overallScore = res.overall_score ?? null;
     grade = res.grade ?? null;
     scores = res.scores ?? null;
@@ -55,6 +57,7 @@ export default async function SubmissionLayout({
       initialScores={scores}
       analysisStatus={analysisStatus}
       analysisMessage={analysisMessage}
+      initialFindingsStale={findingsStale}
     >
       {/* Pin to viewport so Review/Chat tabs get exact remaining height for
           internal pane scroll. Report tab manages its own scroll via overflow. */}

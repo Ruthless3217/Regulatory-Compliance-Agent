@@ -7,12 +7,14 @@ export type SubmissionStatus =
   | "analyzing"
   | "analyzed"
   | "failed"
+  | "needs_review"
   | "waiting_for_review";
 
 export interface Submission {
   id: string;
   title: string;
   content_type: string;
+  product_line?: string | null;
   original_content?: string | null;
   // 0025 — editable working copy; NULL means "no edits yet, current ==
   // original". original_content stays immutable (grading/highlighting
@@ -212,6 +214,9 @@ export interface ComplianceResults {
   reviewer_added_count?: number;
   finding_count?: number;
   finding_counts?: FindingCounts;
+  // Document was edited after this analysis: these findings describe a
+  // superseded version, so export is blocked until it is re-run.
+  findings_stale?: boolean;
   status?: SubmissionStatus;
   message?: string;
 }
@@ -548,7 +553,6 @@ export interface ModelsHealth {
   llm_provider: string;
   llm_model: string;
   critic_llm_model: string;
-  chat_llm_model: string;
   disclosure_check_enabled: boolean;
   product_grounding_enabled: boolean;
 }
@@ -717,8 +721,9 @@ export interface CorpusLayerDeleteResult {
 export interface RetrievalScope {
   uins: string[];
   categories: string[];
-  /** false => no product identified, so nothing could be rejected on scope (C3). */
+  /** false => neither product identity nor a valid declaration resolved scope. */
   resolved: boolean;
+  declared_product_line?: string | null;
 }
 
 export interface ProductMatch {

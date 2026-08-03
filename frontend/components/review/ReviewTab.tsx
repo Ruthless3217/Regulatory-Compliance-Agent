@@ -25,6 +25,7 @@ export function ReviewTab() {
     runs,
     selectedRunId,
     setSelectedRunId,
+    findingsStale,
   } = useSubmissionWorkspace();
 
   const isAnalyzing =
@@ -138,7 +139,13 @@ export function ReviewTab() {
     }
   };
 
-  const usePdfPane = submission.content_type === "pdf" && submission.page_render_status === "completed";
+  // page_render_status is the single source of truth: the backend renders every
+  // format it can lay out (PDF, and DOCX via Gotenberg) and reports "skipped"
+  // for the rest. Re-testing content_type here would re-close that gate.
+  const pagesRendered = submission.page_render_status === "completed";
+  const [editing, setEditing] = React.useState(false);
+  // Nothing to toggle to when there are no page images — stay on the text pane.
+  const usePdfPane = pagesRendered && !editing;
 
   return (
     <div className="grid h-full grid-cols-[1fr_400px] overflow-hidden rounded-md border border-border">
@@ -202,6 +209,50 @@ export function ReviewTab() {
             )}
           </div>
         )}
+
+        {findingsStale && !isAnalyzing && (
+          <div className="border-b border-border bg-sev-high/5 px-4 py-2 text-xs">
+            <span className="font-medium">Document edited since the last analysis.</span>
+            <span className="ml-1 text-muted-foreground">
+              The findings below describe the previous version. Re-run the compliance
+              check to export.
+            </span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant={usePdfPane ? "outline" : "ghost"}
+              disabled={!pagesRendered}
+              title={pagesRendered ? undefined : "No page images for this document"}
+              onClick={() => setEditing(false)}
+            >
+              View
+            </Button>
+            <Button
+              size="sm"
+              variant={usePdfPane ? "ghost" : "outline"}
+              disabled={isHistorical}
+              title={isHistorical ? "Historical runs are read-only" : undefined}
+              onClick={() => setEditing(true)}
+            >
+              Edit
+            </Button>
+          </div>
+          <span className="text-[11px] text-muted-foreground">
+            {submission.page_render_status === "failed"
+              ? "Page render failed — showing extracted text"
+              : submission.page_render_status === "skipped"
+                ? "No page layout for this format — showing extracted text"
+                : pagesRendered
+                  ? usePdfPane
+                    ? "Original formatting"
+                    : "Editing extracted text"
+                  : "Rendering pages…"}
+          </span>
+        </div>
 
         {usePdfPane ? (
           <PdfPagePane
