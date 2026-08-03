@@ -142,8 +142,23 @@ async def list_submissions(
     user: dict = Depends(require("submission:read")),
     db: Session = Depends(get_db)
 ):
-    """List all submissions."""
-    submissions = db.query(Submission).offset(skip).limit(limit).all()
+    """List submissions, newest first.
+
+    The ORDER BY is load-bearing, not cosmetic. Without it Postgres returns
+    heap order, so `skip`/`limit` slice an arbitrary window: with more
+    submissions than `limit`, a newly uploaded document could be absent from
+    page 1 entirely, and paging could show the same row twice while never
+    showing another. Every consumer of this route reads it as a recency-ordered
+    list — the inbox, the retrieval inspector's picker — so the ordering
+    belongs here rather than in each caller.
+    """
+    submissions = (
+        db.query(Submission)
+        .order_by(Submission.submitted_at.desc(), Submission.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
     total = db.query(Submission).count()
 
     return {

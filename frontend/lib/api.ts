@@ -98,8 +98,14 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 /* ---------- submissions ---------- */
-export async function listSubmissions(): Promise<{ submissions: Submission[]; total?: number }> {
-  return jsonFetch(`${base()}/submissions`);
+/** Newest first (the route orders by submitted_at). `limit` is capped at 100
+ * server-side; the default of 20 is a first page, not the whole set, so any
+ * caller that needs to *find* a specific submission must ask for more. */
+export async function listSubmissions(
+  limit?: number
+): Promise<{ submissions: Submission[]; total?: number }> {
+  const qs = limit ? `?limit=${limit}` : "";
+  return jsonFetch(`${base()}/submissions${qs}`);
 }
 export async function getSubmission(id: string): Promise<Submission> {
   return jsonFetch(`${base()}/submissions/${id}`);

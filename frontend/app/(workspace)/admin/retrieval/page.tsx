@@ -663,6 +663,7 @@ function RejectedPanel({
 
 export default function AdminRetrievalPage() {
   const [submissions, setSubmissions] = React.useState<Submission[]>([]);
+  const [subsTotal, setSubsTotal] = React.useState<number | null>(null);
   const [subsErr, setSubsErr] = React.useState<string | null>(null);
 
   const [subId, setSubId] = React.useState("");
@@ -706,10 +707,14 @@ export default function AdminRetrievalPage() {
   );
 
   React.useEffect(() => {
-    listSubmissions()
+    // Ask for the server maximum: this picker exists to FIND a run, so the
+    // default 20-row first page would hide the very documents a curator came
+    // here to inspect. The route returns newest first.
+    listSubmissions(100)
       .then((r) => {
         const subs = r.submissions || [];
         setSubmissions(subs);
+        setSubsTotal(r.total ?? null);
         // Open on the newest submission whose analysis actually reached a
         // terminal state, so the page has content — an empty inspector reads
         // as "retrieval recorded nothing".
@@ -745,6 +750,14 @@ export default function AdminRetrievalPage() {
             <label className="micro-label" htmlFor="submission-picker">
               Submission (inspects its latest run)
             </label>
+            {/* Say so when the list is capped, rather than letting a missing
+                submission read as "this document has no retrieval data". */}
+            {subsTotal !== null && subsTotal > submissions.length && (
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Showing the {submissions.length} most recent of {subsTotal}. Paste a run id below to
+                inspect an older one.
+              </p>
+            )}
             <select
               id="submission-picker"
               value={subId}
