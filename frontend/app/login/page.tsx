@@ -24,12 +24,13 @@ export default function LoginPage() {
       } else {
         router.push("/");
       }
-    } catch (err: any) {
-      if (err.message.includes("403")) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("403")) {
         setError("This device isn't recognised. Contact your compliance admin.");
-      } else if (err.message.includes("401")) {
+      } else if (message.includes("401")) {
         setError("Invalid credentials.");
-      } else if (err.message.includes("429")) {
+      } else if (message.includes("429")) {
         setError("Too many attempts. Account locked temporarily.");
       } else {
         setError("Service unavailable. Try again later.");

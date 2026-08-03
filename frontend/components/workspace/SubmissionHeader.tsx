@@ -46,7 +46,7 @@ function RunPicker() {
   );
 }
 
-export function SubmissionHeader({ submission, overallScore, grade: _grade }: Props) {
+export function SubmissionHeader({ submission, overallScore }: Props) {
   const pathname = usePathname() ?? "";
   const router = useRouter();
   const { setOptimisticAnalyzing, setSelectedRunId } = useSubmissionWorkspace();

@@ -3,8 +3,7 @@ import { cookies } from "next/headers";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { Me } from "@/lib/types";
 import Link from "next/link";
-import { Users, Activity, BarChart, Server, ActivitySquare, Shield, LogOut } from "lucide-react";
-import { headers } from "next/headers";
+import { Users, Activity, BarChart, Server, ActivitySquare, Shield } from "lucide-react";
 
 async function getServerMe() {
   const cookieStore = await cookies();
@@ -18,7 +17,7 @@ async function getServerMe() {
     });
     if (!res.ok) return null;
     return (await res.json()) as Me;
-  } catch (err) {
+  } catch {
     return null;
   }
 }

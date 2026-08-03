@@ -20,8 +20,9 @@ export default function ChangePasswordPage() {
     try {
       await changePassword({ current_password: oldPassword, new_password: newPassword });
       router.push("/");
-    } catch (err: any) {
-      setError(err.message || "Failed to change password.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "";
+      setError(message || "Failed to change password.");
     } finally {
       setLoading(false);
     }

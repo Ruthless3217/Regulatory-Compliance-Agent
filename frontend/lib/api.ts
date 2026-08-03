@@ -345,7 +345,7 @@ export async function createRule(body: {
   severity?: string;
   keywords?: string[];
   points_deduction?: number;
-  product_line?: string;
+  product_line: string;
 }): Promise<Rule> {
   return jsonFetch(`${base()}/rules`, { method: "POST", body: JSON.stringify(body) });
 }
@@ -545,7 +545,75 @@ export const login = (b: {username:string; password:string}) => jsonFetch<{ must
 export const logout = () => jsonFetch(`${base()}/auth/logout`, {method:"POST"});
 export const getMe = () => jsonFetch<Me>(`${base()}/auth/me`);
 export const heartbeat = () => jsonFetch(`${base()}/auth/heartbeat`, {method:"POST"});
-export const changePassword = (b: any) => jsonFetch(`${base()}/auth/change-password`, {method:"POST", body:JSON.stringify(b)});
+export const changePassword = (b: { current_password: string; new_password: string }) =>
+  jsonFetch(`${base()}/auth/change-password`, { method: "POST", body: JSON.stringify(b) });
+
+interface AdminUserApiRow {
+  username: string;
+  role: string;
+  registered_ip?: string | null;
+  is_active: boolean;
+  last_login_at?: string | null;
+  runs?: number | null;
+  total_cost_usd?: number | null;
+}
+
+interface UsageUserApiRow {
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  total_cost_usd?: number | null;
+  runs?: number | null;
+}
+
+interface DocumentUsageApiRow {
+  submission_id: string;
+  title?: string | null;
+  graded_by?: string | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  total_cost_usd?: number | null;
+  total_runs?: number | null;
+  last_run?: string | null;
+}
+
+interface RunApiRow {
+  id: string;
+  submission_id?: string | null;
+  triggered_by?: string | null;
+  run_number?: number | null;
+  is_rerun?: boolean | null;
+  trigger_source?: string | null;
+  status?: string | null;
+  degraded_reason?: string | null;
+  duration_ms?: number | null;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  total_cost_usd?: number | null;
+}
+
+interface SessionApiRow {
+  id: string;
+  username?: string | null;
+  user_id?: string | null;
+  ip?: string | null;
+  login_at?: string | null;
+  last_seen_at?: string | null;
+  duration_seconds?: number | null;
+  status?: string | null;
+}
+
+interface AuditEventApiRow {
+  id: string;
+  created_at?: string | null;
+  actor_role?: string | null;
+  actor_user_id?: string | null;
+  event_type: string;
+  target_type?: string | null;
+  target_id?: string | null;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+}
 
 /* ---------- super-admin console ----------
  * The backend (admin_console.py) wraps rows in {users|documents|runs|sessions|events:[...]}
@@ -553,7 +621,7 @@ export const changePassword = (b: any) => jsonFetch(`${base()}/auth/change-passw
  * These wrappers unwrap + map each response onto the UI's row types so the pages
  * (typed against ./types) render real values. */
 export const listUsers = async (): Promise<UserRow[]> => {
-  const r = await jsonFetch<{ users: any[] }>(`${base()}/super_admin/users`);
+  const r = await jsonFetch<{ users: AdminUserApiRow[] }>(`${base()}/super_admin/users`);
   return (r.users || []).map((u) => ({
     username: u.username,
     role: u.role,
@@ -564,9 +632,14 @@ export const listUsers = async (): Promise<UserRow[]> => {
     total_cost: Number(u.total_cost_usd ?? 0),
   }));
 };
-export const createUser = (b: any) => jsonFetch(`${base()}/super_admin/users`, {method:"POST", body:JSON.stringify(b)});
+export const createUser = (b: {
+  username: string;
+  password: string;
+  registered_ip?: string | null;
+  role?: string;
+}) => jsonFetch(`${base()}/super_admin/users`, { method: "POST", body: JSON.stringify(b) });
 export const usageSummary = async (q: string = ""): Promise<UsageSummary> => {
-  const r = await jsonFetch<{ users: any[] }>(`${base()}/super_admin/usage/summary?${q}`);
+  const r = await jsonFetch<{ users: UsageUserApiRow[] }>(`${base()}/super_admin/usage/summary?${q}`);
   const users = r.users || [];
   const total_cost = users.reduce((s, u) => s + Number(u.total_cost_usd ?? 0), 0);
   const total_tokens_in = users.reduce((s, u) => s + (u.input_tokens ?? 0), 0);
@@ -582,7 +655,7 @@ export const usageSummary = async (q: string = ""): Promise<UsageSummary> => {
   };
 };
 export const usageByDocument = async (q: string = ""): Promise<DocUsageRow[]> => {
-  const r = await jsonFetch<{ documents: any[] }>(`${base()}/super_admin/usage/by-document?${q}`);
+  const r = await jsonFetch<{ documents: DocumentUsageApiRow[] }>(`${base()}/super_admin/usage/by-document?${q}`);
   return (r.documents || []).map((d) => ({
     document_id: d.submission_id,
     title: d.title ?? "",
@@ -595,7 +668,7 @@ export const usageByDocument = async (q: string = ""): Promise<DocUsageRow[]> =>
   }));
 };
 export const listRuns = async (q: string = ""): Promise<RunRow[]> => {
-  const r = await jsonFetch<{ runs: any[] }>(`${base()}/super_admin/runs?${q}`);
+  const r = await jsonFetch<{ runs: RunApiRow[] }>(`${base()}/super_admin/runs?${q}`);
   return (r.runs || []).map((x) => ({
     id: x.id,
     document_title: x.submission_id ?? "",
@@ -612,7 +685,7 @@ export const listRuns = async (q: string = ""): Promise<RunRow[]> => {
   }));
 };
 export const listSessions = async (q: string = ""): Promise<SessionRow[]> => {
-  const r = await jsonFetch<{ sessions: any[] }>(`${base()}/super_admin/sessions?${q}`);
+  const r = await jsonFetch<{ sessions: SessionApiRow[] }>(`${base()}/super_admin/sessions?${q}`);
   return (r.sessions || []).map((s) => ({
     id: s.id,
     user: s.username ?? s.user_id ?? "",
@@ -624,7 +697,7 @@ export const listSessions = async (q: string = ""): Promise<SessionRow[]> => {
   }));
 };
 export const auditFeed = async (q: string = ""): Promise<AuditRow[]> => {
-  const r = await jsonFetch<{ events: any[] }>(`${base()}/super_admin/audit?${q}`);
+  const r = await jsonFetch<{ events: AuditEventApiRow[] }>(`${base()}/super_admin/audit?${q}`);
   return (r.events || []).map((e) => ({
     id: e.id,
     timestamp: e.created_at ?? "",
@@ -637,15 +710,19 @@ export const auditFeed = async (q: string = ""): Promise<AuditRow[]> => {
   }));
 };
 export const ruleAudit = async (q: string = ""): Promise<RuleAuditRow[]> => {
-  const r = await jsonFetch<{ events: any[] }>(`${base()}/super_admin/rules/audit?${q}`);
-  return (r.events || []).map((e) => ({
-    id: e.id,
-    timestamp: e.created_at ?? "",
-    actor: e.actor_role ?? e.actor_user_id ?? "",
-    rule_id: e.target_id ?? (e.metadata && e.metadata.rule_id) ?? "",
-    before: e.before ?? {},
-    after: e.after ?? {},
-  }));
+  const r = await jsonFetch<{ events: AuditEventApiRow[] }>(`${base()}/super_admin/rules/audit?${q}`);
+  return (r.events || []).map((e) => {
+    const metadataRuleId =
+      typeof e.metadata?.rule_id === "string" ? e.metadata.rule_id : "";
+    return {
+      id: e.id,
+      timestamp: e.created_at ?? "",
+      actor: e.actor_role ?? e.actor_user_id ?? "",
+      rule_id: e.target_id ?? metadataRuleId,
+      before: e.before ?? {},
+      after: e.after ?? {},
+    };
+  });
 };
 
 /* ---------- admin: corpus layers ----------

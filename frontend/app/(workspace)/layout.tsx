@@ -19,7 +19,7 @@ async function getServerMe() {
     });
     if (!res.ok) return null;
     return (await res.json()) as Me;
-  } catch (err) {
+  } catch {
     return null;
   }
 }
