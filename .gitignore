@@ -78,9 +78,6 @@ logs/
 /whatiwant.txt
 /docs/dead-code-auth-audit-2026-07-01.md
 
-# Tests — run locally, never deployed to source control/VM
-backend/tests/
-
 # Binary Office documents — cannot be diffed; keep source copies in shared drive
 *.docx
 *.xlsx

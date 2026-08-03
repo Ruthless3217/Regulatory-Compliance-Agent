@@ -12,6 +12,7 @@ __pycache__/
 *.py[cod]
 .coverage
 htmlcov/
+tests/
 .venv/
 venv/
 .git/
