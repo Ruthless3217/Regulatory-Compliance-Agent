@@ -39,7 +39,9 @@ export function ContextRail({ violations }: { violations: Violation[] }) {
     // A rail, not a panel: one hairline against the canvas, no card of its own.
     // Everything inside is sized to live within the 264px track — long values
     // truncate rather than push the column into the document beside it.
-    <aside className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-y-auto border-r border-border bg-surface px-3 py-3">
+    // The rail column already draws its own edge and white ground
+    // (CollapsibleRail); this is only the content inside it.
+    <aside className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-y-auto px-3 py-3">
       <section className="min-w-0">
         {/* Categories, not scope. These are free text on the finding, so the
             list can run to dozens of near-unique labels — showing every one
@@ -79,7 +81,7 @@ export function ContextRail({ violations }: { violations: Violation[] }) {
         )}
       </section>
 
-      <section className="min-w-0">
+      <section className="min-w-0 rounded-md border border-muted bg-subtle p-3">
         <h2 className="micro-label mb-1">Precedent memory</h2>
         {/* Fact first: the count carries the answer, the line under it only
             says what the count means. The full rationale stays on hover. */}

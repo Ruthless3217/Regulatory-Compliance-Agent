@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Source_Serif_4 } from "next/font/google";
 import { cookies } from "next/headers";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -17,6 +17,15 @@ const mono = JetBrains_Mono({
   weight: ["400", "500"],
 });
 
+/** The document's own typeface. Only the panes that render the regulated
+ * document use it — the interface stays in Inter. */
+const serif = Source_Serif_4({
+  subsets: ["latin"],
+  variable: "--font-serif",
+  display: "swap",
+  weight: ["400", "600"],
+});
+
 export const metadata: Metadata = {
   title: "Bajaj Compliance",
   description: "Regulatory compliance review tool for Bajaj Life Insurance marketing content",
@@ -28,7 +37,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang="en"
       data-density={density}
-      className={`${sans.variable} ${mono.variable}`}
+      className={`${sans.variable} ${mono.variable} ${serif.variable}`}
     >
       <body className="min-h-screen bg-surface text-foreground">
         {children}

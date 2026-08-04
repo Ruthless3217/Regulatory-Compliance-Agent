@@ -24,24 +24,35 @@ export function SplitOriginalView({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <div className="grid h-full min-h-0 grid-cols-2 overflow-hidden">
-      <div className="flex min-h-0 flex-col border-r border-border bg-surface">
-        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-          <span className="micro-label">Original — uploaded file</span>
+    // Two columns of equal weight on the canvas, each under its own label, so
+    // which side is the immutable original and which is the working copy is
+    // answered before the reviewer starts comparing wording.
+    <div className="grid h-full min-h-0 grid-cols-2 gap-4 overflow-hidden bg-surface px-4 pt-3">
+      <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="micro-label">Original · uploaded file</span>
           {/* Not decoration: nothing in the app writes to the uploaded file.
               The pane asserts the guarantee so "why can't I type here" never
               becomes a support question. */}
-          <span className="text-[11px] text-muted-foreground">
-            Read-only · cannot be edited here
-          </span>
+          <span className="font-mono text-[10.5px] text-faint">read-only · immutable</span>
         </div>
-        <OriginalPane
-          submissionId={submissionId}
-          pageRenderStatus={pageRenderStatus}
-          originalText={originalText}
-        />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-background shadow-card">
+          <OriginalPane
+            submissionId={submissionId}
+            pageRenderStatus={pageRenderStatus}
+            originalText={originalText}
+          />
+        </div>
       </div>
-      <div className="flex min-h-0 flex-col overflow-hidden">{children}</div>
+      <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="micro-label">Working copy · editable</span>
+          <span className="font-mono text-[10.5px] text-faint">exports from this side</span>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-background shadow-card">
+          {children}
+        </div>
+      </div>
     </div>
   );
 }

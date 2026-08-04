@@ -90,7 +90,9 @@ export function FindingBubbles({
   return (
     // Hangs off the sheet's right edge, in the sheet's own coordinate space —
     // the same origin the plugin measured against, so `top` needs no fixing up.
-    <div className="absolute left-full top-0 ml-6 w-[256px]" aria-label="Findings">
+    // Width + gutter must match the sheet's reserved right margin in
+    // LexicalDocument, or the cards overhang the pane.
+    <div className="absolute left-full top-0 ml-4 w-[220px]" aria-label="Findings">
       {cards.map((card, i) => {
         const { violation, spot } = card;
         const selected = violation.id === selectedViolationId;

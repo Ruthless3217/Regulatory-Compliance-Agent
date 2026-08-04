@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleSlash, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { LexicalDocument } from "@/components/editor/LexicalDocument";
 import { ContextRail } from "./ContextRail";
@@ -92,19 +92,17 @@ function CollapsibleRail({
   );
 
   return (
+    // White, like the document — the canvas grey is reserved for what the panes
+    // float on, so a rail painted in it reads as a hole rather than a panel.
     <div
       className={cn(
-        "flex h-full min-h-0 min-w-0 flex-col bg-surface",
-        !open && cn("items-center gap-1.5 border-border py-1.5", edge)
+        "flex h-full min-h-0 min-w-0 flex-col border-border bg-background",
+        edge,
+        !open && "items-center gap-2.5 py-2.5"
       )}
     >
       {open ? (
-        <div
-          className={cn(
-            "flex shrink-0 items-center justify-between gap-2 border-b border-border px-2 py-1",
-            edge
-          )}
-        >
+        <div className="flex h-[38px] shrink-0 items-center justify-between gap-2 border-b border-border px-3">
           <span className="micro-label truncate">{label}</span>
           {toggle}
         </div>
@@ -112,10 +110,48 @@ function CollapsibleRail({
         <>
           {toggle}
           {badge}
+          {/* Vertical, so a 2rem strip still says what it is. Without it the
+              collapsed rail is an unlabelled sliver and the reviewer has to
+              open it to find out which one it was. */}
+          <span className="micro-label [writing-mode:vertical-rl]">{label}</span>
         </>
       )}
       <div className={open ? "min-h-0 flex-1" : "hidden"}>{children}</div>
     </div>
+  );
+}
+
+/** The segmented View / Split / Edit control: a track in the canvas grey with
+ * the active segment lifted out of it in white. */
+function ModeButton({
+  active,
+  disabled,
+  title,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  title?: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      title={title}
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "h-[26px] rounded-[4px] px-3 text-[12px] font-semibold transition-colors disabled:opacity-40",
+        active
+          ? "bg-background text-foreground shadow-card"
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -319,7 +355,7 @@ export function ReviewTab() {
     // away entirely below xl, where 264+372 of chrome would crowd the document.
     <div
       className={cn(
-        "grid h-full overflow-hidden rounded-md border border-border",
+        "grid h-full overflow-hidden bg-surface",
         splitting ? "grid-cols-[1fr]" : gridCols
       )}
     >
@@ -397,81 +433,61 @@ export function ReviewTab() {
         )}
 
         {unlocated.length > 0 && !isAnalyzing && (
-          <div className="border-b border-border bg-sev-medium/5 px-4 py-2 text-xs">
-            <span className="font-medium">
-              {unlocated.length} finding{unlocated.length === 1 ? "" : "s"} could no longer be
-              located in the edited text.
-            </span>
-            <span className="ml-1 text-muted-foreground">
-              They are still listed on the right and still count — the text they quoted has been
-              changed enough that highlighting it would be a guess. Re-run to re-anchor them.
+          <div className="flex shrink-0 items-center gap-2.5 border-b border-border bg-background px-4 py-2.5">
+            <CircleSlash className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="text-[12.5px] leading-snug text-body">
+              <span className="font-medium">
+                {unlocated.length} finding{unlocated.length === 1 ? "" : "s"} could no longer be
+                located in the edited document.
+              </span>{" "}
+              <span className="text-muted-foreground">
+                They still count. The text they quoted has changed enough that highlighting it
+                would be a guess — re-run the analysis to re-anchor them.
+              </span>
             </span>
           </div>
         )}
 
         {findingsStale && !isAnalyzing && (
-          <div className="border-b border-border bg-sev-high/5 px-4 py-2 text-xs">
-            <span className="font-medium">Document edited since the last analysis.</span>
-            <span className="ml-1 text-muted-foreground">
-              The findings below describe the previous version. Re-run the compliance
-              check to export.
+          <div className="flex shrink-0 items-center gap-2.5 border-b border-warning/40 bg-warning/10 px-4 py-2.5">
+            <TriangleAlert className="h-4 w-4 shrink-0 text-warning-fg" />
+            <span className="text-[12.5px] leading-snug text-warning-fg">
+              Document edited since the last analysis. These findings describe the previous
+              version — re-run the compliance check before approval or export.
             </span>
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
-          <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant={mode === "view" ? "outline" : "ghost"}
+        {/* Mode bar. Fixed 40px so the document below starts at the same line
+            whichever mode is showing, and the segmented control reads as one
+            control rather than three buttons that happen to sit together. */}
+        <div className="flex h-10 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
+          <div className="flex shrink-0 gap-0.5 rounded-[5px] bg-surface p-[3px]">
+            <ModeButton
+              active={mode === "view"}
               disabled={!pagesRendered}
               title={pagesRendered ? undefined : "No page images for this document"}
               onClick={() => setMode("view")}
             >
               View
-            </Button>
-            <Button
-              size="sm"
-              variant={mode === "split" ? "outline" : "ghost"}
-              onClick={() => setMode("split")}
+            </ModeButton>
+            <ModeButton
+              active={mode === "split"}
               title="The uploaded original beside the editable text"
+              onClick={() => setMode("split")}
             >
               Split
-            </Button>
-            <Button
-              size="sm"
-              variant={mode === "edit" ? "outline" : "ghost"}
+            </ModeButton>
+            <ModeButton
+              active={mode === "edit"}
               disabled={isHistorical}
               title={isHistorical ? "Historical runs are read-only" : undefined}
               onClick={() => setMode("edit")}
             >
               Edit
-            </Button>
+            </ModeButton>
           </div>
-          {hasEditor && !isHistorical && (
-            <span className="ml-2 flex items-center gap-2 text-[11px]">
-              {saveState === "saving" ? (
-                <span className="text-muted-foreground">Saving…</span>
-              ) : saveState === "error" ? (
-                <>
-                  <span className="text-sev-critical">Not saved</span>
-                  <Button size="sm" variant="outline" onClick={() => void saveLexical()}>
-                    Retry
-                  </Button>
-                </>
-              ) : lexicalDirty ? (
-                <>
-                  <span className="text-muted-foreground">Unsaved — autosaving</span>
-                  <Button size="sm" variant="ghost" onClick={() => void saveLexical()}>
-                    Save now
-                  </Button>
-                </>
-              ) : (
-                <span className="text-muted-foreground">Saved</span>
-              )}
-            </span>
-          )}
-          <span className="text-[11px] text-muted-foreground">
+          <span className="truncate text-[11.5px] text-faint">
             {submission.page_render_status === "failed"
               ? "Page render failed — showing extracted text"
               : submission.page_render_status === "skipped"
@@ -482,6 +498,38 @@ export function ReviewTab() {
                     : "Editing extracted text"
                   : "Rendering pages…"}
           </span>
+          {hasEditor && !isHistorical && (
+            <span className="ml-auto flex shrink-0 items-center gap-2.5 text-[11.5px]">
+              {/* A dot before the word: the state is glanceable at colour, and
+                  the word is there for anyone who does not read colour. */}
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <span
+                  className={cn(
+                    "h-[7px] w-[7px] rounded-full",
+                    saveState === "error"
+                      ? "bg-sev-critical"
+                      : saveState === "saving"
+                        ? "bg-warning"
+                        : lexicalDirty
+                          ? "bg-warning"
+                          : "bg-success"
+                  )}
+                />
+                {saveState === "saving"
+                  ? "Saving…"
+                  : saveState === "error"
+                    ? "Not saved"
+                    : lexicalDirty
+                      ? "Unsaved — autosaving"
+                      : "All changes saved"}
+              </span>
+              {(saveState === "error" || lexicalDirty) && (
+                <Button size="sm" variant="outline" onClick={() => void saveLexical()}>
+                  {saveState === "error" ? "Retry" : "Save now"}
+                </Button>
+              )}
+            </span>
+          )}
         </div>
 
         {mode === "split" ? (
@@ -558,9 +606,11 @@ export function ReviewTab() {
           onToggle={() => setFindingsOpen(!findingsOpen)}
           badge={
             // Collapsed, the count is all that is left of the findings — without
-            // it the rail hides how much work is still outstanding.
+            // it the rail hides how much work is still outstanding. Carried in
+            // the critical colour: the number is the outstanding work, and a
+            // muted chip reads as a decoration rather than a queue.
             <span
-              className="rounded-sm bg-muted px-1 font-mono text-[10px] text-foreground"
+              className="font-mono text-[12px] font-medium text-sev-critical"
               title={`${findingCount} finding${findingCount === 1 ? "" : "s"}`}
             >
               {findingCount}

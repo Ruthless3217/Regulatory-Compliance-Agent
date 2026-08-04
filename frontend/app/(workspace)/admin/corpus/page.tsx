@@ -1,18 +1,9 @@
 "use client";
 import * as React from "react";
 import { toast } from "sonner";
-import { AlertTriangle, ChevronLeft, ChevronRight, Layers, Unlink } from "lucide-react";
-import { PageHeader } from "@/components/ui/page-header";
-import { StatusPill } from "@/components/ui/status-pill";
+import { AlertTriangle, ChevronLeft, ChevronRight, FileText, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
 import {
@@ -32,225 +23,97 @@ import type {
   CorpusLayerList,
 } from "@/lib/types";
 
-// Corpus-layer administration (backend/app/api/routes/admin_corpus.py). The
-// whole point of a layer is that switching it OFF and throwing it AWAY are
-// different operations with very different blast radii — the UI has to make
-// that difference obvious, not bury both behind one "delete" button.
+/**
+ * Corpus-layer administration (backend/app/api/routes/admin_corpus.py), on the
+ * Compliance Workspace v3 corpus-admin grammar (3g): both grains on one screen
+ * — the layers down the left, the documents inside the selected one in the
+ * middle, and the operations that act on the whole layer on the right.
+ *
+ * The split is the point. Curating a layer means removing a source document at
+ * a time, which is a middle-column action; switching a layer off or destroying
+ * it acts on everything at once, and those live apart from the list so neither
+ * is ever a mis-click away from the other. The three operations differ enormously
+ * in blast radius and the copy says which is which rather than leaving the
+ * admin to find out:
+ *
+ *   disable  — one boolean, reversible, nothing re-embedded
+ *   unlink   — layer record goes, its precedents survive as unlayered
+ *   purge    — precedents deleted, and the embedding is a column ON the row,
+ *              so the vectors die with them. Type-to-confirm.
+ */
 
 const ITEMS_PAGE = 25;
 const DOCS_PAGE = 25;
 
-function Panel({
-  title,
-  description,
-  right,
-  children,
-}: {
-  title: string;
-  description?: string;
-  right?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+/** The corpus-wide pseudo-layer. Rows ingested before layers existed belong to
+ * none, so without this entry the most important view — everything, layered or
+ * not — has no way in. */
+const ALL_DOCUMENTS = "__all__";
+
+function RailHead({ label, right }: { label: string; right?: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-border bg-background shadow-card">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-3">
-        <div>
-          <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-          {description && <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">{description}</p>}
-        </div>
-        {right}
-      </div>
-      <div className="px-5 py-4">{children}</div>
-    </section>
+    <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
+      <span className="micro-label">{label}</span>
+      {right}
+    </div>
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="pb-2 pr-3 text-left font-normal">{children}</th>;
-}
-
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="py-6 text-center text-sm text-muted-foreground">{children}</p>;
+  return <p className="px-4 py-8 text-center text-[12.5px] text-muted-foreground">{children}</p>;
 }
 
-/** Enable/disable. Copy states the actual cost of the operation, because the
- * reason this switch exists is that it is NOT a re-ingest. */
-function EnableToggle({
-  layer,
-  busy,
-  onToggle,
+/** A card in the layers rail: the name, then the two numbers that decide
+ * whether it is worth opening. */
+function LayerCard({
+  name,
+  meta,
+  count,
+  selected,
+  disabled,
+  onClick,
 }: {
-  layer: CorpusLayer;
-  busy: boolean;
-  onToggle: (next: boolean) => void;
+  name: string;
+  meta: string;
+  count: React.ReactNode;
+  selected: boolean;
+  disabled?: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      disabled={busy}
-      onClick={() => onToggle(!layer.enabled)}
-      title={
-        layer.enabled
-          ? "Disable: its precedents stop being retrieved on the very next query. Nothing is deleted, nothing is re-embedded — re-enabling is one click."
-          : "Enable: its precedents are retrievable again on the very next query. No re-embedding."
-      }
+      onClick={onClick}
+      aria-pressed={selected}
       className={cn(
-        "inline-flex items-center gap-2 rounded-sm border px-2 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50",
-        layer.enabled
-          ? "border-success/30 bg-success/5 text-success hover:border-success/60"
-          : "border-border bg-background text-muted-foreground hover:text-foreground"
+        "flex w-full flex-col gap-1.5 rounded-lg border p-3 text-left transition-colors",
+        selected ? "border-primary bg-primary-50/50" : "border-border hover:bg-hover",
+        // Off, not gone: a disabled layer keeps its row and its numbers, dimmed,
+        // because "why is nothing retrieved from X" is answered by seeing X here.
+        disabled && "opacity-60"
       )}
     >
-      <span
-        className={cn(
-          "inline-block h-1.5 w-1.5 rounded-full",
-          layer.enabled ? "bg-success" : "bg-muted-foreground"
-        )}
-      />
-      {busy ? "saving…" : layer.enabled ? "retrieved" : "off"}
+      <span className={cn("text-[12.5px] leading-snug", selected ? "font-semibold" : "font-medium")}>
+        {name}
+      </span>
+      <span className="flex items-center justify-between font-mono text-[10.5px] text-muted-foreground">
+        <span>{meta}</span>
+        <span>{count}</span>
+      </span>
     </button>
   );
 }
 
-/** Two outcomes, not one. Unlink is recoverable (the rows survive, they just go
- * back to being always-retrieved). Purge deletes the rows — and in
- * precedent_cases the embedding is a column ON the row, so the vector dies with
- * it. Purge therefore demands the layer name typed out. */
-function DeleteDialog({
+/** Source documents in the selected layer — the grain an admin actually
+ * curates in. Removing one deletes its precedent rows, and the embedding is a
+ * column on those rows, so retrieval stops seeing it in the same statement. */
+function DocumentsPane({
   layer,
-  onClose,
-  onDone,
+  onChanged,
 }: {
   layer: CorpusLayer | null;
-  onClose: () => void;
-  onDone: () => void;
+  onChanged: () => void;
 }) {
-  const [purge, setPurge] = React.useState(false);
-  const [confirmName, setConfirmName] = React.useState("");
-  const [busy, setBusy] = React.useState(false);
-
-  React.useEffect(() => {
-    setPurge(false);
-    setConfirmName("");
-  }, [layer?.id]);
-
-  if (!layer) return null;
-  const nameOk = confirmName.trim() === layer.name;
-
-  const run = async () => {
-    setBusy(true);
-    try {
-      const r = await deleteCorpusLayer(layer.id, purge);
-      toast.success(
-        r.purged
-          ? `Purged "${r.name}" — ${r.precedents_deleted} precedent row(s) and their embeddings deleted.`
-          : `Unlinked "${r.name}" — ${r.precedents_orphaned} precedent row(s) kept and returned to always-retrieved.`
-      );
-      onDone();
-      onClose();
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Remove layer “{layer.name}”</DialogTitle>
-          <DialogDescription>
-            {layer.item_count} precedent row(s) currently belong to this layer. Choose what happens
-            to them.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setPurge(false)}
-            className={cn(
-              "w-full rounded-md border px-3 py-2.5 text-left transition-colors",
-              !purge ? "border-primary bg-primary-50/40" : "border-border hover:bg-muted/40"
-            )}
-          >
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Unlink className="h-3.5 w-3.5" />
-              Unlink only — keep the {layer.item_count} precedent row(s)
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              The layer record goes away; its precedents are set back to no layer, which means they
-              revert to <span className="font-medium">always retrieved</span>, exactly as before
-              layers existed. No content and no embeddings are lost. Recoverable.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setPurge(true)}
-            className={cn(
-              "w-full rounded-md border px-3 py-2.5 text-left transition-colors",
-              purge
-                ? "border-sev-critical bg-sev-critical/10"
-                : "border-sev-critical/40 hover:bg-sev-critical/5"
-            )}
-          >
-            <div className="flex items-center gap-2 text-sm font-semibold text-sev-critical">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              Purge — permanently DELETE the {layer.item_count} precedent row(s)
-            </div>
-            <p className="mt-1 text-xs text-sev-critical/90">
-              Irreversible. In <span className="font-mono">precedent_cases</span> the embedding is a
-              column on the row, so deleting the rows{" "}
-              <span className="font-semibold">destroys their embeddings too</span>. There is no undo
-              and no second index to restore from — recovering this content means re-ingesting and
-              re-embedding it from the original source.
-            </p>
-          </button>
-        </div>
-
-        {purge && (
-          <div>
-            <label className="micro-label">
-              Type the layer name to confirm: <span className="font-mono">{layer.name}</span>
-            </label>
-            <Input
-              className="mt-1"
-              value={confirmName}
-              onChange={(e) => setConfirmName(e.target.value)}
-              placeholder={layer.name}
-              autoFocus
-            />
-          </div>
-        )}
-
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            variant={purge ? "destructive" : "default"}
-            disabled={busy || (purge && !nameOk)}
-            onClick={run}
-          >
-            {busy
-              ? "Working…"
-              : purge
-              ? `Delete ${layer.item_count} row(s) permanently`
-              : "Unlink layer"}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** Per-document curation: the grain an admin actually curates in. Removing a
- * document deletes its precedent rows, and the embedding is a column on those
- * rows, so retrieval stops seeing it in the same statement — no re-index. */
-function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer | null; onChanged: () => void }) {
   const [docs, setDocs] = React.useState<CorpusLayerDocument[] | null>(null);
   // A corpus of a few thousand precedents spans hundreds of source documents.
   // Rendering every row produced a 20,000px page — the list has to page.
@@ -263,14 +126,13 @@ function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer | null; onCha
 
   const load = React.useCallback(() => {
     setErr(null);
-    // layer === null is the corpus-wide view. It is the important one: rows
-    // ingested before layers existed carry no layer at all, so a layer-scoped
-    // list shows nothing on a corpus that has never been layered.
+    setDocs(null);
     const request = layerId ? listCorpusLayerDocuments(layerId) : listCorpusDocuments();
     request.then((r) => setDocs(r.documents)).catch((e) => setErr((e as Error).message));
   }, [layerId]);
 
   React.useEffect(load, [load]);
+  React.useEffect(() => setDocPage(0), [layerId]);
 
   const visibleDocs = React.useMemo(() => {
     const q = docQuery.trim().toLowerCase();
@@ -281,7 +143,10 @@ function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer | null; onCha
   // Clamp rather than reset: deleting the last row on the last page would
   // otherwise strand the curator on an empty page.
   const currentDocPage = Math.min(docPage, docPageCount - 1);
-  const pageDocs = visibleDocs.slice(currentDocPage * DOCS_PAGE, currentDocPage * DOCS_PAGE + DOCS_PAGE);
+  const pageDocs = visibleDocs.slice(
+    currentDocPage * DOCS_PAGE,
+    currentDocPage * DOCS_PAGE + DOCS_PAGE
+  );
 
   const remove = async (sourceFile: string) => {
     setBusy(sourceFile);
@@ -301,100 +166,152 @@ function DocumentsPanel({ layer, onChanged }: { layer: CorpusLayer | null; onCha
   };
 
   return (
-    <Panel
-      title={layer ? `Source documents in “${layer.name}”` : "Source documents"}
-      description={
-        layer
-          ? "Removing a document deletes its precedents and their embeddings. Irreversible, and it takes effect on the next retrieval."
-          : "Every source document in the precedent corpus, layered or not. Removing one deletes its precedents and their embeddings across the whole corpus. Irreversible, and it takes effect on the next retrieval."
-      }
-      right={
-        <div className="flex items-center gap-2">
-          <input
-            value={docQuery}
-            onChange={(e) => { setDocQuery(e.target.value); setDocPage(0); }}
-            placeholder="Filter by file name…"
-            className="h-7 w-52 rounded-sm border border-border bg-background px-2 text-xs"
-          />
-          <span className="text-xs text-muted-foreground">
-            {docs ? `${visibleDocs.length} of ${docs.length}` : "…"}
-          </span>
-        </div>
-      }
-    >
-      {err ? (
-        <Empty>{err}</Empty>
-      ) : !docs ? (
-        <Empty>Loading…</Empty>
-      ) : docs.length === 0 ? (
-        <Empty>{layer ? "No documents contribute to this layer." : "The precedent corpus is empty."}</Empty>
-      ) : (
-        <table className="w-full text-xs">
-          <thead>
-            <tr>
-              <Th>Source document</Th>
-              <Th>Precedents</Th>
-              <Th>Last updated</Th>
-              <Th> </Th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageDocs.map((d) => {
-              const key = d.source_file ?? "";
-              return (
-                <tr key={key} className="border-t border-border">
-                  <td className="px-3 py-2 font-mono">{d.source_file ?? "(no source file)"}</td>
-                  <td className="px-3 py-2">{d.precedent_count}</td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {d.last_updated ? formatDate(d.last_updated) : "—"}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {confirming === key ? (
-                      <span className="flex items-center justify-end gap-1.5">
-                        <span className="text-muted-foreground">Delete {d.precedent_count} rows?</span>
-                        <Button size="sm" variant="destructive" disabled={busy === key || !d.source_file}
-                          onClick={() => d.source_file && remove(d.source_file)}>
-                          {busy === key ? "Removing…" : "Confirm"}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>Cancel</Button>
-                      </span>
-                    ) : (
-                      <Button size="sm" variant="outline" disabled={!d.source_file}
-                        title={d.source_file ? undefined : "Rows with no source file must be removed individually"}
-                        onClick={() => setConfirming(key)}>
-                        Remove
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-      {docs && visibleDocs.length > DOCS_PAGE && (
-        <nav aria-label="Document pagination" className="mt-3 flex items-center justify-between gap-2 text-xs">
-          <span className="text-muted-foreground">
-            {currentDocPage * DOCS_PAGE + 1}–{currentDocPage * DOCS_PAGE + pageDocs.length} of{" "}
-            {visibleDocs.length}
-            {docQuery.trim() ? ` matching “${docQuery.trim()}”` : ""}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Button size="sm" variant="outline" disabled={currentDocPage === 0}
-              onClick={() => setDocPage(currentDocPage - 1)}>Previous</Button>
-            <span aria-live="polite" className="text-muted-foreground">
-              Page {currentDocPage + 1} of {docPageCount}
+    <>
+      <RailHead
+        label={layer ? "Source documents in this layer" : "Source documents — whole corpus"}
+        right={
+          <span className="flex items-center gap-2">
+            <input
+              value={docQuery}
+              onChange={(e) => {
+                setDocQuery(e.target.value);
+                setDocPage(0);
+              }}
+              placeholder="Filter by file name…"
+              className="h-7 w-52 rounded-sm border border-border bg-background px-2 text-xs"
+            />
+            <span className="text-[12px] text-muted-foreground">
+              Showing <span className="font-mono text-foreground">{visibleDocs.length}</span> of{" "}
+              <span className="font-mono text-foreground">{docs?.length ?? "…"}</span>
             </span>
-            <Button size="sm" variant="outline" disabled={currentDocPage >= docPageCount - 1}
-              onClick={() => setDocPage(currentDocPage + 1)}>Next</Button>
           </span>
-        </nav>
-      )}
-    </Panel>
+        }
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {err ? (
+          <Empty>{err}</Empty>
+        ) : !docs ? (
+          <Empty>Loading…</Empty>
+        ) : visibleDocs.length === 0 ? (
+          <Empty>
+            {docs.length === 0
+              ? layer
+                ? "No documents contribute to this layer. It was registered but nothing was claimed into it — check its source reference against precedent_cases.source_file."
+                : "The precedent corpus is empty."
+              : `No document matches “${docQuery.trim()}”.`}
+          </Empty>
+        ) : (
+          pageDocs.map((d) => {
+            const key = d.source_file ?? "";
+            return (
+              <div
+                key={key}
+                className="flex items-center gap-3.5 border-b border-muted px-4 py-3 hover:bg-hover"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface">
+                  <FileText className="h-[15px] w-[15px] text-muted-foreground" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium" title={key}>
+                    {d.source_file ?? "(no source file)"}
+                  </span>
+                  <span className="mt-0.5 block font-mono text-[10.5px] text-muted-foreground">
+                    {d.last_updated ? `updated ${formatDate(d.last_updated)}` : "never updated"}
+                  </span>
+                </span>
+                <span className="w-24 shrink-0 text-right">
+                  <span className="block font-mono text-[13px] font-medium">{d.precedent_count}</span>
+                  <span className="block text-[10.5px] text-muted-foreground">precedents</span>
+                </span>
+                {confirming === key ? (
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <span className="text-[11.5px] text-muted-foreground">
+                      Delete {d.precedent_count} rows?
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={busy === key || !d.source_file}
+                      onClick={() => d.source_file && remove(d.source_file)}
+                    >
+                      {busy === key ? "Removing…" : "Confirm"}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
+                      Cancel
+                    </Button>
+                  </span>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={!d.source_file}
+                    title={
+                      d.source_file
+                        ? undefined
+                        : "Rows with no source file must be removed individually"
+                    }
+                    onClick={() => setConfirming(key)}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            );
+          })
+        )}
+        {docs && visibleDocs.length > DOCS_PAGE && (
+          <nav
+            aria-label="Document pagination"
+            className="flex items-center justify-between gap-2 px-4 py-3 text-xs"
+          >
+            <span className="text-muted-foreground">
+              {currentDocPage * DOCS_PAGE + 1}–{currentDocPage * DOCS_PAGE + pageDocs.length} of{" "}
+              {visibleDocs.length}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={currentDocPage === 0}
+                onClick={() => setDocPage(currentDocPage - 1)}
+              >
+                Previous
+              </Button>
+              <span aria-live="polite" className="text-muted-foreground">
+                Page {currentDocPage + 1} of {docPageCount}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={currentDocPage >= docPageCount - 1}
+                onClick={() => setDocPage(currentDocPage + 1)}
+              >
+                Next
+              </Button>
+            </span>
+          </nav>
+        )}
+      </div>
+      {/* Pinned to the bottom of the column the action lives in, so the cost of
+          Remove is stated where Remove is, not in a page-level preamble the
+          curator scrolled past ten documents ago. */}
+      <div className="flex shrink-0 items-start gap-2.5 border-t border-border bg-subtle px-4 py-3">
+        <AlertTriangle className="mt-px h-[15px] w-[15px] shrink-0 text-sev-critical" />
+        <span className="text-[12px] leading-relaxed text-muted-foreground">
+          Removing a document deletes its precedent rows in the same operation — the embedding is a
+          column on the row, so the vectors go with them. There is no undo, and any finding that
+          cited them stops resolving immediately.
+        </span>
+      </div>
+    </>
   );
 }
 
-function ItemsPanel({ layer, onClose }: { layer: CorpusLayer; onClose: () => void }) {
+/** The precedent rows themselves. Not in the v3 design, which stops at the
+ * document grain — kept because it is the only way to answer "what actually
+ * got claimed into this layer" when a layer reports items but no documents. */
+function ItemsPane({ layer }: { layer: CorpusLayer }) {
   const [offset, setOffset] = React.useState(0);
   const [data, setData] = React.useState<CorpusLayerItems | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -409,88 +326,206 @@ function ItemsPanel({ layer, onClose }: { layer: CorpusLayer; onClose: () => voi
       .catch((e) => setErr((e as Error).message));
   }, [layer.id, offset]);
 
-  const shown = data ? `${data.offset + 1}–${data.offset + data.items.length} of ${data.total}` : "…";
-
   return (
-    <Panel
-      title={`Items in “${layer.name}”`}
-      description={
-        layer.enabled
-          ? "These rows are live in retrieval right now."
-          : "This layer is disabled — none of these rows can be retrieved until it is switched back on."
-      }
-      right={
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{shown}</span>
-          <Button
-            variant="outline"
-            size="icon"
-            disabled={offset === 0}
-            onClick={() => setOffset(Math.max(0, offset - ITEMS_PAGE))}
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            disabled={!data || offset + ITEMS_PAGE >= data.total}
-            onClick={() => setOffset(offset + ITEMS_PAGE)}
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
-        </div>
-      }
-    >
-      {err ? (
-        <Empty>{err}</Empty>
-      ) : !data ? (
-        <Empty>Loading…</Empty>
-      ) : data.items.length === 0 ? (
-        <Empty>
-          This layer owns no precedent rows. It was registered but nothing was claimed into it —
-          check its source reference against{" "}
-          <span className="font-mono">precedent_cases.source_file</span>.
-        </Empty>
-      ) : (
-        <div className="overflow-x-auto">
+    <>
+      <RailHead
+        label="Precedent rows in this layer"
+        right={
+          <span className="flex items-center gap-2">
+            <span className="text-[12px] text-muted-foreground">
+              {data ? `${data.offset + 1}–${data.offset + data.items.length} of ${data.total}` : "…"}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Previous page"
+              disabled={offset === 0}
+              onClick={() => setOffset(Math.max(0, offset - ITEMS_PAGE))}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Next page"
+              disabled={!data || offset + ITEMS_PAGE >= data.total}
+              onClick={() => setOffset(offset + ITEMS_PAGE)}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </span>
+        }
+      />
+      <div className="min-h-0 flex-1 overflow-auto">
+        {err ? (
+          <Empty>{err}</Empty>
+        ) : !data ? (
+          <Empty>Loading…</Empty>
+        ) : data.items.length === 0 ? (
+          <Empty>
+            This layer owns no precedent rows. It was registered but nothing was claimed into it —
+            check its source reference against precedent_cases.source_file.
+          </Empty>
+        ) : (
           <table className="w-full text-xs">
-            <thead>
-              <tr className="text-muted-foreground">
-                <Th>Issue type</Th>
-                <Th>Highlighted span</Th>
-                <Th>Reviewer comment</Th>
-                <Th>Severity</Th>
-                <Th>Product</Th>
-                <Th>Source file</Th>
-                <Th>Seen</Th>
+            <thead className="sticky top-0 bg-background">
+              <tr className="border-b border-border text-left text-muted-foreground">
+                <th className="px-4 py-2 font-normal">Issue type</th>
+                <th className="px-3 py-2 font-normal">Highlighted span</th>
+                <th className="px-3 py-2 font-normal">Reviewer comment</th>
+                <th className="px-3 py-2 font-normal">Severity</th>
+                <th className="px-3 py-2 font-normal">Source file</th>
+                <th className="px-4 py-2 font-normal">Seen</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-muted">
               {data.items.map((it) => (
-                <tr key={it.id}>
-                  <td className="py-1.5 pr-3">{it.issue_type ?? "—"}</td>
-                  <td className="max-w-xs truncate py-1.5 pr-3" title={it.highlighted_span ?? ""}>
+                <tr key={it.id} className="hover:bg-hover">
+                  <td className="px-4 py-2">{it.issue_type ?? "—"}</td>
+                  <td className="max-w-xs truncate px-3 py-2" title={it.highlighted_span ?? ""}>
                     {it.highlighted_span ?? "—"}
                   </td>
-                  <td className="max-w-xs truncate py-1.5 pr-3" title={it.reviewer_comment ?? ""}>
+                  <td className="max-w-xs truncate px-3 py-2" title={it.reviewer_comment ?? ""}>
                     {it.reviewer_comment ?? "—"}
                   </td>
-                  <td className="py-1.5 pr-3">{it.severity ?? "—"}</td>
-                  <td className="py-1.5 pr-3">{it.product_category ?? "—"}</td>
-                  <td className="max-w-[14rem] truncate py-1.5 pr-3" title={it.source_file ?? ""}>
+                  <td className="px-3 py-2">{it.severity ?? "—"}</td>
+                  <td className="max-w-[14rem] truncate px-3 py-2" title={it.source_file ?? ""}>
                     {it.source_file ?? "—"}
                   </td>
-                  <td className="py-1.5 font-mono">{it.occurrence_count ?? "—"}</td>
+                  <td className="px-4 py-2 font-mono">{it.occurrence_count ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Everything that acts on the layer as a whole. Ordered by blast radius, with
+ * the irreversible one last, in its own bounded box. */
+function LayerOperations({
+  layer,
+  busy,
+  onToggle,
+  onDone,
+}: {
+  layer: CorpusLayer;
+  busy: boolean;
+  onToggle: (next: boolean) => void;
+  onDone: () => void;
+}) {
+  const [confirmName, setConfirmName] = React.useState("");
+  const [running, setRunning] = React.useState<"unlink" | "purge" | null>(null);
+
+  React.useEffect(() => setConfirmName(""), [layer.id]);
+
+  const run = async (purge: boolean) => {
+    setRunning(purge ? "purge" : "unlink");
+    try {
+      const r = await deleteCorpusLayer(layer.id, purge);
+      toast.success(
+        r.purged
+          ? `Purged “${r.name}” — ${r.precedents_deleted} precedent row(s) and their embeddings deleted.`
+          : `Unlinked “${r.name}” — ${r.precedents_orphaned} precedent row(s) kept and returned to always-retrieved.`
+      );
+      onDone();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRunning(null);
+    }
+  };
+
+  return (
+    <>
+      <RailHead label="Layer operations" />
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+        <div className="rounded-lg border border-border bg-subtle p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[12.5px] font-semibold">
+              {layer.enabled ? "Disable this layer" : "Enable this layer"}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={layer.enabled}
+              aria-label={layer.enabled ? "Disable this layer" : "Enable this layer"}
+              disabled={busy}
+              onClick={() => onToggle(!layer.enabled)}
+              className={cn(
+                "flex h-[18px] w-8 shrink-0 items-center rounded-full px-0.5 transition-colors disabled:opacity-50",
+                layer.enabled ? "justify-end bg-success" : "justify-start bg-faint"
+              )}
+            >
+              <span className="h-3.5 w-3.5 rounded-full bg-background" />
+            </button>
+          </div>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">
+            {layer.enabled
+              ? `Retrieval stops offering these ${layer.item_count} precedents from the very next query. Embeddings are kept — switching back on is instant and costs no re-embedding.`
+              : `Its ${layer.item_count} precedents are offered to retrieval again from the very next query. Nothing is re-embedded.`}
+          </p>
         </div>
-      )}
-    </Panel>
+
+        <div className="rounded-lg border border-border bg-subtle p-3">
+          <span className="text-[12.5px] font-semibold">Unlink this layer</span>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">
+            The layer record goes away and its {layer.item_count} precedent row(s) survive with no
+            layer — which means they revert to <span className="font-medium">always retrieved</span>,
+            exactly as before layers existed. No content and no embeddings are lost.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2.5"
+            disabled={running !== null}
+            onClick={() => run(false)}
+          >
+            {running === "unlink" ? "Unlinking…" : "Unlink layer"}
+          </Button>
+        </div>
+
+        <div className="rounded-xl border border-sev-critical/35 bg-sev-critical/[0.04] p-3.5">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-[15px] w-[15px] shrink-0 text-sev-critical" />
+            <span className="text-[13px] font-semibold text-sev-critical">Purge this layer</span>
+          </div>
+          <p className="mt-2 text-[12.5px] leading-relaxed text-foreground">
+            Deletes {layer.item_count} precedent row(s) with their embeddings in one irreversible
+            operation. In <span className="font-mono text-[11.5px]">precedent_cases</span> the
+            embedding is a column on the row, so there is no second index to restore from —
+            recovering this content means re-ingesting and re-embedding it from the original source.
+          </p>
+          <div className="mt-3">
+            <label htmlFor="purge-confirm" className="micro-label">
+              Type the layer name to confirm
+            </label>
+            <Input
+              id="purge-confirm"
+              className="mt-1.5 font-mono text-xs"
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+              placeholder={layer.name}
+            />
+          </div>
+          <Button
+            variant="destructive"
+            className="mt-2.5 w-full"
+            disabled={running !== null || confirmName.trim() !== layer.name}
+            onClick={() => run(true)}
+          >
+            {running === "purge" ? "Purging…" : "Purge layer"}
+          </Button>
+          {confirmName.trim() !== layer.name && (
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              Disabled until the name matches exactly
+            </p>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -498,8 +533,8 @@ export default function AdminCorpusPage() {
   const [data, setData] = React.useState<CorpusLayerList | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
-  const [openLayer, setOpenLayer] = React.useState<CorpusLayer | null>(null);
-  const [deleting, setDeleting] = React.useState<CorpusLayer | null>(null);
+  const [selectedId, setSelectedId] = React.useState<string>(ALL_DOCUMENTS);
+  const [grain, setGrain] = React.useState<"documents" | "items">("documents");
 
   const load = React.useCallback(() => {
     setErr(null);
@@ -510,6 +545,12 @@ export default function AdminCorpusPage() {
 
   React.useEffect(load, [load]);
 
+  const layers = data?.layers ?? [];
+  const selected = layers.find((l) => l.id === selectedId) ?? null;
+  // Documents is the only grain the corpus-wide view has — precedent rows are
+  // listed per layer by the API.
+  const showItems = grain === "items" && selected !== null;
+
   const toggle = async (layer: CorpusLayer, next: boolean) => {
     setBusyId(layer.id);
     try {
@@ -517,7 +558,6 @@ export default function AdminCorpusPage() {
       setData((d) =>
         d ? { ...d, layers: d.layers.map((l) => (l.id === updated.id ? updated : l)) } : d
       );
-      setOpenLayer((l) => (l && l.id === updated.id ? updated : l));
       toast.success(
         updated.enabled
           ? `“${updated.name}” is retrievable again — took effect immediately, nothing re-embedded.`
@@ -530,148 +570,151 @@ export default function AdminCorpusPage() {
     }
   };
 
-  const layers = data?.layers ?? [];
-  const disabledRows = layers.filter((l) => !l.enabled).reduce((s, l) => s + l.item_count, 0);
+  const totalItems = layers.reduce((s, l) => s + l.item_count, 0) + (data?.unlayered_count ?? 0);
+
+  if (err) {
+    return (
+      <div className="mx-auto max-w-2xl px-8 py-10">
+        <h1 className="text-sm font-semibold">Corpus admin</h1>
+        <p className="mt-2 text-[12.5px] text-muted-foreground">{err}</p>
+        <Button size="sm" variant="outline" className="mt-3" onClick={load}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-7xl px-8 py-8">
-      <PageHeader
-        title="Corpus layers"
-        description="Every ingested contribution to the precedent corpus, with an off switch. Disabling a layer is instantly reversible and costs no re-embedding — the embeddings never move, retrieval simply stops joining them in from the next query. Deleting a layer is the separate, explicit operation."
-      />
+    <div className="flex h-full min-h-0 flex-col bg-surface">
+      {/* Header states what is selected and what it costs to retrieve from —
+          the numbers an admin is here to change. */}
+      <div className="flex h-[60px] shrink-0 items-center justify-between gap-5 border-b border-border bg-background px-5">
+        <div className="min-w-0">
+          <div className="truncate text-[16px] font-semibold tracking-[-0.015em]">
+            {selected ? selected.name : "All source documents"}
+          </div>
+          <div className="mt-0.5 font-mono text-[11.5px] text-muted-foreground">
+            {selected
+              ? `layer · ${selected.kind} · ${selected.item_count} precedents · ${
+                  selected.enabled ? "enabled" : "disabled"
+                }`
+              : `whole corpus · ${totalItems} precedents · ${data?.unlayered_count ?? "…"} unlayered, always retrieved`}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {selected && (
+            <div className="flex gap-0.5 rounded-[5px] bg-surface p-[3px]">
+              {(["documents", "items"] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  aria-pressed={grain === g}
+                  onClick={() => setGrain(g)}
+                  className={cn(
+                    "h-[26px] rounded-[4px] px-3 text-[12px] font-semibold transition-colors",
+                    grain === g
+                      ? "bg-background text-foreground shadow-card"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {g === "documents" ? "Documents" : "Precedent rows"}
+                </button>
+              ))}
+            </div>
+          )}
+          <Button size="sm" variant="outline" onClick={load}>
+            Refresh
+          </Button>
+        </div>
+      </div>
 
-      {err ? (
-        <Panel title="Layers">
-          <Empty>{err}</Empty>
-        </Panel>
-      ) : (
-        <>
-          <div className="mb-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-md border border-border bg-surface px-3 py-2">
-              <div className="micro-label">Layers</div>
-              <div className="mt-1 font-mono text-lg leading-none">{data ? layers.length : "…"}</div>
+      <div className="grid min-h-0 flex-1 grid-cols-[264px_1fr] xl:grid-cols-[264px_1fr_372px]">
+        {/* Layers */}
+        <div className="flex min-h-0 flex-col border-r border-border bg-background">
+          <RailHead
+            label="Layers"
+            right={<span className="font-mono text-[10.5px] text-muted-foreground">{layers.length}</span>}
+          />
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div className="flex flex-col gap-2">
+              <LayerCard
+                name="All source documents"
+                meta="every layer, plus unlayered"
+                count={data ? totalItems : "…"}
+                selected={selectedId === ALL_DOCUMENTS}
+                onClick={() => {
+                  setSelectedId(ALL_DOCUMENTS);
+                  setGrain("documents");
+                }}
+              />
+              {!data ? (
+                <p className="px-1 py-2 text-[12px] text-muted-foreground">Loading…</p>
+              ) : layers.length === 0 ? (
+                <p className="px-1 py-2 text-[11.5px] leading-relaxed text-muted-foreground">
+                  No layers registered. The corpus is entirely unlayered ({data.unlayered_count}{" "}
+                  row(s)), so every precedent is always retrieved and none of it can be switched off.
+                </p>
+              ) : (
+                layers.map((l) => (
+                  <LayerCard
+                    key={l.id}
+                    name={l.name}
+                    meta={l.enabled ? l.kind : `${l.kind} · off`}
+                    count={l.item_count}
+                    selected={selectedId === l.id}
+                    disabled={!l.enabled}
+                    onClick={() => setSelectedId(l.id)}
+                  />
+                ))
+              )}
             </div>
-            <div className="rounded-md border border-border bg-surface px-3 py-2">
-              <div className="micro-label">Rows switched off</div>
-              <div className="mt-1 font-mono text-lg leading-none">{data ? disabledRows : "…"}</div>
-              <div className="mt-1 text-[11px] text-muted-foreground">
-                Present in the database, excluded from retrieval.
-              </div>
-            </div>
-            <div className="rounded-md border border-border bg-surface px-3 py-2">
-              <div className="micro-label">Unlayered rows</div>
-              <div className="mt-1 font-mono text-lg leading-none">
-                {data ? data.unlayered_count : "…"}
-              </div>
-              <div className="mt-1 text-[11px] text-muted-foreground">
-                Predate layers, belong to none, and are{" "}
-                <span className="font-medium">always retrieved</span> — they have no provenance and
-                cannot be switched off here.
-              </div>
+            <div className="mt-3.5 rounded-lg bg-subtle px-3 py-3">
+              <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+                Disabling a layer takes it out of retrieval and is reversible — nothing is
+                re-embedded when you switch it back on.
+              </p>
             </div>
           </div>
+        </div>
 
-          <Panel
-            title="Layers"
-            description="Toggling a layer is one boolean UPDATE. It takes effect on the very next retrieval, it deletes nothing, and re-enabling costs another boolean — no re-ingest, no re-embedding."
-            right={
-              <Button variant="outline" size="sm" onClick={load}>
-                Refresh
-              </Button>
-            }
-          >
-            {!data ? (
-              <Empty>Loading…</Empty>
-            ) : layers.length === 0 ? (
-              <Empty>
-                No layers registered. The corpus is entirely unlayered ({data.unlayered_count} row(s)),
-                which means every precedent is always retrieved and none of it can be switched off.
-              </Empty>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-muted-foreground">
-                      <Th>Name</Th>
-                      <Th>Kind</Th>
-                      <Th>Items</Th>
-                      <Th>Retrieval</Th>
-                      <Th>Created</Th>
-                      <Th>&nbsp;</Th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {layers.map((l) => (
-                      <tr
-                        key={l.id}
-                        className={cn(openLayer?.id === l.id && "bg-primary-50/40", !l.enabled && "opacity-70")}
-                      >
-                        <td className="py-2 pr-3">
-                          <div className="font-medium">{l.name}</div>
-                          {l.description && (
-                            <div className="max-w-md truncate text-muted-foreground">{l.description}</div>
-                          )}
-                          {l.source_ref && (
-                            <div className="max-w-md truncate font-mono text-[10px] text-muted-foreground">
-                              {l.source_ref}
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-2 pr-3">
-                          <StatusPill tone="muted">{l.kind}</StatusPill>
-                        </td>
-                        <td className="py-2 pr-3 font-mono">{l.item_count}</td>
-                        <td className="py-2 pr-3">
-                          <EnableToggle
-                            layer={l}
-                            busy={busyId === l.id}
-                            onToggle={(next) => toggle(l, next)}
-                          />
-                        </td>
-                        <td className="py-2 pr-3">{formatDate(l.created_at)}</td>
-                        <td className="py-2 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setOpenLayer(openLayer?.id === l.id ? null : l)}
-                            >
-                              <Layers className="mr-1 h-3 w-3" />
-                              Items
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setDeleting(l)}>
-                              Remove…
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {/* Documents / precedent rows in the selection */}
+        <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
+          {showItems && selected ? (
+            <ItemsPane layer={selected} />
+          ) : (
+            <DocumentsPane layer={selected} onChanged={load} />
+          )}
+        </div>
+
+        {/* Layer operations. Below xl there is no room for a third column and
+            the operations would squeeze the documents they act on; the layer
+            still toggles from its card, and the destructive ones wait for a
+            wider window rather than being crammed. */}
+        <div className="hidden min-h-0 flex-col border-l border-border bg-background xl:flex">
+          {selected ? (
+            <LayerOperations
+              layer={selected}
+              busy={busyId === selected.id}
+              onToggle={(next) => toggle(selected, next)}
+              onDone={() => {
+                setSelectedId(ALL_DOCUMENTS);
+                load();
+              }}
+            />
+          ) : (
+            <>
+              <RailHead label="Layer operations" />
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+                <Layers className="h-5 w-5 text-faint" />
+                <p className="text-[12px] leading-relaxed text-muted-foreground">
+                  Pick a layer to disable, unlink or purge it. The corpus-wide view curates one
+                  document at a time — there is no layer for these operations to act on.
+                </p>
               </div>
-            )}
-          </Panel>
-
-          {/* Always mounted. Document curation is the primary operation here and
-              must not require a layer to exist first — a corpus ingested before
-              layers has none, so gating this behind an opened layer made the
-              whole feature unreachable. Scoped to the open layer when there is
-              one, corpus-wide otherwise. */}
-          <div className="mt-5 space-y-5">
-            <DocumentsPanel layer={openLayer} onChanged={load} />
-            {openLayer && <ItemsPanel layer={openLayer} onClose={() => setOpenLayer(null)} />}
-          </div>
-        </>
-      )}
-
-      <DeleteDialog
-        layer={deleting}
-        onClose={() => setDeleting(null)}
-        onDone={() => {
-          setOpenLayer(null);
-          load();
-        }}
-      />
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

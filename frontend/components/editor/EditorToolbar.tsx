@@ -115,7 +115,7 @@ function ToolbarButton({
       // before the command runs, so the format applies to nothing.
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
-      className={cn("h-7 w-7 text-muted-foreground", active && "bg-primary-50 text-primary")}
+      className={cn("h-7 w-7 text-body hover:bg-surface", active && "bg-primary-50 text-primary")}
     >
       {children}
     </Button>
@@ -189,7 +189,7 @@ export function EditorToolbar(): React.ReactElement {
     <div
       role="toolbar"
       aria-label="Text formatting"
-      className="flex flex-wrap items-center gap-0.5 border-b border-border bg-background px-4 py-1.5"
+      className="flex h-10 shrink-0 flex-wrap items-center gap-px border-b border-border bg-background px-3"
     >
       <ToolbarButton
         label="Undo"
@@ -272,6 +272,12 @@ export function EditorToolbar(): React.ReactElement {
       >
         <Quote className="h-4 w-4" />
       </ToolbarButton>
+
+      <Separator orientation="vertical" className="mx-1 h-[18px]" />
+
+      {/* The slash menu is the only affordance here with no button of its own
+          (SlashCommandPlugin), so the toolbar is where it gets discovered. */}
+      <span className="px-1 font-mono text-[11px] text-faint">/ for commands</span>
     </div>
   );
 }

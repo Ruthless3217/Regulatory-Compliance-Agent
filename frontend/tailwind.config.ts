@@ -15,6 +15,12 @@ const config: Config = {
         foreground: "hsl(var(--foreground))",
         surface: "hsl(var(--surface))",
         muted: { DEFAULT: "hsl(var(--muted))", foreground: "hsl(var(--muted-foreground))" },
+        // The lower rungs of the grey ramp — see globals.css for when each one
+        // is the right answer.
+        body: "hsl(var(--body))",
+        faint: "hsl(var(--faint))",
+        subtle: "hsl(var(--subtle))",
+        hover: "hsl(var(--hover))",
         border: "hsl(var(--border))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
@@ -30,8 +36,8 @@ const config: Config = {
           medium: "hsl(var(--sev-medium))",
           low: "hsl(var(--sev-low))",
         },
-        success: "hsl(var(--success))",
-        warning: "hsl(var(--warning))",
+        success: { DEFAULT: "hsl(var(--success))", fg: "hsl(var(--success-fg))" },
+        warning: { DEFAULT: "hsl(var(--warning))", fg: "hsl(var(--warning-fg))" },
         info: "hsl(var(--info))",
       },
       borderRadius: {
@@ -42,9 +48,14 @@ const config: Config = {
       },
       boxShadow: {
         card: "var(--shadow-card)",
+        sheet: "var(--shadow-sheet)",
       },
       fontFamily: {
-        serif: ["var(--font-sans)", "system-ui", "sans-serif"],
+        // The document is set in a serif and the interface around it in Inter,
+        // which is what tells a reviewer at a glance which pixels are the
+        // regulated artifact and which are the tool. `serif` used to alias the
+        // sans, so every `font-serif` in the document panes rendered as Inter.
+        serif: ["var(--font-serif)", "Georgia", "serif"],
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },

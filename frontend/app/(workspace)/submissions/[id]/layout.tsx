@@ -71,7 +71,11 @@ export default async function SubmissionLayout({
           overallScore={overallScore}
           grade={grade}
         />
-        <div className="min-h-0 flex-1 overflow-hidden px-6 py-6">{children}</div>
+        {/* No padding of its own. The review workspace runs its rails to the
+            window edges, the way every document tool with side panels does —
+            an inset card would spend the document's width on a margin that
+            says nothing. Tabs that want a margin set their own. */}
+        <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
       </div>
     </SubmissionWorkspaceProvider>
   );

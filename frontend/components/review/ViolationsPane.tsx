@@ -1,8 +1,10 @@
 "use client";
 import * as React from "react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { FilterChipBar, type FilterKey, type SelectFilterDef, type SelectFilterOption } from "./FilterChipBar";
 import { ViolationCard, ViolationRow } from "./ViolationCard";
 import { severityOrder, normalizeSeverity, categoryLabel } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { Violation } from "@/lib/types";
 
 interface Props {
@@ -178,35 +180,43 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
   const others = filtered.filter((v) => v.id !== selectedViolationId);
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col border-l border-border bg-background">
-      <FilterChipBar counts={counts} value={filter} onChange={setFilter} selectFilters={selectFilters} />
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <span className="min-w-0 text-[11px] text-muted-foreground">
+    <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
+      {/* Counter and stepper first, filters under them: the count is the
+          reviewer's progress through the queue and has to survive whatever the
+          filters are doing. Paging arrows rather than words — they sit beside
+          the count they move through, and the rail cannot spare the width. */}
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+        <span className="min-w-0 truncate text-[12.5px] font-semibold">
           {filtered.length === 0
             ? "No findings"
             : cursor === -1
-              ? `None selected · ${filtered.length} findings · ${reviewedCount} reviewed`
-              : `${cursor + 1} of ${filtered.length} · ${reviewedCount} reviewed`}
+              ? `${filtered.length} findings · ${reviewedCount} reviewed`
+              : `Finding ${cursor + 1} of ${filtered.length}`}
         </span>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <button
             type="button"
-            className="rounded-sm border border-border px-2 py-1 text-[11px] disabled:opacity-40"
+            aria-label="Previous finding"
+            title="Previous finding"
+            className="flex h-[26px] w-[26px] items-center justify-center rounded-[5px] border border-border text-body hover:bg-hover disabled:opacity-40"
             disabled={filtered.length === 0 || cursor === 0}
             onClick={() => step(-1)}
           >
-            Previous
+            <ChevronLeft className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
-            className="rounded-sm border border-border px-2 py-1 text-[11px] disabled:opacity-40"
+            aria-label="Next finding"
+            title="Next finding"
+            className="flex h-[26px] w-[26px] items-center justify-center rounded-[5px] border border-border text-body hover:bg-hover disabled:opacity-40"
             disabled={filtered.length === 0 || cursor === filtered.length - 1}
             onClick={() => step(1)}
           >
-            Next
+            <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
+      <FilterChipBar counts={counts} value={filter} onChange={setFilter} selectFilters={selectFilters} />
       {/* One finding in full at the top, every other one as a dense line. The
           detail card is the only place a finding's evidence, verdict actions
           and rewrite live — the rows exist to get you to it. */}
@@ -232,22 +242,32 @@ export function ViolationsPane({ violations, selectedViolationId, setSelectedVio
             No violations in this filter.
           </div>
         ) : (
-          others.map((v) => (
-            <ViolationRow key={v.id} violation={v} onSelect={() => setSelectedViolationId(v.id)} />
-          ))
+          <>
+            <div className="flex items-center gap-2 px-3 pb-1 pt-2">
+              <span className="micro-label">All findings</span>
+              <span className="font-mono text-[10.5px] text-faint">
+                {reviewedCount} of {filtered.length} reviewed
+              </span>
+            </div>
+            {others.map((v) => (
+              <ViolationRow key={v.id} violation={v} onSelect={() => setSelectedViolationId(v.id)} />
+            ))}
+          </>
         )}
 
         {suppressed.length > 0 && (
-          <div className="border-t border-dashed border-border">
+          <div className="border-t border-border">
             <button
               type="button"
               onClick={() => setShowSuppressed((s) => !s)}
-              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+              className="flex w-full items-center gap-2 bg-subtle px-3 py-2.5 text-left text-[11.5px] font-semibold text-muted-foreground hover:text-foreground"
             >
-              <span>
-                Needs review ({suppressed.length}) — low-confidence or structural; not counted in the score
-              </span>
-              <span className="font-mono">{showSuppressed ? "−" : "+"}</span>
+              <ChevronDown
+                className={cn("h-3.5 w-3.5 shrink-0 text-faint transition-transform", !showSuppressed && "-rotate-90")}
+              />
+              Suppressed &amp; low-confidence
+              <span className="font-mono text-[10.5px] font-normal text-faint">{suppressed.length}</span>
+              <span className="ml-auto font-normal text-faint">Excluded from score</span>
             </button>
             {showSuppressed &&
               suppressed

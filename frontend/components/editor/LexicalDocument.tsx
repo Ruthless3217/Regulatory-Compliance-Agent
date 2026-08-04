@@ -192,23 +192,53 @@ export function LexicalDocument({
           The sheet is the positioned ancestor: the finding overlay layer and
           the margin bubbles are absolutely positioned against it, so they
           scroll with the text and share one coordinate origin. */}
-      <div className="min-h-0 flex-1 overflow-y-auto bg-surface px-6 py-6">
+      {/* Split already frames this pane in a card of its own
+          (SplitOriginalView), so the sheet drops its canvas, border and shadow
+          there — two nested sheets is chrome around chrome, in the mode with
+          the least width to spare. */}
+      <div
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto",
+          bubbles ? "px-5 py-6" : "bg-surface px-6 py-5 pb-16"
+        )}
+      >
         <div
           className={cn(
-            "relative rounded-sm border border-border bg-background px-10 py-12 shadow-card",
-            // The bubbles hang off the right edge (256px + a 24px gutter), so
-            // the sheet reserves that width rather than letting them fall off
-            // the pane. Left-aligned then, not centred: centring the sheet
-            // alone would put the pair off-centre anyway.
-            bubbles ? "mr-[280px] max-w-2xl" : "mx-auto max-w-3xl"
+            "relative",
+            bubbles
+              // The bubbles hang off the right edge (220px card + a 16px
+              // gutter), so the sheet reserves that width rather than letting
+              // them fall off the pane. Left-aligned then, not centred:
+              // centring the sheet alone would put the pair off-centre anyway.
+              ? "mr-[236px] max-w-xl"
+              : "mx-auto max-w-[820px] rounded-md border border-border bg-background px-[62px] py-[52px] shadow-sheet"
           )}
         >
           {seedFailure && (
             <ImportFailureNotice failure={seedFailure} pagesRendered={pagesRendered} />
           )}
+          {/* The document reads in its own typeface at its own measure. Sizes
+              are the design's: body 15.5/1.78, headings stepped off it, and
+              every block spaced so a paragraph is a paragraph rather than a
+              row in a list. Set here rather than on the ContentEditable so the
+              rules also reach nodes Lexical renders itself (h1-h3, li, table). */}
           <RichTextPlugin
             contentEditable={
-              <ContentEditable className="text-[15px] leading-[1.75] outline-none" />
+              <ContentEditable
+                className={cn(
+                  "font-serif text-[15.5px] leading-[1.78] text-foreground outline-none",
+                  "[&_p]:mb-[18px] [&_p:last-child]:mb-0",
+                  "[&_h1]:mb-1.5 [&_h1]:text-[29px] [&_h1]:font-semibold [&_h1]:leading-[1.25] [&_h1]:tracking-[-0.01em]",
+                  "[&_h2]:mb-3 [&_h2]:mt-6 [&_h2]:text-[19px] [&_h2]:font-semibold",
+                  "[&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:text-[16px] [&_h3]:font-semibold",
+                  "[&_ul]:mb-[18px] [&_ul]:list-disc [&_ul]:pl-6",
+                  "[&_ol]:mb-[18px] [&_ol]:list-decimal [&_ol]:pl-6",
+                  "[&_blockquote]:mb-[18px] [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground",
+                  "[&_table]:mb-[18px] [&_table]:w-full [&_table]:border-collapse",
+                  "[&_td]:border [&_td]:border-border [&_td]:p-2 [&_td]:align-top",
+                  "[&_th]:border [&_th]:border-border [&_th]:bg-subtle [&_th]:p-2 [&_th]:text-left"
+                )}
+              />
             }
             placeholder={null}
             ErrorBoundary={LexicalErrorBoundary}

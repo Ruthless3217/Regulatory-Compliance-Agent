@@ -16,6 +16,20 @@
     --muted-foreground: 215 12% 42%;
     --border: 214 20% 90%;
 
+    /* Three greys below --foreground, from the Compliance Workflow v5 design.
+       They are a ramp, not synonyms, and using the wrong rung is what makes a
+       dense screen read as noise:
+         --body   (#3A4453) running prose and control labels
+         --muted-foreground (#5E6978) secondary values
+         --faint  (#98A2B0) metadata that must not compete — ids, timestamps,
+                  section labels, counts beside a label */
+    --body: 216 18% 28%;
+    --faint: 215 13% 64%;
+    /* Two near-whites that separate a nested panel from the card holding it
+       (--subtle) and mark a row under the cursor (--hover). */
+    --subtle: 220 60% 99%;
+    --hover: 216 45% 98%;
+
     /* Bajaj blue */
     --primary: 218 100% 29%;
     --primary-fg: 0 0% 100%;
@@ -30,13 +44,20 @@
     --sev-medium: 38 92% 50%;
     --sev-low: 218 100% 29%;
 
-    /* Status */
+    /* Status. The -fg pairs are the readable text weight of each: the fill
+       colour on a tinted background fails contrast at 11–12px, which is the
+       size these statuses are actually set in. */
     --success: 152 60% 36%;
+    --success-fg: 152 61% 27%;
     --warning: 38 92% 50%;
+    --warning-fg: 37 100% 36%;
     --info: 218 100% 29%;
 
     --radius: 6px;
     --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.04);
+    /* The document sheet floating on the canvas — deeper than a card's, because
+       the sheet is the subject of the screen and everything else is chrome. */
+    --shadow-sheet: 0 2px 10px rgb(23 28 38 / 0.07);
   }
 
   * {

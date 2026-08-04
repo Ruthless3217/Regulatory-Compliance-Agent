@@ -88,8 +88,8 @@ function headingLevel(pieces: DocPiece[]): number {
 }
 
 const headingClass = (level: number) =>
-  "mb-2 mt-6 font-sans font-semibold first:mt-0 " +
-  (level === 1 ? "text-[22px]" : level === 2 ? "text-[19px]" : "text-[16px]");
+  "mb-3 mt-6 font-semibold first:mt-0 " +
+  (level === 1 ? "text-[29px] leading-[1.25] tracking-[-0.01em]" : level === 2 ? "text-[19px]" : "text-[16px]");
 
 export function DocumentPane({ violations, selectedViolationId, onSelect, readOnly }: Props) {
   const { submission, documentText, applyEdit, setViolations } = useSubmissionWorkspace();
@@ -272,10 +272,15 @@ export function DocumentPane({ violations, selectedViolationId, onSelect, readOn
     <div className="relative flex min-h-0 flex-1 flex-col bg-background">
       <EditorToolbar readOnly={readOnly} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto" onMouseUp={handleMouseUp}>
+      {/* Same sheet as the editor: a reviewer switching between a submission
+          with a working document and one without must not feel they changed
+          product. Serif throughout — the paragraphs used to opt back out to
+          the interface font, which was invisible only because `font-serif`
+          resolved to Inter anyway. */}
+      <div className="min-h-0 flex-1 overflow-y-auto bg-surface px-6 py-5 pb-16" onMouseUp={handleMouseUp}>
         <article
           ref={containerRef}
-          className="prose mx-auto max-w-2xl px-8 py-10 font-serif text-[15px] leading-[1.75] text-foreground [&_p]:mb-4 [&_p]:font-sans"
+          className="mx-auto max-w-[820px] rounded-md border border-border bg-background px-[62px] py-[52px] font-serif text-[15.5px] leading-[1.78] text-foreground shadow-sheet [&_p]:mb-[18px]"
         >
           {paragraphs.length === 0 && (
             <p className="text-muted-foreground">This submission has no content to display.</p>
