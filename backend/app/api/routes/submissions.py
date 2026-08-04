@@ -36,6 +36,7 @@ from app.services.submission_render_service import (
     run_anchor,
     run_render,
 )
+from app.services import comparison_service
 from app.services import submission_export_service
 from app.services import export_common
 from app.services import lexical_document_service
@@ -567,6 +568,45 @@ async def delete_comment(
     return {"message": "Comment deleted", "id": comment_id}
 
 
+@router.get("/{submission_id}/draft-diff")
+async def submission_draft_diff(
+    submission_id: str,
+    user: dict = Depends(require("submission:read")),
+    db: Session = Depends(get_db),
+):
+    """The reviewer's corrections as a redline: uploaded original vs working copy.
+
+    Split view asks "what did we change, and is the new draft better?" — a
+    question about the two drafts, not about the compliance findings. It is the
+    same question Compare answers between two files, so it runs the same
+    aligner (`comparison_service.build_diff`) rather than a second one that
+    could disagree with it.
+
+    Both sides come from the extracted text the analyser graded, not from the
+    uploaded bytes: the working copy only exists as text, so diffing it against
+    a re-extraction of the original would report the extractor's own
+    inconsistencies as reviewer edits.
+    """
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    original = submission.original_content or ""
+    working = submission.current_content or original
+    blocks = comparison_service.build_diff(
+        comparison_service.split_text_paragraphs(original),
+        comparison_service.split_text_paragraphs(working),
+    )
+    changed = sum(1 for b in blocks if b.get("type") != "equal")
+    return {
+        "blocks": blocks,
+        "changed": changed,
+        # An unedited document is a valid answer, and the pane says so rather
+        # than rendering an empty redline that reads as a failure.
+        "edited": bool(submission.current_content) and working != original,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Export — clean/annotated/report/feedback-report copies (docx + pdf) plus a
 # bundle.zip. Mirrors GET /comparisons/{id}/export/{kind}'s dispatch shape:
@@ -584,6 +624,24 @@ _EXPORT_MEDIA = {
     "feedback-report.docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "feedback-report.pdf": "application/pdf",
     "bundle.zip": "application/zip",
+}
+
+
+# Kinds that put the document and the findings in ONE artifact. Only these can
+# misrepresent a corrected document as carrying the previous version's findings,
+# so only these are refused while the findings are stale.
+#
+# `clean.*` is the corrected document and cites no finding at all;
+# `feedback-report.*` is the log of what reviewers did, which an edit does not
+# invalidate. Refusing those too meant that editing a document — the entire
+# point of the editor — left the reviewer unable to download the very document
+# they had just corrected, with no way round it but a full re-analysis.
+_STALE_BLOCKED_EXPORTS = {
+    "annotated.docx",
+    "annotated.pdf",
+    "report.docx",
+    "report.pdf",
+    "bundle.zip",  # contains both of the above
 }
 
 
@@ -610,11 +668,16 @@ async def export_submission(
 
     # An export must never pair a corrected document with the findings of the
     # version before the correction. Enforced here, not only in the UI banner,
-    # because the export URL is directly reachable.
-    if export_common.findings_are_stale(db, submission.id):
+    # because the export URL is directly reachable — but only for the kinds
+    # that actually combine the two (see _STALE_BLOCKED_EXPORTS).
+    if kind in _STALE_BLOCKED_EXPORTS and export_common.findings_are_stale(db, submission.id):
         raise HTTPException(
             status_code=409,
-            detail="Document edited since the last analysis — re-run the compliance check before exporting",
+            detail=(
+                "Document edited since the last analysis — re-run the compliance check "
+                "before exporting an annotated copy or a findings report. The clean copy "
+                "and the reviewer feedback report are unaffected and still download."
+            ),
         )
 
     try:

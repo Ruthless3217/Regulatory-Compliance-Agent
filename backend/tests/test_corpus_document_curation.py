@@ -97,11 +97,20 @@ def test_corpus_wide_list_is_not_layer_scoped(monkeypatch):
     nothing and the whole curation surface is unreachable.
     """
     monkeypatch.setattr(svc, "get_layer", lambda db, lid: None)
-    db = _Db(rows=[dict(source_file="a.pdf", precedent_count=2440, last_updated=None)])
+    db = _Db(
+        rows=[
+            dict(source_file="a.pdf", precedent_count=2440, unlayered_count=2440, last_updated=None)
+        ]
+    )
     docs = svc.list_documents(db, None)
     assert docs[0]["precedent_count"] == 2440
+    # The whole document is uncategorised, which is what makes it assignable.
+    assert docs[0]["unlayered_count"] == 2440
     sql, params = db.calls[0]
-    assert "source_layer_id" not in sql, "corpus-wide list must not filter by layer"
+    # The column may be NAMED (the per-document uncategorised count aggregates
+    # over it); what must never appear is a filter that scopes the listing to
+    # one layer, which is what hid the pre-layers corpus from curation.
+    assert "WHERE source_layer_id =" not in sql, "corpus-wide list must not filter by layer"
     assert params == {}
 
 
@@ -139,13 +148,40 @@ def test_list_documents_groups_by_source_file(layer):
         pass
 
     rows = [
-        _Row(source_file="a.pdf", precedent_count=12, last_updated=None),
-        _Row(source_file="", precedent_count=3, last_updated=None),
+        _Row(source_file="a.pdf", precedent_count=12, unlayered_count=0, last_updated=None),
+        _Row(source_file="", precedent_count=3, unlayered_count=0, last_updated=None),
     ]
     docs = svc.list_documents(_Db(rows=rows), layer)
-    assert docs[0] == {"source_file": "a.pdf", "precedent_count": 12, "last_updated": None}
+    assert docs[0] == {
+        "source_file": "a.pdf",
+        "precedent_count": 12,
+        "unlayered_count": 0,
+        "last_updated": None,
+    }
     # An empty source_file surfaces as None rather than a blank-looking row.
     assert docs[1]["source_file"] is None
+
+
+def test_claim_adopts_only_the_unlayered_rows_of_that_document(layer):
+    """Filing a document must not steal rows already owned by another layer —
+    re-filing is a decision with an owner, not a side effect of Assign."""
+    db = _Db(rowcount=2440)
+    claimed = svc.claim_document(db, layer, "a.pdf")
+
+    assert claimed == 2440
+    sql, params = db.calls[0]
+    assert "source_layer_id IS NULL" in sql
+    assert params["src"] == "a.pdf"
+
+
+def test_claim_refuses_a_document_with_nothing_uncategorised(layer):
+    with pytest.raises(LookupError):
+        svc.claim_document(_Db(rowcount=0), layer, "a.pdf")
+
+
+def test_claim_requires_a_source_file(layer):
+    with pytest.raises(svc.CorpusLayerError):
+        svc.claim_document(_Db(), layer, "  ")
 
 
 def test_added_rows_are_embedded_then_stamped_into_the_layer(layer, monkeypatch):

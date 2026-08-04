@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
 import {
+  claimCorpusLayerDocument,
   deleteCorpusLayer,
   deleteCorpusDocument,
   deleteCorpusLayerDocument,
@@ -109,9 +110,12 @@ function LayerCard({
  * column on those rows, so retrieval stops seeing it in the same statement. */
 function DocumentsPane({
   layer,
+  layers,
   onChanged,
 }: {
   layer: CorpusLayer | null;
+  /** Assignment targets for uncategorised documents. */
+  layers: CorpusLayer[];
   onChanged: () => void;
 }) {
   const [docs, setDocs] = React.useState<CorpusLayerDocument[] | null>(null);
@@ -165,6 +169,23 @@ function DocumentsPane({
     }
   };
 
+  const assign = async (sourceFile: string, targetLayerId: string) => {
+    setBusy(sourceFile);
+    try {
+      const r = await claimCorpusLayerDocument(targetLayerId, sourceFile);
+      const name = layers.find((l) => l.id === targetLayerId)?.name ?? "layer";
+      toast.success(`Filed ${r.precedents_claimed} precedents under “${name}” — nothing re-embedded`);
+      load();
+      onChanged();
+    } catch (e) {
+      toast.error((e as Error).message || "Assign failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const uncategorised = (docs ?? []).reduce((n, d) => n + (d.unlayered_count ?? 0), 0);
+
   return (
     <>
       <RailHead
@@ -180,6 +201,11 @@ function DocumentsPane({
               placeholder="Filter by file name…"
               className="h-7 w-52 rounded-sm border border-border bg-background px-2 text-xs"
             />
+            {!layer && uncategorised > 0 && (
+              <span className="rounded-sm bg-warning/10 px-1.5 py-0.5 text-[11.5px] font-medium text-warning-fg">
+                {uncategorised} uncategorised
+              </span>
+            )}
             <span className="text-[12px] text-muted-foreground">
               Showing <span className="font-mono text-foreground">{visibleDocs.length}</span> of{" "}
               <span className="font-mono text-foreground">{docs?.length ?? "…"}</span>
@@ -223,6 +249,31 @@ function DocumentsPane({
                   <span className="block font-mono text-[13px] font-medium">{d.precedent_count}</span>
                   <span className="block text-[10.5px] text-muted-foreground">precedents</span>
                 </span>
+                {/* Uncategorised rows get filed from where they are visible.
+                    A document sitting at source_layer_id IS NULL is always
+                    retrieved and cannot be switched off, so "uncategorised" is
+                    an operational state, not a cosmetic one. */}
+                {!layer && d.unlayered_count > 0 && d.source_file && (
+                  <select
+                    aria-label={`Assign ${d.source_file} to a layer`}
+                    value=""
+                    disabled={busy === key || layers.length === 0}
+                    title={
+                      layers.length === 0
+                        ? "No layers exist yet to file this under"
+                        : `${d.unlayered_count} of these precedents belong to no layer`
+                    }
+                    onChange={(e) => e.target.value && assign(key, e.target.value)}
+                    className="h-[30px] shrink-0 rounded-lg border border-warning/50 bg-warning/5 px-2 text-[12px] font-medium text-warning-fg"
+                  >
+                    <option value="">Uncategorised ({d.unlayered_count}) — file under…</option>
+                    {layers.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 {confirming === key ? (
                   <span className="flex shrink-0 items-center gap-1.5">
                     <span className="text-[11.5px] text-muted-foreground">
@@ -682,7 +733,7 @@ export default function AdminCorpusPage() {
           {showItems && selected ? (
             <ItemsPane layer={selected} />
           ) : (
-            <DocumentsPane layer={selected} onChanged={load} />
+            <DocumentsPane layer={selected} layers={layers} onChanged={load} />
           )}
         </div>
 

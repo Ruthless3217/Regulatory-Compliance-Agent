@@ -9,6 +9,7 @@ import type {
   CheckSummary,
   ComplianceResults,
   DashboardSummary,
+  DiffBlock,
   DocUsageRow,
   DocumentComment,
   DocumentComparison,
@@ -215,6 +216,14 @@ export type SubmissionExportKind =
   | "feedback-report.docx"
   | "feedback-report.pdf"
   | "bundle.zip";
+
+/** The reviewer's corrections as a redline: uploaded original vs working copy.
+ * Same aligner Compare uses between two files. */
+export async function getSubmissionDraftDiff(id: string) {
+  return jsonFetch<{ blocks: DiffBlock[]; changed: number; edited: boolean }>(
+    `${base()}/submissions/${id}/draft-diff`
+  );
+}
 
 /** Same-origin URL for a submission export artifact (feed to a download
  * anchor / window.open) — mirrors exportComparisonUrl for Compare. */
@@ -825,6 +834,14 @@ export const deleteCorpusDocument = (sourceFile: string) =>
   jsonFetch<{ source_file: string; precedents_deleted: number }>(
     `${base()}/admin/corpus/documents?source_file=${encodeURIComponent(sourceFile)}`,
     { method: "DELETE" }
+  );
+
+/** Categorise one uncategorised source document into a layer. Adopts only
+ * rows that belong to no layer yet. */
+export const claimCorpusLayerDocument = (id: string, sourceFile: string) =>
+  jsonFetch<{ layer_id: string; source_file: string; precedents_claimed: number }>(
+    `${base()}/admin/corpus/layers/${id}/documents?source_file=${encodeURIComponent(sourceFile)}`,
+    { method: "POST" }
   );
 
 export const deleteCorpusLayerDocument = (id: string, sourceFile: string) =>

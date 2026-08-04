@@ -182,6 +182,39 @@ async def list_layer_documents(
         raise HTTPException(status_code=404, detail="Layer not found.")
 
 
+@router.post("/layers/{layer_id}/documents")
+async def claim_layer_document(
+    layer_id: str,
+    request: Request,
+    source_file: str = Query(..., description="Exact source_file to categorise into this layer."),
+    db: Session = Depends(get_db),
+    actor=_ADMIN,
+):
+    """Assign one uncategorised source document to this layer.
+
+    Only rows at ``source_layer_id IS NULL`` are adopted — a document already
+    filed under another layer is left alone. Nothing is re-embedded: the layer
+    is a stamp on the row the retrieval join reads live.
+    """
+    try:
+        claimed = svc.claim_document(db, layer_id, source_file)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e) or "Layer not found.")
+    except svc.CorpusLayerError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    result = {"layer_id": str(layer_id), "source_file": source_file, "precedents_claimed": claimed}
+    await audit.record(
+        "corpus_document_claimed",
+        actor=actor,
+        request=request,
+        target_type="corpus_layer",
+        target_id=str(layer_id),
+        after=result,
+    )
+    return result
+
+
 @router.delete("/layers/{layer_id}/documents")
 async def delete_layer_document(
     layer_id: str,

@@ -1,57 +1,172 @@
 "use client";
 import * as React from "react";
+import { GitCompare, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { submissionPageImageUrl } from "@/lib/api";
+import { DiffViewer } from "@/components/compare/DiffViewer";
+import { getSubmissionDraftDiff, submissionPageImageUrl } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import type { DiffBlock } from "@/lib/types";
 
 /**
- * Two-pane original-vs-working view: the immutable uploaded file on the left,
- * the editable working document (`children`) on the right.
+ * Split: the uploaded original beside the editable working copy.
  *
- * The left pane never renders blank. It shows, in priority order: the rendered
- * page images, else the extracted text explicitly labelled as a fallback, else
- * a statement of what is missing. A blank sheet would read as "the document is
- * empty", which is the opposite of "we could not render it".
+ * The question this mode answers is "what did we change, and is the new draft
+ * better than the old one?" — a question about two drafts. So both sides are
+ * rendered as DOCUMENTS, in the same serif at the same measure, and the
+ * original defaults to its extracted text rather than the rendered page
+ * images: a page image is a picture of a PDF, which cannot be read against
+ * editable prose line for line, and View already exists for anyone who wants
+ * the original artwork. The page images stay one click away rather than being
+ * removed, because "what did the artwork actually look like" is still a real
+ * question — just not this mode's question.
+ *
+ * Compare turns the pair into a redline of the reviewer's own corrections,
+ * using the same aligner Compare uses between two files
+ * (GET /submissions/{id}/draft-diff).
  */
 export function SplitOriginalView({
   submissionId,
   pageRenderStatus,
   originalText,
+  /** Turned off while the redline is on — see the note on `compare` below. */
+  onCompareChange,
   children,
 }: {
   submissionId: string;
   pageRenderStatus?: string | null;
   originalText?: string | null;
+  onCompareChange?: (comparing: boolean) => void;
   children: React.ReactNode;
 }): React.ReactElement {
+  const [compare, setCompare] = React.useState(false);
+  const [pages, setPages] = React.useState(false);
+
+  // Two mark systems over one document is the "unnecessary highlighting"
+  // problem: a compliance span and a redline word both claim the same
+  // sentence and neither reads. While the redline is on, the findings
+  // decorations come off.
+  React.useEffect(() => onCompareChange?.(compare), [compare, onCompareChange]);
+
+  const canShowPages = pageRenderStatus === "completed";
+
   return (
-    // Two columns of equal weight on the canvas, each under its own label, so
-    // which side is the immutable original and which is the working copy is
-    // answered before the reviewer starts comparing wording.
-    <div className="grid h-full min-h-0 grid-cols-2 gap-4 overflow-hidden bg-surface px-4 pt-3">
-      <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="micro-label">Original · uploaded file</span>
-          {/* Not decoration: nothing in the app writes to the uploaded file.
-              The pane asserts the guarantee so "why can't I type here" never
-              becomes a support question. */}
-          <span className="font-mono text-[10.5px] text-faint">read-only · immutable</span>
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-background shadow-card">
-          <OriginalPane
-            submissionId={submissionId}
-            pageRenderStatus={pageRenderStatus}
-            originalText={originalText}
-          />
+    <div className="flex h-full min-h-0 flex-col bg-surface">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
+        <span className="micro-label">Original vs working copy</span>
+        <div className="ml-auto flex items-center gap-1.5">
+          {canShowPages && !compare && (
+            <Button
+              size="sm"
+              variant={pages ? "outline" : "ghost"}
+              aria-pressed={pages}
+              title="Show the original as its rendered page images instead of text"
+              onClick={() => setPages((p) => !p)}
+            >
+              <ImageIcon className="mr-1.5 h-3.5 w-3.5" />
+              Original artwork
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant={compare ? "default" : "outline"}
+            aria-pressed={compare}
+            title="Redline the corrections made to this document"
+            onClick={() => setCompare((c) => !c)}
+          >
+            <GitCompare className="mr-1.5 h-3.5 w-3.5" />
+            {compare ? "Hide changes" : "Compare drafts"}
+          </Button>
         </div>
       </div>
-      <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="micro-label">Working copy · editable</span>
-          <span className="font-mono text-[10.5px] text-faint">exports from this side</span>
+
+      {compare ? (
+        <DraftRedline submissionId={submissionId} />
+      ) : (
+        <div className="grid min-h-0 flex-1 grid-cols-2 gap-4 overflow-hidden px-4 pt-3">
+          <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="micro-label">Original · uploaded file</span>
+              <span className="font-mono text-[10.5px] text-faint">read-only · immutable</span>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-background shadow-card">
+              <OriginalPane
+                submissionId={submissionId}
+                pageRenderStatus={pageRenderStatus}
+                originalText={originalText}
+                pages={pages && canShowPages}
+              />
+            </div>
+          </div>
+          <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="micro-label">Working copy · editable</span>
+              <span className="font-mono text-[10.5px] text-faint">exports from this side</span>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-background shadow-card">
+              {children}
+            </div>
+          </div>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-background shadow-card">
-          {children}
-        </div>
+      )}
+    </div>
+  );
+}
+
+/** The corrections themselves, word-aligned. */
+function DraftRedline({ submissionId }: { submissionId: string }) {
+  const [data, setData] = React.useState<{
+    blocks: DiffBlock[];
+    changed: number;
+    edited: boolean;
+  } | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [selected, setSelected] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setErr(null);
+    setData(null);
+    getSubmissionDraftDiff(submissionId)
+      .then((r) => !cancelled && setData(r))
+      .catch((e) => !cancelled && setErr((e as Error).message));
+    return () => {
+      cancelled = true;
+    };
+  }, [submissionId]);
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div className="mx-auto max-w-[1240px]">
+        {err ? (
+          <p className="rounded-md border border-border bg-background px-4 py-8 text-center text-[12.5px] text-muted-foreground">
+            {err}
+          </p>
+        ) : !data ? (
+          <p className="flex items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-8 text-[12.5px] text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Aligning the two drafts…
+          </p>
+        ) : !data.edited ? (
+          <p className="rounded-md border border-border bg-background px-4 py-8 text-center text-[12.5px] text-muted-foreground">
+            The working copy is still identical to the uploaded original — nothing has been
+            corrected yet, so there is no redline to show.
+          </p>
+        ) : (
+          <>
+            <p className="mb-2.5 text-[12px] text-muted-foreground">
+              <span className="font-medium text-foreground">{data.changed}</span> changed
+              {data.changed === 1 ? " passage" : " passages"} between the uploaded original and the
+              working copy.
+            </p>
+            <DiffViewer
+              blocks={data.blocks}
+              oldLabel="Original · uploaded file"
+              newLabel="Working copy · editable"
+              selectedId={selected}
+              onSelect={setSelected}
+            />
+          </>
+        )}
       </div>
     </div>
   );
@@ -61,28 +176,28 @@ function OriginalPane({
   submissionId,
   pageRenderStatus,
   originalText,
+  pages,
 }: {
   submissionId: string;
   pageRenderStatus?: string | null;
   originalText?: string | null;
+  pages: boolean;
 }) {
   const [page, setPage] = React.useState(1);
   // Set once a page 404s: that page does not exist, so the one before it was
   // the last. Probing stops permanently at that point.
   const [lastPage, setLastPage] = React.useState<number | null>(null);
-  // page 1 itself 404ing means "completed" but no files — fall through to text
-  // rather than showing an empty sheet.
   const [noImages, setNoImages] = React.useState(false);
 
-  const showImages = pageRenderStatus === "completed" && !noImages;
   const hasNext = lastPage === null || page < lastPage;
   const text = originalText?.trim();
 
-  if (showImages) {
+  if (pages && !noImages) {
     return (
       <>
-        <div className="min-h-0 flex-1 overflow-y-auto bg-background p-4">
-          <div className="mx-auto max-w-3xl border border-border bg-background shadow-sm">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-surface p-4">
+          <div className="mx-auto border border-border bg-background shadow-sm">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               key={page}
               src={submissionPageImageUrl(submissionId, page)}
@@ -93,9 +208,9 @@ function OriginalPane({
             />
           </div>
           {/* One page ahead, hidden: its 404 is what ends the range, so Next is
-              already disabled by the time the reviewer reaches the last page.
-              Only ever one probe in flight, and none once lastPage is known. */}
+              already disabled by the time the reviewer reaches the last page. */}
           {lastPage === null && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={submissionPageImageUrl(submissionId, page + 1)}
               alt=""
@@ -105,7 +220,7 @@ function OriginalPane({
             />
           )}
         </div>
-        <div className="flex items-center justify-center gap-3 border-t border-border px-3 py-1.5">
+        <div className="flex shrink-0 items-center justify-center gap-3 border-t border-border px-3 py-1.5">
           <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>
             Previous
           </Button>
@@ -121,25 +236,36 @@ function OriginalPane({
     );
   }
 
+  if (!text) {
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+          {pageRenderStatus === "completed"
+            ? "The rendered page images for this document are missing, and there is no extracted text either."
+            : "There is no extracted text for this document, so the original cannot be shown here."}{" "}
+          Download the uploaded file to read it.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-4">
-      <p className="mb-3 rounded-sm border border-border bg-background px-2.5 py-1.5 text-[11px] text-muted-foreground">
-        {pageRenderStatus === "failed"
-          ? "The original could not be rendered as page images."
-          : pageRenderStatus === "completed"
-            ? "The rendered page images for this document are missing."
-            : pageRenderStatus === "skipped"
-              ? "This format has no page layout to render."
-              : "Page images are not available."}{" "}
-        {text
-          ? "Showing the extracted text instead — this is a fallback, not the page image, and does not reproduce the original layout."
-          : "There is no extracted text for this document either, so the original cannot be shown here. Download the uploaded file to read it."}
-      </p>
-      {text && (
-        <pre className="whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed">
-          {text}
-        </pre>
-      )}
+    // Same typography as the working copy opposite it. Two documents set
+    // differently cannot be compared by eye — every difference in weight or
+    // measure reads as a difference in content.
+    <div className="min-h-0 flex-1 overflow-y-auto px-10 py-8">
+      <div
+        className={cn(
+          "font-serif text-[15.5px] leading-[1.78] text-foreground",
+          "[&>p]:mb-[18px] [&>p:last-child]:mb-0"
+        )}
+      >
+        {text.split(/\n\s*\n/).map((para, i) => (
+          <p key={i} className="whitespace-pre-wrap">
+            {para}
+          </p>
+        ))}
+      </div>
     </div>
   );
 }

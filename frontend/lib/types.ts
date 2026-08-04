@@ -720,6 +720,10 @@ export interface CorpusLayerItems {
 export interface CorpusLayerDocument {
   source_file: string | null;
   precedent_count: number;
+  /** How many of this document's precedents belong to no layer. Only ever
+   * non-zero in the corpus-wide listing — that is where uncategorised rows
+   * become visible and assignable. */
+  unlayered_count: number;
   last_updated: string | null;
 }
 

@@ -299,6 +299,9 @@ export function ReviewTab() {
   // dropped: a finding that is simply missing from the document reads as
   // "resolved", which is the opposite of what happened.
   const [unlocated, setUnlocated] = React.useState<Array<{ id: string; reason: string }>>([]);
+  // Split's redline is on. Reported up from SplitOriginalView because it
+  // decides whether the editor beside it still draws its findings.
+  const [comparingDrafts, setComparingDrafts] = React.useState(false);
   // Nothing to toggle to when there are no page images — stay on the text pane.
   const usePdfPane = pagesRendered && !editing;
   const hasEditor = !!(submission.lexical_state || submission.has_import_source);
@@ -537,6 +540,7 @@ export function ReviewTab() {
             submissionId={submission.id}
             pageRenderStatus={submission.page_render_status}
             originalText={submission.original_content}
+            onCompareChange={setComparingDrafts}
           >
             {hasEditor ? (
               <LexicalDocument
@@ -544,12 +548,15 @@ export function ReviewTab() {
                 submissionId={submission.id}
                 readOnly={isHistorical}
                 onChange={setLexicalDoc}
-                violations={displayViolations}
+                // Findings come off while the redline is on: a compliance span
+                // and a changed word claiming the same sentence is two mark
+                // systems fighting over one document, and neither reads.
+                violations={comparingDrafts ? undefined : displayViolations}
                 selectedViolationId={selectedViolationId}
                 onSelectViolation={selectViolation}
                 onUnlocatedFindings={setUnlocated}
                 pagesRendered={pagesRendered}
-                bubbles
+                bubbles={!comparingDrafts}
               />
             ) : (
               <DocumentPane

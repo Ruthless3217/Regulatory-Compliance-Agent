@@ -299,6 +299,7 @@ def list_documents(db: Session, layer_id=None) -> List[Dict[str, Any]]:
             f"""
             SELECT COALESCE(source_file, '') AS source_file,
                    COUNT(*)                  AS precedent_count,
+                   COUNT(*) FILTER (WHERE source_layer_id IS NULL) AS unlayered_count,
                    MAX(updated_at)           AS last_updated
               FROM precedent_cases
              {"WHERE source_layer_id = CAST(:id AS UUID)" if scoped else ""}
@@ -312,10 +313,51 @@ def list_documents(db: Session, layer_id=None) -> List[Dict[str, Any]]:
         {
             "source_file": r["source_file"] or None,
             "precedent_count": int(r["precedent_count"]),
+            # How many of this document's rows belong to no layer. The
+            # corpus-wide view is the only place this is ever non-zero, and it
+            # is what makes "uncategorised" visible per document instead of as
+            # one opaque total the admin cannot act on.
+            "unlayered_count": int(r["unlayered_count"]),
             "last_updated": r["last_updated"].isoformat() if r["last_updated"] else None,
         }
         for r in rows
     ]
+
+
+def claim_document(db: Session, layer_id, source_file: str) -> int:
+    """Adopt one source document's UNLAYERED precedents into a layer.
+
+    ``create_layer(claim=True)`` only ever adopts rows matching a single
+    ``source_ref``, so a corpus whose rows span many source files had no way to
+    be categorised at all — its precedents stayed at ``source_layer_id IS NULL``
+    permanently, always retrieved and impossible to switch off. This is the
+    per-document assignment that closes that gap.
+
+    Rows already owned by another layer are never stolen: re-filing a document
+    means removing it from its current layer first, which is a decision with an
+    owner, not a side effect of clicking Assign.
+    """
+    if get_layer(db, layer_id) is None:
+        raise LookupError("Layer not found.")
+    name = (source_file or "").strip()
+    if not name:
+        raise CorpusLayerError("source_file is required.")
+    claimed = db.execute(
+        text(
+            "UPDATE precedent_cases SET source_layer_id = CAST(:lid AS UUID) "
+            "WHERE source_file = :src AND source_layer_id IS NULL"
+        ),
+        {"lid": str(layer_id), "src": name},
+    ).rowcount or 0
+    if not claimed:
+        raise LookupError("No unlayered precedents for that source document.")
+    _refresh_count(db, layer_id)
+    db.commit()
+    logger.info(
+        "corpus document CLAIMED: layer=%s source_file=%r — %d precedent rows assigned",
+        layer_id, name, claimed,
+    )
+    return claimed
 
 
 def delete_document(db: Session, layer_id, source_file: str) -> int:
