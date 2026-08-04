@@ -289,6 +289,14 @@ export function ReviewTab() {
   // lane there), so the strip and the open rail can never disagree.
   const findingCount = displayViolations.filter((v) => !v.suppressed).length;
 
+  // Split puts two documents on one screen. Both rails come off entirely —
+  // not collapsed to their strips — because 264+372 of chrome around two
+  // half-width documents leaves neither readable, and the findings the right
+  // rail held move into the editor's own margin as bubbles beside the text
+  // they describe (LexicalDocument `bubbles`). The rails' own open/closed
+  // state is untouched, so leaving Split restores exactly what was there.
+  const splitting = mode === "split";
+
   // Tailwind needs whole class names, so the templates are spelled out rather
   // than composed. This is the only place the track widths live, which is what
   // keeps the columns and the rails they hold from drifting apart.
@@ -309,17 +317,24 @@ export function ReviewTab() {
     // never re-learns the layout — until the reviewer collapses a rail to a
     // 2rem strip and hands that width to the document. The context rail drops
     // away entirely below xl, where 264+372 of chrome would crowd the document.
-    <div className={cn("grid h-full overflow-hidden rounded-md border border-border", gridCols)}>
-      <div className="hidden min-h-0 xl:block">
-        <CollapsibleRail
-          side="left"
-          label="Context"
-          open={contextOpen}
-          onToggle={() => setContextOpen(!contextOpen)}
-        >
-          <ContextRail violations={displayViolations} />
-        </CollapsibleRail>
-      </div>
+    <div
+      className={cn(
+        "grid h-full overflow-hidden rounded-md border border-border",
+        splitting ? "grid-cols-[1fr]" : gridCols
+      )}
+    >
+      {!splitting && (
+        <div className="hidden min-h-0 xl:block">
+          <CollapsibleRail
+            side="left"
+            label="Context"
+            open={contextOpen}
+            onToggle={() => setContextOpen(!contextOpen)}
+          >
+            <ContextRail violations={displayViolations} />
+          </CollapsibleRail>
+        </div>
+      )}
       <div className="flex h-full min-h-0 flex-col">
         {isAnalyzing && (
           <div className="border-b border-border bg-background px-4 py-2 text-xs">
@@ -486,6 +501,7 @@ export function ReviewTab() {
                 onSelectViolation={selectViolation}
                 onUnlocatedFindings={setUnlocated}
                 pagesRendered={pagesRendered}
+                bubbles
               />
             ) : (
               <DocumentPane
@@ -534,28 +550,30 @@ export function ReviewTab() {
           />
         )}
       </div>
-      <CollapsibleRail
-        side="right"
-        label="Findings"
-        open={findingsOpen}
-        onToggle={() => setFindingsOpen(!findingsOpen)}
-        badge={
-          // Collapsed, the count is all that is left of the findings — without
-          // it the rail hides how much work is still outstanding.
-          <span
-            className="rounded-sm bg-muted px-1 font-mono text-[10px] text-foreground"
-            title={`${findingCount} finding${findingCount === 1 ? "" : "s"}`}
-          >
-            {findingCount}
-          </span>
-        }
-      >
-        <ViolationsPane
-          violations={displayViolations}
-          selectedViolationId={selectedViolationId}
-          setSelectedViolationId={selectViolation}
-        />
-      </CollapsibleRail>
+      {!splitting && (
+        <CollapsibleRail
+          side="right"
+          label="Findings"
+          open={findingsOpen}
+          onToggle={() => setFindingsOpen(!findingsOpen)}
+          badge={
+            // Collapsed, the count is all that is left of the findings — without
+            // it the rail hides how much work is still outstanding.
+            <span
+              className="rounded-sm bg-muted px-1 font-mono text-[10px] text-foreground"
+              title={`${findingCount} finding${findingCount === 1 ? "" : "s"}`}
+            >
+              {findingCount}
+            </span>
+          }
+        >
+          <ViolationsPane
+            violations={displayViolations}
+            selectedViolationId={selectedViolationId}
+            setSelectedViolationId={selectViolation}
+          />
+        </CollapsibleRail>
+      )}
     </div>
   );
 }

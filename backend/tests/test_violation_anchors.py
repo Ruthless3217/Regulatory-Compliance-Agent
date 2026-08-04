@@ -141,6 +141,52 @@ def test_duplicate_across_pages_is_also_ambiguous():
     assert vas.locate(words, "alpha") is None
 
 
+# --- anchoring after analysis ------------------------------------------------
+#
+# The render job anchors at UPLOAD time, when a submission has no findings yet.
+# `anchor_now` is the pass the analyzer runs once they exist — without it every
+# violation keeps a NULL anchor and the reviewer's page view draws no boxes.
+
+
+def _analysed(content_type="pdf", file_path=None):
+    return SimpleNamespace(id="sub-1", content_type=content_type, file_path=file_path)
+
+
+def test_anchor_now_measures_a_pdf_against_its_own_upload(tmp_path):
+    pdf = tmp_path / "doc.pdf"
+    _make_pdf(str(pdf), ["Guaranteed returns for life."])
+    found = _violation("Guaranteed returns")
+
+    anchored = srs.anchor_now(_db_with([found]), _analysed(file_path=str(pdf)))
+
+    assert anchored == 1 and found.anchor_page == 1
+
+
+def test_anchor_now_is_a_no_op_without_a_rendered_pdf():
+    """A pasted-text submission, or a render that has not finished yet."""
+    v = _violation("Guaranteed returns")
+
+    assert srs.anchor_now(_db_with([v]), _analysed(content_type="txt")) == 0
+    assert srs.anchor_now(_db_with([v]), _analysed(file_path=None)) == 0
+    assert v.anchor_page is None
+
+
+def test_anchor_now_reads_the_converted_copy_for_a_docx(tmp_path, monkeypatch):
+    """A DOCX has no geometry of its own — `_render` leaves the Gotenberg
+    conversion at renders_dir/source.pdf, and that is what is measured."""
+    base = tmp_path / "renders"
+    base.mkdir()
+    _make_pdf(str(base / "source.pdf"), ["Guaranteed returns for life."])
+    monkeypatch.setattr(srs, "renders_dir", lambda _sid: str(base))
+    found = _violation("Guaranteed returns")
+
+    anchored = srs.anchor_now(
+        _db_with([found]), _analysed(content_type="docx", file_path="upload.docx")
+    )
+
+    assert anchored == 1 and found.anchor_page == 1
+
+
 # --- the write pass ---------------------------------------------------------
 
 def test_pass_writes_anchors_for_found_text_only(tmp_path):

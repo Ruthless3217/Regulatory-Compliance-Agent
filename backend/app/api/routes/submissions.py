@@ -18,6 +18,7 @@ from typing import Optional
 
 from app.database import get_db
 from app.models.analysis_run import AnalysisRun
+from app.models.compliance_check import ComplianceCheck
 from app.models.submission import Submission
 from app.models.submission_revision import SubmissionRevision
 from app.models.document_comment import DocumentComment
@@ -29,7 +30,12 @@ from app.schemas.submission import (
     DocumentCommentCreate,
     DocumentCommentUpdate,
 )
-from app.services.submission_render_service import RENDERABLE_CONTENT_TYPES, renders_dir, run_render
+from app.services.submission_render_service import (
+    RENDERABLE_CONTENT_TYPES,
+    renders_dir,
+    run_anchor,
+    run_render,
+)
 from app.services import submission_export_service
 from app.services import export_common
 from app.services import lexical_document_service
@@ -207,6 +213,22 @@ async def get_submission(
         submission.page_render_status = "pending"
         db.commit()
         background_tasks.add_task(run_render, str(submission.id))
+    elif submission.page_render_status == "completed":
+        # Anything analysed before the analyzer started anchoring its own
+        # findings has NULL anchor_page, and the page view draws no boxes for
+        # it. Nothing else would ever revisit those, so re-anchor on first open
+        # when not a single finding on the document has a box.
+        anchored = (
+            db.query(Violation.id)
+            .join(ComplianceCheck, Violation.compliance_check_id == ComplianceCheck.id)
+            .filter(
+                ComplianceCheck.submission_id == submission.id,
+                Violation.anchor_page.isnot(None),
+            )
+            .first()
+        )
+        if anchored is None:
+            background_tasks.add_task(run_anchor, str(submission.id))
 
     return {
         "id": str(submission.id),

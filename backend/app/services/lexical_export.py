@@ -19,13 +19,37 @@ import logging
 import re
 from typing import List, Optional, Tuple
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, NavigableString, Tag
 from docx import Document
 from docx.document import Document as DocxDocument
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 logger = logging.getLogger(__name__)
 
 _HEADING_TAGS = {"h1": 1, "h2": 2, "h3": 3, "h4": 4, "h5": 5, "h6": 6}
+
+# Inline tag -> the character formatting it turns on. Both spellings of each are
+# listed because the two producers disagree: mammoth emits <strong>/<em> (see
+# lexical_import._STYLE_MAP) and Lexical's own exportDOM emits <b>/<i>/<u>/<s>.
+_INLINE_FORMATS = {
+    "strong": "bold", "b": "bold",
+    "em": "italic", "i": "italic",
+    "u": "underline",
+    "s": "strike", "strike": "strike", "del": "strike",
+}
+
+_ALIGNMENTS = {
+    "left": WD_ALIGN_PARAGRAPH.LEFT,
+    "center": WD_ALIGN_PARAGRAPH.CENTER,
+    "centre": WD_ALIGN_PARAGRAPH.CENTER,
+    "right": WD_ALIGN_PARAGRAPH.RIGHT,
+    "justify": WD_ALIGN_PARAGRAPH.JUSTIFY,
+}
+_TEXT_ALIGN = re.compile(r"text-align\s*:\s*([a-z]+)", re.IGNORECASE)
+
+# Everything but a newline: <br> becomes "\n" and must survive the collapse that
+# turns HTML's incidental whitespace into single spaces.
+_HORIZONTAL_WS = re.compile(r"[^\S\n]+")
 
 # lexical_import appends each header/footer to the body as a labelled
 # `<h3>Page header</h3>` / `<h3>Page footer 2</h3>` section so the reviewer can
@@ -48,6 +72,105 @@ def _styled(doc: DocxDocument, text: str, style: str):
         return doc.add_paragraph(text)
 
 
+# --- Inline content ----------------------------------------------------------
+#
+# A block's text cannot be read with `get_text()`. Two things are lost by it and
+# both are visible in the approved document:
+#
+#   * the formatting — bold, italic, underline are what the editor showed, and a
+#     flattened paragraph is not the document the reviewer approved;
+#   * the *spacing* — `get_text(strip=True)` strips each string and joins them
+#     with nothing, so "Insurance is the <b>subject</b> matter" comes back as
+#     "Insurance is thesubjectmatter". Every character is present and the
+#     sentence is still unreadable.
+#
+# So inline content is walked instead, carrying each ancestor's formatting down,
+# and written as one Word run per formatting change.
+
+
+def _walk_inline(el: Tag, formats: frozenset):
+    """(text, formats) for `el`'s inline content, depth-first.
+
+    Formatting is inherited: the text inside `<strong><em>` is both. `<br>`
+    yields "\\n", which `_write_runs` turns into a Word line break.
+    """
+    for node in el.children:
+        if isinstance(node, NavigableString):
+            text = str(node)
+            if text:
+                yield text, formats
+        elif isinstance(node, Tag):
+            if node.name == "br":
+                yield "\n", formats
+            elif node.name in ("img", "ul", "ol"):
+                # Pictures are embedded separately; a nested list is a block of
+                # its own and is walked by _add_list, not folded into this text.
+                continue
+            else:
+                fmt = _INLINE_FORMATS.get(node.name)
+                yield from _walk_inline(node, formats | {fmt} if fmt else formats)
+
+
+def _inline_pieces(el: Tag) -> List[Tuple[str, frozenset]]:
+    """`el`'s inline content with HTML's whitespace rules applied.
+
+    Runs of horizontal whitespace collapse to one space and the block's own
+    leading/trailing space is dropped — what a browser renders, and what the
+    reviewer therefore saw in the editor.
+    """
+    pieces: List[List] = []
+    for text, formats in _walk_inline(el, frozenset()):
+        if text != "\n":
+            text = _HORIZONTAL_WS.sub(" ", text)
+            # The space between two pieces belongs to whichever kept it first;
+            # emitting both would double it.
+            if text.startswith(" ") and pieces and pieces[-1][0].endswith((" ", "\n")):
+                text = text.lstrip(" ")
+        if text:
+            pieces.append([text, formats])
+    if pieces:
+        pieces[0][0] = pieces[0][0].lstrip(" ")
+        pieces[-1][0] = pieces[-1][0].rstrip(" ")
+    return [(text, formats) for text, formats in pieces if text]
+
+
+def _plain(el: Tag) -> str:
+    """`el`'s text with its spacing intact — `get_text()` without the gluing."""
+    return "".join(text for text, _ in _inline_pieces(el))
+
+
+def _write_runs(paragraph, el: Tag) -> None:
+    """Append `el`'s inline content to `paragraph`, one run per format change.
+
+    A format the piece does not carry is left None rather than set False: False
+    would override the paragraph style's own bold/italic, which is exactly the
+    template styling the export exists to preserve.
+    """
+    for text, formats in _inline_pieces(el):
+        for i, line in enumerate(text.split("\n")):
+            if i:
+                paragraph.add_run().add_break()
+            if not line:
+                continue
+            run = paragraph.add_run(line)
+            run.bold = True if "bold" in formats else None
+            run.italic = True if "italic" in formats else None
+            run.underline = True if "underline" in formats else None
+            if "strike" in formats:
+                run.font.strike = True
+
+
+def _align(paragraph, el: Tag) -> None:
+    """Carry an inline `text-align` across. Lexical writes the editor's
+    paragraph alignment as a style attribute; without this every centred title
+    exports left-aligned."""
+    match = _TEXT_ALIGN.search(el.get("style") or "")
+    if match:
+        alignment = _ALIGNMENTS.get(match.group(1).lower())
+        if alignment is not None:
+            paragraph.alignment = alignment
+
+
 def _add_pictures(doc: DocxDocument, el: Tag) -> None:
     """Embed every image in `el`. mammoth emits base64 `data:` URIs."""
     for img in [el] if el.name == "img" else el.find_all("img"):
@@ -61,15 +184,32 @@ def _add_pictures(doc: DocxDocument, el: Tag) -> None:
             logger.warning("lexical_export: skipping image: %s", exc)
 
 
+def _add_list(doc: DocxDocument, el: Tag, level: int = 1) -> None:
+    """A `ul`/`ol` and every list nested inside it.
+
+    Word expresses nesting through the style name — "List Bullet 2" is the
+    second level — and stops at 3, so deeper nesting flattens onto that last
+    level rather than falling back to body text.
+    """
+    base = "List Bullet" if el.name == "ul" else "List Number"
+    style = base if level == 1 else f"{base} {min(level, 3)}"
+    for li in el.find_all("li", recursive=False):
+        # _walk_inline skips nested lists, so this is the item's own wording.
+        paragraph = _styled(doc, "", style)
+        _write_runs(paragraph, li)
+        for nested in li.find_all(["ul", "ol"], recursive=False):
+            _add_list(doc, nested, level + 1)
+
+
 def _add_block(doc: DocxDocument, el: Tag) -> None:
     _add_pictures(doc, el)
     name = el.name
     if name in _HEADING_TAGS:
-        _styled(doc, el.get_text(strip=True), f"Heading {_HEADING_TAGS[name]}")
+        paragraph = _styled(doc, "", f"Heading {_HEADING_TAGS[name]}")
+        _write_runs(paragraph, el)
+        _align(paragraph, el)
     elif name in ("ul", "ol"):
-        style = "List Bullet" if name == "ul" else "List Number"
-        for li in el.find_all("li", recursive=False):
-            _styled(doc, li.get_text(strip=True), style)
+        _add_list(doc, el)
     elif name == "table":
         rows: List[Tag] = el.find_all("tr")
         if not rows:
@@ -80,13 +220,20 @@ def _add_block(doc: DocxDocument, el: Tag) -> None:
             cells = r.find_all(["td", "th"])
             row = table.add_row()
             for i, cell in enumerate(cells[:cols]):
-                row.cells[i].text = cell.get_text(strip=True)
+                _write_runs(row.cells[i].paragraphs[0], cell)
     elif name == "blockquote":
-        _styled(doc, el.get_text(strip=True), "Quote")
+        paragraph = _styled(doc, "", "Quote")
+        _write_runs(paragraph, el)
     else:
-        text = el.get_text(strip=True)
-        if text:
-            doc.add_paragraph(text)
+        # An empty <p> is a blank line the reviewer typed, not noise: Lexical
+        # writes one for every empty paragraph, and dropping them re-flows the
+        # document. Only elements with no text AND no break are skipped.
+        pieces = _inline_pieces(el)
+        if not pieces and not el.find("br"):
+            return
+        paragraph = doc.add_paragraph()
+        _write_runs(paragraph, el)
+        _align(paragraph, el)
 
 
 def _open_template(template_path: Optional[str]) -> DocxDocument:
@@ -120,7 +267,7 @@ def _region_label(el: Tag) -> Optional[Tuple[str, int]]:
     """(kind, 1-based section number) if `el` labels a header/footer section."""
     if el.name != "h3":
         return None
-    match = _REGION_LABEL.match(el.get_text(strip=True))
+    match = _REGION_LABEL.match(_plain(el))
     if not match:
         return None
     return match.group(1).lower(), int(match.group(2) or 1)
@@ -176,7 +323,7 @@ def lexical_html_to_docx(
             current = label
             regions.setdefault(current, [])
         elif current is not None:
-            text = el.get_text(strip=True)
+            text = _plain(el)
             if text:
                 regions[current].append(text)
         else:

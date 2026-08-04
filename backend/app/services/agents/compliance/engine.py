@@ -453,6 +453,16 @@ class ComplianceEngine:
             db.commit()
             db.refresh(check)
 
+            # The findings only exist as of that commit. The render job anchors
+            # too, but it runs at upload time with nothing to anchor, so without
+            # this pass every violation keeps a NULL anchor_page/anchor_bbox and
+            # the reviewer's page view draws no boxes at all. Never fatal: the
+            # anchor service swallows its own failures and returns 0.
+            if submission is not None:
+                from app.services.submission_render_service import anchor_now
+
+                anchor_now(db, submission)
+
             logger.info(
                 f"Persisted compliance check {check.id} with "
                 f"{len(violations)} violations, score={scores.get('overall')} grade={scores.get('grade')}"

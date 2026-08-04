@@ -19,7 +19,7 @@ after the pages are on disk and never raises — see `run_render`.
 import os
 import shutil
 import logging
-from typing import List
+from typing import List, Optional
 
 from app.config import settings
 from app.database import SessionLocal
@@ -83,6 +83,65 @@ def run_render(submission_id: str) -> None:
             anchor_submission_violations(db, submission_id, pdf_path)
     finally:
         db.close()
+
+
+def rendered_pdf_path(submission) -> Optional[str]:
+    """The PDF the page images were rasterized from, if it is still on disk.
+
+    A PDF submission is its own upload; a DOCX is the converted copy `_render`
+    left in the render directory. Returns None when there is nothing to measure
+    against — an unrenderable format, or a render that has not run yet.
+    """
+    if submission.content_type not in RENDERABLE_CONTENT_TYPES:
+        return None
+    path = (
+        submission.file_path
+        if submission.content_type == "pdf"
+        else os.path.join(renders_dir(str(submission.id)), "source.pdf")
+    )
+    return path if path and os.path.exists(path) else None
+
+
+def anchor_now(db, submission) -> int:
+    """Anchor `submission`'s findings against its rendered PDF. Returns the count.
+
+    `run_render` anchors too, but it runs at UPLOAD time, when a submission
+    normally has no findings at all — analysis lands minutes later and writes
+    violations whose anchor_page/anchor_bbox stay NULL, so the reviewer's page
+    view draws no boxes on a document full of findings. This is the pass that
+    runs once the findings exist; it is a no-op when there is no rendered PDF.
+    """
+    pdf_path = rendered_pdf_path(submission)
+    if not pdf_path:
+        return 0
+    return anchor_submission_violations(db, str(submission.id), pdf_path)
+
+
+def run_anchor(submission_id: str) -> None:
+    """Background entrypoint: anchor a submission's findings, once per process.
+
+    Backfill for everything analysed before `anchor_now` was called from the
+    analyzer — those findings have NULL anchors and no future event would ever
+    give them one.
+
+    ponytail: the "already tried" set is per-process, not a column. A finding
+    whose text cannot be located stays NULL by design, so an un-guarded retry
+    would re-parse the PDF on every open forever; a restart retrying once is a
+    cost worth not paying a migration for.
+    """
+    if submission_id in _reanchored:
+        return
+    _reanchored.add(submission_id)
+    db = SessionLocal()
+    try:
+        submission = db.query(Submission).filter(Submission.id == submission_id).first()
+        if submission is not None:
+            anchor_now(db, submission)
+    finally:
+        db.close()
+
+
+_reanchored: set = set()
 
 
 def _render(submission_id: str, file_path: str, content_type: str) -> str:

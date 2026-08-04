@@ -20,8 +20,10 @@ import { getSubmissionImportHtml } from "@/lib/api";
 
 import { EditorToolbar } from "./EditorToolbar";
 import { SlashCommandPlugin } from "./SlashCommandPlugin";
-import { FindingDecorationsPlugin } from "./FindingDecorationsPlugin";
+import { FindingDecorationsPlugin, type FindingSpot } from "./FindingDecorationsPlugin";
+import { FindingBubbles } from "./FindingBubbles";
 import { ImageNode } from "./ImageNode";
+import { cn } from "@/lib/utils";
 import type { Violation } from "@/lib/types";
 
 const NODES = [
@@ -136,6 +138,7 @@ export function LexicalDocument({
   onSelectViolation,
   onUnlocatedFindings,
   pagesRendered,
+  bubbles = false,
 }: {
   initialState?: Record<string, unknown> | null;
   /** Seed source is fetched from this submission when there is no saved state. */
@@ -144,6 +147,11 @@ export function LexicalDocument({
   /** Whether page images exist, i.e. whether View is a way out when the import
    * fails. Only read for that message. */
   pagesRendered?: boolean;
+  /** Show each located finding as a card in the sheet's right margin. Split
+   * mode turns this on: it hides both rails to give the two documents the
+   * width, and the findings have to go somewhere the reviewer can still see
+   * them beside the text they describe. */
+  bubbles?: boolean;
   onChange?: (doc: { state: SerializedEditorState; html: string; text: string }) => void;
   /** Findings to draw on the document. Decorations only — never editor content,
    * so they cannot reach the exported DOCX. */
@@ -155,6 +163,10 @@ export function LexicalDocument({
   onUnlocatedFindings?: (unlocated: Array<{ id: string; reason: string }>) => void;
 }) {
   const [seedFailure, setSeedFailure] = React.useState<SeedFailure | null>(null);
+  // Where each located finding sits vertically, in the sheet's coordinates.
+  // Measured by the decorations plugin, which already walks every finding to
+  // draw it — measuring a second time would be a second source of truth.
+  const [spots, setSpots] = React.useState<FindingSpot[]>([]);
   const config = {
     namespace: "compliance-document",
     editable: !readOnly,
@@ -173,28 +185,59 @@ export function LexicalDocument({
           not a draft, and offering formatting buttons that do nothing is worse
           than offering none. */}
       {!readOnly && <EditorToolbar />}
-      <div className="relative min-h-0 flex-1 overflow-y-auto px-8 py-6">
-        {seedFailure && (
-          <ImportFailureNotice failure={seedFailure} pagesRendered={pagesRendered} />
-        )}
-        <RichTextPlugin
-          contentEditable={<ContentEditable className="outline-none" />}
-          placeholder={null}
-          ErrorBoundary={LexicalErrorBoundary}
-        />
+      {/* A page, not a text box. The app canvas is grey (globals.css sets
+          --surface on the body) and an editor that inherits it reads as a flat
+          panel; every document editor floats a white sheet on that canvas
+          instead, which is also what View and the rendered pages already show.
+          The sheet is the positioned ancestor: the finding overlay layer and
+          the margin bubbles are absolutely positioned against it, so they
+          scroll with the text and share one coordinate origin. */}
+      <div className="min-h-0 flex-1 overflow-y-auto bg-surface px-6 py-6">
+        <div
+          className={cn(
+            "relative rounded-sm border border-border bg-background px-10 py-12 shadow-card",
+            // The bubbles hang off the right edge (256px + a 24px gutter), so
+            // the sheet reserves that width rather than letting them fall off
+            // the pane. Left-aligned then, not centred: centring the sheet
+            // alone would put the pair off-centre anyway.
+            bubbles ? "mr-[280px] max-w-2xl" : "mx-auto max-w-3xl"
+          )}
+        >
+          {seedFailure && (
+            <ImportFailureNotice failure={seedFailure} pagesRendered={pagesRendered} />
+          )}
+          <RichTextPlugin
+            contentEditable={
+              <ContentEditable className="text-[15px] leading-[1.75] outline-none" />
+            }
+            placeholder={null}
+            ErrorBoundary={LexicalErrorBoundary}
+          />
+          {/* Inside the sheet, so it shares the origin the plugin measures
+              against and scrolls with the text it annotates. */}
+          {violations && violations.length > 0 && (
+            <FindingDecorationsPlugin
+              violations={violations}
+              selectedViolationId={selectedViolationId ?? null}
+              onSelect={onSelectViolation}
+              onResolved={onUnlocatedFindings}
+              onPlaced={bubbles ? setSpots : undefined}
+            />
+          )}
+          {bubbles && violations && (
+            <FindingBubbles
+              violations={violations}
+              spots={spots}
+              selectedViolationId={selectedViolationId ?? null}
+              onSelect={onSelectViolation}
+            />
+          )}
+        </div>
         <HistoryPlugin />
         <ListPlugin />
         <LinkPlugin />
         <TablePlugin />
         {!readOnly && <SlashCommandPlugin />}
-        {violations && violations.length > 0 && (
-          <FindingDecorationsPlugin
-            violations={violations}
-            selectedViolationId={selectedViolationId ?? null}
-            onSelect={onSelectViolation}
-            onResolved={onUnlocatedFindings}
-          />
-        )}
         {onChange && (
           <OnChangePlugin
             ignoreSelectionChange

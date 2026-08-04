@@ -30,6 +30,7 @@ export function FindingDecorationsPlugin({
   selectedViolationId,
   onSelect,
   onResolved,
+  onPlaced,
 }: {
   violations: Violation[];
   selectedViolationId: string | null;
@@ -37,6 +38,11 @@ export function FindingDecorationsPlugin({
   /** Reports which findings could not be located, so the rail can say so
    * instead of silently showing nothing. */
   onResolved?: (unlocated: Array<{ id: string; reason: string }>) => void;
+  /** Where each located finding sits vertically, for anything drawn beside the
+   * text (the margin bubbles). Reported from this pass rather than measured
+   * again: a second measurement is a second answer, and a card that disagrees
+   * with the mark it points at is worse than no card. */
+  onPlaced?: (spots: FindingSpot[]) => void;
 }) {
   const [editor] = useLexicalComposerContext();
   const layerRef = React.useRef<HTMLDivElement | null>(null);
@@ -48,9 +54,14 @@ export function FindingDecorationsPlugin({
   // identity — a parent re-render must not force a full re-decorate.
   const onSelectRef = React.useRef(onSelect);
   const onResolvedRef = React.useRef(onResolved);
+  const onPlacedRef = React.useRef(onPlaced);
   onSelectRef.current = onSelect;
   onResolvedRef.current = onResolved;
+  onPlacedRef.current = onPlaced;
   const scrolledToRef = React.useRef<string | null>(null);
+  // Last reported placement, so a decorate that moved nothing (every keystroke
+  // in an unaffected paragraph) does not re-render the bubbles.
+  const placedSigRef = React.useRef("");
 
   React.useEffect(() => {
     const decorate = () => {
@@ -145,6 +156,24 @@ export function FindingDecorationsPlugin({
       hitsRef.current = hits;
       onResolvedRef.current?.(unlocated);
 
+      if (onPlacedRef.current) {
+        // A span's own top; a paragraph-only anchor gets the paragraph's, which
+        // is the most the fingerprint match actually knows.
+        const spots: FindingSpot[] = placed.map((p) => ({
+          id: p.id,
+          top:
+            p.kind === "span"
+              ? Math.min(...p.rects.map((r) => r.y))
+              : p.el.getBoundingClientRect().top - origin.top,
+          anchored: p.kind === "span",
+        }));
+        const signature = spots.map((s) => `${s.id}:${Math.round(s.top)}`).join("|");
+        if (signature !== placedSigRef.current) {
+          placedSigRef.current = signature;
+          onPlacedRef.current(spots);
+        }
+      }
+
       // Scroll only when the selection itself changed. decorate() also runs on
       // every keystroke, and yanking the view back to the selected finding
       // while the reviewer types elsewhere is the panel-beside-the-document
@@ -226,6 +255,15 @@ interface Box {
   y: number;
   w: number;
   h: number;
+}
+
+/** A located finding's vertical position in the sheet's coordinates. */
+export interface FindingSpot {
+  id: string;
+  top: number;
+  /** True when the exact words were located; false when only the paragraph
+   * was, so anything drawn from it can say which claim it is making. */
+  anchored: boolean;
 }
 
 type Placed =

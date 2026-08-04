@@ -11,6 +11,7 @@ import io
 
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, Inches
 
 from app.services.lexical_export import lexical_html_to_docx
@@ -51,6 +52,72 @@ def test_table_exports_as_a_table():
 def test_empty_html_produces_a_valid_document():
     """A blank document must not raise — it exports as an empty file."""
     assert lexical_html_to_docx("", "t")
+
+
+# ---------------------------------------------------------------------------
+# Inline fidelity — the character-level formatting the editor shows
+# ---------------------------------------------------------------------------
+
+def _first(data: bytes, index: int = 0):
+    return [p for p in Document(io.BytesIO(data)).paragraphs if p.text.strip()][index]
+
+
+def test_inline_markup_does_not_glue_words_together():
+    """The reviewer's sentence must survive intact.
+
+    An inline tag splits a paragraph into several strings; joining them without
+    their spacing turns "Hello world now" into "Helloworldnow" — the document
+    reads as corrupted even though every character is present.
+    """
+    data = lexical_html_to_docx("<p>Hello <strong>world</strong> now.</p>", "t")
+    assert _first(data).text == "Hello world now."
+
+
+def test_bold_italic_and_underline_survive_as_runs():
+    html = "<p>plain <b>bold</b> <i>italic</i> <u>under</u></p>"
+    runs = {r.text: r for r in _first(lexical_html_to_docx(html, "t")).runs if r.text.strip()}
+    assert runs["bold"].bold is True
+    assert runs["italic"].italic is True
+    assert runs["under"].underline is True
+    assert runs["plain "].bold is not True
+
+
+def test_nested_emphasis_keeps_both_formats():
+    html = "<p><strong>bold and <em>also italic</em></strong></p>"
+    run = next(r for r in _first(lexical_html_to_docx(html, "t")).runs if "italic" in r.text)
+    assert run.bold is True and run.italic is True
+
+
+def test_line_break_stays_a_break():
+    data = lexical_html_to_docx("<p>one<br/>two</p>", "t")
+    assert _first(data).text == "one\ntwo"
+
+
+def test_paragraph_alignment_survives():
+    data = lexical_html_to_docx('<p style="text-align: center">Centred.</p>', "t")
+    assert _first(data).alignment == WD_ALIGN_PARAGRAPH.CENTER
+
+
+def test_nested_list_keeps_its_level():
+    html = "<ul><li>outer<ul><li>inner</li></ul></li></ul>"
+    doc = Document(io.BytesIO(lexical_html_to_docx(html, "t")))
+    styles = {p.text: p.style.name for p in doc.paragraphs if p.text.strip()}
+    assert styles["outer"] == "List Bullet"
+    assert styles["inner"] == "List Bullet 2"
+
+
+def test_heading_keeps_its_inline_formatting():
+    data = lexical_html_to_docx("<h2>Key <em>charges</em></h2>", "t")
+    para = _first(data)
+    assert para.text == "Key charges"
+    assert next(r for r in para.runs if "charges" in r.text).italic is True
+
+
+def test_table_cell_keeps_inline_formatting_and_spacing():
+    html = "<table><tr><td>fund <b>value</b></td></tr></table>"
+    cell = Document(io.BytesIO(lexical_html_to_docx(html, "t"))).tables[0].rows[0].cells[0]
+    assert cell.text == "fund value"
+    assert next(r for r in cell.paragraphs[0].runs if r.text == "value").bold is True
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +193,15 @@ def test_labelled_footer_goes_back_to_the_footer_not_the_body(tmp_path):
     out = _exported(tmp_path, html)
     assert "v2" in "\n".join(p.text for p in out.sections[0].footer.paragraphs)
     assert "v2" not in "\n".join(p.text for p in out.paragraphs)
+
+
+def test_footer_text_keeps_its_spacing(tmp_path):
+    """The footer carries the mandated disclaimer — it goes back word for word."""
+    html = "<p>Body.</p><h3>Page footer</h3><p>Insurance is the <b>subject</b> matter.</p>"
+    out = _exported(tmp_path, html)
+    assert "Insurance is the subject matter." in "\n".join(
+        p.text for p in out.sections[0].footer.paragraphs
+    )
 
 
 def test_labelled_header_goes_back_to_the_header(tmp_path):
