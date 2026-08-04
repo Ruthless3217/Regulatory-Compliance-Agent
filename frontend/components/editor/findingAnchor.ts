@@ -7,7 +7,9 @@
  *   1. node key + offsets — exact, but a Lexical node key is only stable while
  *      the node lives. Splitting, merging or retyping a paragraph re-keys it.
  *   2. the quoted span itself — survives re-keying, but not an edit to the
- *      quoted words.
+ *      quoted words. Searched inside each block and then across them, because
+ *      the finding was written against flat prose that the importer later cut
+ *      into blocks the analysis never saw.
  *   3. the surrounding fingerprint — survives edits to the span, which is
  *      exactly the case that matters: a reviewer rewriting flagged wording.
  *
@@ -95,6 +97,16 @@ export function locate(finding: FindingAnchor, nodes: NodeText[]): AnchorResult 
     return { status: "unlocated", reason: "quoted text appears more than once" };
   }
 
+  // 2b. The span straddles a block boundary. A finding is written against the
+  //     analysed text, which is one flat run of prose — the editor's blocks are
+  //     a later invention of the importer, so a quote running from the end of
+  //     one paragraph into the next is present in the document but in no single
+  //     node, and the per-node search above can never see it. Measured on real
+  //     uploads this is four out of five unlocated findings, because headings,
+  //     bullets and table rows put a block boundary every line or two.
+  const straddled = locateAcrossBlocks(needle, nodes);
+  if (straddled) return straddled;
+
   // 3. The span was edited. Fall back to the node that still carries the most
   //    of its surroundings — the reviewer rewrote the words, not the paragraph.
   const best = bestFingerprintMatch(span, nodes);
@@ -103,6 +115,54 @@ export function locate(finding: FindingAnchor, nodes: NodeText[]): AnchorResult 
   }
 
   return { status: "unlocated", reason: "text edited beyond recognition" };
+}
+
+/** The quoted span found across block boundaries, or null if it is not in the
+ * document at all (the caller then tries the fingerprint).
+ *
+ * Uniqueness is still what licenses the answer — it is proven against the
+ * flattened document instead of against one node, so this stays a match and
+ * never becomes a guess. Ambiguity is a miss here too.
+ *
+ * Only the START is anchored: the span is reported against the block the
+ * flagged text begins in, clipped to that block, because no single node holds
+ * the rest. The caller cannot measure a range that overruns its node and falls
+ * back to marking that block — which is the honest claim, and the same rule
+ * `violation_anchor_service` follows on the PDF side: a partial locate that is
+ * true beats a whole one that is wrong.
+ */
+function locateAcrossBlocks(needle: string, nodes: NodeText[]): AnchorResult | null {
+  // The document as the analysis saw it — one run of prose — with each block's
+  // start kept so a hit can be walked back to the block it begins in.
+  const blocks: Array<{ key: string; at: number; len: number }> = [];
+  let flat = "";
+  for (const node of nodes) {
+    const text = normalize(node.text);
+    if (!text) continue;
+    if (flat) flat += " ";
+    blocks.push({ key: node.key, at: flat.length, len: text.length });
+    flat += text;
+  }
+
+  const at = flat.indexOf(needle);
+  if (at === -1) return null;
+  if (flat.indexOf(needle, at + 1) !== -1) {
+    return { status: "unlocated", reason: "quoted text appears more than once" };
+  }
+
+  let block: { key: string; at: number; len: number } | undefined;
+  for (const b of blocks) {
+    if (b.at > at) break;
+    block = b;
+  }
+  if (!block) return null;
+  const start = at - block.at;
+  return {
+    status: "text",
+    nodeKey: block.key,
+    start,
+    end: Math.min(block.len, start + needle.length),
+  };
 }
 
 /** The node sharing the most distinctive words with the flagged span.

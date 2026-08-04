@@ -66,8 +66,20 @@ const RULE_CATEGORIES = [
 
 export default function SettingsPage() {
   const [pinging, setPinging] = React.useState(false);
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
-  const buildSha = process.env.NEXT_PUBLIC_BUILD_SHA || "dev";
+
+  // NEXT_PUBLIC_* is inlined into the browser bundle at BUILD time, but the
+  // standalone Next server reads the same name from the container env at
+  // REQUEST time — and the two are not wired from the same place. compose
+  // passes NEXT_PUBLIC_BUILD_SHA at runtime only (frontend/Dockerfile takes no
+  // such build arg, and .env sets BUILD_SHA=prod), so the server rendered
+  // "prod" here while the browser bundle had nothing and rendered "dev":
+  // hydration mismatch, React #418. docker-compose.prod.yml has the mirror
+  // image of the problem for NEXT_PUBLIC_API_BASE — baked at build, absent at
+  // runtime. Both are read after mount so the pass the server also runs emits
+  // no environment-dependent text, same shape as DensityToggle.
+  const [mounted, setMounted] = React.useState(false);
+  const apiBase = mounted ? process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000" : "…";
+  const buildSha = mounted ? process.env.NEXT_PUBLIC_BUILD_SHA || "dev" : "…";
 
   const [models, setModels] = React.useState<ModelsHealth | null>(null);
   const [modelsErr, setModelsErr] = React.useState<string | null>(null);
@@ -77,6 +89,7 @@ export default function SettingsPage() {
   const [ruleCountsErr, setRuleCountsErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    setMounted(true);
     healthModels()
       .then(setModels)
       .catch((e) => setModelsErr((e as Error).message));

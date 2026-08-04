@@ -132,6 +132,70 @@ check("a finding quoting no text is unlocated, not matched", () => {
   assert.match(r.reason, /quotes no source text/);
 });
 
+// --- spans that straddle a block boundary ------------------------------------
+//
+// A finding is written against the analysed text, which is one flat run of
+// prose. The importer cuts that same document into blocks the analysis never
+// saw, and headings, bullets and table rows put a boundary every line or two —
+// so a quote routinely runs from the end of one block into the next. Replaying
+// locate() over the real import/extraction pipelines on the uploaded documents,
+// these were 4 out of 5 unlocated findings, and NONE of them were ambiguous.
+
+check("a quote spanning two blocks is located, not reported unlocated", () => {
+  const blocks = [
+    { key: "b1", text: "5. Compliance & Disclosure" },
+    { key: "b2", text: "Guaranteed returns of 8% p.a. for the full policy term." },
+    { key: "b3", text: "Past performance is not indicative of future performance." },
+  ];
+  const r = locate(
+    { current_text: "Guaranteed returns of 8% p.a. for the full policy term. Past performance is not indicative" },
+    blocks
+  );
+  assert.equal(r.status, "text");
+  assert.equal(r.nodeKey, "b2", "anchors to the block the flagged text starts in");
+});
+
+check("a straddling quote is clipped to the block it starts in", () => {
+  // No single node holds the rest, so the range must stop at the block end —
+  // running it past would measure words the node does not have.
+  const blocks = [
+    { key: "p1", text: "The Fund Value is payable on maturity." },
+    { key: "p2", text: "Terms and conditions apply." },
+  ];
+  const r = locate({ current_text: "payable on maturity. Terms and conditions" }, blocks);
+  assert.equal(r.status, "text");
+  assert.equal(r.nodeKey, "p1");
+  assert.equal(r.start, normalize(blocks[0].text).indexOf("payable on maturity."));
+  assert.equal(r.end, normalize(blocks[0].text).length, "clipped at the block end");
+});
+
+check("a straddling quote that appears twice is still a miss", () => {
+  // Ambiguity is a miss across blocks too — proving uniqueness against the
+  // flattened document is what licenses the match, so losing it must lose it.
+  const blocks = [
+    { key: "a1", text: "Maturity Benefit" },
+    { key: "a2", text: "The Fund Value is paid." },
+    { key: "a3", text: "Maturity Benefit" },
+    { key: "a4", text: "The Fund Value is paid." },
+  ];
+  const r = locate({ current_text: "Maturity Benefit The Fund Value is paid." }, blocks);
+  assert.equal(r.status, "unlocated");
+  assert.match(r.reason, /more than once/);
+});
+
+check("the flattened search never invents an adjacency", () => {
+  // These words exist in the document but NOT in this order, so no text match
+  // may be claimed. Reversing the two blocks is the cheapest way to prove the
+  // flattened haystack is read in document order rather than as a word bag —
+  // the fingerprint may still relocate it, but only as a paragraph.
+  const blocks = [
+    { key: "c1", text: "The Fund Value is payable on maturity." },
+    { key: "c2", text: "Terms and conditions apply." },
+  ];
+  const r = locate({ current_text: "Terms and conditions apply. The Fund Value" }, blocks);
+  assert.notEqual(r.status, "text", "must not claim the exact words were found");
+});
+
 check("normalization folds case and collapses whitespace", () => {
   assert.equal(normalize("  The   FUND\n Value "), "the fund value");
 });

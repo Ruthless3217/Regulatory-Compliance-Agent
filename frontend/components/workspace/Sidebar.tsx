@@ -174,15 +174,12 @@ export function Sidebar() {
           </div>
         ))}
 
-        {/* Coverage block */}
-        <div className="mt-6 mb-5 mx-2 rounded-sm border border-border bg-surface p-3">
-          <div className="micro-label mb-2">Rule coverage</div>
-          <ul className="space-y-1.5 text-[11px]">
-            <li className="flex justify-between"><span>IRDAI</span><span className="font-mono text-muted-foreground">30</span></li>
-            <li className="flex justify-between"><span>Brand</span><span className="font-mono text-muted-foreground">20</span></li>
-            <li className="flex justify-between"><span>SEBI</span><span className="font-mono text-muted-foreground">15</span></li>
-          </ul>
-        </div>
+        {/* The "Rule coverage" block that sat here was hardcoded to IRDAI 30 /
+            Brand 20 / SEBI 15 and had drifted to roughly half the real corpus
+            (62 / 33 / 15). Because the sidebar is on every page, it put wrong
+            coverage figures in front of a compliance reviewer everywhere — next
+            to the Rules page stating the true counts. Deleted rather than
+            wired up: /rules already carries these numbers, from the data. */}
       </nav>
 
       {/* Footer */}

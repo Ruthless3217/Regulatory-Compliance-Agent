@@ -69,7 +69,16 @@ export default async function SubmissionsPage() {
   const failed = items.filter((s) => s.status === "failed");
   const waiting = items.filter((s) => s.status === "waiting_for_review");
 
-  const tables: { title: string; icon: React.ReactNode; tone: "success" | "info" | "danger"; rows: Submission[] }[] = [
+  // Anything the buckets above do not claim — `needs_review` is the one that
+  // actually occurs, and it was landing in none of them, so a degraded run
+  // vanished from the inbox entirely while still counting in the totals. The
+  // bucket is defined by subtraction rather than by listing statuses, so a
+  // status added to the backend later cannot silently disappear again.
+  const bucketed = new Set([...reviewed, ...inProgress, ...failed, ...waiting].map((s) => s.id));
+  const needsReview = items.filter((s) => !bucketed.has(s.id));
+
+  const tables: { title: string; icon: React.ReactNode; tone: "success" | "info" | "danger" | "warning"; rows: Submission[] }[] = [
+    { title: "Needs review", icon: <AlertOctagon className="h-3.5 w-3.5" />, tone: "warning", rows: needsReview },
     { title: "Reviewed", icon: <CheckCircle2 className="h-3.5 w-3.5" />, tone: "success", rows: reviewed },
     { title: "In progress", icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, tone: "info", rows: [...inProgress, ...waiting] },
     { title: "Failed", icon: <AlertOctagon className="h-3.5 w-3.5" />, tone: "danger", rows: failed },
@@ -172,7 +181,9 @@ export default async function SubmissionsPage() {
                           ? "Compliance pass completed. Open for inline highlights or to export the report."
                           : t.tone === "info"
                             ? "Currently being chunked and analysed. Open to watch streamed progress."
-                            : "Encountered an error. Retry or inspect logs."
+                            : t.tone === "warning"
+                              ? "Analysed, but the run could not be graded cleanly. Open to see why and decide."
+                              : "Encountered an error. Retry or inspect logs."
                       }
                     />
                     <DenseTable items={t.rows} />

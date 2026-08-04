@@ -26,24 +26,35 @@ interface Props {
 
 /** The design's "p. 17 · para 2" line, from whichever anchors a real finding
  * actually carries. chunk_index is the last resort: text-extracted documents
- * have no page anchor, and a row with no locator at all reads as unplaced. */
+ * have no page anchor, and a row with no locator at all reads as unplaced.
+ *
+ * `location` is deliberately NOT consulted. Every write site stores plumbing
+ * there — "chunk:<uuid>" for chunk findings, the literal "document" for
+ * document-level ones — so reading it put a raw UUID in the reviewer's most
+ * prominent metadata slot. It survives only as a debug tooltip on the row. */
 export function locationLine(v: Violation): string | null {
   const parts: string[] = [];
   if (typeof v.anchor_page === "number") parts.push(`p. ${v.anchor_page}`);
-  const where = v.section_title?.trim() || v.location?.trim();
+  const where = v.section_title?.trim();
   if (where) parts.push(where);
   if (parts.length === 0 && typeof v.chunk_index === "number") parts.push(`chunk ${v.chunk_index}`);
   return parts.length ? parts.join(" · ") : null;
 }
 
 /** The design's "IRDAI-ULIP-014 · cl. 14(3), p. 22" line. cited_section is
- * stored already labelled ("Section 41"), so it is not re-prefixed. */
+ * stored already labelled ("Section 41"), so it is not re-prefixed.
+ *
+ * The rule code the design shows first does not exist: `rule_id` is a bare FK
+ * to `rules.id` and that table carries no human code column (see
+ * backend/app/models/rule.py), so putting it here rendered a UUID where a
+ * citation was promised. The citation is what a reviewer checks against the
+ * regulation, so the line now carries only that; the id stays reachable as a
+ * tooltip for anyone tracing a finding back to its rule row.
+ *
+ * If a rule code is ever added to the schema, it belongs at the front of this
+ * list — that is the shape the design asked for. */
 function ruleLine(v: Violation): string | null {
-  const parts = [
-    v.rule_id,
-    v.cited_section,
-    typeof v.cited_page === "number" ? `p. ${v.cited_page}` : null,
-  ]
+  const parts = [v.cited_section, typeof v.cited_page === "number" ? `p. ${v.cited_page}` : null]
     .map((p) => p?.trim())
     .filter((p): p is string => !!p);
   return parts.length ? parts.join(" · ") : null;
@@ -354,7 +365,12 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
       <p className="text-sm leading-snug">{violation.description}</p>
 
       {ruleLine(violation) && (
-        <p className="mt-1 font-mono text-[11px] text-muted-foreground">{ruleLine(violation)}</p>
+        <p
+          className="mt-1 font-mono text-[11px] text-muted-foreground"
+          title={violation.rule_id ? `rule ${violation.rule_id}` : undefined}
+        >
+          {ruleLine(violation)}
+        </p>
       )}
 
       <ActionTags violation={violation} className="mt-2 flex flex-wrap items-center gap-1.5" />
@@ -626,14 +642,16 @@ function verdictLabel(v: Violation): string {
  * section title or description can never widen the 372px column.
  */
 export function ViolationRow({ violation, onSelect }: { violation: Violation; onSelect: () => void }) {
-  const where = locationLine(violation);
+  // Document-level findings anchor to nothing — no page, no section, no chunk.
+  // Their category is the only honest identity left, and it beats a blank slot.
+  const where = locationLine(violation) ?? categoryLabel(violation.category);
   const state = verdictLabel(violation);
   return (
     <button
       type="button"
       data-violation-id={violation.id}
       onClick={onSelect}
-      title={violation.description}
+      title={violation.location ? `${violation.description}\n${violation.location}` : violation.description}
       className={cn(
         "flex w-full items-center gap-2 border-b border-border px-3 py-1.5 text-left text-xs",
         "transition-colors hover:bg-muted/40",

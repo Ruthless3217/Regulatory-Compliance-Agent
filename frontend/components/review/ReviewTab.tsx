@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import { useSSEStream } from "@/lib/sse";
-import { diffRun, getCheck } from "@/lib/api";
+import { analyzeSubmission, diffRun, getCheck } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { RunDiff, Violation } from "@/lib/types";
 
@@ -165,6 +165,7 @@ export function ReviewTab() {
     setSelectedViolationId,
     setScore,
     optimisticAnalyzing,
+    setOptimisticAnalyzing,
     runs,
     selectedRunId,
     setSelectedRunId,
@@ -302,6 +303,21 @@ export function ReviewTab() {
   // Split's redline is on. Reported up from SplitOriginalView because it
   // decides whether the editor beside it still draws its findings.
   const [comparingDrafts, setComparingDrafts] = React.useState(false);
+
+  // Same optimistic flip SubmissionHeader's Re-run does, so the banner's own
+  // button and the header's button leave the workspace in the same state.
+  const rerun = React.useCallback(async () => {
+    setOptimisticAnalyzing(true);
+    setSelectedRunId(null);
+    try {
+      await analyzeSubmission(submission.id);
+      toast.success("Re-running analysis");
+      router.refresh();
+    } catch (e) {
+      toast.error(`Could not start the analysis: ${(e as Error).message}`);
+      setOptimisticAnalyzing(false);
+    }
+  }, [submission.id, setOptimisticAnalyzing, setSelectedRunId, router]);
   // Nothing to toggle to when there are no page images — stay on the text pane.
   const usePdfPane = pagesRendered && !editing;
   const hasEditor = !!(submission.lexical_state || submission.has_import_source);
@@ -435,29 +451,58 @@ export function ReviewTab() {
           </div>
         )}
 
-        {unlocated.length > 0 && !isAnalyzing && (
-          <div className="flex shrink-0 items-center gap-2.5 border-b border-border bg-background px-4 py-2.5">
-            <CircleSlash className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="text-[12.5px] leading-snug text-body">
-              <span className="font-medium">
-                {unlocated.length} finding{unlocated.length === 1 ? "" : "s"} could no longer be
-                located in the edited document.
-              </span>{" "}
-              <span className="text-muted-foreground">
-                They still count. The text they quoted has changed enough that highlighting it
-                would be a guess — re-run the analysis to re-anchor them.
+        {/* One notice, not two. Both of these say "the document moved on since
+            the analysis" and both are fixed by the same re-run, so stacking
+            them spent two rows above the document to deliver one instruction —
+            on a screen whose whole job is showing the document. The action that
+            resolves them sits in the notice rather than in the header, because
+            that is where the reviewer is reading. */}
+        {(findingsStale || unlocated.length > 0) && !isAnalyzing && (
+          <div
+            className={cn(
+              "flex shrink-0 items-center gap-2.5 border-b px-4 py-2.5",
+              findingsStale
+                ? "border-warning/40 bg-warning/10"
+                : "border-border bg-background"
+            )}
+          >
+            {findingsStale ? (
+              <TriangleAlert className="h-4 w-4 shrink-0 text-warning-fg" />
+            ) : (
+              <CircleSlash className="h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
+            <span
+              className={cn(
+                "text-[12.5px] leading-snug",
+                findingsStale ? "text-warning-fg" : "text-body"
+              )}
+            >
+              {findingsStale && (
+                <span className="font-medium">
+                  Document edited since the last analysis — these findings describe the previous
+                  version.{" "}
+                </span>
+              )}
+              {unlocated.length > 0 && (
+                <span className={findingsStale ? undefined : "font-medium"}>
+                  {unlocated.length} finding{unlocated.length === 1 ? "" : "s"} can no longer be
+                  located in the text and {unlocated.length === 1 ? "is" : "are"} not highlighted.{" "}
+                </span>
+              )}
+              <span className={findingsStale ? "opacity-80" : "text-muted-foreground"}>
+                {unlocated.length > 0 && "They still count. "}
+                Re-run the compliance check to re-anchor
+                {findingsStale ? " and to approve or export." : "."}
               </span>
             </span>
-          </div>
-        )}
-
-        {findingsStale && !isAnalyzing && (
-          <div className="flex shrink-0 items-center gap-2.5 border-b border-warning/40 bg-warning/10 px-4 py-2.5">
-            <TriangleAlert className="h-4 w-4 shrink-0 text-warning-fg" />
-            <span className="text-[12.5px] leading-snug text-warning-fg">
-              Document edited since the last analysis. These findings describe the previous
-              version — re-run the compliance check before approval or export.
-            </span>
+            <Button
+              size="sm"
+              variant={findingsStale ? "default" : "outline"}
+              className="ml-auto shrink-0"
+              onClick={rerun}
+            >
+              Re-run analysis
+            </Button>
           </div>
         )}
 
