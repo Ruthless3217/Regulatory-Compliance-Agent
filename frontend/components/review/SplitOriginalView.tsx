@@ -30,16 +30,36 @@ export function SplitOriginalView({
   originalText,
   /** Turned off while the redline is on — see the note on `compare` below. */
   onCompareChange,
+  /**
+   * False in Edit mode: the original pane and the compare bar come off, and the
+   * working copy takes the full width.
+   *
+   * This component wraps the editor in BOTH modes rather than only in Split,
+   * and that is load-bearing, not tidiness. React reconciles by position, so
+   * rendering the editor as a child here in one mode and as a sibling in the
+   * other unmounts and remounts it on every switch. A remounted editor comes up
+   * empty while it re-fetches its import, reports every finding as unlocatable
+   * for those seconds, and emits an empty document into the workspace — which
+   * the autosave then wrote over the reviewer's working copy.
+   */
+  split = true,
   children,
 }: {
   submissionId: string;
   pageRenderStatus?: string | null;
   originalText?: string | null;
   onCompareChange?: (comparing: boolean) => void;
+  split?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const [compare, setCompare] = React.useState(false);
   const [pages, setPages] = React.useState(false);
+
+  // Leaving Split closes the redline with it, so returning to Edit never lands
+  // on a document whose findings are silently switched off.
+  React.useEffect(() => {
+    if (!split) setCompare(false);
+  }, [split]);
 
   // Two mark systems over one document is the "unnecessary highlighting"
   // problem: a compliance span and a redline word both claim the same
@@ -50,40 +70,52 @@ export function SplitOriginalView({
   const canShowPages = pageRenderStatus === "completed";
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-surface">
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
-        <span className="micro-label">Original vs working copy</span>
-        <div className="ml-auto flex items-center gap-1.5">
-          {canShowPages && !compare && (
+    <div className={cn("flex h-full min-h-0 flex-col", split && "bg-surface")}>
+      {split && (
+        <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
+          <span className="micro-label">Original vs working copy</span>
+          <div className="ml-auto flex items-center gap-1.5">
+            {canShowPages && !compare && (
+              <Button
+                size="sm"
+                variant={pages ? "outline" : "ghost"}
+                aria-pressed={pages}
+                title="Show the original as its rendered page images instead of text"
+                onClick={() => setPages((p) => !p)}
+              >
+                <ImageIcon className="mr-1.5 h-3.5 w-3.5" />
+                Original artwork
+              </Button>
+            )}
             <Button
               size="sm"
-              variant={pages ? "outline" : "ghost"}
-              aria-pressed={pages}
-              title="Show the original as its rendered page images instead of text"
-              onClick={() => setPages((p) => !p)}
+              variant={compare ? "default" : "outline"}
+              aria-pressed={compare}
+              title="Redline the corrections made to this document"
+              onClick={() => setCompare((c) => !c)}
             >
-              <ImageIcon className="mr-1.5 h-3.5 w-3.5" />
-              Original artwork
+              <GitCompare className="mr-1.5 h-3.5 w-3.5" />
+              {compare ? "Hide changes" : "Compare drafts"}
             </Button>
-          )}
-          <Button
-            size="sm"
-            variant={compare ? "default" : "outline"}
-            aria-pressed={compare}
-            title="Redline the corrections made to this document"
-            onClick={() => setCompare((c) => !c)}
-          >
-            <GitCompare className="mr-1.5 h-3.5 w-3.5" />
-            {compare ? "Hide changes" : "Compare drafts"}
-          </Button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {compare ? (
-        <DraftRedline submissionId={submissionId} />
-      ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-2 gap-4 overflow-hidden px-4 pt-3">
-          <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+      {split && compare && <DraftRedline submissionId={submissionId} />}
+
+      {/* Hidden rather than unmounted while the redline is up, and keyed so the
+          working-copy column keeps its identity when the original column comes
+          and goes. Both are the same rule: the editor inside must never be
+          torn down by a layout change. */}
+      <div
+        className={cn(
+          "grid min-h-0 flex-1 overflow-hidden",
+          split ? "grid-cols-2 gap-4 px-4 pt-3" : "grid-cols-1",
+          split && compare && "hidden"
+        )}
+      >
+        {split && (
+          <div key="original" className="flex min-h-0 flex-col gap-2 overflow-hidden">
             <div className="flex shrink-0 items-center gap-2">
               <span className="micro-label">Original · uploaded file</span>
               <span className="font-mono text-[10.5px] text-faint">read-only · immutable</span>
@@ -97,17 +129,24 @@ export function SplitOriginalView({
               />
             </div>
           </div>
-          <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+        )}
+        <div key="working" className="flex min-h-0 flex-col gap-2 overflow-hidden">
+          {split && (
             <div className="flex shrink-0 items-center gap-2">
               <span className="micro-label">Working copy · editable</span>
               <span className="font-mono text-[10.5px] text-faint">exports from this side</span>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-background shadow-card">
-              {children}
-            </div>
+          )}
+          <div
+            className={cn(
+              "flex min-h-0 flex-1 flex-col overflow-hidden",
+              split && "rounded-md border border-border bg-background shadow-card"
+            )}
+          >
+            {children}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

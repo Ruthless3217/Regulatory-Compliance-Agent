@@ -535,14 +535,37 @@ export function ReviewTab() {
           )}
         </div>
 
-        {mode === "split" ? (
+        {/* View is the only mode with no working document on screen, so it is
+            the only one that may replace this subtree. Split and Edit both
+            render through SplitOriginalView — see its `split` prop: moving the
+            editor between two parents remounts it, and a remounted editor comes
+            up empty, reports every finding as unlocatable, and used to emit
+            that empty document straight into the autosave. */}
+        {usePdfPane ? (
+          <PdfPagePane
+            submissionId={submission.id}
+            violations={displayViolations}
+            selectedViolationId={selectedViolationId}
+            onSelect={selectViolation}
+          />
+        ) : (
           <SplitOriginalView
+            split={mode === "split"}
             submissionId={submission.id}
             pageRenderStatus={submission.page_render_status}
             originalText={submission.original_content}
             onCompareChange={setComparingDrafts}
           >
             {hasEditor ? (
+              // Rich editing on the working document. The uploaded file stays
+              // immutable; this edits the Lexical state and export renders from
+              // it.
+              //
+              // `has_import_source` only promises the upload *looks* importable,
+              // so this can mount over a conversion that then fails; the editor
+              // says so rather than showing a blank page, and needs
+              // pagesRendered to know whether View is one of the ways out it can
+              // offer.
               <LexicalDocument
                 initialState={submission.lexical_state}
                 submissionId={submission.id}
@@ -556,7 +579,7 @@ export function ReviewTab() {
                 onSelectViolation={selectViolation}
                 onUnlocatedFindings={setUnlocated}
                 pagesRendered={pagesRendered}
-                bubbles={!comparingDrafts}
+                bubbles={mode === "split" && !comparingDrafts}
               />
             ) : (
               <DocumentPane
@@ -567,42 +590,6 @@ export function ReviewTab() {
               />
             )}
           </SplitOriginalView>
-        ) : usePdfPane ? (
-          <PdfPagePane
-            submissionId={submission.id}
-            violations={displayViolations}
-            selectedViolationId={selectedViolationId}
-            onSelect={selectViolation}
-          />
-        ) : hasEditor ? (
-          // Rich editing on the working document. The uploaded file stays
-          // immutable; this edits the Lexical state and export renders from it.
-          // Findings are still anchored to extracted-text offsets, which drift
-          // once this editor is used — re-anchoring is Phase 2, so a submission
-          // with no working document keeps the offset-highlighted pane below.
-          //
-          // `has_import_source` only promises the upload *looks* importable, so
-          // this can mount over a conversion that then fails; the editor says so
-          // rather than showing a blank page, and needs pagesRendered to know
-          // whether View is one of the ways out it can offer.
-          <LexicalDocument
-            initialState={submission.lexical_state}
-            submissionId={submission.id}
-            readOnly={isHistorical}
-            onChange={setLexicalDoc}
-            violations={displayViolations}
-            selectedViolationId={selectedViolationId}
-            onSelectViolation={selectViolation}
-            onUnlocatedFindings={setUnlocated}
-            pagesRendered={pagesRendered}
-          />
-        ) : (
-          <DocumentPane
-            violations={displayViolations}
-            selectedViolationId={selectedViolationId}
-            onSelect={selectViolation}
-            readOnly={isHistorical}
-          />
         )}
       </div>
       {!splitting && (

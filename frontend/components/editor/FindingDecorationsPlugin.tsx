@@ -77,6 +77,18 @@ export function FindingDecorationsPlugin({
         }
       });
 
+      // An empty document is not a document whose findings cannot be located —
+      // it is a document that has not arrived yet. The editor is empty for the
+      // seconds its import takes, and reporting every finding as unlocatable in
+      // that window told the reviewer their whole analysis had come unstuck.
+      // Nothing is drawn and nothing is claimed until there is text to claim it
+      // against.
+      if (nodes.length === 0) {
+        layer.replaceChildren();
+        hitsRef.current = [];
+        return;
+      }
+
       // Clear previous decorations before re-applying; a finding that moved
       // must not leave its old paragraph looking flagged.
       root.querySelectorAll("[data-finding-id]").forEach((el) => {

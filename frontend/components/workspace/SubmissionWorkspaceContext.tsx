@@ -120,6 +120,20 @@ export function SubmissionWorkspaceProvider({
   const lexicalDocRef = React.useRef<LexicalDoc | null>(null);
 
   const setLexicalDoc = React.useCallback((d: LexicalDoc) => {
+    // A freshly-mounted editor emits an EMPTY document before its content
+    // arrives, and this provider outlives the editor — switching View/Split/Edit
+    // re-parents it, so React remounts it and that empty emission lands here
+    // with `savedLexicalRef` already holding the real document. Treating it as
+    // an edit marks the submission dirty and lets the next autosave write a
+    // blank revision over the reviewer's working copy.
+    //
+    // So an empty document is only ever accepted as the truth when what we hold
+    // is also empty. Clearing a document deliberately still works — it goes
+    // through the editor with content already loaded, so `text` is empty only
+    // after the reviewer has actually emptied it, which the seeded ref reflects.
+    if (!d.text.trim() && (savedLexicalRef.current ?? "").trim()) {
+      return;
+    }
     lexicalDocRef.current = d;
     setLexicalDocState(d);
     setLexicalDirty(savedLexicalRef.current !== null && savedLexicalRef.current !== d.html);
@@ -242,6 +256,11 @@ export function SubmissionWorkspaceProvider({
   const saveLexical = React.useCallback(async () => {
     const doc = lexicalDocRef.current;
     if (!doc) return false;
+    // Second line of the same defence as setLexicalDoc: whatever route got us
+    // here — autosave, the toolbar, Apply fix — an empty document never
+    // overwrites a non-empty saved one. The cost of being wrong is the
+    // reviewer's corrected wording.
+    if (!doc.text.trim() && (savedLexicalRef.current ?? "").trim()) return false;
     if (savedLexicalRef.current === doc.html) return true;
     const ok = await persist(doc.text, "manual_edit");
     if (ok) {
