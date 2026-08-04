@@ -4,7 +4,7 @@ import { listComparisons } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { PageHeader, PageHeaderMeta } from "@/components/ui/page-header";
 import { StatusPill } from "@/components/ui/status-pill";
-import { formatDate } from "@/lib/format";
+import { formatDate, sideLabel } from "@/lib/format";
 import type { DocumentComparison } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,19 @@ function comparisonStatusTone(status: string) {
   if (status === "completed") return "success" as const;
   if (status === "processing") return "info" as const;
   return "danger" as const;
+}
+
+/**
+ * Secondary identifier for a row. Comparisons created before titles were derived
+ * are all called "Untitled comparison", so their file names are the only thing
+ * telling them apart. Null when the title already spells them out (extensions
+ * dropped to match how the server derives it) or when neither side was a file.
+ */
+function sourceLine(c: DocumentComparison): string | null {
+  if (!c.old_filename && !c.new_filename) return null;
+  const stem = (n: string) => n.replace(/\.[^.]+$/, "");
+  const line = `${stem(sideLabel(c, "old"))} → ${stem(sideLabel(c, "new"))}`;
+  return line === c.title ? null : line;
 }
 
 export default async function ComparePage() {
@@ -76,6 +89,14 @@ export default async function ComparePage() {
                     >
                       {c.title}
                     </Link>
+                    {sourceLine(c) && (
+                      <div className="text-[11px] text-muted-foreground">{sourceLine(c)}</div>
+                    )}
+                    {/* The reason is already in the list payload; without it a
+                        failed row says only "failed". */}
+                    {c.status === "failed" && c.error_message && (
+                      <div className="text-[11px] text-sev-critical">{c.error_message}</div>
+                    )}
                   </td>
                   <td className="px-3 py-2.5">
                     <StatusPill tone={comparisonStatusTone(c.status)}>{c.status}</StatusPill>

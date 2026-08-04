@@ -57,7 +57,11 @@ export function ScoreTrend({ points }: { points: TimeseriesPoint[] }) {
         </div>
       ) : (
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+          <AreaChart data={data} // left: -16 pulled the axis past the container's left edge and clipped the
+          // leading digit off the widest tick — the score trend's Y axis read
+          // "00, 75, 50, 25, 0". The volume chart has the same latent bug, which
+          // shows the moment its counts reach three digits.
+          margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
             <XAxis dataKey="x" tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={20} />
             <YAxis domain={[0, 100]} tick={AXIS_TICK} tickLine={false} axisLine={false} width={36} />
@@ -96,7 +100,11 @@ export function VolumeTrend({ points }: { points: TimeseriesPoint[] }) {
         </div>
       ) : (
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+          <BarChart data={data} // left: -16 pulled the axis past the container's left edge and clipped the
+          // leading digit off the widest tick — the score trend's Y axis read
+          // "00, 75, 50, 25, 0". The volume chart has the same latent bug, which
+          // shows the moment its counts reach three digits.
+          margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
             <XAxis dataKey="x" tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={20} />
             <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} width={36} allowDecimals={false} />

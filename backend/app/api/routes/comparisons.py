@@ -88,6 +88,31 @@ def _sanitize_ext(filename: Optional[str]) -> str:
     return ext or "txt"
 
 
+def _derive_title(
+    old_filename: Optional[str],
+    new_filename: Optional[str],
+    old_content: Optional[str],
+    new_content: Optional[str],
+) -> str:
+    """Name a comparison after its two sides, for callers that send a blank title.
+
+    The title is the only thing distinguishing rows in the list, so a constant
+    placeholder makes the list unreadable. Extensions are dropped as noise but
+    nothing else is — documents in this corpus share long near-identical names
+    that differ only at the tail.
+    """
+    def side(filename: Optional[str], content: Optional[str], fallback: str) -> str:
+        if filename:
+            return os.path.splitext(filename)[0] or filename
+        first_line = next((ln.strip() for ln in (content or "").splitlines() if ln.strip()), "")
+        return first_line[:60] or fallback
+
+    return (
+        f"{side(old_filename, old_content, 'Original')}"
+        f" → {side(new_filename, new_content, 'Revised')}"
+    )
+
+
 def _safe_title(title: Optional[str]) -> str:
     """Filesystem-safe slug for export download filenames."""
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", (title or "comparison").strip()).strip("-")
@@ -175,7 +200,7 @@ def _search_pdf(pdf_path: str, q: str, cap: int = 200) -> List[dict]:
 @router.post("")
 async def create_comparison(
     background_tasks: BackgroundTasks,
-    title: str = Form(...),
+    title: str = Form(default=""),
     old_content: Optional[str] = Form(default=None),
     new_content: Optional[str] = Form(default=None),
     old_file: Optional[UploadFile] = File(default=None),
@@ -204,6 +229,10 @@ async def create_comparison(
     if new_file and new_file.filename:
         new_file_path, new_content_type = await _persist_upload(new_file)
         new_filename = new_file.filename
+
+    # Derived here rather than in the form so every caller gets a real title,
+    # and so it can see the resolved filenames above.
+    title = title.strip() or _derive_title(old_filename, new_filename, old_content, new_content)
 
     comparison = DocumentComparison(
         title=title,

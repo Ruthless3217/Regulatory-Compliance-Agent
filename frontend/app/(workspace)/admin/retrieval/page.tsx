@@ -26,8 +26,14 @@ import type {
 // contracts drive the layout:
 //   1. "no data" is a real, multi-causal state — never an empty table. An empty
 //      table reads as "nothing was rejected", which is the wrong conclusion.
-//   2. Rejections are persisted in full; acceptances are capped at 100. Every
-//      accepted count on this page is therefore a SAMPLE and must say so.
+//   2. TWO POPULATIONS. dispatch_node persists at most 100 rejections AND at
+//      most 100 acceptances per run (graph/nodes.py), while candidates_total /
+//      rejected_total count the whole run. Every number on this page must name
+//      which of the two it belongs to, and no number may be derived by mixing
+//      them — that is how "rejected + accepted > judged" got on screen.
+
+/** Rows per page in the two candidate tables. 25 matches admin/corpus. */
+const ROWS_PAGE = 25;
 
 /* ---------- no-data: three distinct causes, three distinct renders ---------- */
 
@@ -259,67 +265,182 @@ function CandidateDoc({ c }: { c: RetrievalCandidate }) {
 }
 
 function CandidateTable({ rows }: { rows: RetrievalCandidate[] }) {
+  const [page, setPage] = React.useState(0);
+  // The rejected panel swaps `rows` under one mounted table when a reason tab
+  // changes, so the page has to follow the data, not the mount.
+  React.useEffect(() => setPage(0), [rows]);
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / ROWS_PAGE));
+  const current = Math.min(page, pageCount - 1);
+  const pageRows = rows.slice(current * ROWS_PAGE, current * ROWS_PAGE + ROWS_PAGE);
+
+  // A column that says the same thing on every row of a group is noise, and the
+  // widest one was the worst offender. Both are stated once above the table
+  // instead — never dropped, because "why" is what a curator reads this for.
+  //   score:  the active_rules_fallback tier is not retrieved, so those rows
+  //           genuinely have no similarity score at all.
+  //   reason: one reason bucket / one tier usually shares one verbatim string.
+  const hasScore = rows.some((c) => typeof c.score === "number");
+  const reasons = new Set(rows.map((c) => c.reason ?? "—"));
+  const sharedReason = reasons.size === 1 ? [...reasons][0] : null;
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-muted-foreground">
-            <Th>Document</Th>
-            <Th>Score</Th>
-            <Th>Scope value</Th>
-            <Th>Verdict</Th>
-            <Th>Reason</Th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {rows.map((c, i) => (
-            <tr key={`${c.corpus}:${c.id}:${c.chunk_id ?? ""}:${i}`}>
-              <td className="max-w-md py-1.5 pr-3">
-                <CandidateDoc c={c} />
-              </td>
-              <td className="py-1.5 pr-3 font-mono">
-                {typeof c.score === "number" ? c.score.toFixed(3) : "—"}
-              </td>
-              <td className="py-1.5 pr-3 font-mono">{c.scope_value ?? "untagged"}</td>
-              <td className="py-1.5 pr-3">
-                {c.verdict === "rejected" ? (
-                  <span className="inline-flex items-center gap-1 text-sev-critical">
-                    <Ban className="h-3 w-3" />
-                    rejected
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-success">
-                    <Check className="h-3 w-3" />
-                    accepted
-                  </span>
-                )}
-              </td>
-              <td className="max-w-sm py-1.5 font-mono text-[10px] text-muted-foreground" title={c.reason ?? ""}>
-                {c.reason ?? "—"}
-              </td>
+    <>
+      {(sharedReason || !hasScore) && (
+        <dl className="mb-2 space-y-0.5 text-[11px] text-muted-foreground">
+          {sharedReason && (
+            <div>
+              <dt className="inline">Reason, identical on all {rows.length} row(s): </dt>
+              <dd className="inline font-mono text-[10px]">{sharedReason}</dd>
+            </div>
+          )}
+          {!hasScore && (
+            <div>
+              <dt className="inline">Score: </dt>
+              <dd className="inline">
+                none recorded — these candidates were not retrieved by similarity, so there is no
+                score to show.
+              </dd>
+            </div>
+          )}
+        </dl>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-muted-foreground">
+              <Th>Document</Th>
+              {hasScore && <Th>Score</Th>}
+              <Th>Scope value</Th>
+              <Th>Verdict</Th>
+              {!sharedReason && <Th>Reason</Th>}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {pageRows.map((c, i) => (
+              <tr key={`${c.corpus}:${c.id}:${c.chunk_id ?? ""}:${i}`}>
+                <td className="max-w-md py-1.5 pr-3">
+                  <CandidateDoc c={c} />
+                </td>
+                {hasScore && (
+                  <td className="py-1.5 pr-3 font-mono">
+                    {typeof c.score === "number" ? c.score.toFixed(3) : "—"}
+                  </td>
+                )}
+                <td className="py-1.5 pr-3 font-mono">{c.scope_value ?? "untagged"}</td>
+                <td className="py-1.5 pr-3">
+                  {c.verdict === "rejected" ? (
+                    <span className="inline-flex items-center gap-1 text-sev-critical">
+                      <Ban className="h-3 w-3" />
+                      rejected
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-success">
+                      <Check className="h-3 w-3" />
+                      accepted
+                    </span>
+                  )}
+                </td>
+                {!sharedReason && (
+                  <td
+                    className="max-w-sm py-1.5 font-mono text-[10px] text-muted-foreground"
+                    title={c.reason ?? ""}
+                  >
+                    {c.reason ?? "—"}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {rows.length > ROWS_PAGE && (
+        <nav
+          aria-label="Candidate pagination"
+          className="flex items-center justify-between gap-2 py-3 text-xs"
+        >
+          <span className="text-muted-foreground">
+            {current * ROWS_PAGE + 1}–{current * ROWS_PAGE + pageRows.length} of {rows.length}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={current === 0}
+              onClick={() => setPage(current - 1)}
+            >
+              Previous
+            </Button>
+            <span aria-live="polite" className="text-muted-foreground">
+              Page {current + 1} of {pageCount}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={current >= pageCount - 1}
+              onClick={() => setPage(current + 1)}
+            >
+              Next
+            </Button>
+          </span>
+        </nav>
+      )}
+    </>
   );
 }
 
 /* ---------- the story ---------- */
 
+/** Degradation codes as sentences. The codes come from two places in
+ * run_metadata: `degraded` carries the reason as its VALUE (engine.py
+ * _NEEDS_REVIEW_REASONS), the sibling flags carry it in their KEY. Unknown
+ * codes fall through to the raw code rather than being swallowed. */
+const DEGRADED_PROSE: Record<string, string> = {
+  product_unresolved:
+    "The document refers to a product the approved catalogue could not resolve — an unknown UIN, or a declared product with no fact card. Anything that did resolve is listed below, but the envelope is incomplete.",
+  product_ambiguous:
+    "A UIN in the document matched more than one approved product variant, so no fact card could be chosen without guessing which one applies.",
+  product_resolution_failed:
+    "Product resolution raised an error, so no product was resolved and nothing below is grounded.",
+  scope_metadata_missing:
+    "Candidates carried a scope tag that maps to no product category, so they were refused for curation instead of being graded.",
+  knowledge_base_empty:
+    "The precedent corpus returned nothing for any chunk, so the run could not find a violation whether or not one exists.",
+  no_content: "Preprocessing produced no analyzable chunks, so nothing was graded.",
+  analysis_incomplete: "Analysis did not cover every chunk of the document.",
+  rules_unavailable: "The rules corpus was unavailable, so rule-based checks did not run.",
+  disclosure_unavailable: "The disclosure registry was unavailable, so disclosure checks did not run.",
+  rag_degraded:
+    "Per-chunk rule retrieval failed, so the run fell back to the whole rule set — the candidates below were not narrowed by similarity.",
+  disclosure_recall_degraded:
+    "Disclosure recall ran degraded, so a required disclosure may have gone unchecked.",
+  analysis_failed_chunks:
+    "One or more chunks failed to analyse, so the verdict rests on partial content.",
+};
+
 function ScopePanel({ story }: { story: RetrievalStory }) {
   const scope = story.scope;
   const degradedKeys = Object.keys(story.degraded || {});
+  // ONE verdict. `scope.resolved` and the degraded flags answer different
+  // questions, and showing both raw produced a green "scope resolved" pill
+  // above an amber "this run was degraded" banner — a reviewer could not tell
+  // whether the envelope was usable. The pill now states the run's standing,
+  // which is what the banner elaborates.
+  const degraded = degradedKeys.length > 0;
   return (
     <Panel
       title="Resolved product scope"
       description="Applicability is judged BEFORE similarity: a candidate outside this envelope never reaches any prompt tier, however well it scores."
       right={
-        scope?.resolved ? (
-          <StatusPill tone="success">scope resolved</StatusPill>
-        ) : (
-          <StatusPill tone="warning">scope unresolved</StatusPill>
-        )
+        <StatusPill tone={degraded || !scope?.resolved ? "warning" : "success"}>
+          {degraded
+            ? scope?.resolved
+              ? "resolved, but this run is degraded"
+              : "unresolved — this run is degraded"
+            : scope?.resolved
+            ? "scope resolved"
+            : "scope unresolved"}
+        </StatusPill>
       }
     >
       {!scope ? (
@@ -398,10 +519,23 @@ function ScopePanel({ story }: { story: RetrievalStory }) {
             </div>
           )}
 
-          {degradedKeys.length > 0 && (
-            <div className="mt-3 rounded-sm border border-sev-medium/30 bg-sev-medium/5 px-3 py-2 text-xs text-sev-medium">
-              <span className="font-medium">This run was degraded.</span>{" "}
-              {degradedKeys.map((k) => `${k}=${JSON.stringify(story.degraded[k])}`).join(" · ")}
+          {degraded && (
+            <div className="mt-3 space-y-1.5 rounded-sm border border-sev-medium/30 bg-sev-medium/5 px-3 py-2 text-xs text-sev-medium">
+              <p className="font-medium">
+                This run was degraded, so treat the envelope above as provisional.
+              </p>
+              {degradedKeys.map((k) => {
+                const code = k === "degraded" ? String(story.degraded[k]) : k;
+                return (
+                  <p key={k}>
+                    {DEGRADED_PROSE[code] ?? `The run recorded the degradation code ${code}.`}{" "}
+                    {/* The bare code stays: it is what an engineer greps the
+                        logs and run_metadata for. It follows the sentence
+                        rather than replacing it. */}
+                    <span className="font-mono text-[10px] opacity-70">({code})</span>
+                  </p>
+                );
+              })}
             </div>
           )}
         </>
@@ -411,23 +545,40 @@ function ScopePanel({ story }: { story: RetrievalStory }) {
 }
 
 /** The sampling caveat, stated where the counts are — an admin must never read
- * the accepted numbers as a population. */
+ * a sampled number as a population. */
 function TotalsPanel({ story }: { story: RetrievalStory }) {
   const t = story.totals;
   const corpora = Object.keys(story.by_corpus_recorded || {});
+
+  // The whole-run population: judged = rejected + accepted, exactly. Accepted
+  // is NOT candidates_total − records_available, which is what this tile used
+  // to show: records_available holds both verdicts, so that subtraction counted
+  // every unpersisted REJECTION as an acceptance and made the three tiles sum
+  // to more than the run ever judged (5518 judged vs 3505 + 5318 claimed).
+  const acceptedTotal =
+    typeof t.candidates_total === "number" && typeof t.rejected_total === "number"
+      ? t.candidates_total - t.rejected_total
+      : null;
+  // The persisted sample, capped per verdict at 100 by dispatch_node.
+  const recordedAccepted = t.records_available - t.recorded_rejected;
+
   return (
     <Panel
       title="Per-corpus counts"
       description={
         <>
-          Rejections are persisted in full. Acceptances are capped at 100 per run, so every accepted
-          number here is a <span className="font-semibold">sample of the recorded records</span>, not
-          the population.
+          Two populations, never mixed. The three totals count{" "}
+          <span className="font-semibold">every candidate the run judged</span>. Everything
+          inspectable on this page — the table below, the candidate tabs, the rejection buckets — is
+          the persisted <span className="font-semibold">sample</span>: at most 100 rejections and at
+          most 100 acceptances per run.
         </>
       }
       right={
         t.truncated ? (
-          <StatusPill tone="warning">accepted counts are a sample</StatusPill>
+          <StatusPill tone="warning">
+            {t.records_available} of {t.candidates_total ?? "?"} records kept
+          </StatusPill>
         ) : (
           <StatusPill tone="success">complete — nothing truncated</StatusPill>
         )
@@ -437,31 +588,31 @@ function TotalsPanel({ story }: { story: RetrievalStory }) {
         <div className="rounded-md border border-border bg-surface px-3 py-2">
           <div className="micro-label">Candidates judged</div>
           <div className="mt-1 font-mono text-lg leading-none">{t.candidates_total ?? "—"}</div>
-          <div className="mt-1 text-[10px] text-muted-foreground">true total at run time</div>
+          <div className="mt-1 text-[10px] text-muted-foreground">whole run</div>
         </div>
         <div className="rounded-md border border-border bg-surface px-3 py-2">
           <div className="micro-label">Rejected</div>
           <div className="mt-1 font-mono text-lg leading-none text-sev-critical">
             {t.rejected_total ?? "—"}
           </div>
-          <div className="mt-1 text-[10px] text-muted-foreground">complete, never sampled</div>
+          <div className="mt-1 text-[10px] text-muted-foreground">
+            whole run · {t.recorded_rejected} inspectable
+          </div>
+        </div>
+        <div className="rounded-md border border-border bg-surface px-3 py-2">
+          <div className="micro-label">Accepted</div>
+          <div className="mt-1 font-mono text-lg leading-none text-success">
+            {acceptedTotal ?? "—"}
+          </div>
+          <div className="mt-1 text-[10px] text-muted-foreground">
+            whole run · {recordedAccepted} inspectable
+          </div>
         </div>
         <div className="rounded-md border border-border bg-surface px-3 py-2">
           <div className="micro-label">Records inspectable</div>
           <div className="mt-1 font-mono text-lg leading-none">{t.records_available}</div>
           <div className="mt-1 text-[10px] text-muted-foreground">
-            {t.recorded_rejected} rejected + the accepted sample
-          </div>
-        </div>
-        <div className="rounded-md border border-border bg-surface px-3 py-2">
-          <div className="micro-label">Accepted (not shown)</div>
-          <div className="mt-1 font-mono text-lg leading-none">
-            {typeof t.candidates_total === "number"
-              ? Math.max(0, t.candidates_total - t.records_available)
-              : "—"}
-          </div>
-          <div className="mt-1 text-[10px] text-muted-foreground">
-            accepted candidates dropped by the 100 cap
+            {t.recorded_rejected} rejected + {recordedAccepted} accepted, 100 max each
           </div>
         </div>
       </div>
@@ -475,31 +626,35 @@ function TotalsPanel({ story }: { story: RetrievalStory }) {
       {corpora.length === 0 ? (
         <Empty>No per-corpus records.</Empty>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-muted-foreground">
-                <Th>Corpus</Th>
-                <Th>Accepted (sampled)</Th>
-                <Th>Rejected (complete)</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {corpora.map((c) => (
-                <tr key={c}>
-                  <td className="py-1.5 pr-3 font-medium">{c}</td>
-                  <td className="py-1.5 pr-3 font-mono">
-                    {story.by_corpus_recorded[c].accepted}
-                    {t.truncated && <span className="ml-1 text-[10px] text-sev-medium">(sample)</span>}
-                  </td>
-                  <td className="py-1.5 font-mono text-sev-critical">
-                    {story.by_corpus_recorded[c].rejected}
-                  </td>
+        <>
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Counted over the {t.records_available} inspectable record(s) only — not the{" "}
+            {t.candidates_total ?? "?"} judged. A corpus can sit at the cap in both columns without
+            that being its true share.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-muted-foreground">
+                  <Th>Corpus</Th>
+                  <Th>Accepted (in sample)</Th>
+                  <Th>Rejected (in sample)</Th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {corpora.map((c) => (
+                  <tr key={c}>
+                    <td className="py-1.5 pr-3 font-medium">{c}</td>
+                    <td className="py-1.5 pr-3 font-mono">{story.by_corpus_recorded[c].accepted}</td>
+                    <td className="py-1.5 font-mono text-sev-critical">
+                      {story.by_corpus_recorded[c].rejected}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {story.enrichment_notes && (
@@ -547,7 +702,7 @@ function CandidatesPanel({ story }: { story: RetrievalStory }) {
   return (
     <Panel
       title="Candidates by corpus and tier"
-      description="Every recorded candidate with its similarity score, its own scope tag, the verdict and the verbatim reason. Accepted rows here are the 100-cap sample; rejected rows are complete."
+      description="Every recorded candidate with its own scope tag, the verdict, the verbatim reason, and — where the tier was retrieved by similarity — its score. Both verdicts are the 100-cap sample, so a tab count is a count of records kept, not of candidates judged."
     >
       {groups.length === 0 ? (
         <Empty>No candidate records on this run.</Empty>
@@ -602,11 +757,14 @@ function RejectedPanel({
   return (
     <Panel
       title="What was excluded"
-      description="The primary curation question. These candidates matched on similarity and were then refused by the applicability guard — a wrongly excluded document here is a corpus or scope-tag bug. This list is COMPLETE: rejections are never sampled."
+      description="The primary curation question. These candidates matched on similarity and were then refused by the applicability guard — a wrongly excluded document here is a corpus or scope-tag bug."
       right={
         data && data.status === "ok" ? (
+          // Both numbers, because the buckets below sum to the second one and a
+          // lone population figure over sampled tabs reads as a contradiction.
           <StatusPill tone={data.rejected_total ? "danger" : "success"}>
-            {data.rejected_total ?? 0} rejected
+            {data.rejected_total ?? 0} rejected in the run ·{" "}
+            {data.records_available} inspectable
           </StatusPill>
         ) : null
       }
@@ -629,6 +787,13 @@ function RejectedPanel({
         </div>
       ) : (
         <>
+          {/* The tab counts sum to records_available, never to rejected_total —
+              say so next to them rather than leaving the reader to notice. */}
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            {data.rejected_total !== null && data.rejected_total > data.records_available
+              ? `The run rejected ${data.rejected_total} candidate(s); it persisted the first ${data.records_available}. These buckets cover those ${data.records_available}.`
+              : `These buckets cover all ${data.records_available} rejection(s) the run recorded.`}
+          </p>
           <div className="mb-3 flex flex-wrap gap-1.5">
             {codes.map((code) => (
               <button

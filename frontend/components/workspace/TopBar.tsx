@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search } from "lucide-react";
 import { ApiHealthDot } from "./ApiHealthDot";
@@ -14,7 +15,27 @@ const LABELS: Record<string, string> = {
   "knowledge-base": "Knowledge base",
   settings: "Project settings",
   submissions: "Submission",
+  // Routes that had no entry and so rendered as raw lowercase path segments.
+  compare: "Compare",
+  admin: "Admin",
+  corpus: "Corpus layers",
+  retrieval: "Retrieval inspector",
+  account: "Account",
+  "change-password": "Change password",
+  report: "Report",
+  super_admin: "Super admin",
 };
+
+/** Segments whose meaning depends on what they sit under. "new" is the only
+ * one today: /new starts an analysis, /compare/new starts a comparison, and a
+ * single global label put "New analysis" above a page headed "New comparison". */
+const CONTEXTUAL: Record<string, Record<string, string>> = {
+  compare: { new: "New comparison" },
+};
+
+/** Path prefixes that group routes without being routes themselves. Linking
+ * them would hand the reviewer a 404 dressed as navigation. */
+const NOT_A_PAGE = new Set(["admin", "account", "submissions"]);
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,16 +56,41 @@ export function TopBar() {
   const pathname = usePathname() ?? "/";
   const { setOpen } = useCommandPalette();
   const segments = pathname.split("/").filter(Boolean);
-  const crumbs = segments.length === 0 ? ["Submissions"] : segments.slice(0, 2).map(crumbLabel);
+  // Every segment, not the first two. Truncating at two dropped the tail of
+  // any deeper route, so /submissions/{id}/report and /rules/generate both
+  // ended at a crumb that was not the page you were on.
+  const crumbs = segments.map((segment, i) => ({
+    label: CONTEXTUAL[segments[i - 1]]?.[segment] ?? crumbLabel(segment),
+    href: `/${segments.slice(0, i + 1).join("/")}`,
+    // The last crumb is the current page, and a grouping prefix has nowhere to
+    // go — everything else navigates.
+    navigable: i < segments.length - 1 && !NOT_A_PAGE.has(segment) && !UUID_RE.test(segment),
+  }));
 
   return (
     <header className="sticky top-0 z-20 flex h-12 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur-sm">
+      {/* A trail that looks like navigation has to navigate. Every crumb was a
+          <span>, so the one control on screen that says "here is the way back"
+          did nothing when clicked. */}
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground" aria-label="Breadcrumb">
-        <span className="text-foreground">Compliance</span>
+        <Link href="/" className="text-foreground hover:underline">
+          Compliance
+        </Link>
         {crumbs.map((c, i) => (
-          <React.Fragment key={i}>
+          <React.Fragment key={c.href}>
             <span className="text-border">/</span>
-            <span className={i === crumbs.length - 1 ? "text-foreground" : ""}>{c}</span>
+            {c.navigable ? (
+              <Link href={c.href} className="hover:text-foreground hover:underline">
+                {c.label}
+              </Link>
+            ) : (
+              <span
+                className={i === crumbs.length - 1 ? "text-foreground" : ""}
+                aria-current={i === crumbs.length - 1 ? "page" : undefined}
+              >
+                {c.label}
+              </span>
+            )}
           </React.Fragment>
         ))}
       </nav>

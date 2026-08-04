@@ -1127,9 +1127,14 @@ async def dispatch_node(state: ComplianceState) -> Dict:
     md["precedents_per_chunk"] = {cid: len(v) for cid, v in retrieved_examples.items()}
 
     # Retrieval debugger (contract C6): why every candidate entered or was
-    # refused. Rejections are always kept; acceptances are capped so a large
-    # run cannot bloat run metadata. used_in_final_verdict is derivable by
-    # joining violations' rule_id / cited_precedent_id onto these ids.
+    # refused. BOTH verdicts are capped at 100 rows below, so a large run cannot
+    # bloat run metadata — the totals beside them (`candidates_total`,
+    # `rejected_total`) are the whole run, the row lists are a sample of it.
+    # Anything deriving a count from the length of these lists is measuring the
+    # cap; the inspector once computed accepted as total minus persisted rows
+    # and reported every unpersisted rejection as an acceptance.
+    # used_in_final_verdict is derivable by joining violations' rule_id /
+    # cited_precedent_id onto these ids.
     _rejected = [d for d in retrieval_debug if d["verdict"] == "rejected"]
     _accepted = [d for d in retrieval_debug if d["verdict"] == "accepted"]
     _scope_gap_rows = [

@@ -14,9 +14,12 @@ dispatch, and runs that recorded zero candidates all return an explicit
 looking payload would silently read as "retrieval was clean", which is exactly
 the wrong conclusion to hand a curator.
 
-Two truncation caveats are surfaced rather than hidden: the persisted payload
-keeps ALL rejections but only the first 100 acceptances, so accepted counts
-derived from the records are a sample (``truncated``/``*_total`` say so).
+Truncation is surfaced rather than hidden: the persisted payload keeps only the
+first 100 rejections and the first 100 acceptances, so EVERY count derived from
+the records is a sample. Only ``candidates_total`` and ``rejected_total`` count
+the whole run — and the accepted population is their difference, never
+``candidates_total - records_available`` (the records hold both verdicts, so
+that subtraction counts unpersisted rejections as acceptances).
 
 Gated on ``rules:write`` — the corpus-curation scope (admin + super_admin,
 never a plain grader).
@@ -208,8 +211,13 @@ def _no_data(run, reason: str) -> dict:
 
 def _totals(dbg: dict, records: List[dict]) -> dict:
     """Persisted totals vs what is actually inspectable. They differ because
-    acceptances are sampled at 100 — say so instead of implying the sample is
-    the whole population."""
+    dispatch_node caps BOTH verdicts at 100 records per run
+    (``_rejected[:100]`` / ``_accepted[:100]`` in graph/nodes.py) — say so
+    instead of implying the sample is the whole population.
+
+    The note used to claim rejections were persisted in full. They are not, and
+    a consumer that believed it read the 100-row rejection sample as the whole
+    rejection population sitting next to a rejected_total in the thousands."""
     total = dbg.get("candidates_total")
     rejected_total = dbg.get("rejected_total")
     recorded_rejected = sum(1 for r in records if r.get("verdict") == "rejected")
@@ -219,8 +227,9 @@ def _totals(dbg: dict, records: List[dict]) -> dict:
         "records_available": len(records),
         "truncated": bool(isinstance(total, int) and total > len(records)),
         "note": (
-            "All rejections are persisted; acceptances are capped at 100 per run. "
-            "accepted counts below are of the recorded sample."
+            "Rejections AND acceptances are each capped at 100 records per run. "
+            "Every per-record count here is of that sample; only "
+            "candidates_total and rejected_total count the whole run."
             if isinstance(total, int) and total > len(records)
             else None
         ),

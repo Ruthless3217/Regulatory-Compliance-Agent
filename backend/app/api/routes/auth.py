@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.sql import func
 from sqlalchemy import select
 from app.database import get_db
 from app.models.user import User
 from app.models.user_session import UserSession
-from app.auth.passwords import verify_password, hash_password
+from app.auth.passwords import verify_password, hash_password, MIN_PASSWORD_LEN
 from app.auth.sessions import create_session, revoke_session, revoke_all_for_user, SESSION_TTL
 from app.auth.dependencies import get_current_user, ip_allowed
 from app.api.rate_limit import extract_client_key
@@ -50,7 +50,10 @@ class LoginIn(BaseModel):
 
 class PasswordChangeIn(BaseModel):
     current_password: str
-    new_password: str
+    # Enforced here, not only in the form. This endpoint hashed whatever it was
+    # handed, so a one-character password was accepted on a system whose whole
+    # purpose is regulatory control — and the client is not a trust boundary.
+    new_password: str = Field(min_length=MIN_PASSWORD_LEN)
 
 async def open_user_session_row(db, sid: str, user: User, ip: str, request: Request):
     user_agent = request.headers.get("user-agent", "")
@@ -134,7 +137,13 @@ async def heartbeat(request: Request, user = Depends(get_current_user), db = Dep
 async def change_password(body: PasswordChangeIn, request: Request, user = Depends(get_current_user), db = Depends(get_db)):
     if not verify_password(body.current_password, user.password_hash or ""):
         raise HTTPException(400, "Incorrect current password.")
-    
+
+    # A "change" that sets the same password is not one, and it would clear
+    # must_change_password — letting a forced rotation be satisfied by retyping
+    # the password being rotated away from.
+    if body.new_password == body.current_password:
+        raise HTTPException(400, "The new password must be different from the current one.")
+
     user.password_hash = hash_password(body.new_password)
     user.must_change_password = False
     user.password_updated_at = func.now()

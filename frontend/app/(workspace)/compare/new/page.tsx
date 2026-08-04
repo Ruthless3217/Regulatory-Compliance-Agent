@@ -175,7 +175,9 @@ export default function NewComparisonPage() {
     setSubmitting(true);
     try {
       const comparison = await createComparison({
-        title: title.trim() || "Untitled comparison",
+        // Blank on purpose — the server names the comparison after its two
+        // sides, so the list stays readable when the user skips the field.
+        title: title.trim(),
         old_file: oldFile ?? undefined,
         new_file: newFile ?? undefined,
         old_content: oldFile ? undefined : oldText,
@@ -206,7 +208,7 @@ export default function NewComparisonPage() {
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g. Smart Secure brochure v1 vs v2"
+          placeholder="Optional — defaults to the two document names"
           className="h-10 max-w-md text-base"
         />
       </div>

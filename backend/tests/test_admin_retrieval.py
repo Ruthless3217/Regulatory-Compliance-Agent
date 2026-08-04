@@ -206,6 +206,28 @@ def test_story_reports_truncation_instead_of_implying_the_sample_is_everything()
     assert totals["records_available"] == 4
     assert totals["truncated"] is True
     assert "capped" in totals["note"]
+    # dispatch_node caps rejections too (_rejected[:100]); a note claiming they
+    # are all persisted is what let a 100-row sample be read as the population.
+    assert "All rejections are persisted" not in totals["note"]
+
+
+def test_the_two_populations_never_add_up_to_more_than_the_run_judged():
+    """The counters must reconcile: judged = rejected + accepted, both counting
+    the whole run. Deriving accepted from records_available instead mixes the
+    populations — it counts every rejection the 100-cap dropped as an
+    acceptance, which is how the inspector once showed 3505 + 5318 > 5518."""
+    md = _real_metadata()
+    md["retrieval_debug"]["candidates_total"] = 900
+    md["retrieval_debug"]["rejected_total"] = 700
+    dbg, _ = ar.extract_debug(_Run(run_metadata=md))
+    t = ar._totals(dbg, ar._records(dbg))
+
+    accepted_total = t["candidates_total"] - t["rejected_total"]
+    assert accepted_total == 200
+    assert t["rejected_total"] + accepted_total == t["candidates_total"]
+    # The sample is strictly inside the population it was drawn from.
+    assert t["recorded_rejected"] <= t["rejected_total"]
+    assert t["records_available"] - t["recorded_rejected"] <= accepted_total
 
 
 def test_story_never_mutates_the_persisted_run_metadata():
