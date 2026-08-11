@@ -89,6 +89,8 @@ services:
       LLM_USE_MAX_COMPLETION_TOKENS: ${LLM_USE_MAX_COMPLETION_TOKENS:-true}
       # gpt-5.4 reasoning mode rejects custom temperature → omit (default false).
       LLM_SUPPORTS_TEMPERATURE: ${LLM_SUPPORTS_TEMPERATURE:-false}
+      # Best-effort sampling seed for determinism (openai/azure); empty = unset.
+      LLM_SEED: ${LLM_SEED:-}
       # Reasoning effort = main cost lever (high ≈ 5x low's output tokens). Default low.
       LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-low}
       # Safety ceiling only (billed on actual tokens). 8000 is ample at low effort.

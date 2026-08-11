@@ -59,6 +59,7 @@ class ProductDocsRetriever:
         uin: Optional[str] = None,
         product_name: Optional[str] = None,
         block_type: Optional[str] = None,
+        product_scope: Optional[List[Optional[str]]] = None,
     ) -> List[Dict[str, Any]]:
         """Return up to ``top_k`` product-doc passages for ``query``.
 
@@ -85,6 +86,10 @@ class ProductDocsRetriever:
             filters["product_name"] = product_name
         if block_type:
             filters["block_type"] = block_type
+        # Product family scope (applicability.scope_filter_values). Includes
+        # None, so brochures indexed before 0036 stamping stay retrievable.
+        if product_scope:
+            filters["product_line"] = product_scope
 
         try:
             hits = await store.hybrid_search(

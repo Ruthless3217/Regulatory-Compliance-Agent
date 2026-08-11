@@ -23,16 +23,17 @@ import type { RunDiff, Violation } from "@/lib/types";
  * has no localStorage, so reading it during render would hand React a first
  * client tree that differs from the one it hydrates against. Same shape as
  * DensityToggle, which reads its persisted value the same way. */
-function useRailOpen(key: string) {
-  const [open, setOpen] = React.useState(true);
+function useRailOpen(key: string, defaultOpen = true) {
+  const [open, setOpen] = React.useState(defaultOpen);
 
   React.useEffect(() => {
     try {
-      setOpen(window.localStorage.getItem(key) !== "collapsed");
+      const stored = window.localStorage.getItem(key);
+      setOpen(stored === null ? defaultOpen : stored !== "collapsed");
     } catch {
-      /* storage blocked — the rail just starts open every time */
+      /* storage blocked — the rail just starts at its default every time */
     }
-  }, [key]);
+  }, [key, defaultOpen]);
 
   const set = React.useCallback(
     (next: boolean) => {
@@ -174,6 +175,7 @@ export function ReviewTab() {
     lexicalDirty,
     saveLexical,
     saveState,
+    registerEditorApply,
   } = useSubmissionWorkspace();
 
   const isAnalyzing =
@@ -303,6 +305,13 @@ export function ReviewTab() {
   // Split's redline is on. Reported up from SplitOriginalView because it
   // decides whether the editor beside it still draws its findings.
   const [comparingDrafts, setComparingDrafts] = React.useState(false);
+  // Findings as cards in the document's own margin, in both working modes.
+  // Split has no rails at all; Edit has one that starts collapsed, and a
+  // finding you can read beside the sentence it describes is the point of
+  // editing in place. Off under the redline: a compliance span and a changed
+  // word claiming the same sentence is two mark systems fighting over one
+  // document, and neither reads.
+  const showBubbles = editing && !comparingDrafts;
 
   // Same optimistic flip SubmissionHeader's Re-run does, so the banner's own
   // button and the header's button leave the workspace in the same state.
@@ -324,7 +333,14 @@ export function ReviewTab() {
 
   // --- Collapsible rails ----------------------------------------------------
   const [contextOpen, setContextOpen] = useRailOpen("review.rail.context");
-  const [findingsOpen, setFindingsOpen] = useRailOpen("review.rail.findings");
+  const [readFindingsOpen, setReadFindingsOpen] = useRailOpen("review.rail.findings");
+  // Editing hands the findings to the document's own margin (LexicalDocument
+  // `bubbles`), so the rail starts out of the way there — and remembers that
+  // separately, so putting it away while editing does not also put it away
+  // while reading.
+  const [editFindingsOpen, setEditFindingsOpen] = useRailOpen("review.rail.findings.edit", false);
+  const findingsOpen = mode === "edit" ? editFindingsOpen : readFindingsOpen;
+  const setFindingsOpen = mode === "edit" ? setEditFindingsOpen : setReadFindingsOpen;
 
   // Every selection goes through here so a finding picked in the document
   // always lands somewhere visible — selecting one and seeing nothing happen is
@@ -621,10 +637,16 @@ export function ReviewTab() {
                 // systems fighting over one document, and neither reads.
                 violations={comparingDrafts ? undefined : displayViolations}
                 selectedViolationId={selectedViolationId}
-                onSelectViolation={selectViolation}
+                // With cards in the margin the finding is already on screen
+                // where it was clicked; forcing the rail open would shove the
+                // document aside to show a second copy of what the reviewer is
+                // looking at. Without them, the rail IS where the finding is.
+                onSelectViolation={showBubbles ? setSelectedViolationId : selectViolation}
                 onUnlocatedFindings={setUnlocated}
                 pagesRendered={pagesRendered}
-                bubbles={mode === "split" && !comparingDrafts}
+                bubbles={showBubbles}
+                chromeless={mode === "split"}
+                registerApply={registerEditorApply}
               />
             ) : (
               <DocumentPane

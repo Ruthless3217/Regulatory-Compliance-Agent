@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 from collections import Counter
 from statistics import median
 
@@ -82,11 +83,11 @@ def docx_to_html(docx_bytes: bytes) -> str:
 
     for message in result.messages:
         logger.info("lexical_import: %s", message)
-    return result.value + _peripheral_html(docx_bytes)
+    return result.value + _peripheral_html(docx_bytes, result.value)
 
 
-def _peripheral_html(docx_bytes: bytes) -> str:
-    """Headers, footers and text boxes, which mammoth does not read.
+def _peripheral_html(docx_bytes: bytes, body_html: str) -> str:
+    """Headers, footers and the text boxes mammoth did not read.
 
     mammoth converts the document body only. `preprocessing_service._extract_docx`
     deliberately includes these regions because mandated disclaimers live in
@@ -110,40 +111,107 @@ def _peripheral_html(docx_bytes: bytes) -> str:
         logger.warning("lexical_import: peripheral extraction skipped: %s", exc)
         return ""
 
-    blocks: list[str] = []
-    for label, region in _iter_peripheral_regions(doc):
-        lines = [p.text.strip() for p in region.paragraphs if p.text.strip()]
-        for table in getattr(region, "tables", []):
-            for row in table.rows:
-                cells = [c.text.strip() for c in row.cells if c.text.strip()]
-                if cells:
-                    lines.append(" | ".join(cells))
-        if lines:
-            blocks.append(
-                f"<h3>{label}</h3>" + "".join(f"<p>{_escape(l)}</p>" for l in lines)
-            )
-    return "".join(blocks)
+    return "".join(
+        f"<h3>{label}</h3>" + "".join(f"<p>{_escape(l)}</p>" for l in lines)
+        for label, lines in _iter_peripheral_regions(doc, html_to_text(body_html))
+    )
 
 
-def _iter_peripheral_regions(doc):
-    """(label, region) for every distinct header/footer in the document.
+def _iter_peripheral_regions(doc, body_text: str):
+    """(label, lines) for every header, footer and unconverted text box.
 
     Word gives each section its own header and footer, and an unlinked section
     can carry different wording — a different disclaimer on a different page.
+
+    Text boxes are anchored in the body but sit outside the run tree, and a
+    mandated disclaimer is very often set in one — the same reason
+    `preprocessing_service` extracts them for grading. mammoth reads SOME of
+    them (`v:textbox` and `w:txbxContent` are in its element map, so a VML box
+    and the VML fallback Word writes inside `mc:AlternateContent` both convert)
+    but not a bare DrawingML `wps:txbx`, which it walks into and does not
+    recognise. Hence `body_text`: only a box whose wording is not already in the
+    converted body is appended here. Emitting them all instead would duplicate
+    the disclaimer in the editor, in `clean.docx` and in the redline — and a
+    duplicated mandated disclaimer is its own compliance problem.
+
     Deduplicated by text so an unchanged repeat is not emitted once per section.
     """
     seen: set[str] = set()
-    for i, section in enumerate(doc.sections, start=1):
+
+    def is_new(lines: list[str]) -> bool:
+        signature = "\n".join(lines).strip()
+        if not signature or signature in seen:
+            return False
+        seen.add(signature)
+        return True
+
+    sections = doc.sections
+    for i, section in enumerate(sections, start=1):
         for kind, region in (("header", section.header), ("footer", section.footer)):
             try:
-                signature = "\n".join(p.text for p in region.paragraphs)
+                lines = _region_lines(region)
             except Exception:  # noqa: BLE001 — a malformed part must not abort the rest
                 continue
-            if not signature.strip() or signature in seen:
-                continue
-            seen.add(signature)
-            suffix = "" if len(doc.sections) == 1 else f" {i}"
-            yield f"Page {kind}{suffix}", region
+            if is_new(lines):
+                suffix = "" if len(sections) == 1 else f" {i}"
+                yield f"Page {kind}{suffix}", lines
+
+    boxes = [
+        lines
+        for lines in _textbox_blocks(doc)
+        if not all(line in body_text for line in lines)
+    ]
+    for i, lines in enumerate(boxes, start=1):
+        if is_new(lines):
+            suffix = "" if len(boxes) == 1 else f" {i}"
+            yield f"Text box{suffix}", lines
+
+
+def _region_lines(region) -> list[str]:
+    """Paragraph and table text of one header/footer, blank lines dropped."""
+    lines = [p.text.strip() for p in region.paragraphs if p.text.strip()]
+    for table in getattr(region, "tables", []):
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells if c.text.strip()]
+            if cells:
+                lines.append(" | ".join(cells))
+    return lines
+
+
+def _textbox_blocks(doc) -> list[list[str]]:
+    """The lines of each text box in the body, one list per box.
+
+    Mirrors `preprocessing_service._docx_textbox_lines`, which is what the
+    analyser grades: VML (`w:pict`) and DrawingML (`w:drawing`) both nest their
+    content in `w:txbxContent`, and `w:moveFrom` residue is skipped so a moved
+    run's stale source is not imported twice.
+
+    The caller drops the ones mammoth already converted. What is left is text
+    the analyser graded and the editor did not contain, so a finding on it could
+    not be corrected, `clean.docx` dropped it, and the redline read every line
+    of it as a reviewer deletion.
+    """
+    try:
+        from docx.oxml.ns import qn
+
+        move_from = qn("w:moveFrom")
+        blocks: list[list[str]] = []
+        for txbx in doc.element.body.iter(qn("w:txbxContent")):
+            lines: list[str] = []
+            for p in txbx.iter(qn("w:p")):
+                text = "".join(
+                    t.text or ""
+                    for t in p.iter(qn("w:t"))
+                    if not any(a.tag == move_from for a in t.iterancestors())
+                ).strip()
+                if text:
+                    lines.append(text)
+            if lines:
+                blocks.append(lines)
+        return blocks
+    except Exception as exc:  # noqa: BLE001 — body already converted; keep it
+        logger.warning("lexical_import: text-box extraction skipped: %s", exc)
+        return []
 
 
 def _escape(text: str) -> str:
@@ -343,3 +411,88 @@ def _pdf_is_heading(line: dict, body_size: float) -> bool:
     # body_size 0 means the PDF reported no font sizes at all — no evidence, so
     # no headings, rather than promoting every heading-shaped line.
     return body_size > 0 and line["size"] >= body_size * 1.15
+
+
+# --- HTML -> text ------------------------------------------------------------
+
+# Block-level tags of the import vocabulary (plus the ones Lexical writes back).
+# Anything else is inline and belongs to the block it sits in.
+_BLOCK_TAGS = frozenset({
+    "p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "pre", "div",
+    "ul", "ol", "table", "thead", "tbody", "tfoot", "tr", "td", "th",
+})
+
+_WS = re.compile(r"\s+")
+
+
+def _walk(node):
+    """Yield one string per block-level region under `node`, in document order."""
+    from bs4 import NavigableString, Tag
+
+    buf: list[str] = []
+    for child in node.children:
+        if isinstance(child, NavigableString):
+            buf.append(str(child))
+        elif not isinstance(child, Tag):
+            continue
+        elif child.name in _BLOCK_TAGS:
+            # A block ends whatever text preceded it — a list item's own
+            # wording ahead of its nested list, a cell's ahead of a nested
+            # paragraph. Gluing them invents word boundaries the diff then
+            # reports as edits.
+            yield "".join(buf)
+            buf = []
+            yield from _walk(child)
+        else:
+            # Inline. get_text() with NO separator, so "the <b>subject</b>
+            # matter" neither loses nor gains a space.
+            buf.append("\n" if child.name == "br" else child.get_text())
+    yield "".join(buf)
+
+
+def _clean_blocks(node) -> list[str]:
+    return [b for b in (_WS.sub(" ", raw).strip() for raw in _walk(node)) if b]
+
+
+def html_to_text(html: str) -> str:
+    """Plain text of import HTML — the server-side stand-in for the editor's
+    ``$getRoot().getTextContent()``.
+
+    Every block ends a line and inline markup does not, which is what Lexical's
+    own projection does. Byte-parity with it is not reachable from Python (nor
+    needed): the consumer is `comparison_service.build_diff`, which aligns
+    whitespace-insensitive word tokens, so what has to match is the WORDS and
+    their order.
+    """
+    from bs4 import BeautifulSoup
+
+    return "\n\n".join(_clean_blocks(BeautifulSoup(html or "", "html.parser")))
+
+
+def html_to_blocks(html: str) -> list[dict]:
+    """``[{tag, text}]`` — one entry per TOP-LEVEL element, the blocks the
+    editor gets.
+
+    ``$generateNodesFromDOM`` maps each top-level element of this fragment onto
+    one root child: a ``<p>`` to a paragraph, an ``<h2>`` to a heading, a whole
+    ``<ul>`` to one list node, a whole ``<table>`` to one table node. So the
+    unit here is the top-level element, and everything nested inside it is that
+    block's text — Lexical joins nested blocks with newlines, which
+    ``lexical_anchor.normalize`` collapses to the single spaces used here.
+
+    Empty blocks are dropped, exactly as ``SectionIdPlugin.readBlocks`` drops
+    them: a blank paragraph is not something a finding can be anchored to, and
+    the ordinals that disambiguate repeated blocks are assigned over the
+    surviving list on both sides.
+    """
+    from bs4 import BeautifulSoup, Tag
+
+    soup = BeautifulSoup(html or "", "html.parser")
+    blocks: list[dict] = []
+    for child in soup.children:
+        if not isinstance(child, Tag):
+            continue
+        text = " ".join(_clean_blocks(child))
+        if text:
+            blocks.append({"tag": child.name, "text": text})
+    return blocks

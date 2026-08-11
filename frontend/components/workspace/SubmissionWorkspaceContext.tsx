@@ -2,6 +2,7 @@
 import * as React from "react";
 import { applySubmissionRevision, listSubmissionRevisions, listSubmissionRuns } from "@/lib/api";
 import type { SerializedEditorState } from "lexical";
+import type { EditorFixApply, EditorFixMode } from "@/components/editor/EditorApplyPlugin";
 
 /** The three views of the working document, always written together. */
 export type LexicalDoc = { state: SerializedEditorState; html: string; text: string };
@@ -82,6 +83,26 @@ interface Ctx {
   /** Persist the editor's current content as a revision. Autosave calls this
    * on idle; the toolbar's Save calls it directly. */
   saveLexical: () => Promise<boolean>;
+  /** Called by the mounted rich editor to offer (and on unmount to withdraw)
+   * its own apply-fix path. */
+  registerEditorApply: (apply: EditorFixApply | null) => void;
+  /** Apply a fix THROUGH the rich editor and persist the result as one
+   * apply_fix revision.
+   *
+   * The alternative — splicing the plain-text copy and posting it next to the
+   * editor's untouched state and HTML — saved a document that disagreed with
+   * itself: the export renders the HTML, so an approved DOCX went out with the
+   * original wording and `fix_applied` set against it. Every writer of a fix
+   * comes through here so that cannot happen from any of them.
+   *
+   * "no-editor" means there is no editor mounted to route through; the caller
+   * decides whether that is a plain-text submission (splice is fine) or a rich
+   * one being viewed in a mode that has no editor on screen (it is not). */
+  applyFixInEditor: (
+    violation: Violation,
+    replacement: string,
+    mode: EditorFixMode
+  ) => Promise<"applied" | "unlocated" | "already-present" | "save-failed" | "no-editor">;
 }
 
 const Context = React.createContext<Ctx | null>(null);
@@ -154,11 +175,11 @@ export function SubmissionWorkspaceProvider({
   };
 
   // --- Live document text ---------------------------------------------------
-  // Seeded from current_content when present, else the original upload. NOTE:
-  // GET /submissions/{id} does NOT serialize current_content (see
-  // backend/app/api/routes/submissions.py::get_submission), so in practice the
-  // seed is original_content and the real working copy is adopted from the
-  // newest revision by the effect below.
+  // Seeded from current_content when present, else the original upload. Both
+  // come from GET /submissions/{id} (see
+  // backend/app/api/routes/submissions.py::get_submission), so the working copy
+  // is already on screen at first paint; the effect below re-checks it against
+  // the newest revision, which is the same record of it.
   const seed = submission.current_content ?? submission.original_content ?? "";
   const [documentText, setDocumentText] = React.useState(seed);
   const [savedText, setSavedText] = React.useState(seed);
@@ -169,8 +190,8 @@ export function SubmissionWorkspaceProvider({
   const textRef = React.useRef(seed);
   const seedRef = React.useRef(seed);
 
-  // The submission endpoint drops current_content, but the revisions list is
-  // the same record of it — adopt the newest revision so a reviewer's earlier
+  // The newest revision is the same record of current_content, and this page's
+  // submission prop can be a cached render — adopt it so a reviewer's earlier
   // edits survive a reload instead of the pane snapping back to the original.
   React.useEffect(() => {
     let cancelled = false;
@@ -212,8 +233,12 @@ export function SubmissionWorkspaceProvider({
           applied_violation_ids: appliedViolationIds?.length ? appliedViolationIds : undefined,
           // Both or neither — the backend mirrors them onto the submission as
           // a pair, and only when state is present.
-          lexical_state: lexicalDoc?.state,
-          lexical_html: lexicalDoc?.html,
+          // Read from the ref, not from state: a fix applied through the editor
+          // persists in the same tick as the edit, and the re-render carrying
+          // the new `lexicalDoc` has not happened yet. Posting the state from
+          // that stale render is exactly how content and HTML came apart.
+          lexical_state: lexicalDocRef.current?.state,
+          lexical_html: lexicalDocRef.current?.html,
         });
         // A persisted revision is exactly what makes the backend call the
         // findings stale, so reflect it now instead of after a refresh.
@@ -233,7 +258,7 @@ export function SubmissionWorkspaceProvider({
         return false;
       }
     },
-    [submission.id, lexicalDoc]
+    [submission.id]
   );
 
   const applyEdit = React.useCallback(
@@ -244,6 +269,32 @@ export function SubmissionWorkspaceProvider({
       return persist(next, source, appliedViolationIds);
     },
     [persist]
+  );
+
+  // --- Apply-fix through the rich editor ------------------------------------
+  const editorApplyRef = React.useRef<EditorFixApply | null>(null);
+  const registerEditorApply = React.useCallback((apply: EditorFixApply | null) => {
+    editorApplyRef.current = apply;
+  }, []);
+
+  const applyFixInEditor = React.useCallback<Ctx["applyFixInEditor"]>(
+    async (violation, replacement, mode) => {
+      const apply = editorApplyRef.current;
+      if (!apply) return "no-editor";
+      const result = await apply(violation, replacement, mode);
+      if (!result.ok) return result.reason;
+      // The editor committed its update synchronously, so `lexicalDocRef` now
+      // holds the state, HTML and text of the edited document — and this POST
+      // carries all three from it.
+      const ok = await applyEdit(result.text, "apply_fix", [violation.id]);
+      if (!ok) return "save-failed";
+      // That revision IS the editor's content, so the editor is no longer
+      // ahead of the server and the idle autosave must not write it again.
+      savedLexicalRef.current = lexicalDocRef.current?.html ?? savedLexicalRef.current;
+      setLexicalDirty(false);
+      return "applied";
+    },
+    [applyEdit]
   );
 
   /** Persist the editor's content as a revision.
@@ -362,8 +413,12 @@ export function SubmissionWorkspaceProvider({
       setLexicalDoc,
       lexicalDirty,
       saveLexical,
+      registerEditorApply,
+      applyFixInEditor,
     }),
     [
+      registerEditorApply,
+      applyFixInEditor,
       findingsStale,
       lexicalDoc,
       setLexicalDoc,

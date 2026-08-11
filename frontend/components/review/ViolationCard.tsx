@@ -53,7 +53,7 @@ export function locationLine(v: Violation): string | null {
  *
  * If a rule code is ever added to the schema, it belongs at the front of this
  * list — that is the shape the design asked for. */
-function ruleLine(v: Violation): string | null {
+export function ruleLine(v: Violation): string | null {
   const parts = [v.cited_section, typeof v.cited_page === "number" ? `p. ${v.cited_page}` : null]
     .map((p) => p?.trim())
     .filter((p): p is string => !!p);
@@ -99,7 +99,12 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
   { index, violation, selected, onSelect },
   ref
 ) {
-  const { documentText, applyEdit, setViolations } = useSubmissionWorkspace();
+  const { documentText, applyEdit, setViolations, submission, applyFixInEditor } =
+    useSubmissionWorkspace();
+  // A DOCX/PDF import, or a submission already saved out of the rich editor:
+  // its export renders from the editor's HTML, so a fix that only touches the
+  // plain-text copy would ship the original wording in the approved file.
+  const richDocument = !!(submission.lexical_state || submission.has_import_source);
   const sevClass = severityClass(violation.severity).split(" ")[0]; // border-l-*
   const autoFix = truthyAutoFix(violation.auto_fixable);
 
@@ -201,19 +206,69 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     submitAction("dismiss", { reason: dismissReason });
   };
 
+  /** Record locally that this finding's fix is now in the document. */
+  const markApplied = () => {
+    const appliedAt = new Date().toISOString();
+    setViolations((prev) =>
+      prev.map((v) => (v.id === violation.id ? { ...v, fix_applied: true, fix_applied_at: appliedAt } : v))
+    );
+  };
+
   /** Persist `nextContent` as one apply_fix revision and mark this finding
-   * applied. The tail shared by replacing a span and by appending wording. */
+   * applied. The tail shared by replacing a span and by appending wording — in
+   * a PLAIN-TEXT submission, where the text is the whole document. */
   const commitEdit = async (nextContent: string) => {
     const ok = await applyEdit(nextContent, "apply_fix", [violation.id]);
     if (!ok) {
       toast.error("Applied locally but not saved — use Save in the document toolbar to retry.");
       return false;
     }
-    const appliedAt = new Date().toISOString();
-    setViolations((prev) =>
-      prev.map((v) => (v.id === violation.id ? { ...v, fix_applied: true, fix_applied_at: appliedAt } : v))
-    );
+    markApplied();
     return true;
+  };
+
+  const copyInstead = async (replacement: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(replacement);
+      toast.message(`Could not auto-locate the flagged text — ${label} copied to clipboard instead`);
+    } catch {
+      toast.error("Clipboard write failed");
+    }
+    return false;
+  };
+
+  /** Apply through the rich editor, which is the only way to change a rich
+   * document without the saved copies contradicting each other. Returns null
+   * when there is no editor at all and the plain-text splice below is the
+   * right path. */
+  const applyViaEditor = async (
+    replacement: string,
+    mode: "replace" | "append",
+    label: string
+  ): Promise<boolean | null> => {
+    const outcome = await applyFixInEditor(violation, replacement, mode);
+    switch (outcome) {
+      case "no-editor":
+        if (!richDocument) return null;
+        // The editor exists for this submission but is not on screen (View
+        // shows the rendered pages). Writing the text copy from here would set
+        // fix_applied against an export that still says the old thing.
+        toast.error(
+          "Switch to Edit or Split to apply this fix — from View it would not reach the exported file."
+        );
+        return false;
+      case "applied":
+        markApplied();
+        return true;
+      case "already-present":
+        toast.message("Already present — this wording is in the document, nothing was added");
+        return false;
+      case "save-failed":
+        toast.error("Changed in the editor but not saved — use Save in the mode bar to retry.");
+        return false;
+      case "unlocated":
+        return copyInstead(replacement, label);
+    }
   };
 
   /** Splice `replacement` over this finding's quoted span in the live working
@@ -227,13 +282,7 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     const evidence = violation.current_text;
 
     if (!evidence || !baseText.includes(evidence)) {
-      try {
-        await navigator.clipboard.writeText(replacement);
-        toast.message(`Could not auto-locate the flagged text — ${label} copied to clipboard instead`);
-      } catch {
-        toast.error("Clipboard write failed");
-      }
-      return false;
+      return copyInstead(replacement, label);
     }
 
     // Function form: replacement text containing "$&" must stay literal.
@@ -262,11 +311,18 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     setApplyFixBusy(true);
     try {
       if (insertOnly) {
-        if (await appendToDocument(suggestedFix)) {
+        const inEditor = await applyViaEditor(suggestedFix, "append", "approved wording");
+        if (inEditor === true || (inEditor === null && (await appendToDocument(suggestedFix)))) {
           toast.success("Approved wording added to the end of the document");
         }
-      } else if (await spliceIntoDocument(suggestedFix, "suggested fix")) {
-        toast.success("Fix applied to document");
+      } else {
+        const inEditor = await applyViaEditor(suggestedFix, "replace", "suggested fix");
+        if (
+          inEditor === true ||
+          (inEditor === null && (await spliceIntoDocument(suggestedFix, "suggested fix")))
+        ) {
+          toast.success("Fix applied to document");
+        }
       }
     } finally {
       setApplyFixBusy(false);
@@ -277,7 +333,8 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     if (!replacement || applyFixBusy) return;
     setApplyFixBusy(true);
     try {
-      if (await spliceIntoDocument(replacement, "rewrite")) {
+      const inEditor = await applyViaEditor(replacement, "replace", "rewrite");
+      if (inEditor === true || (inEditor === null && (await spliceIntoDocument(replacement, "rewrite")))) {
         toast.success("Rewrite applied — re-run the check before exporting");
         setRewriteOpen(false);
       }
@@ -623,7 +680,7 @@ const SEV_DOT: Record<Severity, string> = {
 
 /** review_status is null until a reviewer acts, so an absent verdict is "open"
  * rather than unknown. */
-function verdictLabel(v: Violation): string {
+export function verdictLabel(v: Violation): string {
   switch (normalizeVerdict(v.reviewer_verdict)) {
     case "correct":
       return "corrected";

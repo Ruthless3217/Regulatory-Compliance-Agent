@@ -41,6 +41,9 @@ def _rule_to_doc(rule: Rule, embedding: List[float]) -> VectorDoc:
             "keywords": rule.keywords or [],
             "embed_text": _embed_text_for_rule(rule),
             "source": rule.generation_source,
+            # Scope carried onto the vector row so retrieval can cut by product
+            # in SQL instead of only post-filtering (0036).
+            "product_line": rule.product_line,
         },
     )
 

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint --no-cache",
     "typecheck": "tsc --noEmit",
-    "check:anchor": "node scripts/check-finding-anchor.mjs"
+    "check:anchor": "node scripts/check-finding-anchor.mjs",
+    "check:sections": "node scripts/check-sections.mjs"
   },
   "dependencies": {
     "@lexical/html": "^0.48.0",

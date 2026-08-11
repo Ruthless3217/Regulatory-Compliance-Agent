@@ -2,8 +2,9 @@
 Preprocessing Service: Handles document chunking and context engineering.
 Token-based chunking for compliance analysis.
 """
+import asyncio
+import hashlib
 import logging
-import os
 import re
 import uuid
 from typing import Optional, List, Dict, Any
@@ -26,6 +27,48 @@ MIN_SECTION_TOKENS = 30
 _MD_HEADING_RE = re.compile(r"^#{1,6}\s+(.*?)\s*#*$")
 # Bullet / numbered list item — never a heading.
 _LIST_ITEM_RE = re.compile(r"^([-*•·]|\d+[.)])\s+")
+
+
+def _content_fence(*parts: Optional[str]) -> str:
+    """Delimiter for the UNTRUSTED-content blocks in a grading prompt.
+
+    Derived from the fenced content instead of ``uuid4()``: a per-call random
+    fence made every prompt byte-different for identical input, which destroyed
+    run-to-run determinism AND provider prompt caching. Same content in => same
+    prompt out.
+
+    Injection resistance is preserved: to close the fence early, an attacker
+    would have to author a document that CONTAINS its own truncated SHA-256 —
+    a fixed point costing ~2^48 hashes to search for, not something a reader of
+    the source can just read off.
+    """
+    h = hashlib.sha256()
+    for part in parts:
+        h.update((part or "").encode("utf-8", "replace"))
+        h.update(b"\x00")
+    return f"UNTRUSTED-{h.hexdigest()[:12]}"
+
+
+def _is_reviewer_rejection(precedent: Dict) -> bool:
+    """Is this "precedent" a reviewer saying the opposite — NOT a violation?
+
+    ``precedent_cases`` has no polarity column, so a ``not_violation`` verdict
+    carries its direction in ``issue_type``, which the retriever hands on as
+    ``violation_category`` (rule_feedback_service._reviewer_precedent_row writes
+    the prefix; precedent_retriever._hit_to_precedent does the mapping). That
+    prefix is the only polarity signal that survives to the prompt.
+
+    ``is_reviewer`` is now carried on the retrieved dict, but it deliberately
+    does NOT take precedence here: it is set to True for every reviewer-authored
+    row — confirmations included — so preferring it would read half the taught
+    corpus backwards. It is provenance ("a human wrote this"), not direction.
+    """
+    return (
+        str(precedent.get("violation_category") or "")
+        .strip()
+        .lower()
+        .startswith("not a violation")
+    )
 
 
 def build_document_context(
@@ -88,54 +131,40 @@ class ContextEngineeringService:
         self.db = db
 
     async def preprocess_submission(self, submission_id: uuid.UUID) -> int:
-        """
-        Preprocesses a submission into content chunks.
-        Returns the number of chunks created.
+        """Chunk a submission's CURRENT content, reusing the rows that are
+        still accurate. Returns the number of chunks the submission now has.
+
+        This used to early-return the moment any chunk existed, and to chunk
+        `original_content` only — so a re-analysis after a reviewer edit graded
+        the document as it was uploaded and reported findings against text that
+        no longer existed. The content is now compared on every call, and the
+        chunk rows are reconciled against it.
+
+        Rows whose text is unchanged KEEP THEIR ID. That identity is load
+        bearing: violations.chunk_id and the analysis cache
+        (agents/compliance/analysis_cache.py) both hang off it, so a one-
+        paragraph edit invalidates one chunk rather than the document.
         """
         from app.models.submission import Submission
         from app.models.content_chunk import ContentChunk
+        from app.services.agents.compliance.analysis_cache import chunk_content_hash
 
         submission = self.db.query(Submission).filter(Submission.id == submission_id).first()
         if not submission:
             raise ValueError(f"Submission {submission_id} not found")
 
-        # Check if already preprocessed
-        existing_chunks = self.db.query(ContentChunk).filter(
-            ContentChunk.submission_id == str(submission_id)
-        ).count()
+        existing_chunks = (
+            self.db.query(ContentChunk)
+            .filter(ContentChunk.submission_id == str(submission_id))
+            .order_by(ContentChunk.chunk_index)
+            .all()
+        )
 
-        if existing_chunks > 0:
-            # If we previously chunked a file-upload submission but never
-            # persisted the extracted text on the row, backfill it now so
-            # the Review tab can render the body. Cheap one-time fix-up.
-            if (
-                not submission.original_content
-                and submission.file_path
-                and os.path.exists(submission.file_path)
-            ):
-                try:
-                    text = await self._extract_from_file(
-                        submission.file_path, submission.content_type
-                    )
-                    if text:
-                        submission.original_content = text
-                        self.db.add(submission)
-                        self.db.commit()
-                        logger.info(
-                            f"Backfilled original_content for {submission_id} "
-                            f"({len(text)} chars from {submission.content_type})"
-                        )
-                except Exception as e:
-                    logger.warning(f"Original-content backfill failed (non-fatal): {e}")
-            logger.info(f"Submission {submission_id} already has {existing_chunks} chunks")
-            return existing_chunks
-
-        # Update status
-        submission.status = "preprocessing"
-        self.db.commit()
-
-        # Get content
-        content = submission.original_content or ""
+        # The reviewer's working copy wins over the original: a re-analysis must
+        # grade what the document says NOW. Extraction only runs when there is no
+        # text at all (first pass on an upload) — after the backfill below, a
+        # re-analysis never re-opens the PDF (or re-runs OCR).
+        content = submission.current_content or submission.original_content or ""
         extracted_from_file = False
         if not content and submission.file_path:
             content = await self._extract_from_file(submission.file_path, submission.content_type)
@@ -145,6 +174,15 @@ class ContextEngineeringService:
             content = self._extract_html(content)
 
         if not content:
+            if existing_chunks:
+                # Unreadable file / blanked body: keep the chunking we already
+                # have rather than destroying a usable one over a transient
+                # extraction failure.
+                logger.warning(
+                    f"No content readable for submission {submission_id}; keeping "
+                    f"the existing {len(existing_chunks)} chunk(s)."
+                )
+                return len(existing_chunks)
             logger.warning(f"No content found for submission {submission_id}")
             submission.status = "preprocessed"
             self.db.commit()
@@ -158,27 +196,102 @@ class ContextEngineeringService:
             self.db.add(submission)
             self.db.commit()
 
-        # Chunk the content
-        chunks = self._chunk_text(content, submission.content_type)
+        # Block-aligned first: chunking over the blocks the EDITOR holds is what
+        # lets a finding name the block it sits in (chunk_metadata.block_ids ->
+        # violations.anchor_node_key). Falls back to the flat-text chunker for
+        # pasted/plain submissions and for any import that cannot be read.
+        blocks = await self._document_blocks(submission)
+        chunks = (
+            self._chunk_by_blocks(blocks, submission.content_type) if blocks else None
+        ) or self._chunk_text(content, submission.content_type)
+        new_hashes = [chunk_content_hash(c["text"]) for c in chunks]
 
-        # Save chunks
-        chunk_objects = []
-        for i, chunk in enumerate(chunks):
-            chunk_obj = ContentChunk(
-                submission_id=submission_id,
-                chunk_index=i,
-                text=chunk["text"],
-                token_count=chunk.get("token_count"),
-                chunk_metadata=chunk.get("metadata", {})
+        if existing_chunks and [c.content_hash for c in existing_chunks] == new_hashes:
+            logger.info(
+                f"Submission {submission_id} already has {len(existing_chunks)} "
+                f"chunks matching its current content"
             )
-            self.db.add(chunk_obj)
-            chunk_objects.append(chunk_obj)
+            return len(existing_chunks)
 
-        submission.status = "preprocessed"
+        # The transitional statuses drive the SSE progress stages on a first
+        # analysis. They are NOT written on a re-chunk: the engine has already
+        # claimed the submission with status='analyzing', and overwriting that
+        # mid-run would tell the duplicate-trigger guard nothing is running.
+        first_pass = not existing_chunks
+        if first_pass:
+            submission.status = "preprocessing"
+            self.db.commit()
+
+        if existing_chunks:
+            # Chunk ids are about to churn, and the RAG index is keyed on them —
+            # drop this submission's vectors so the deleted chunks' text can't
+            # keep surfacing in cross-submission similarity search. preprocess_node
+            # re-upserts every chunk immediately after. Non-fatal: a degraded
+            # vector store must not block grading.
+            try:
+                from app.services.rag.indexers.chunks_indexer import (
+                    delete_chunks_for_submission,
+                )
+                await delete_chunks_for_submission(submission_id, self.db)
+            except Exception as e:
+                logger.warning(f"RAG chunk cleanup before re-chunk failed (non-fatal): {e}")
+
+        count = self._sync_chunks(submission_id, existing_chunks, chunks, new_hashes)
+
+        if first_pass:
+            submission.status = "preprocessed"
         self.db.commit()
 
-        logger.info(f"Created {len(chunk_objects)} chunks for submission {submission_id}")
-        return len(chunk_objects)
+        logger.info(
+            f"Chunked submission {submission_id} into {count} chunks "
+            f"(was {len(existing_chunks)})"
+        )
+        return count
+
+    def _sync_chunks(
+        self,
+        submission_id: uuid.UUID,
+        existing: List[Any],
+        chunks: List[Dict],
+        new_hashes: List[str],
+    ) -> int:
+        """Reconcile persisted chunk rows against a fresh chunking.
+
+        A row whose text still appears in the new chunking is REUSED (same id,
+        re-indexed in place); the rest are inserted and the leftovers deleted.
+        Matching is by content hash, so a chunk that only moved keeps its
+        identity — whether its cached verdicts still apply is a separate
+        question, answered by context_key (the rendered document context
+        embeds chunk positions, so a move invalidates it).
+        """
+        from app.models.content_chunk import ContentChunk
+
+        pool: Dict[str, List[Any]] = {}
+        for row in existing:
+            pool.setdefault(row.content_hash or "", []).append(row)
+
+        for i, (chunk, digest) in enumerate(zip(chunks, new_hashes)):
+            bucket = pool.get(digest)
+            row = bucket.pop(0) if bucket else None
+            if row is None:
+                self.db.add(ContentChunk(
+                    submission_id=submission_id,
+                    chunk_index=i,
+                    text=chunk["text"],
+                    token_count=chunk.get("token_count"),
+                    chunk_metadata=chunk.get("metadata", {}),
+                    content_hash=digest,
+                ))
+            else:
+                row.chunk_index = i
+                row.token_count = chunk.get("token_count")
+                row.chunk_metadata = chunk.get("metadata", {})
+                self.db.add(row)
+
+        for leftover in [r for rows in pool.values() for r in rows]:
+            self.db.delete(leftover)
+
+        return len(chunks)
 
     def _chunk_text(self, content: str, content_type: str = "text") -> List[Dict]:
         """Chunk a document for per-chunk grading.
@@ -198,6 +311,104 @@ class ContextEngineeringService:
             if chunks:
                 return chunks
         return self._chunk_by_tokens(content, content_type)
+
+    # --- block-aligned chunking -----------------------------------------------
+
+    async def _document_blocks(self, submission) -> Optional[List[Dict]]:
+        """The blocks the reviewer's editor holds, or None when there are none.
+
+        None is the normal answer for a pasted / plain-text submission and for
+        an upload whose conversion fails — both keep the flat-text chunker they
+        always had. Never fatal, and never on the event loop: a cache miss here
+        converts the whole document.
+        """
+        try:
+            from app.services import lexical_document_service
+
+            return await asyncio.to_thread(
+                lexical_document_service.document_blocks, submission
+            )
+        except Exception as e:  # noqa: BLE001 — degrade to flat-text chunking
+            logger.warning(f"Block-aligned chunking unavailable (non-fatal): {e}")
+            return None
+
+    _HEADING_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
+
+    @classmethod
+    def _is_heading_block(cls, block: Dict) -> bool:
+        """A heading the document DECLARES (a Word heading style the importer
+        mapped to <h1>-<h6>) or one that merely reads like a heading."""
+        return (
+            block.get("tag") in cls._HEADING_TAGS
+            or cls._is_heading_line(block.get("text") or "")
+        )
+
+    def _chunk_by_blocks(self, blocks: List[Dict], content_type: str) -> List[Dict]:
+        """Chunk over runs of consecutive editor blocks, never across one.
+
+        Same knobs and the same shape as ``_chunk_by_sections`` — a heading
+        block opens a section, tiny sections merge up to MIN_SECTION_TOKENS,
+        nothing exceeds MAX_TOKENS_PER_CHUNK — but the unit is a block, so every
+        chunk can say which blocks it is made of. That list is what
+        ``engine.persist_results`` turns into a finding's ``anchor_node_key``.
+
+        Pure and deterministic: same blocks in, same chunks (and same ids) out.
+        """
+        from app.services.lexical_anchor import block_ids
+
+        ids = block_ids([b.get("text") or "" for b in blocks])
+        chunks: List[Dict] = []
+        buf: List[Dict] = []
+        buf_tokens = 0
+        buf_title: Optional[str] = None
+        title: Optional[str] = None
+
+        def emit(text, token_count, bids, section_title) -> None:
+            chunks.append({
+                "text": text,
+                "token_count": token_count,
+                "metadata": {
+                    "chunk_index": len(chunks),
+                    "section_title": section_title,
+                    "content_type": content_type,
+                    "block_ids": bids,
+                },
+            })
+
+        def flush() -> None:
+            nonlocal buf, buf_tokens
+            if buf:
+                emit(
+                    "\n\n".join(b["text"] for b in buf),
+                    buf_tokens,
+                    [b["id"] for b in buf],
+                    buf_title,
+                )
+            buf, buf_tokens = [], 0
+
+        for block, bid in zip(blocks, ids):
+            text = block.get("text") or ""
+            if self._is_heading_block(block):
+                if buf_tokens >= MIN_SECTION_TOKENS:
+                    flush()
+                title = text
+            tokens = self._count_tokens(text)
+            if tokens > MAX_TOKENS_PER_CHUNK:
+                # One block larger than a whole chunk — a charge table, a wall
+                # of small print. Window it by tokens; every piece still lives
+                # in that ONE block, so the anchor is unaffected.
+                flush()
+                for sub in self._chunk_by_tokens(text, content_type):
+                    emit(sub["text"], sub.get("token_count"), [bid], title)
+                continue
+            if buf and buf_tokens + tokens > MAX_TOKENS_PER_CHUNK:
+                flush()
+            if not buf:
+                buf_title = title
+            buf.append({"text": text, "id": bid})
+            buf_tokens += tokens
+        flush()
+        return chunks
 
     # --- section detection ----------------------------------------------------
 
@@ -666,6 +877,11 @@ class ContextEngineeringService:
                     bucket.extend(block)
         return headers, footers
 
+    # NOTE: every prompt builder below is covered by
+    # agents/compliance/analysis_cache.PROMPT_VERSION. Change the wording of a
+    # prompt and bump that constant, or a re-analysis will keep serving verdicts
+    # the old prompt produced.
+
     def create_compliance_prompts(self, content: str, rules_dict: Dict[str, List]) -> str:
         """
         Build a compliance analysis prompt from content and rules.
@@ -697,8 +913,7 @@ class ContextEngineeringService:
                             quote = quote[:237] + "…"
                         rules_text += f"   regulator_quote: \"{quote}\"\n"
 
-        import uuid as _uuid
-        fence = f"UNTRUSTED-{_uuid.uuid4().hex[:12]}"
+        fence = _content_fence(content)
 
         prompt = f"""You are auditing marketing content against insurance/financial compliance rules.
 Be precise — flag only ACTUAL violations of the rules listed, not stylistic gripes.
@@ -769,7 +984,6 @@ Constraints:
         teach STYLE; retrieval supplies the substance. Reviewer names omitted.
         """
         rules = rules or []
-        has_p = bool(precedents)
         has_r = bool(rules)
 
         # Deterministic per-field caps so a single long precedent can't dominate
@@ -780,36 +994,57 @@ Constraints:
             s = (s or "").strip()
             return s if len(s) <= n else s[: n - 1].rstrip() + "…"
 
-        if has_p:
-            # Surface the reviewer's rationale / cited guideline (added to the
-            # precedent dict in PKB2 Task 11) so the analysis LLM sees *why* a
-            # phrase was flagged — previously these keys were dropped before
-            # the prompt. We ENRICH the existing block (not replace it) to
-            # preserve the established prompt structure and per-field token
-            # caps. The same field set + labels are codified in the pure,
-            # unit-tested ``graph.nodes.format_precedent_context`` helper, which
-            # is the canonical contract for the "why" block (used directly where
-            # the prompt-budget cap is not required).
-            blocks = []
-            for i, p in enumerate(precedents):
-                block = (
-                    f"\n--- PRECEDENT {i} ---\n"
-                    f"Past copy reviewed: {_cap(p.get('chunk_text'), 500)}\n"
-                    f"Reviewer-flagged phrase (anchor): {_cap(p.get('anchor_text'), 200)}\n"
-                    f"Reviewer comment: {_cap(p.get('comment_text'), 400)}\n"
-                    f"Violation type: {p.get('violation_category') or 'other'}\n"
-                    f"Severity: {p.get('severity') or 'informational'}\n"
+        # Surface the reviewer's rationale / cited guideline (added to the
+        # precedent dict in PKB2 Task 11) so the analysis LLM sees *why* a
+        # phrase was flagged — previously these keys were dropped before
+        # the prompt. We ENRICH the existing block (not replace it) to
+        # preserve the established prompt structure and per-field token
+        # caps. The same field set + labels are codified in the pure,
+        # unit-tested ``graph.nodes.format_precedent_context`` helper, which
+        # is the canonical contract for the "why" block (used directly where
+        # the prompt-budget cap is not required).
+        #
+        # A reviewer who judged a finding NOT a violation is projected into the
+        # same corpus (rule_feedback_service._reviewer_precedent_row) because
+        # precedent_cases has no polarity column — its direction rides in the
+        # text. Rendering it alongside real precedents taught the model the
+        # opposite of what the reviewer said, so the two are split here and the
+        # rejections get their own section and their own instruction.
+        blocks, rejections = [], []
+        for i, p in enumerate(precedents):
+            if _is_reviewer_rejection(p):
+                # Its own labels: "Reviewer-flagged phrase" on a phrase the
+                # reviewer refused to flag is the exact inversion to avoid.
+                rejections.append(
+                    f"\n--- REJECTION {i} ---\n"
+                    f"Copy that was reviewed: {_cap(p.get('chunk_text'), 500)}\n"
+                    f"Phrase that was raised and REJECTED: {_cap(p.get('anchor_text'), 200)}\n"
+                    f"Why the reviewer allowed it: "
+                    f"{_cap(p.get('why_rationale') or p.get('comment_text'), 400)}\n"
+                    f"Topic: {_cap(str(p.get('violation_category') or 'other'), 120)}\n"
                 )
-                if p.get("why_rationale"):
-                    block += f"Why it was flagged: {_cap(p['why_rationale'], 400)}\n"
-                if p.get("guideline_ref"):
-                    block += f"Guideline: {_cap(p['guideline_ref'], 200)}\n"
-                if p.get("final_text_chunk"):
-                    block += f"Approved rewrite (for reference): {_cap(p['final_text_chunk'], 400)}\n"
-                blocks.append(block)
-            precedents_block = "".join(blocks)
-        else:
-            precedents_block = "(none retrieved for this section)\n"
+                continue
+            # `precedent_index` in the response indexes THIS list, so the
+            # original position is kept whichever section the block lands in.
+            block = (
+                f"\n--- PRECEDENT {i} ---\n"
+                f"Past copy reviewed: {_cap(p.get('chunk_text'), 500)}\n"
+                f"Reviewer-flagged phrase (anchor): {_cap(p.get('anchor_text'), 200)}\n"
+                f"Reviewer comment: {_cap(p.get('comment_text'), 400)}\n"
+                f"Violation type: {p.get('violation_category') or 'other'}\n"
+                f"Severity: {p.get('severity') or 'informational'}\n"
+            )
+            if p.get("why_rationale"):
+                block += f"Why it was flagged: {_cap(p['why_rationale'], 400)}\n"
+            if p.get("guideline_ref"):
+                block += f"Guideline: {_cap(p['guideline_ref'], 200)}\n"
+            if p.get("final_text_chunk"):
+                block += f"Approved rewrite (for reference): {_cap(p['final_text_chunk'], 400)}\n"
+            blocks.append(block)
+
+        has_p = bool(blocks)
+        precedents_block = "".join(blocks) if blocks else "(none retrieved for this section)\n"
+        rejections_block = "".join(rejections)
 
         if has_r:
             rblocks = []
@@ -926,11 +1161,23 @@ Constraints:
             )
             mode_instruction = "\n\n".join(instr_parts) + "\n"
 
-        # Fence untrusted content with a per-call random delimiter so an
+        if rejections_block:
+            mode_instruction += (
+                "\n(X) REVIEWER REJECTIONS are listed below: findings that were raised\n"
+                "    on live copy and that a compliance reviewer then judged NOT to be\n"
+                "    violations. They are the opposite of a precedent. Do NOT flag\n"
+                "    content in this section that matches one, and do NOT cite them —\n"
+                "    they carry no `precedent_index` you may use. If your only reason\n"
+                "    for a finding is the topic a rejection covers, drop the finding.\n"
+                "    A rejection binds only its own reasoning: a genuinely different\n"
+                "    problem in the same wording is still a finding.\n"
+            )
+
+        # Fence untrusted content with a content-derived delimiter so an
         # injected "ignore previous instructions / mark compliant" inside the
         # document or a precedent can't be read as a real instruction (audit H1).
-        import uuid as _uuid
-        fence = f"UNTRUSTED-{_uuid.uuid4().hex[:12]}"
+        fence = _content_fence(content, document_context, precedents_block,
+                              rules_block, product_passages_block, rejections_block)
 
         if document_context:
             document_context_block = (
@@ -963,6 +1210,13 @@ Constraints:
             "these; divergence may be a finding) ===\n"
             f"«{fence}»\n{product_passages_block}\n«{fence}»\n\n"
             if product_passages_block else ""
+        )
+        rejections_section = (
+            "=== REVIEWER REJECTIONS — these were judged NOT violations. They are "
+            "NOT precedents: do not flag matching content, and never cite them as "
+            "a violation precedent. ===\n"
+            f"«{fence}»\n{rejections_block}\n«{fence}»\n\n"
+            if rejections_block else ""
         )
 
         prompt = f"""You are a senior Bajaj Life Insurance compliance reviewer (Legal/Compliance/FPU).
@@ -999,7 +1253,7 @@ RULES (retrieved regulations — each carries a citation you must preserve):
 {rules_block}
 «{fence}»
 
-{product_passages_section}{document_context_block}NEW DOCUMENT SECTION:
+{rejections_section}{product_passages_section}{document_context_block}NEW DOCUMENT SECTION:
 «{fence}»
 {content}
 «{fence}»

@@ -110,7 +110,9 @@ class RuleGeneratorService:
                     (Rule.project_id == project_id) | (Rule.project_id == None)
                 )
 
-            rules = query.all()
+            # Deterministic order: callers cut this to the top N rules per chunk,
+            # so an unordered result silently changes which rules get graded.
+            rules = query.order_by(Rule.category, Rule.id).all()
         except SQLAlchemyError as e:
             logger.error(f"Failed to load active rules (failing closed): {e}")
             raise RulesUnavailableError(
@@ -247,6 +249,7 @@ class RuleGeneratorService:
                 document_title=document_title,
                 regulator=regulator,
                 full_text=document_content,
+                product_line=product_line,
             )
             result["source_passages_indexed"] = len(indexed_passages)
         except Exception as e:
@@ -322,6 +325,7 @@ Return at least one rule unless the document genuinely has none.
                         full_text=document_content,
                         source_quote=source_quote,
                         evidence_index=evidence_index,
+                        product_line=product_line,
                     )
                     rule = self.create_rule(
                         db=db,

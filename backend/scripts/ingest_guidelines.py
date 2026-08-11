@@ -13,16 +13,25 @@ delete previously-ingested rules first (filter by metadata.source) or pass
 --skip-existing which skips a file if any rule already exists with the
 same source filename in its metadata.
 
-Filename → regulator mapping (used only for source-doc tagging):
-  retirement_and_pension_*  → irdai
-  term_insurance_*          → irdai
-  ulip_*                    → sebi
-  tax_and_gst_*             → regulatory
-  (anything else)           → regulatory
+Filename prefix → product_line (the scope stamped on every rule from the file;
+generate_rules_from_text REQUIRES it — omitting it made this script a silent
+no-op from 2026-08-03) and → regulator (source-doc tagging):
+
+  prefix                    product_line      regulator
+  ulip_*                    ulip              irdai
+  term_insurance_*          term              irdai
+  retirement_and_pension_*  pension_annuity   irdai
+  tax_and_gst_*             global            regulatory
+  disclaimer*               global            regulatory
+  (anything else)           global            regulatory
+  *sebi* anywhere in name   (as above)        sebi
 
 Usage:
   docker exec compliance-backend python -m scripts.ingest_guidelines
   docker exec compliance-backend python -m scripts.ingest_guidelines --skip-existing
+
+Exit code is non-zero if any file failed, including a file that produced zero
+rules while reporting errors — that combination WAS the silent-success bug.
 """
 from __future__ import annotations
 
@@ -54,12 +63,38 @@ DEFAULT_GUIDELINES_DIRS = [
 ]
 
 
-def _regulator_for(filename: str) -> str:
+#: Guideline filename prefix → product_line, in match order. Values are from
+#: rule_generator_service._ALLOWED_PRODUCT_LINES; anything unmatched is
+#: cross-product and ingests as "global". Shared with
+#: scripts.backfill_product_metadata (which reports unmatched instead of
+#: defaulting, because an arbitrarily-titled uploaded doc is not evidence of
+#: global scope).
+PRODUCT_LINE_BY_PREFIX = (
+    ("ulip", "ulip"),
+    ("term_insurance", "term"),
+    ("retirement_and_pension", "pension_annuity"),
+    ("tax_and_gst", "global"),
+    ("disclaimer", "global"),
+)
+
+
+def _product_line_for(filename: str) -> str:
     name = filename.lower()
-    if name.startswith("retirement_and_pension") or name.startswith("term_insurance"):
-        return "irdai"
-    if name.startswith("ulip"):
+    for prefix, product_line in PRODUCT_LINE_BY_PREFIX:
+        if name.startswith(prefix):
+            return product_line
+    return "global"
+
+
+def _regulator_for(filename: str) -> str:
+    """ULIP MARKETING compliance is IRDAI's, not SEBI's — these guideline docs
+    are IRDAI advertising rules for a unit-linked product, so only a filename
+    that genuinely names SEBI is tagged sebi."""
+    name = filename.lower()
+    if "sebi" in name:
         return "sebi"
+    if name.startswith(("retirement_and_pension", "term_insurance", "ulip")):
+        return "irdai"
     return "regulatory"
 
 
@@ -92,6 +127,7 @@ async def ingest_file(path: Path, skip_existing: bool) -> dict:
     title = path.stem.replace("_", " ").title()
     source_name = path.name
     regulator = _regulator_for(path.name)
+    product_line = _product_line_for(path.name)
 
     db = SessionLocal()
     try:
@@ -100,7 +136,10 @@ async def ingest_file(path: Path, skip_existing: bool) -> dict:
             return {"file": source_name, "skipped": True, "rules_created": 0}
 
         content = path.read_text(encoding="utf-8", errors="replace")
-        logger.info(f"  → {source_name} ({len(content)} chars, regulator={regulator})")
+        logger.info(
+            f"  → {source_name} ({len(content)} chars, regulator={regulator}, "
+            f"product_line={product_line})"
+        )
 
         result = await rule_generator_service.generate_rules_from_text(
             document_content=content,
@@ -113,7 +152,17 @@ async def ingest_file(path: Path, skip_existing: bool) -> dict:
                 "social media posts. Skip background/explanatory passages."
             ),
             regulator=regulator,
+            product_line=product_line,
         )
+
+        # Fail loudly. generate_rules_from_text reports its failures in
+        # result["errors"] and returns normally, so "0 rules + errors" used to
+        # print a ✓ line and exit 0 (the whole corpus silently stopped being
+        # ingested for a month). Nothing but a raise is allowed here.
+        if not result.get("rules_created") and result.get("errors"):
+            raise RuntimeError(
+                f"{source_name}: 0 rules created — " + "; ".join(result["errors"])
+            )
 
         # Tag every newly-created rule's metadata with the source filename so
         # _already_ingested() can recognise it on the next run.
@@ -148,7 +197,7 @@ except ImportError:
         return lambda f: f
 
 @traceable(run_type="chain", name="Ingest Guidelines")
-async def main() -> None:
+async def main() -> int:
     parser = argparse.ArgumentParser(description="Ingest guideline markdown files into rules + RAG")
     parser.add_argument(
         "--skip-existing",
@@ -166,12 +215,15 @@ async def main() -> None:
 
     md_files = sorted(guidelines_dir.glob("*.md"))
     if not md_files:
-        logger.warning(f"No .md files found in {guidelines_dir}")
-        return
+        logger.error(f"No .md files found in {guidelines_dir}")
+        return 1
 
     logger.info(f"Found {len(md_files)} guideline file(s)")
 
-    totals = {"rules_created": 0, "rules_failed": 0, "files_processed": 0, "files_skipped": 0}
+    totals = {
+        "rules_created": 0, "rules_failed": 0,
+        "files_processed": 0, "files_skipped": 0, "files_errored": 0,
+    }
     for path in md_files:
         try:
             r = await ingest_file(path, args.skip_existing)
@@ -182,16 +234,24 @@ async def main() -> None:
                 totals["rules_created"] += r.get("rules_created", 0)
                 totals["rules_failed"] += r.get("rules_failed", 0)
         except Exception as e:
+            totals["files_errored"] += 1
             logger.error(f"  ✗ {path.name}: {e}")
 
     logger.info("=" * 60)
     logger.info(
         f"Done. Processed {totals['files_processed']} files "
-        f"(skipped {totals['files_skipped']}) · "
+        f"(skipped {totals['files_skipped']}, errored {totals['files_errored']}) · "
         f"created {totals['rules_created']} rules "
         f"({totals['rules_failed']} failed)"
     )
+    if totals["files_errored"]:
+        logger.error(
+            f"INGEST FAILED: {totals['files_errored']} of {len(md_files)} files "
+            f"produced no rules or raised. The rule corpus is NOT up to date."
+        )
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(asyncio.run(main()))

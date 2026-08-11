@@ -108,9 +108,12 @@ export default async function RulesPage() {
           )}
           {unclassifiedActive > 0 && (
             <div className="mb-5 rounded-md border border-sev-high/40 bg-sev-high/5 px-4 py-3 text-sm">
-              <span className="font-medium">{unclassifiedActive} active rules have no product scope.</span>
+              <span className="font-medium">
+                {unclassifiedActive} active rules have no product scope and are excluded from analysis until scoped.
+              </span>
               <span className="ml-1 text-muted-foreground">
-                They currently apply globally. Edit each rule to assign a product scope or mark it explicitly Global.
+                The applicability check rejects an unscoped rule rather than applying it everywhere — it never reaches a
+                document. Edit each rule to assign a product scope or mark it explicitly Global.
               </span>
             </div>
           )}

@@ -13,10 +13,17 @@ from __future__ import annotations
 
 import logging
 import os
+from functools import lru_cache
 from typing import NamedTuple, Optional
 
 from app.models.submission import Submission
-from app.services.lexical_import import LexicalImportError, docx_to_html, pdf_to_html
+from app.services.lexical_import import (
+    LexicalImportError,
+    docx_to_html,
+    html_to_blocks,
+    html_to_text,
+    pdf_to_html,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +116,87 @@ def import_html(submission: Submission) -> ImportResult:
         # and the reviewer still needs telling why the page is blank.
         return ImportResult(None, "unavailable", "The uploaded document contains no text.")
     return ImportResult(html, "imported", None)
+
+
+def import_text(submission: Submission) -> Optional[str]:
+    """Plain text of the document the editor was SEEDED with, or None when this
+    submission has nothing importable.
+
+    The baseline a working copy has to be diffed against. The working copy is
+    this text plus the reviewer's edits — Lexical persists
+    ``$getRoot().getTextContent()`` as the revision's content — so diffing it
+    against the analyser's own extraction of the same upload instead reports
+    every disagreement between the two readers (text boxes, "[PAGE FOOTER]"
+    labels, table pipes, PDF page chrome) as a reviewer edit.
+
+    Costs a whole conversion, so callers must keep it off the event loop.
+    """
+    html = _seed_html(submission)
+    return html_to_text(html) or None if html else None
+
+
+def import_blocks(submission: Submission) -> Optional[list]:
+    """``[{tag, text}]`` for the document the editor was SEEDED with, or None.
+
+    The same blocks ``$generateNodesFromDOM`` gives the editor, so an id minted
+    from one of them here names a block that exists on the other side. See
+    ``lexical_import.html_to_blocks``.
+
+    Costs a whole conversion on a cache miss, so callers must keep it off the
+    event loop.
+    """
+    html = _seed_html(submission)
+    return html_to_blocks(html) or None if html else None
+
+
+def document_blocks(submission: Submission) -> Optional[list]:
+    """The blocks the editor holds RIGHT NOW, or None for a submission whose
+    editor document is not a rich import.
+
+    ``lexical_html`` is the reviewer's saved working document — once it exists
+    it, not the upload, is what the editor shows and what a finding has to be
+    anchored into. Falling back to the import for a submission that has been
+    edited would mint ids for blocks the editor no longer has.
+
+    Restricted to DOCX/PDF on purpose. A pasted HTML or plain-text submission is
+    graded on extracted text the editor never held — surfaced meta tags, the
+    ``[PAGE FOOTER]`` labels — so chunking it by blocks would change WHAT is
+    graded rather than only how it is cut.
+    """
+    if submission.content_type not in _IMPORTABLE_CONTENT_TYPES:
+        return None
+    if getattr(submission, "lexical_html", None):
+        return html_to_blocks(submission.lexical_html) or None
+    return import_blocks(submission)
+
+
+def _seed_html(submission: Submission) -> Optional[str]:
+    if not can_import(submission):
+        return None
+    stat = os.stat(submission.file_path)
+    return _import_html(
+        submission.file_path, submission.content_type, stat.st_mtime_ns, stat.st_size
+    )
+
+
+@lru_cache(maxsize=16)
+def _import_html(
+    file_path: str, content_type: str, mtime_ns: int, size: int
+) -> Optional[str]:
+    """Cached: the redline is re-fetched every time the reviewer opens Split,
+    and converting a long DOCX costs seconds. The upload is immutable, so the
+    only invalidation needed is a path being reused for a different file —
+    which mtime and size carry.
+    """
+    try:
+        with open(file_path, "rb") as f:
+            data = f.read()
+        return docx_to_html(data) if content_type == "docx" else pdf_to_html(data)
+    except (LexicalImportError, OSError) as exc:
+        # No baseline of this lineage; the caller falls back to extracted text,
+        # which is also what the editor fell back to for this submission.
+        logger.warning("lexical baseline unavailable for %s: %s", file_path, exc)
+        return None
 
 
 def build_import_html(submission: Submission) -> Optional[str]:

@@ -19,7 +19,8 @@ timestamp: 2026-07-03T12:00:00Z
 | `POST /compliance/analyze/{id}/stream` | **SSE** — polls the DB every 0.7s, emits `stage` / `chunk` / `score` / `done` / `error` events |
 | `GET /compliance/results/{id}` | Latest check + serialized [violations](../data-model/violations.md) |
 | `GET /compliance/check/{check_id}` | One check's summary |
-| `POST /compliance/violations/{id}/feedback` | Reviewer accept/reject → adaptive [rule reliability](../architecture/scoring-and-fail-closed.md) |
+| `POST /compliance/violations/{id}/actions` | Reviewer verdict (the live UI path) → adaptive [rule reliability](../architecture/scoring-and-fail-closed.md) + a precedent in the removable "Reviewer feedback" corpus layer |
+| `POST /compliance/violations/{id}/feedback` | Legacy accept/reject shim (no frontend callers) → rule reliability only |
 | `POST /compliance/check/{id}/reviewer-score` | Held-out reviewer score (**eval only**, never trained on) |
 
 ## SSE contract

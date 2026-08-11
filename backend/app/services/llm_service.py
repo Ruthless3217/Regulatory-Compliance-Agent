@@ -256,6 +256,11 @@ class LLMService:
                 "api_version": self.azure_api_version,
                 "azure_deployment": self.model,
             }
+            # Same transport bounds as the OpenAI client below — without these
+            # the Azure client silently used the SDK defaults, so timeout/retry
+            # behaviour differed between providers for no reason.
+            azure_kwargs["timeout"] = settings.llm_request_timeout
+            azure_kwargs["max_retries"] = settings.llm_max_retries
             if http_client is not None:
                 azure_kwargs["http_client"] = http_client
             return AsyncAzureOpenAI(**azure_kwargs)
@@ -278,8 +283,15 @@ class LLMService:
         params: Dict[str, Any] = {
             self.token_limit_param: max_tokens if max_tokens is not None else self.max_tokens
         }
+        # TODO(live probe): whether the gpt-5.4 deployment actually accepts
+        # `temperature` is unresolved — config defaults it True, the critic
+        # comments above assume it is rejected. Probe the live deployment once
+        # the stack is up and pin LLM_SUPPORTS_TEMPERATURE to the real answer.
         if self.supports_temperature and temperature is not None:
             params["temperature"] = temperature
+        # Best-effort determinism; only the OpenAI-compatible surfaces accept it.
+        if settings.llm_seed is not None and self.provider in ("openai", "azure"):
+            params["seed"] = settings.llm_seed
         # Reasoning effort is the dominant cost lever on reasoning models; only
         # send it when configured (non-reasoning models like Groq llama reject it).
         if self.reasoning_effort:

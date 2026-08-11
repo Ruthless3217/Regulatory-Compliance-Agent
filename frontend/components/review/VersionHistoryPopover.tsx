@@ -18,8 +18,8 @@ const SOURCE_LABEL: Record<string, string> = {
 interface Props {
   submissionId: string;
   /** Hand the restored content back so the live document view adopts it —
-   * without this the pane keeps showing the pre-restore text (the submission
-   * endpoint does not serialize current_content). */
+   * without this the pane keeps showing the pre-restore text, since nothing
+   * re-fetches the submission after a restore. */
   onRestore?: (content: string) => void;
 }
 

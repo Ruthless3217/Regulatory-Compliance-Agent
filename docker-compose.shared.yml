@@ -97,6 +97,8 @@ services:
       LLM_USE_MAX_COMPLETION_TOKENS: ${LLM_USE_MAX_COMPLETION_TOKENS:-true}
       # gpt-5.4 reasoning mode rejects custom temperature → omit (default false).
       LLM_SUPPORTS_TEMPERATURE: ${LLM_SUPPORTS_TEMPERATURE:-false}
+      # Best-effort sampling seed for determinism (openai/azure); empty = unset.
+      LLM_SEED: ${LLM_SEED:-}
       # Reasoning effort = the main cost lever on reasoning models (high ≈ 5x the
       # output tokens of low). Default low; empty for non-reasoning providers.
       LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-low}

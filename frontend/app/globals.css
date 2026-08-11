@@ -144,6 +144,14 @@
      paragraph. Dashed, because a guess must not look as certain as a match. */
   [data-finding-anchor="paragraph"] { border-left-style: dashed; }
 
+  /* Under the pointer — here, or on the margin card that describes it. The
+     accent says "this one", the severity colour still says how bad it is, so
+     the two never compete for the same slot. */
+  [data-finding-id][data-finding-hover="true"] {
+    background: hsl(var(--muted));
+    border-left-color: hsl(var(--primary));
+  }
+
   /* The located span itself. Absolutely positioned inside the scroll
      container, so it scrolls with the text it marks; zero-sized layer, so it
      is only a coordinate origin and takes part in no layout. */
@@ -181,6 +189,10 @@
   }
   .finding-span[data-finding-selected="true"] {
     border-bottom-width: 3px;
+    background: hsl(var(--primary-50));
+  }
+  .finding-span[data-finding-hover="true"] {
+    border-bottom-color: hsl(var(--primary));
     background: hsl(var(--primary-50));
   }
 }

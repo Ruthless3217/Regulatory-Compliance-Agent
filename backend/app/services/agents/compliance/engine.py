@@ -56,6 +56,7 @@ class ComplianceEngine:
         "product_unresolved",
         "product_resolution_failed",
         "scope_metadata_missing",
+        "disclosure_recall_degraded",
     }
 
     @staticmethod
@@ -88,6 +89,11 @@ class ComplianceEngine:
             return False, "product_unresolved"
         if md.get("scope_metadata_missing"):
             return False, "scope_metadata_missing"
+        # The disclosure sweep only covered part of the document (or the LLM
+        # backstop failed outright), so required-disclaimer findings are
+        # silently missing. Fail closed: review it, don't grade it.
+        if md.get("disclosure_recall_degraded"):
+            return False, "disclosure_recall_degraded"
         degraded = md.get("degraded")
         if degraded:
             return False, degraded
@@ -107,6 +113,13 @@ class ComplianceEngine:
         "scope_metadata_missing",
         "declared_product_line",
         "disclosure_recall_degraded", "rag_rules_per_chunk", "precedents_per_chunk",
+        # Chunk-level analysis reuse (analysis_cache.py): how much of this run
+        # was carried forward, and the context fingerprint it was graded under —
+        # the one field that says WHY a later run did or didn't reuse it. The
+        # per-chunk `chunk_keys` map is deliberately absent: it is plumbing for
+        # persist_results, not run observability.
+        "chunks_total", "chunks_reused", "chunks_analyzed", "llm_calls_saved",
+        "analysis_context_key",
     )
 
     @staticmethod
@@ -215,9 +228,17 @@ class ComplianceEngine:
                 "user_feedback": None
             }
 
-            # 5. Config for persistence (thread_id enables HITL checkpointing)
+            # 5. Config for persistence (thread_id enables HITL checkpointing).
+            #    The thread id is per-RUN, not per-submission: ComplianceState
+            #    .violations is an `operator.add` reducer channel, so re-running
+            #    a submission on the same thread RESUMED the finished checkpoint
+            #    and appended a second copy of every violation (3 -> 6 -> 9).
+            # ponytail: old threads are never deleted — unbounded checkpoint
+            # growth in Redis. Cleanup path: pass a TTL to AsyncRedisSaver in
+            # orchestrator._ensure_checkpointer_setup (MemorySaver is per-process
+            # so it dies with the container anyway).
             config = {
-                "configurable": {"thread_id": str(submission_id)},
+                "configurable": {"thread_id": f"{submission_id}:{run.id}"},
                 "metadata": {
                     "submission_id": str(submission_id),
                     "user_id": str(submission.submitted_by) if submission.submitted_by else None
@@ -265,6 +286,7 @@ class ComplianceEngine:
                     scores=final_state.get("scores", {}),
                     db=db,
                     analysis_run_id=str(run.id),
+                    chunk_keys=(final_state.get("metadata") or {}).get("chunk_keys"),
                 )
 
                 # 7. Flip RAG chunk status to 'analyzed' so they become eligible
@@ -315,12 +337,141 @@ class ComplianceEngine:
             raise
 
     @staticmethod
+    def _reparent_reused(
+        v_data: Dict, check_id, analysis_run_id: Optional[str], db: Session
+    ) -> bool:
+        """Move a carried-forward finding onto the new check instead of copying it.
+
+        A chunk that skipped its LLM passes (analysis_cache.py) contributes the
+        SAME rows it produced last run. They are re-parented, not duplicated:
+        rule_feedback verdicts, reviewer actions and the review_status all key on
+        `violations.id`, so a copy would hand the reviewer a fresh finding and
+        silently drop the decision they already made on it — the same reasoning
+        the scoped-rerun endpoint re-parents its out-of-scope rows.
+
+        Returns False when the row has vanished, so the caller falls back to
+        inserting it fresh (fail open: a lost verdict beats a lost finding).
+        """
+        reused_id = v_data.get("reused_violation_id")
+        if not reused_id:
+            return False
+        row = db.query(Violation).filter(Violation.id == reused_id).first()
+        if row is None:
+            logger.warning(
+                "Reused violation %s no longer exists; re-inserting it as a new "
+                "finding (its reviewer verdict, if any, does not carry over).",
+                reused_id,
+            )
+            return False
+        row.compliance_check_id = check_id
+        row.analysis_run_id = analysis_run_id
+        # A chunk can keep its text but move; position follows the current chunk.
+        row.chunk_index = v_data.get("chunk_index")
+        if v_data.get("location"):
+            row.location = v_data["location"]
+        db.add(row)
+        return True
+
+    # Every anchor field a finding can carry, all absent by default. Returned
+    # whole (rather than only the keys that were resolved) so a partially
+    # located finding cannot inherit a previous one's coordinates.
+    _NO_ANCHOR = {
+        "section_title": None,
+        "anchor_node_key": None,
+        "anchor_offset_start": None,
+        "anchor_offset_end": None,
+        "anchor_fingerprint": None,
+    }
+
+    @staticmethod
+    def _anchor_fields(current_text: Optional[str], chunk) -> Dict[str, Any]:
+        """Where in the EDITABLE document this finding sits.
+
+        The chunk was cut along the editor's own blocks
+        (preprocessing_service._chunk_by_blocks), so its metadata carries the id
+        of every block it is made of. The block holding the quoted text is the
+        finding's anchor, and the offsets are measured in that block's
+        NORMALIZED text — the coordinate system `findingAnchor.verifiedOffsets`
+        checks them in.
+
+        A quote found in NO block leaves `anchor_node_key` NULL. Naming the
+        chunk's first block instead would be a guess, and the frontend acts on
+        the id before it verifies anything: a wrong one scopes the search to the
+        wrong paragraph and turns a locatable finding into an unlocated one.
+        NULL simply starts the search document-wide, which is what every
+        finding did before block ids existed.
+        """
+        out = dict(ComplianceEngine._NO_ANCHOR)
+        if chunk is None:
+            return out
+        metadata = getattr(chunk, "chunk_metadata", None) or {}
+        out["section_title"] = metadata.get("section_title")
+
+        from app.services.lexical_anchor import compute_anchor_fingerprint, normalize
+
+        ids = metadata.get("block_ids") or []
+        span = normalize(current_text or "")
+        if not ids or not span:
+            return out
+
+        # The chunk's own text, back into the blocks it was joined from.
+        texts = (chunk.text or "").split("\n\n")
+        if len(texts) != len(ids):
+            # A single block windowed by tokens because it exceeded the chunk
+            # budget: one id, one slice of its text. Anything else is a chunk
+            # this code did not build — say nothing rather than guess.
+            if len(ids) != 1:
+                return out
+            texts = [chunk.text or ""]
+
+        for block_id, block_text in zip(ids, texts):
+            body = normalize(block_text)
+            at = body.find(span)
+            if at < 0:
+                continue
+            out.update(
+                anchor_node_key=block_id,
+                anchor_offset_start=at,
+                anchor_offset_end=at + len(span),
+                anchor_fingerprint=compute_anchor_fingerprint(
+                    body[:at], span, body[at + len(span):]
+                ),
+            )
+            break
+        return out
+
+    @staticmethod
+    def _stamp_chunk_keys(submission_id: str, chunk_keys: Dict[str, str], db: Session) -> int:
+        """Record, on each chunk row, the context this run graded it under.
+
+        Written here and nowhere else: only a run that reaches persistence may
+        advertise a cache. A degraded run computes the same keys and stamps
+        none, so the next run keeps comparing against the last verdicts that
+        actually exist in the database.
+        """
+        from app.models.content_chunk import ContentChunk
+
+        stamped = 0
+        for row in (
+            db.query(ContentChunk)
+            .filter(ContentChunk.submission_id == submission_id)
+            .all()
+        ):
+            key = chunk_keys.get(str(row.id))
+            if key and row.context_key != key:
+                row.context_key = key
+                db.add(row)
+                stamped += 1
+        return stamped
+
+    @staticmethod
     def persist_results(
         submission_id: str,
         violations: List[Dict],
         scores: Dict,
         db: Session,
         analysis_run_id: Optional[str] = None,
+        chunk_keys: Optional[Dict[str, str]] = None,
     ) -> ComplianceCheck:
         """
         Persist compliance analysis results to the database.
@@ -341,7 +492,31 @@ class ComplianceEngine:
             # Persist violations
             ALLOWED_SEV = {"critical", "high", "medium", "low", "moderate", "informational"}
             _rule_version_cache: Dict[str, Optional[int]] = {}
+            reused_count = 0
+
+            # The chunks the findings came out of, for their section title and
+            # their block ids. Loaded once, and only when something actually
+            # names a chunk (document-level findings never do).
+            chunk_rows: Dict[str, Any] = {}
+            if any(v.get("chunk_id") for v in violations):
+                from app.models.content_chunk import ContentChunk
+
+                chunk_rows = {
+                    str(row.id): row
+                    for row in db.query(ContentChunk)
+                    .filter(ContentChunk.submission_id == submission_id)
+                    .all()
+                }
+
             for v_data in violations:
+                # Carried forward from an unchanged chunk: the row already
+                # exists, verdicts and all. Re-parent it and move on.
+                if ComplianceEngine._reparent_reused(
+                    v_data, check.id, analysis_run_id, db
+                ):
+                    reused_count += 1
+                    continue
+
                 # Normalize severity + category casing at the boundary so the
                 # LLM's "CRITICAL" / "Critical" / "critical" all stop forking
                 # dashboard aggregations. Falls back to medium / unknown.
@@ -390,6 +565,33 @@ class ComplianceEngine:
                 except (TypeError, ValueError):
                     sim_score = None
 
+                # Which chunk produced this finding. The column has existed since
+                # 0001 and was never written — only the positional chunk_index
+                # was, which stops identifying anything the moment the document
+                # is re-chunked. The reuse cache needs the stable id to find a
+                # chunk's previous verdicts. Document-level findings (disclosure)
+                # carry no chunk and stay NULL.
+                chunk_id = None
+                raw_chunk = v_data.get("chunk_id")
+                if raw_chunk:
+                    try:
+                        import uuid as _uuid
+                        chunk_id = _uuid.UUID(str(raw_chunk))
+                    except (ValueError, TypeError):
+                        chunk_id = None
+
+                # Fail-soft by contract: an anchor is a convenience for the
+                # editor's highlighter, and no amount of malformed chunk
+                # metadata may cost a run its findings.
+                try:
+                    anchors = ComplianceEngine._anchor_fields(
+                        v_data.get("current_text"),
+                        chunk_rows.get(str(chunk_id)) if chunk_id else None,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("Anchor computation failed (non-fatal): %s", e)
+                    anchors = dict(ComplianceEngine._NO_ANCHOR)
+
                 violation = Violation(
                     compliance_check_id=check.id,
                     analysis_run_id=analysis_run_id,
@@ -400,6 +602,7 @@ class ComplianceEngine:
                     current_text=v_data.get("current_text"),
                     suggested_fix=v_data.get("suggested_fix"),
                     auto_fixable=str(v_data.get("auto_fixable", False)).lower(),
+                    chunk_id=chunk_id,
                     chunk_index=v_data.get("chunk_index"),
                     confidence=confidence,
                     regulator_quote=v_data.get("regulator_quote"),
@@ -419,6 +622,7 @@ class ComplianceEngine:
                     # score and routed to human review.
                     suppressed=bool(v_data.get("suppressed", False)),
                     suppressed_reason=v_data.get("suppressed_reason"),
+                    **anchors,
                 )
 
                 # Try to resolve rule_id as UUID + snapshot the rule's version so
@@ -440,6 +644,11 @@ class ComplianceEngine:
                         pass
 
                 db.add(violation)
+
+            # Same transaction as the findings: a chunk may only advertise a
+            # reusable verdict if that verdict is committed alongside it.
+            if chunk_keys:
+                ComplianceEngine._stamp_chunk_keys(submission_id, chunk_keys, db)
 
             # Flip submission status in the SAME transaction as the check +
             # violations so the three commit atomically (no torn record).
@@ -465,7 +674,8 @@ class ComplianceEngine:
 
             logger.info(
                 f"Persisted compliance check {check.id} with "
-                f"{len(violations)} violations, score={scores.get('overall')} grade={scores.get('grade')}"
+                f"{len(violations)} violations ({reused_count} carried forward from "
+                f"unchanged chunks), score={scores.get('overall')} grade={scores.get('grade')}"
             )
             return check
 

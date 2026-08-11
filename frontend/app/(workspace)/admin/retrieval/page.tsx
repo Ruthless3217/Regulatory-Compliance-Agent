@@ -9,16 +9,22 @@ import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
 import {
   getLatestSubmissionRetrieval,
+  getRunCandidates,
+  getRunChunks,
   getRunRejectedRetrieval,
   getRunRetrieval,
   listSubmissions,
 } from "@/lib/api";
 import type {
   RetrievalCandidate,
+  RetrievalCandidatesInspection,
+  RetrievalChunksInspection,
+  RetrievalDocument,
   RetrievalInspection,
   RetrievalNoData,
   RetrievalRejectedInspection,
   RetrievalStory,
+  RetrievalTraceRow,
   Submission,
 } from "@/lib/types";
 
@@ -229,8 +235,9 @@ const REASON_LABEL: Record<string, string> = {
 };
 
 /** The whole point of enrichment: show the document, not the UUID. Falls back to
- * the bare id and says why. */
-function CandidateDoc({ c }: { c: RetrievalCandidate }) {
+ * the bare id and says why. Takes the structural minimum so a sampled candidate
+ * and a traced one render identically. */
+function CandidateDoc({ c }: { c: { id: string; document?: RetrievalDocument | null } }) {
   const d = c.document;
   if (!d) {
     return (
@@ -834,6 +841,569 @@ function RejectedPanel({
   );
 }
 
+/* ---------- per-candidate trace (migration 0037) ----------
+ * A different population from everything above: `retrieval_candidates` holds
+ * EVERY candidate of every (chunk, category) query — uncapped, per chunk, with
+ * the per-leg scores the store used to discard. The panels above stay, because
+ * every run older than 0037 has only the sample. */
+
+/** The vocabulary, owned by backend/app/services/rag/trace.py. Each entry says
+ * which stage ended the candidate's journey — that is the whole question this
+ * section exists to answer. */
+const STATUS_COPY: Record<
+  string,
+  { label: string; tone: "success" | "warning" | "danger" | "muted" | "info"; prose: string }
+> = {
+  in_prompt: {
+    label: "in prompt",
+    tone: "success",
+    prose: "Reached the analysis prompt for its chunk. Nothing dropped it.",
+  },
+  dropped_by_cap: {
+    label: "cut by rule cap",
+    tone: "warning",
+    prose:
+      "Applicable, but the per-chunk rule cap (8) kept only the higher-ranked rules. Nothing else records this — if a rule you expect is here, it lost on rank, not on scope.",
+  },
+  unused_fallback: {
+    label: "unused fallback",
+    tone: "muted",
+    prose:
+      "Part of the flat active-rule set, which is only fed to prompts when per-chunk retrieval fails. This run's retrieval worked, so it was never used.",
+  },
+  rejected_applicability: {
+    label: "rejected — applicability",
+    tone: "danger",
+    prose:
+      "Refused by the product-applicability guard before similarity was allowed to matter. The verbatim reason is on the row.",
+  },
+  below_threshold: {
+    label: "below score threshold",
+    tone: "warning",
+    prose:
+      "Survived fusion, then scored under the retriever's minimum fused score, so it never reached the applicability guard.",
+  },
+  dropped_by_retriever: {
+    label: "dropped by retriever",
+    tone: "warning",
+    prose:
+      "Survived fusion, then was dropped by a corpus filter: a thin (pure-response) precedent comment, or the same-submission leakage guard.",
+  },
+  not_retrieved_far_enough: {
+    label: "ranked out of the cut",
+    tone: "muted",
+    prose:
+      "Retrieved by at least one leg but ranked outside the fused top-K, so the applicability guard never saw it. Only the near-miss band is recorded.",
+  },
+};
+
+function StatusCell({ row }: { row: RetrievalTraceRow }) {
+  const copy = STATUS_COPY[row.final_status];
+  return (
+    <div className="min-w-0">
+      <StatusPill tone={copy?.tone ?? "muted"}>{copy?.label ?? row.final_status}</StatusPill>
+      <div className="mt-0.5 text-[10px] text-muted-foreground">
+        stage: <span className="font-mono">{row.deciding_stage}</span>
+      </div>
+      {row.reason && (
+        <div
+          className="mt-0.5 max-w-[16rem] truncate font-mono text-[10px] text-muted-foreground"
+          title={row.reason}
+        >
+          {row.reason}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Both legs, side by side. A candidate found by only one of them is the most
+ * common surprise on this page, so the absent leg reads "—", never 0. */
+function LegCell({ row }: { row: RetrievalTraceRow }) {
+  const num = (v: number | null, digits: number) =>
+    typeof v === "number" ? v.toFixed(digits) : "—";
+  return (
+    <div className="whitespace-nowrap font-mono text-[10px]">
+      <div>
+        <span className="text-muted-foreground">vec </span>
+        {num(row.cosine, 3)}
+        {row.vector_rank !== null && (
+          <span className="text-muted-foreground"> #{row.vector_rank}</span>
+        )}
+      </div>
+      <div>
+        <span className="text-muted-foreground">bm25 </span>
+        {num(row.ts_rank, 4)}
+        {row.bm25_rank !== null && (
+          <span className="text-muted-foreground"> #{row.bm25_rank}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FacetChips({
+  title,
+  counts,
+  active,
+  onPick,
+}: {
+  title: string;
+  counts: Record<string, number>;
+  active?: string;
+  onPick?: (key: string) => void;
+}) {
+  const keys = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  if (keys.length === 0) return null;
+  return (
+    <div className="mb-2">
+      <div className="micro-label mb-1">{title}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {keys.map((k) => (
+          <button
+            key={k}
+            type="button"
+            disabled={!onPick}
+            onClick={() => onPick?.(active === k ? "" : k)}
+            title={STATUS_COPY[k]?.prose}
+            className={cn(
+              "rounded-sm border px-2 py-1 text-[11px] transition-colors",
+              active === k
+                ? "border-primary bg-primary-50 text-primary"
+                : "border-border text-muted-foreground",
+              onPick && "hover:text-foreground"
+            )}
+          >
+            {STATUS_COPY[k]?.label ?? k} <span className="font-mono">({counts[k]})</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChunkRollupPanel({
+  runId,
+  selected,
+  onPick,
+}: {
+  runId: string;
+  selected: string;
+  onPick: (chunkId: string) => void;
+}) {
+  const [data, setData] = React.useState<RetrievalChunksInspection | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [page, setPage] = React.useState(0);
+
+  React.useEffect(() => {
+    setData(null);
+    setErr(null);
+    setPage(0);
+    getRunChunks(runId)
+      .then(setData)
+      .catch((e) => setErr((e as Error).message));
+  }, [runId]);
+
+  const chunks = data && data.status === "ok" ? data.chunks : [];
+  const pageCount = Math.max(1, Math.ceil(chunks.length / ROWS_PAGE));
+  const current = Math.min(page, pageCount - 1);
+  const rows = chunks.slice(current * ROWS_PAGE, current * ROWS_PAGE + ROWS_PAGE);
+
+  return (
+    <Panel
+      title="Per-chunk trace"
+      description="Every candidate every chunk considered — uncapped, unlike the sampled counts above. Pick a chunk to see why each of its candidates did or did not reach the prompt."
+      right={
+        data && data.status === "ok" ? (
+          <StatusPill tone="info">
+            {data.chunks_total} chunk(s) · {data.candidates_total} candidates
+          </StatusPill>
+        ) : null
+      }
+    >
+      {err ? (
+        <Empty>{err}</Empty>
+      ) : !data ? (
+        <Empty>Loading…</Empty>
+      ) : data.status === "no_retrieval_data" ? (
+        <div className="rounded-sm border border-border bg-surface px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">No per-candidate trace for this run.</span>{" "}
+          {data.reason}
+        </div>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-muted-foreground">
+                  <Th>Chunk</Th>
+                  <Th>Candidates</Th>
+                  <Th>Accepted</Th>
+                  <Th>In prompt</Th>
+                  <Th>Cut by cap</Th>
+                  <Th>Rejected</Th>
+                  <Th>Top fused</Th>
+                  <Th>Corpora</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {rows.map((c) => {
+                  const key = c.chunk_id ?? "";
+                  const isOpen = selected === key && key !== "";
+                  return (
+                    <tr
+                      key={key || "no-chunk"}
+                      className={cn(isOpen && "bg-primary-50/40")}
+                    >
+                      <td className="py-1.5 pr-3">
+                        {c.chunk_id ? (
+                          <button
+                            type="button"
+                            onClick={() => onPick(isOpen ? "" : c.chunk_id!)}
+                            className="font-mono text-[11px] text-primary hover:underline"
+                          >
+                            {c.chunk_id.slice(0, 8)}
+                          </button>
+                        ) : (
+                          <span
+                            className="text-[11px] text-muted-foreground"
+                            title="The flat active-rule fallback set is validated once per run, so it belongs to no chunk."
+                          >
+                            fallback set (no chunk)
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono">{c.candidates}</td>
+                      <td className="py-1.5 pr-3 font-mono text-success">{c.accepted}</td>
+                      <td className="py-1.5 pr-3 font-mono">{c.in_prompt}</td>
+                      <td className="py-1.5 pr-3 font-mono text-sev-medium">
+                        {c.dropped_by_cap}
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono text-sev-critical">
+                        {c.rejected_applicability}
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono">
+                        {typeof c.top_fused_score === "number"
+                          ? c.top_fused_score.toFixed(4)
+                          : "—"}
+                      </td>
+                      <td className="py-1.5 text-[10px] text-muted-foreground">
+                        {Object.entries(c.by_corpus)
+                          .map(([k, v]) => `${k} ${v.candidates}`)
+                          .join(" · ")}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {chunks.length > ROWS_PAGE && (
+            <nav
+              aria-label="Chunk pagination"
+              className="flex items-center justify-between gap-2 py-3 text-xs"
+            >
+              <span className="text-muted-foreground">
+                {current * ROWS_PAGE + 1}–{current * ROWS_PAGE + rows.length} of {chunks.length}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={current === 0}
+                  onClick={() => setPage(current - 1)}
+                >
+                  Previous
+                </Button>
+                <span aria-live="polite" className="text-muted-foreground">
+                  Page {current + 1} of {pageCount}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={current >= pageCount - 1}
+                  onClick={() => setPage(current + 1)}
+                >
+                  Next
+                </Button>
+              </span>
+            </nav>
+          )}
+        </>
+      )}
+    </Panel>
+  );
+}
+
+function TracePanel({
+  runId,
+  chunkId,
+  onChunkId,
+}: {
+  runId: string;
+  chunkId: string;
+  onChunkId: (id: string) => void;
+}) {
+  const [corpus, setCorpus] = React.useState("");
+  const [verdict, setVerdict] = React.useState("");
+  const [finalStatus, setFinalStatus] = React.useState("");
+  const [offset, setOffset] = React.useState(0);
+  const [data, setData] = React.useState<RetrievalCandidatesInspection | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  // Any filter change invalidates the page window — otherwise a narrower
+  // filter lands on page 5 of a 2-page result and reads as "no candidates".
+  React.useEffect(() => setOffset(0), [runId, chunkId, corpus, verdict, finalStatus]);
+
+  React.useEffect(() => {
+    let live = true;
+    setErr(null);
+    getRunCandidates(runId, {
+      chunk_id: chunkId || undefined,
+      corpus: corpus || undefined,
+      verdict: verdict || undefined,
+      final_status: finalStatus || undefined,
+      limit: ROWS_PAGE,
+      offset,
+    })
+      .then((d) => live && setData(d))
+      .catch((e) => live && setErr((e as Error).message));
+    return () => {
+      live = false;
+    };
+  }, [runId, chunkId, corpus, verdict, finalStatus, offset]);
+
+  const ok = data && data.status === "ok" ? data : null;
+  const pageCount = ok ? Math.max(1, Math.ceil(ok.matched / ROWS_PAGE)) : 1;
+  const currentPage = Math.floor(offset / ROWS_PAGE) + 1;
+
+  const select = (
+    label: string,
+    value: string,
+    set: (v: string) => void,
+    options: [string, string][]
+  ) => (
+    <div>
+      <label className="micro-label">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => set(e.target.value)}
+        className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-xs"
+      >
+        {options.map(([v, l]) => (
+          <option key={v} value={v}>
+            {l}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
+  return (
+    <Panel
+      title="Why each candidate did or did not reach the prompt"
+      description="One row per candidate per query: which leg found it, how it scored on each, where fusion put it, what the applicability guard said, and the stage that ended its journey."
+      right={
+        ok ? (
+          <StatusPill tone="info">
+            {ok.matched} of {ok.total_traced} traced
+          </StatusPill>
+        ) : null
+      }
+    >
+      <div className="mb-3 grid gap-3 sm:grid-cols-4">
+        <div>
+          <label className="micro-label" htmlFor="trace-chunk">
+            Chunk id
+          </label>
+          <Input
+            id="trace-chunk"
+            value={chunkId}
+            onChange={(e) => onChunkId(e.target.value.trim())}
+            placeholder="all chunks"
+            className="mt-1 h-8 font-mono text-xs"
+          />
+        </div>
+        {select("Corpus", corpus, setCorpus, [
+          ["", "all"],
+          ["rules", "rules"],
+          ["precedents", "precedents"],
+        ])}
+        {select("Applicability verdict", verdict, setVerdict, [
+          ["", "all"],
+          ["accepted", "accepted"],
+          ["rejected", "rejected"],
+        ])}
+        {select("Final status", finalStatus, setFinalStatus, [
+          ["", "all"],
+          ...(Object.keys(STATUS_COPY).map((k) => [k, STATUS_COPY[k].label]) as [
+            string,
+            string
+          ][]),
+        ])}
+      </div>
+
+      {err ? (
+        <Empty>{err}</Empty>
+      ) : !data ? (
+        <Empty>Loading…</Empty>
+      ) : data.status === "no_retrieval_data" ? (
+        <div className="rounded-sm border border-border bg-surface px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">No per-candidate trace for this run.</span>{" "}
+          {data.reason}
+        </div>
+      ) : (
+        <>
+          <FacetChips
+            title="Final status (whole run under the other filters)"
+            counts={data.facets.final_status}
+            active={finalStatus}
+            onPick={setFinalStatus}
+          />
+          <FacetChips title="Deciding stage" counts={data.facets.deciding_stage} />
+
+          {finalStatus && STATUS_COPY[finalStatus] && (
+            <p className="mb-3 flex items-start gap-1.5 text-xs text-muted-foreground">
+              <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {STATUS_COPY[finalStatus].prose}
+            </p>
+          )}
+
+          {data.rows.length === 0 ? (
+            <Empty>No candidate matches these filters. The run traced {data.total_traced}.</Empty>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground">
+                    <Th>Document</Th>
+                    <Th>Chunk</Th>
+                    <Th>Leg scores</Th>
+                    <Th>Fused</Th>
+                    <Th>Scope</Th>
+                    <Th>Verdict</Th>
+                    <Th>Outcome</Th>
+                    <Th>Cited</Th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {data.rows.map((r, i) => (
+                    <tr key={`${r.corpus}:${r.candidate_id}:${r.chunk_id ?? ""}:${i}`}>
+                      <td className="max-w-xs py-1.5 pr-3">
+                        <CandidateDoc c={r} />
+                        <div className="text-[10px] text-muted-foreground">
+                          {r.corpus}
+                          {r.category ? ` · ${r.category}` : ""} ·{" "}
+                          <span title="Which leg found it">
+                            {r.retrieval_method ?? "not retrieved"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono text-[10px]">
+                        {r.chunk_id ? r.chunk_id.slice(0, 8) : "—"}
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <LegCell row={r} />
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono text-[10px] whitespace-nowrap">
+                        {typeof r.fused_score === "number" ? r.fused_score.toFixed(4) : "—"}
+                        {r.fused_rank !== null && (
+                          <span className="text-muted-foreground"> #{r.fused_rank}</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono text-[10px]">
+                        {r.scope_value ?? "untagged"}
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        {r.verdict === "rejected" ? (
+                          <span className="inline-flex items-center gap-1 text-sev-critical">
+                            <Ban className="h-3 w-3" />
+                            rejected
+                          </span>
+                        ) : r.verdict === "accepted" ? (
+                          <span className="inline-flex items-center gap-1 text-success">
+                            <Check className="h-3 w-3" />
+                            accepted
+                          </span>
+                        ) : (
+                          <span
+                            className="text-[10px] text-muted-foreground"
+                            title="The applicability guard never saw this candidate — it was dropped earlier. Not the same as 'accepted'."
+                          >
+                            never judged
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <StatusCell row={r} />
+                      </td>
+                      <td className="py-1.5">
+                        {r.used_in_final_verdict ? (
+                          <span
+                            className="inline-flex items-center gap-1 text-success"
+                            title="A violation in this run's final verdict cites this candidate."
+                          >
+                            <Check className="h-3 w-3" />
+                            cited
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {ok && ok.matched > ROWS_PAGE && (
+            <nav
+              aria-label="Trace pagination"
+              className="flex items-center justify-between gap-2 py-3 text-xs"
+            >
+              <span className="text-muted-foreground">
+                {offset + 1}–{offset + data.rows.length} of {ok.matched}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={offset === 0}
+                  onClick={() => setOffset(Math.max(0, offset - ROWS_PAGE))}
+                >
+                  Previous
+                </Button>
+                <span aria-live="polite" className="text-muted-foreground">
+                  Page {currentPage} of {pageCount}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={offset + ROWS_PAGE >= ok.matched}
+                  onClick={() => setOffset(offset + ROWS_PAGE)}
+                >
+                  Next
+                </Button>
+              </span>
+            </nav>
+          )}
+
+          {data.enrichment_notes && (
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Enrichment degraded:{" "}
+              {Object.entries(data.enrichment_notes)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(" · ")}{" "}
+              — those candidates show a bare id.
+            </p>
+          )}
+        </>
+      )}
+    </Panel>
+  );
+}
+
 /* ---------- page ---------- */
 
 export default function AdminRetrievalPage() {
@@ -851,12 +1421,17 @@ export default function AdminRetrievalPage() {
   const [rejected, setRejected] = React.useState<RetrievalRejectedInspection | null>(null);
   const [rejectedErr, setRejectedErr] = React.useState<string | null>(null);
 
+  // Shared by the two trace panels: clicking a chunk in the rollup filters the
+  // candidate table, which is the whole drill-in gesture.
+  const [chunkFilter, setChunkFilter] = React.useState("");
+
   const inspect = React.useCallback(async (fetcher: () => Promise<RetrievalInspection>) => {
     setLoading(true);
     setStoryErr(null);
     setStory(null);
     setRejected(null);
     setRejectedErr(null);
+    setChunkFilter("");
     try {
       const s = await fetcher();
       setStory(s);
@@ -994,6 +1569,11 @@ export default function AdminRetrievalPage() {
       {story && story.status === "no_retrieval_data" && (
         <div className="space-y-5">
           <NoDataCard data={story} />
+          {/* The per-candidate trace is a SEPARATE table with its own history:
+              a run can have no sampled payload and still have been traced, and
+              vice versa. Ask both, always. */}
+          <ChunkRollupPanel runId={story.run_id} selected={chunkFilter} onPick={setChunkFilter} />
+          <TracePanel runId={story.run_id} chunkId={chunkFilter} onChunkId={setChunkFilter} />
           <RejectedPanel data={rejected} err={rejectedErr} />
         </div>
       )}
@@ -1005,6 +1585,8 @@ export default function AdminRetrievalPage() {
           </section>
           <RejectedPanel data={rejected} err={rejectedErr} />
           <ScopePanel story={story} />
+          <ChunkRollupPanel runId={story.run_id} selected={chunkFilter} onPick={setChunkFilter} />
+          <TracePanel runId={story.run_id} chunkId={chunkFilter} onChunkId={setChunkFilter} />
           <TotalsPanel story={story} />
           <CandidatesPanel story={story} />
         </div>

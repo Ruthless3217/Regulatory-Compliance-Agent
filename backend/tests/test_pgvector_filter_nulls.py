@@ -81,11 +81,12 @@ def test_product_category_is_allowed_on_precedents():
     assert "product_category" in clause
 
 
-def test_product_line_is_still_rejected_on_rag_rules():
-    # rag_rules has no product_line column; whitelisting it would produce a
-    # query against a nonexistent column at runtime.
-    with pytest.raises(ValueError, match="not allowed"):
-        _clause({"product_line": ["term"]}, index="rag_rules")
+def test_product_line_is_allowed_on_rag_rules():
+    # Migration 0036 added product_line to rag_rules, so the pushdown filter is
+    # now a real column reference (it used to be rejected as nonexistent).
+    clause, params = _clause({"product_line": ["term"]}, index="rag_rules")
+    assert "product_line IN (" in clause
+    assert list(params.values()) == ["term"]
 
 
 def test_unknown_field_still_rejected():

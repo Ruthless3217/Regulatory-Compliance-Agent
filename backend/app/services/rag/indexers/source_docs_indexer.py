@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -47,8 +47,13 @@ async def index_source_document(
     document_title: str,
     regulator: str,
     full_text: str,
+    product_line: Optional[str] = None,
 ) -> List[Tuple[str, str]]:
-    """Chunk + embed + upsert. Returns [(passage_id, passage_text), ...] in order."""
+    """Chunk + embed + upsert. Returns [(passage_id, passage_text), ...] in order.
+
+    `product_line` is the scope the ingest caller already validated for the
+    guideline; NULL leaves the passages visibly unscoped rather than guessed.
+    """
     if not full_text:
         return []
     passages = _chunk_source_text(full_text)
@@ -72,6 +77,7 @@ async def index_source_document(
                         "page_number": None,
                         "text": passage,
                         "derived_rule_ids": [],
+                        "product_line": product_line,
                     },
                 )
             )
@@ -92,6 +98,7 @@ async def index_source_evidence_quote(
     full_text: str,
     source_quote: str,
     evidence_index: int,
+    product_line: Optional[str] = None,
 ) -> str:
     """Stage one exact quote as the sole publishable evidence for a rule.
 
@@ -126,6 +133,7 @@ async def index_source_evidence_quote(
                         "page_number": None,
                         "text": quote,
                         "derived_rule_ids": [],
+                        "product_line": product_line,
                     },
                 )
             ],

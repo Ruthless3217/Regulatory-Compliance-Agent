@@ -42,7 +42,13 @@ def test_only_the_disclosure_path_proposes_wording():
     Everything else must be None until something generates a rewrite for the
     actual passage — the on-demand rewrite endpoint.
     """
-    non_null = [rhs for rhs in _assignments("suggested_fix") if rhs != "None"]
-    assert non_null == ["d.text"], (
-        f"unexpected suggested_fix source(s): {non_null}"
-    )
+    non_null = {rhs for rhs in _assignments("suggested_fix") if rhs != "None"}
+    assert non_null == {
+        "d.text",
+        # The reuse path (_prior_violation_to_state) mirrors an ALREADY
+        # PERSISTED finding back into graph state when its chunk is unchanged.
+        # It copies the stored value; it does not choose one, so it cannot
+        # introduce a wrong source — whatever it carries was vetted by this
+        # same guard when the finding was first created.
+        "v.suggested_fix",
+    }, f"unexpected suggested_fix source(s): {non_null}"

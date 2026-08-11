@@ -619,6 +619,11 @@ async def submit_violation_feedback(
     """Record a reviewer's accept/reject on a finding and update the fired
     rule's learned reliability (Beta-Binomial pseudo-counts, damped by the
     prior). Re-submitting flips the stored verdict without double-counting.
+
+    The reviewer is attributed exactly as /actions does: rule_feedback is
+    unique per (violation, reviewer), so submitting without one parked every
+    verdict on the same NULL-reviewer row — one reviewer's accept silently
+    flipped another's reject, reverting a pseudo-count that was never theirs.
     """
     from app.services.rule_feedback_service import RuleFeedbackService
 
@@ -627,6 +632,7 @@ async def submit_violation_feedback(
             db,
             violation_id,
             payload.verdict,
+            reviewer_id=getattr(user, "id", None),
             severity_override=payload.severity_override,
             comment=payload.comment,
         )
@@ -647,18 +653,35 @@ async def submit_violation_feedback(
 # Which reviewer-supplied `reason` escalates a finding to a human-review
 # queue, and which queue. Reasons absent from this map (or no reason at all)
 # route to no queue — most actions are routine and need no escalation.
+#
+# Keys are the reviewer vocabulary the UI actually offers (ViolationCard's
+# dismiss + not-a-violation reason lists), normalized to underscores. The UI
+# sends them hyphenated ("wrong-severity"), which used to miss every key here
+# and left needs_severity_review / needs_legal_review permanently empty.
+# `out_of_scope` has no UI option left but is kept for rows written before this.
 REASON_TO_QUEUE: Dict[str, str] = {
     "wrong_severity": "needs_severity_review",
+    "needs_human_legal_review": "needs_legal_review",
+    "valid_regulatory_exception": "needs_legal_review",
+    "outdated_rule": "needs_legal_review",
     "out_of_scope": "needs_legal_review",
     "duplicate": "needs_dedup_review",
 }
 
 
-def resolve_routed_queue(reason: Optional[str]) -> Optional[str]:
-    """Pure REASON_TO_QUEUE lookup — no queue for an unmapped/absent reason."""
+def normalize_reason(reason: Optional[str]) -> Optional[str]:
+    """Reviewer reason keys as one vocabulary: the UI speaks kebab-case, the
+    queue map and every stored row speak snake_case."""
     if not reason:
         return None
-    return REASON_TO_QUEUE.get(reason)
+    return reason.strip().lower().replace("-", "_") or None
+
+
+def resolve_routed_queue(reason: Optional[str]) -> Optional[str]:
+    """Pure REASON_TO_QUEUE lookup — no queue for an unmapped/absent reason.
+    Accepts either spelling of the key."""
+    key = normalize_reason(reason)
+    return REASON_TO_QUEUE.get(key) if key else None
 
 
 class ViolationActionRequest(BaseModel):
@@ -689,7 +712,12 @@ async def submit_violation_action(
     way this is a real, server-persisted action — previously "Dismiss" was
     100% client-side React state that persisted nothing (silent-discard bug).
     """
+    from app.services import rule_feedback_service as rfs
     from app.services.rule_feedback_service import RuleFeedbackService
+
+    # Stored in the same spelling the queue map uses, so the queues endpoint's
+    # (rule_id, reason) pattern count can't split one reason across two keys.
+    reason = normalize_reason(payload.reason)
 
     try:
         res = RuleFeedbackService.apply_action(
@@ -697,11 +725,22 @@ async def submit_violation_action(
             violation_id,
             payload.action,
             reviewer_id=getattr(user, "id", None),
-            reason=payload.reason,
+            reason=reason,
             explanation=payload.explanation,
             final_text=payload.final_text,
             severity_override=payload.severity_override,
-            routed_queue=resolve_routed_queue(payload.reason),
+            routed_queue=resolve_routed_queue(reason),
+        )
+        # The verdict is now also a precedent: correct/not_violation teach the
+        # "Reviewer feedback" corpus layer, dismiss un-teaches it. Fail-soft —
+        # the feedback above is already committed and never blocks on this.
+        await rfs.sync_reviewer_precedent(
+            db,
+            violation_id,
+            payload.action,
+            reason=reason,
+            explanation=payload.explanation,
+            final_text=payload.final_text,
         )
         import asyncio
         from app.services.observability import audit

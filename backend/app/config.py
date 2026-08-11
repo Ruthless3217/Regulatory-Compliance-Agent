@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 4096      # hard cap on generated tokens per call (cost-leak guard)
     llm_request_timeout: float = 120.0  # per-request timeout in seconds (SDK-level)
     llm_max_retries: int = 2            # SDK-level retry count for transient errors
+    # Best-effort determinism knob for openai/azure: same seed + same prompt =>
+    # (mostly) same completion. Unset = omit the param entirely, which is what
+    # every non-OpenAI-compatible provider needs. Not a guarantee — the provider
+    # only promises "mostly deterministic" for a fixed system_fingerprint.
+    llm_seed: Optional[int] = None
 
     # --- Chat-feature LLM override -------------------------------------------
     # The chat assistant (streaming Q&A) can run on a DIFFERENT provider than the
@@ -113,6 +118,7 @@ class Settings(BaseSettings):
     @field_validator(
         "critic_llm_use_max_completion_tokens",
         "critic_llm_supports_temperature",
+        "llm_seed",
         mode="before",
     )
     @classmethod
@@ -339,6 +345,15 @@ class Settings(BaseSettings):
     # docs/superpowers/specs/2026-06-15-cross-chunk-context-design.md.
     cross_chunk_context_enabled: bool = True
     cross_chunk_context_token_budget: int = 8000
+
+    # Chunk-level analysis reuse: a chunk whose text and whole grading context
+    # are identical to the last PERSISTED run carries that run's verdicts
+    # forward instead of paying ~3 LLM calls to re-derive them. The keys live on
+    # content_chunks (migration 0035); see
+    # services/agents/compliance/analysis_cache.py for what invalidates them.
+    # Set False to force every chunk through the LLM (A/B, or while debugging a
+    # suspected stale verdict) — one switch, no code change.
+    analysis_reuse_enabled: bool = True
 
     # Scoring policy version — stamped onto every AnalysisRun at open_run time
     # (analysis_runs.scoring_policy_version, migration 0029) so a later change

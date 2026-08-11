@@ -21,7 +21,10 @@ import { getSubmissionImportHtml } from "@/lib/api";
 import { EditorToolbar } from "./EditorToolbar";
 import { SlashCommandPlugin } from "./SlashCommandPlugin";
 import { FindingDecorationsPlugin, type FindingSpot } from "./FindingDecorationsPlugin";
-import { FindingBubbles } from "./FindingBubbles";
+import { FindingBubbles, BUBBLE_LANE } from "./FindingBubbles";
+import { SectionIdPlugin } from "./SectionIdPlugin";
+import { EditorApplyPlugin, type EditorFixApply } from "./EditorApplyPlugin";
+import type { NodeText } from "./findingAnchor";
 import { ImageNode } from "./ImageNode";
 import { cn } from "@/lib/utils";
 import type { Violation } from "@/lib/types";
@@ -139,6 +142,8 @@ export function LexicalDocument({
   onUnlocatedFindings,
   pagesRendered,
   bubbles = false,
+  chromeless = false,
+  registerApply,
 }: {
   initialState?: Record<string, unknown> | null;
   /** Seed source is fetched from this submission when there is no saved state. */
@@ -148,10 +153,20 @@ export function LexicalDocument({
    * fails. Only read for that message. */
   pagesRendered?: boolean;
   /** Show each located finding as a card in the sheet's right margin. Split
-   * mode turns this on: it hides both rails to give the two documents the
-   * width, and the findings have to go somewhere the reviewer can still see
+   * and Edit both turn this on: Split hides both rails to give the two
+   * documents the width, Edit collapses the findings rail by default, and in
+   * either case the findings have to go somewhere the reviewer can still see
    * them beside the text they describe. */
   bubbles?: boolean;
+  /** The pane already frames this editor (Split's card), so the sheet drops its
+   * canvas, border and shadow — two nested sheets is chrome around chrome, in
+   * the mode with the least width to spare. Kept separate from `bubbles`: Edit
+   * shows cards on a full sheet. */
+  chromeless?: boolean;
+  /** Offers this editor as the surface Apply-fix writes through. Without it a
+   * fix would splice the plain-text copy while the editor's state and HTML —
+   * what the export renders — kept the original wording. */
+  registerApply?: (apply: EditorFixApply | null) => void;
   onChange?: (doc: { state: SerializedEditorState; html: string; text: string }) => void;
   /** Findings to draw on the document. Decorations only — never editor content,
    * so they cannot reach the exported DOCX. */
@@ -167,6 +182,15 @@ export function LexicalDocument({
   // Measured by the decorations plugin, which already walks every finding to
   // draw it — measuring a second time would be a second source of truth.
   const [spots, setSpots] = React.useState<FindingSpot[]>([]);
+  // The finding under the pointer, either on the text or on its card. Only
+  // tracked while the cards are shown — otherwise it is a re-render per mouse
+  // move for nothing to look at.
+  const [hovered, setHovered] = React.useState<string | null>(null);
+  // The live blocks and their content-derived ids, maintained by
+  // SectionIdPlugin and read by everything that has to find a finding in the
+  // document. A ref, not state: it changes on every keystroke and nothing
+  // renders from it.
+  const sectionsRef = React.useRef<NodeText[] | null>(null);
   const config = {
     namespace: "compliance-document",
     editable: !readOnly,
@@ -199,18 +223,19 @@ export function LexicalDocument({
       <div
         className={cn(
           "min-h-0 flex-1 overflow-y-auto",
-          bubbles ? "px-5 py-6" : "bg-surface px-6 py-5 pb-16"
+          chromeless ? "px-5 py-6" : "bg-surface px-6 py-5 pb-16"
         )}
+        // The cards hang off the sheet's right edge, so the scroll container
+        // reserves their lane rather than letting them fall off the pane. Done
+        // as padding on the container, so the centred sheet inside it ends up
+        // with the sheet-and-cards PAIR centred.
+        style={bubbles ? { paddingRight: BUBBLE_LANE + (chromeless ? 20 : 24) } : undefined}
       >
         <div
           className={cn(
             "relative",
-            bubbles
-              // The bubbles hang off the right edge (220px card + a 16px
-              // gutter), so the sheet reserves that width rather than letting
-              // them fall off the pane. Left-aligned then, not centred:
-              // centring the sheet alone would put the pair off-centre anyway.
-              ? "mr-[236px] max-w-xl"
+            chromeless
+              ? "max-w-xl"
               : "mx-auto max-w-[820px] rounded-md border border-border bg-background px-[62px] py-[52px] shadow-sheet"
           )}
         >
@@ -249,7 +274,10 @@ export function LexicalDocument({
             <FindingDecorationsPlugin
               violations={violations}
               selectedViolationId={selectedViolationId ?? null}
+              hoveredViolationId={bubbles ? hovered : null}
+              sectionsRef={sectionsRef}
               onSelect={onSelectViolation}
+              onHover={bubbles ? setHovered : undefined}
               onResolved={onUnlocatedFindings}
               onPlaced={bubbles ? setSpots : undefined}
             />
@@ -259,10 +287,16 @@ export function LexicalDocument({
               violations={violations}
               spots={spots}
               selectedViolationId={selectedViolationId ?? null}
+              hoveredViolationId={hovered}
               onSelect={onSelectViolation}
+              onHover={setHovered}
             />
           )}
         </div>
+        <SectionIdPlugin sectionsRef={sectionsRef} />
+        {registerApply && !readOnly && (
+          <EditorApplyPlugin register={registerApply} sectionsRef={sectionsRef} />
+        )}
         <HistoryPlugin />
         <ListPlugin />
         <LinkPlugin />

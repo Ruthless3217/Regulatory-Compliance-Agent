@@ -582,16 +582,29 @@ async def submission_draft_diff(
     aligner (`comparison_service.build_diff`) rather than a second one that
     could disagree with it.
 
-    Both sides come from the extracted text the analyser graded, not from the
-    uploaded bytes: the working copy only exists as text, so diffing it against
-    a re-extraction of the original would report the extractor's own
-    inconsistencies as reviewer edits.
+    Both sides must come through the SAME reader, or the redline is fiction.
+    The working copy is the Lexical editor's text, and the editor was seeded by
+    `lexical_document_service.import_text` — so that is the baseline, not
+    `original_content`, which is the analyser's own extraction of the same
+    upload. The two disagree by design (the analyser labels page headers and
+    footers, joins table cells with pipes and keeps PDF page chrome), and
+    diffing across them reported hundreds of extractor disagreements as
+    reviewer edits the moment anyone saved.
+
+    A submission with no importable upload — pasted text, HTML, markdown — has
+    no editor lineage to be seeded from, so `original_content` IS its baseline
+    and stays the answer there. Same fallback when the conversion fails, since
+    the editor degrades to extracted text in that case too.
+
+    The conversion runs off the event loop: it is seconds of CPU on a long
+    DOCX, and this handler is async (see GET /import-html for the same reason).
     """
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    original = submission.original_content or ""
+    baseline = await run_in_threadpool(lexical_document_service.import_text, submission)
+    original = baseline if baseline is not None else (submission.original_content or "")
     working = submission.current_content or original
     blocks = comparison_service.build_diff(
         comparison_service.split_text_paragraphs(original),
@@ -602,8 +615,10 @@ async def submission_draft_diff(
         "blocks": blocks,
         "changed": changed,
         # An unedited document is a valid answer, and the pane says so rather
-        # than rendering an empty redline that reads as a failure.
-        "edited": bool(submission.current_content) and working != original,
+        # than rendering an empty redline that reads as a failure. Read off the
+        # blocks, not off string equality: the two projections of one unedited
+        # document can differ in whitespace, and whitespace is not an edit.
+        "edited": bool(submission.current_content) and changed > 0,
     }
 
 

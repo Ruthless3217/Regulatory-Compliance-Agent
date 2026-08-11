@@ -645,11 +645,28 @@ def map_findings_to_violations(
     grounding tiers: precedent citations, rule-grounded findings, novel
     findings, and product-fact findings. Out-of-range indices and sub-floor
     novel findings are dropped."""
+    from app.services.preprocessing_service import _is_reviewer_rejection
+
     rules = rules or []
     out: List[Dict[str, Any]] = []
     for c in (result.citations or []):
         idx = int(c.precedent_index)
         if not (0 <= idx < len(precedents)):
+            continue
+        # A reviewer-REJECTION carries the opposite verdict: a human read this
+        # exact wording and refused to flag it. The prompt renders those in
+        # their own section with their own instruction (preprocessing_service),
+        # but `precedent_index` still addresses the flat list, so a model that
+        # cites one produces a finding whose "precedent" says do NOT raise
+        # this. Deterministic guard, because no prompt wording can be trusted
+        # to hold the line every time.
+        if _is_reviewer_rejection(precedents[idx]):
+            logger.info(
+                "Dropped citation on precedent_index=%d: it resolves to a "
+                "reviewer REJECTION (%r), which is evidence the phrase is "
+                "acceptable, not a violation.",
+                idx, str(precedents[idx].get("violation_category"))[:60],
+            )
             continue
         out.append(
             _citation_to_violation(
@@ -869,7 +886,9 @@ def _submission_scope_signals(
     return []
 
 
-async def _resolve_product_grounding(state: Dict, chunks: List[Dict]) -> tuple:
+async def _resolve_product_grounding(
+    state: Dict, chunks: List[Dict], product_scope: Optional[List] = None
+) -> tuple:
     """Return (product_facts, product_passages) for the matched product(s).
 
     product_facts: deterministic fact cards (per document). product_passages:
@@ -923,6 +942,7 @@ async def _resolve_product_grounding(state: Dict, chunks: List[Dict]) -> tuple:
             try:
                 product_passages[cid] = await retriever.retrieve(
                     query=text, uin=primary_uin, top_k=settings.product_docs_top_k,
+                    product_scope=product_scope,
                 )
             except Exception as e:
                 logger.warning(f"product-docs retrieval failed for chunk {cid} (non-fatal): {e}")
@@ -994,7 +1014,7 @@ async def dispatch_node(state: ComplianceState) -> Dict:
     # chunk of any product when embeddings were down (RETRIEVAL_RCA.md).
     from app.services.fact_card_service import get_fact_card_service
     from app.services.rag.applicability import (
-        build_scope, validate_precedents, validate_rules,
+        build_scope, scope_filter_values, validate_precedents, validate_rules,
     )
     _md_in = state.get("metadata") or {}
     scope = build_scope(
@@ -1002,11 +1022,23 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         get_fact_card_service(),
         declared_product_line=_md_in.get("declared_product_line"),
     )
+    # Same scope, pushed down into SQL so wrong-product rows stop consuming
+    # recall-pool slots (the judge below still decides applicability). None
+    # when no product resolved -> retrieval stays unfiltered, as before.
+    product_scope = scope_filter_values(scope)
     product_line_by_id: Dict[str, Any] = {
         r["id"]: r.get("product_line")
         for r_list in rules_serializable.values() for r in r_list
     }
     retrieval_debug: List[Dict[str, Any]] = []
+
+    # Full per-candidate trace (migration 0037). `retrieval_debug` below stays
+    # byte-identical — `_gated` is a PARALLEL structure that additionally
+    # carries the category, and gets joined against the per-leg scores/ranks
+    # that hybrid_search used to discard inside its own closure.
+    from app.services.rag import trace as rag_trace
+    _trace_token = rag_trace.start()
+    _gated: List[Dict[str, Any]] = []
 
     # Scope the fallback set itself (state.active_rules feeds the degraded path
     # in _select_rules_for_chunk and the scoring category list — keys are kept
@@ -1015,6 +1047,9 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         accepted, dbg = validate_rules(rules_serializable[cat], scope, product_line_by_id)
         rules_serializable[cat] = accepted
         retrieval_debug.extend({**d, "tier": "active_rules_fallback"} for d in dbg)
+        _gated.extend(
+            {**d, "tier": "active_rules_fallback", "category": cat} for d in dbg
+        )
 
     # 2. Try RAG per-chunk retrieval. On any failure, set rag_degraded=true
     #    and let analysis_node use the flat rules_serializable.
@@ -1031,6 +1066,7 @@ async def dispatch_node(state: ComplianceState) -> Dict:
                 chunks=chunks,
                 categories=categories,
                 top_k=settings.rag_top_k_analysis,
+                product_scope=product_scope,
             )
             retrieved_total = sum(
                 len(rs) for chunk_map in chunk_rules.values() for rs in chunk_map.values()
@@ -1072,6 +1108,10 @@ async def dispatch_node(state: ComplianceState) -> Dict:
             accepted, dbg = validate_rules(rule_list, scope, product_line_by_id)
             cat_map[cat] = accepted
             retrieval_debug.extend({**d, "tier": "chunk_rules", "chunk_id": str(cid)} for d in dbg)
+            _gated.extend(
+                {**d, "tier": "chunk_rules", "chunk_id": str(cid), "category": cat}
+                for d in dbg
+            )
 
     md = dict(state.get("metadata") or {})
     md["rag_degraded"] = rag_degraded
@@ -1099,7 +1139,15 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         from app.services.rag.retrievers.precedent_retriever import get_precedent_retriever
         precedent_retriever = get_precedent_retriever()
         retrieved_examples = await precedent_retriever.retrieve_per_chunk(
-            chunks=chunks, top_k=settings.pgvector_top_k
+            chunks=chunks,
+            top_k=settings.pgvector_top_k,
+            product_scope=product_scope,
+            # Leakage guard: a reviewer-feedback precedent carries the
+            # submission id it was taught from in `ticket`, which the retriever
+            # exposes as `document_id`. Without this, re-analysing a submission
+            # grades it against its OWN reviewer verdicts and trivially
+            # "agrees" with itself.
+            exclude_document_id=str(state.get("submission_id") or "") or None,
         )
     except Exception as e:
         logger.warning(f"Precedent retrieval failed (analysis will find no violations): {e}")
@@ -1112,6 +1160,7 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         accepted, dbg = validate_precedents(precedent_list, scope)
         retrieved_examples[cid] = accepted
         retrieval_debug.extend({**d, "tier": "precedents", "chunk_id": str(cid)} for d in dbg)
+        _gated.extend({**d, "tier": "precedents", "chunk_id": str(cid)} for d in dbg)
 
     total_precedents = sum(len(v) for v in retrieved_examples.values())
     # Only label "knowledge_base_empty" when chunks exist but the knowledge
@@ -1168,10 +1217,62 @@ async def dispatch_node(state: ComplianceState) -> Dict:
             "for scope %s", len(_rejected), len(retrieval_debug), scope.as_dict(),
         )
 
+    # Durable per-candidate trace (migration 0037). Joins the store's leg
+    # scores/ranks onto the applicability verdicts and stamps the stage that
+    # decided each candidate's fate — the uncapped, per-chunk answer to "why is
+    # this not in the prompt", where retrieval_debug above is a 100-row sample.
+    #
+    # Fail-soft end to end: a trace or persist failure must never change what
+    # the run grades. The insert is SAVEPOINT-scoped (rag/trace.py) so it cannot
+    # poison the graph's transaction either.
+    _traced = rag_trace.stop(_trace_token)
+    try:
+        from app.services.observability.usage_context import get_usage_context
+
+        _run_id = get_usage_context().run_id
+        if _run_id:
+            # Which candidates actually reached a prompt. The rule cap is pure,
+            # so re-running the selection is exact — there is no other record of
+            # what it cut.
+            _prompt_keys = set()
+            for _c in chunks:
+                _cid = str(_c.get("id"))
+                for _r in _select_rules_for_chunk(
+                    _cid, chunk_rules, rules_serializable, rag_degraded
+                ):
+                    # The degraded path feeds the FLAT set, whose applicability
+                    # records carry no chunk_id — key them as they were recorded.
+                    _prompt_keys.add(
+                        ("rules", None if rag_degraded else _cid, str(_r.get("id")))
+                    )
+                for _p in retrieved_examples.get(_cid) or []:
+                    # An accepted precedent goes into the prompt 1:1.
+                    _prompt_keys.add(("precedents", _cid, str(_p.get("id"))))
+
+            _written = rag_trace.persist_run_candidates(
+                db,
+                str(_run_id),
+                rag_trace.build_rows(
+                    str(_run_id),
+                    traced=_traced,
+                    gated=_gated,
+                    prompt_keys=_prompt_keys,
+                    score_threshold=settings.rag_score_threshold,
+                ),
+            )
+            logger.info(
+                "dispatch_node: traced %d retrieval candidate(s) for run %s "
+                "(%d judged by applicability)", _written, _run_id, len(_gated),
+            )
+    except Exception as e:  # noqa: BLE001 - observability must not break analysis
+        logger.warning("dispatch_node: retrieval trace failed (non-fatal): %s", e)
+
     if "agent_precedent" not in active_agents:
         active_agents.append("agent_precedent")
 
-    product_facts, product_passages = await _resolve_product_grounding(state, chunks)
+    product_facts, product_passages = await _resolve_product_grounding(
+        state, chunks, product_scope
+    )
 
     return {
         "active_rules": rules_serializable,
@@ -1189,6 +1290,93 @@ async def dispatch_node(state: ComplianceState) -> Dict:
             )
         )]
     }
+
+
+def _prior_violation_to_state(v: Any, chunk: Dict[str, Any]) -> Dict[str, Any]:
+    """One persisted violation, back in the shape graph state carries.
+
+    ``reused_violation_id`` is an instruction to engine.persist_results:
+    re-parent THAT row onto the new check instead of inserting a copy. A copy
+    would carry a new id, and every rule_feedback verdict the reviewer recorded
+    joins on the old one — reuse would quietly discard the review it exists to
+    preserve. Same reason the scoped-rerun endpoint re-parents rather than
+    copies. Position fields are taken from the CURRENT chunk, since a chunk can
+    move without its text changing.
+    """
+    loc = f"chunk:{chunk.get('id')}"
+    page = (chunk.get("metadata") or {}).get("page_number")
+    if page:
+        loc += f":page:{page}"
+    return {
+        "category": v.category,
+        "severity": v.severity,
+        "description": v.description or "",
+        "location": loc,
+        "current_text": v.current_text,
+        "suggested_fix": v.suggested_fix,
+        "auto_fixable": str(v.auto_fixable).lower() == "true",
+        "confidence": v.confidence,
+        "rule_id": str(v.rule_id) if v.rule_id else None,
+        "regulator_quote": v.regulator_quote,
+        "cited_precedent_id": str(v.cited_precedent_id) if v.cited_precedent_id else None,
+        "cited_document_id": v.cited_document_id,
+        "cited_source_file": v.cited_source_file,
+        "cited_anchor_text": v.cited_anchor_text,
+        "cited_comment_verbatim": v.cited_comment_verbatim,
+        "cited_final_text": v.cited_final_text,
+        "cited_section": v.cited_section,
+        "cited_page": v.cited_page,
+        "cited_regulation_version": v.cited_regulation_version,
+        "similarity_score": v.similarity_score,
+        "suppressed": bool(v.suppressed),
+        "suppressed_reason": v.suppressed_reason,
+        "chunk_id": str(chunk.get("id")),
+        "chunk_index": chunk.get("chunk_index"),
+        "violation_metadata": dict(v.violation_metadata or {}),
+        "reused_violation_id": str(v.id),
+    }
+
+
+def _load_reuse_inputs(db, submission_id: str, chunks: List[Dict]) -> tuple:
+    """DB half of the cache lookup: (stored context key per chunk id, prior
+    findings per chunk id).
+
+    Prior findings come from the newest persisted check only — the one the
+    stored keys describe the conditions of. Reviewer-authored flags are
+    excluded: they are not model predictions and must not be re-parented as if
+    this run had produced them.
+    """
+    from app.models.content_chunk import ContentChunk
+    from app.models.violation import Violation
+    from app.services import export_common
+
+    stored_keys = {
+        str(r.id): r.context_key
+        for r in db.query(ContentChunk)
+        .filter(ContentChunk.submission_id == submission_id)
+        .all()
+    }
+
+    prior: Dict[str, List[Dict]] = {}
+    check = export_common.latest_check(db, submission_id)
+    if check is not None:
+        by_id = {str(c.get("id")): c for c in chunks}
+        rows = (
+            db.query(Violation)
+            .filter(
+                Violation.compliance_check_id == check.id,
+                Violation.source == "model",
+            )
+            .all()
+        )
+        for v in rows:
+            chunk = by_id.get(str(v.chunk_id)) if v.chunk_id else None
+            if chunk is None:
+                continue
+            prior.setdefault(str(v.chunk_id), []).append(
+                _prior_violation_to_state(v, chunk)
+            )
+    return stored_keys, prior
 
 
 @traceable(run_type="chain", name="graph.analysis_node")
@@ -1249,10 +1437,72 @@ async def analysis_node(state: ComplianceState) -> Dict:
     from app.config import settings as _settings
     _grade_semaphore = asyncio.Semaphore(max(1, _settings.grade_concurrency))
 
+    # --- chunk-level analysis reuse ------------------------------------------
+    # The document context is rendered once per chunk here (it was rebuilt
+    # inside every grading task before) because it is half of that chunk's cache
+    # key: it embeds the OTHER chunks' text into this chunk's prompt, so an edit
+    # anywhere in the document invalidates every chunk that could see it.
+    from app.services.agents.compliance.analysis_cache import (
+        chunk_context_key,
+        llm_calls_per_chunk,
+        plan_chunk_reuse,
+        run_context_fingerprint,
+    )
+
+    doc_context_by_chunk: Dict[str, Optional[str]] = {
+        str(c.get("id")): (
+            build_document_context(
+                chunks_data, c.get("chunk_index"), _settings.cross_chunk_context_token_budget
+            )
+            if _settings.cross_chunk_context_enabled
+            else None
+        )
+        for c in chunks_data
+    }
+
+    run_fingerprint = run_context_fingerprint(
+        _settings,
+        active_rules=active_rules,
+        retrieved_examples=retrieved,
+        product_facts=product_facts,
+    )
+    chunk_keys: Dict[str, str] = {
+        str(c.get("id")): chunk_context_key(
+            run_fingerprint,
+            c.get("text") or "",
+            doc_context_by_chunk.get(str(c.get("id"))),
+        )
+        for c in chunks_data
+    }
+
+    reuse_hits: Dict[str, List[Dict]] = {}
+    if chunks_data and _settings.analysis_reuse_enabled:
+        try:
+            from .context import GraphContext
+
+            stored_keys, prior_violations = _load_reuse_inputs(
+                GraphContext.get_db_session(), submission_id, chunks_data
+            )
+            reuse_hits = plan_chunk_reuse(chunk_keys, stored_keys, prior_violations)
+        except Exception as e:
+            # Fail open. A cache that cannot be read costs LLM calls, never
+            # correctness — every chunk is simply graded from scratch.
+            logger.warning(f"Analysis reuse lookup failed; grading every chunk: {e}")
+            reuse_hits = {}
+
     async def grade_chunk(chunk_data: Dict) -> Dict:
         chunk_id = chunk_data.get("id")
         chunk_index = chunk_data.get("chunk_index")
         chunk_text = chunk_data.get("text", "")
+
+        cached = reuse_hits.get(str(chunk_id))
+        if cached is not None:
+            logger.info(
+                "Chunk %s unchanged since the last persisted run — carrying "
+                "forward %d finding(s), no LLM call.", chunk_index, len(cached),
+            )
+            return {"violations": cached, "failed": False}
+
         precedents = retrieved.get(str(chunk_id), [])
         rules = _rules_for_chunk(chunk_id)
         passages = product_passages_by_chunk.get(str(chunk_id), [])
@@ -1294,11 +1544,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 exec_id = str(execution.id)
                 task_db.commit()
 
-                document_context = None
-                if _settings.cross_chunk_context_enabled:
-                    document_context = build_document_context(
-                        chunks_data, chunk_index, _settings.cross_chunk_context_token_budget
-                    )
+                document_context = doc_context_by_chunk.get(str(chunk_id))
                 prompt = context_service.create_precedent_prompts(
                     chunk_text, precedents, rules=rules, document_context=document_context,
                     product_facts=product_facts, product_passages=passages,
@@ -1452,6 +1698,23 @@ async def analysis_node(state: ComplianceState) -> Dict:
     # fail-closed guard can refuse to grade a partially-analyzed document.
     md = dict(state.get("metadata") or {})
     md["analysis_failed_chunks"] = failed_chunks
+
+    # Reuse census + the keys this run graded under. The keys are stamped onto
+    # the chunk rows by engine.persist_results — only a run that persists may
+    # advertise a cache — and are kept out of run_metadata by its whitelist.
+    reused = len(reuse_hits)
+    md["chunks_total"] = len(chunks_data)
+    md["chunks_reused"] = reused
+    md["chunks_analyzed"] = len(chunks_data) - reused
+    md["llm_calls_saved"] = reused * llm_calls_per_chunk(_settings)
+    md["analysis_context_key"] = run_fingerprint
+    md["chunk_keys"] = chunk_keys
+    logger.info(
+        "Analysis reuse: %d/%d chunk(s) carried forward, %d graded, ~%d LLM "
+        "call(s) saved (context %s).",
+        reused, len(chunks_data), md["chunks_analyzed"], md["llm_calls_saved"],
+        run_fingerprint[:12],
+    )
     if failed_chunks and not md.get("degraded"):
         md["degraded"] = "analysis_incomplete"
     # Verdict-origin census: makes precedent(comment)-influenced verdicts

@@ -88,6 +88,19 @@ def normalize_category(raw: Optional[str]) -> Optional[str]:
     return _ALIASES.get(s)
 
 
+def _spellings(token: str) -> set:
+    """Every casing of `token` a corpus column is known to hold.
+
+    The taggers disagree on case by design and history: precedent ingest writes
+    the title/upper labels of its hint table ('ULIP', 'Non-Par', 'Pension'),
+    while the rule/submission API and the backfill script write canonical
+    lowercase ('ulip', 'non_par', 'pension_annuity'). SQL `IN` is
+    case-sensitive, so a pushdown filter built from canonical values alone
+    would match zero ingested precedents.
+    """
+    return {token, token.lower(), token.upper(), token.title()}
+
+
 @dataclass(frozen=True)
 class RetrievalScope:
     """The product envelope a submission is allowed to retrieve within."""
@@ -103,6 +116,38 @@ class RetrievalScope:
             "resolved": self.resolved,
             "declared_product_line": self.declared_product_line,
         }
+
+
+def scope_filter_values(scope: RetrievalScope) -> Optional[List[Optional[str]]]:
+    """Value list for a SQL pushdown filter on a product-scope column
+    (`precedent_cases.product_category`, `rag_*.product_line`).
+
+    Construction rule, exactly:
+      * unresolved scope -> None, meaning NO filter at all (never over-restrict
+        a run whose product could not be resolved)
+      * otherwise: every canonical category in the scope, expanded to each raw
+        spelling that normalizes onto it (its aliases), in all four casings
+      * plus the explicit-global and cross-cutting tokens, same expansion —
+        they apply to every product and must never be cut in SQL
+      * plus None, so untagged rows stay retrievable (C2/C7 fail-open; the
+        applicability judge is the strict gate and still rejects them)
+
+    Deliberately coarse: this cut only stops wrong-product rows from eating
+    recall-pool slots. It is not the applicability decision.
+    """
+    if not scope.resolved:
+        return None
+    values: set = set()
+    for cat in scope.categories:
+        values |= _spellings(cat)
+        values |= {
+            s
+            for alias, canon in _ALIASES.items() if canon == cat
+            for s in _spellings(alias)
+        }
+    for token in _EXPLICIT_GLOBAL | _CROSS_CUTTING:
+        values |= _spellings(token)
+    return sorted(values) + [None]
 
 
 def derive_segments(card: Dict[str, Any]) -> FrozenSet[str]:

@@ -63,6 +63,8 @@ async def _ingest_one(path: Path, apply: bool, db) -> str:
     """Returns one of: ingested | quarantined | skipped."""
     from app.models.product_document import ProductDocument, ProductTable
     from app.services.brochure_parser import parse_brochure
+    from app.services.fact_card_service import get_fact_card_service
+    from scripts.backfill_product_metadata import product_line_for_uin
 
     digest = _sha256(path)
     existing = (
@@ -75,10 +77,14 @@ async def _ingest_one(path: Path, apply: bool, db) -> str:
     parsed = parse_brochure(str(path))
     reasons = validate_brochure(parsed)
     status = "quarantined" if reasons else "ingested"
+    # Product family from the hand-curated fact card. NULL when the UIN has no
+    # card — an unscoped document is visible for curation, never guessed.
+    product_type = product_line_for_uin(parsed.uin, get_fact_card_service())
 
     logger.info(
         f"{'WOULD ' if not apply else ''}{status.upper()}: {path.name} "
-        f"[{parsed.product_name or '?'} / {parsed.uin or 'no-UIN'}] "
+        f"[{parsed.product_name or '?'} / {parsed.uin or 'no-UIN'} / "
+        f"{product_type or 'unscoped'}] "
         f"{len(parsed.sections)} sections, {len(parsed.tables)} tables"
     )
     for r in reasons:
@@ -90,6 +96,7 @@ async def _ingest_one(path: Path, apply: bool, db) -> str:
     doc = ProductDocument(
         id=uuid.uuid4(),
         product_name=parsed.product_name or path.stem,
+        product_type=product_type,
         uin=parsed.uin,
         uins=parsed.uins,
         descriptor=parsed.descriptor,
@@ -122,7 +129,7 @@ async def _ingest_one(path: Path, apply: bool, db) -> str:
     if status == "ingested":
         from app.services.rag.indexers.product_docs_indexer import index_product_document
         db.flush()  # assign doc.id without ending the transaction
-        n = await index_product_document(doc.id, parsed)
+        n = await index_product_document(doc.id, parsed, product_line=product_type)
         logger.info(f"    indexed {n} vectors into rag_product_docs")
     db.commit()
     return status

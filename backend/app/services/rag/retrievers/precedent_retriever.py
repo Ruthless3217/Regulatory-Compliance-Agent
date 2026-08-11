@@ -13,6 +13,7 @@ from app.services.rag.errors import RAGDegraded, RAGEmbedFailed
 from app.services.rag.factory import get_embedder, get_vector_store
 from app.services.rag.ports import SearchHit
 from app.services.rag.precedent_filters import is_thin_comment
+from app.services.rag import trace as rag_trace
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,13 @@ def _hit_to_precedent(hit: SearchHit) -> Dict[str, Any]:
         # Scope tag consumed by rag.applicability — was previously dropped here,
         # which made product-aware validation impossible (RETRIEVAL_RCA.md §1).
         "product_category": f.get("product_category"),
+        # Provenance, not polarity: True means the row was authored from
+        # reviewer feedback (rule_feedback_service._reviewer_precedent_row),
+        # which covers CONFIRMED findings and rejections alike. It was dropped
+        # here before, so a consumer could not tell a taught precedent from an
+        # ingested one. `preprocessing_service._is_reviewer_rejection` still
+        # decides direction from the issue_type prefix — see its docstring.
+        "is_reviewer": bool(f.get("is_reviewer")),
     }
 
 
@@ -68,6 +76,9 @@ def _hit_to_precedent_legacy(hit: SearchHit) -> Dict[str, Any]:
         "why_rationale": None,
         "guideline_ref": None,
         "occurrence_count": None,
+        # The legacy table has no such column; keep the key so consumers can
+        # read it unconditionally.
+        "is_reviewer": False,
     }
 
 
@@ -105,12 +116,20 @@ class PrecedentRetriever:
         chunks: List[Dict[str, Any]],
         top_k: Optional[int] = None,
         exclude_document_id: Optional[str] = None,
+        product_scope: Optional[List[Optional[str]]] = None,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """For each chunk, return its top_k most-similar precedents.
         On embed/store failure for a chunk, that chunk yields [].
 
         Falls back to the legacy rag_compliance_examples table when
         precedent_cases is empty (v2 ingestion not yet run).
+
+        `product_scope` (applicability.scope_filter_values) is pushed into the
+        `product_category` predicate so a ULIP precedent never occupies a
+        recall-pool slot on a term submission. It carries every spelling the
+        ingest heuristic emits ('ULIP', 'Non-Par', ...) plus global,
+        cross-cutting and None. The legacy table has no scope column, so the
+        fallback path stays unfiltered and relies on the post-retrieval judge.
         """
         if not chunks:
             return {}
@@ -119,6 +138,9 @@ class PrecedentRetriever:
         use_v2 = _check_precedent_cases_populated()
         index = "precedent_cases" if use_v2 else "rag_compliance_examples"
         mapper = _hit_to_precedent if use_v2 else _hit_to_precedent_legacy
+        filters = (
+            {"product_category": product_scope} if (use_v2 and product_scope) else None
+        )
 
         k = top_k or settings.pgvector_top_k
         embedder = get_embedder()
@@ -144,15 +166,18 @@ class PrecedentRetriever:
         for chunk, qvec in zip(chunks, vectors):
             cid = str(chunk.get("id"))
             try:
-                hits = await store.hybrid_search(
-                    index=index,
-                    query_text=chunk.get("text", ""),
-                    query_vector=qvec,
-                    top_k=k,
-                    recall_pool=settings.rag_recall_pool,
-                    rrf_k=settings.rag_rrf_k,
-                    filters=None,
-                )
+                # Label the query so the retrieval trace can attribute each
+                # candidate's leg scores to the chunk that asked.
+                with rag_trace.query(chunk_id=cid):
+                    hits = await store.hybrid_search(
+                        index=index,
+                        query_text=chunk.get("text", ""),
+                        query_vector=qvec,
+                        top_k=k,
+                        recall_pool=settings.rag_recall_pool,
+                        rrf_k=settings.rag_rrf_k,
+                        filters=filters,
+                    )
                 precedents = [mapper(h) for h in hits]
                 # Runtime safety net (mirrors the 0007 corpus purge): drop
                 # pure-response precedents the store may still surface. Idempotent

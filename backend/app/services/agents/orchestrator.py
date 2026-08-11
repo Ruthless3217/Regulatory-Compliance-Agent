@@ -83,7 +83,14 @@ class ComplianceOrchestrator:
 
             logger.info("Connecting orchestrator to shared Redis client...")
             conn = await get_redis()
-            self.checkpointer = AsyncRedisSaver(redis_client=conn)
+            # Thread ids are per-run since the determinism fix, so finished
+            # checkpoints are never resumed (resume_workflow has no callers);
+            # expire them instead of accumulating forever.
+            ttl_config = {"default_ttl": 24 * 60, "refresh_on_read": False}  # minutes
+            try:
+                self.checkpointer = AsyncRedisSaver(redis_client=conn, ttl=ttl_config)
+            except TypeError:  # older langgraph-checkpoint-redis without ttl support
+                self.checkpointer = AsyncRedisSaver(redis_client=conn)
 
             if hasattr(self.checkpointer, 'setup'):
                 await self.checkpointer.setup()

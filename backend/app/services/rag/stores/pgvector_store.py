@@ -24,27 +24,31 @@ from app.database import SessionLocal
 from app.services.rag.errors import RAGDegraded, RAGIndexingFailed
 from app.services.rag.ports import IndexName, SearchHit, VectorDoc
 from app.services.rag.rrf import reciprocal_rank_fusion
+from app.services.rag import trace as rag_trace
 
 logger = logging.getLogger(__name__)
 
 
 # Field whitelist per index — protects against SQL injection in `filters` keys.
 # Values are still passed via parameter binding.
+# product_category / product_line enable pushdown scoping: retrieve top-K
+# WITHIN the resolved product scope instead of retrieving globally and
+# discarding the out-of-scope survivors in Python (applicability.validate_*).
+# Pass None in the collection to keep untagged rows, per the C2/C7 global
+# contract — the applicability judge, not the SQL, is the strict gate.
+# `product_line` exists on all four rag_* corpora since migration 0036.
 _FILTER_WHITELIST: Dict[IndexName, set] = {
-    "rag_rules": {"category", "severity", "is_active"},
-    "rag_chunks": {"submission_id", "submission_status", "chunk_index"},
-    "rag_source_docs": {"document_id", "regulator"},
+    "rag_rules": {"category", "severity", "is_active", "product_line"},
+    "rag_chunks": {
+        "submission_id", "submission_status", "chunk_index", "product_line",
+    },
+    "rag_source_docs": {"document_id", "regulator", "product_line"},
     "rag_compliance_examples": {
         "reviewer_name", "violation_category", "severity", "document_id",
     },
-    "rag_product_docs": {"product_document_id", "uin", "product_name", "block_type"},
-    # product_category enables pushdown scoping: retrieve top-K WITHIN the
-    # resolved product scope instead of retrieving globally and discarding the
-    # out-of-scope survivors in Python (applicability.validate_precedents).
-    # Pass None in the collection to keep untagged rows, per the C2/C7 global
-    # contract. rag_rules deliberately has no product_line equivalent — that
-    # column does not exist on the index, and with ~150 rules the post-filter
-    # is cheap anyway.
+    "rag_product_docs": {
+        "product_document_id", "uin", "product_name", "block_type", "product_line",
+    },
     "precedent_cases": {
         "issue_type", "severity", "ticket", "is_reviewer", "guideline_ref",
         "product_category",
@@ -175,11 +179,14 @@ _UPSERT_SQL: Dict[IndexName, str] = {
     "rag_rules": """
         INSERT INTO rag_rules (id, category, severity, is_active, rule_text,
                                keywords, embed_text, embedding, source,
+                               product_line,
                                embedding_model, embedding_dim, updated_at)
         VALUES (:id, :category, :severity, :is_active, :rule_text,
                 CAST(:keywords AS JSONB), :embed_text, CAST(:embedding AS VECTOR), :source,
+                :product_line,
                 :embedding_model, :embedding_dim, NOW())
         ON CONFLICT (id) DO UPDATE SET
+          product_line = EXCLUDED.product_line,
           category = EXCLUDED.category,
           severity = EXCLUDED.severity,
           is_active = EXCLUDED.is_active,
@@ -195,11 +202,14 @@ _UPSERT_SQL: Dict[IndexName, str] = {
     "rag_chunks": """
         INSERT INTO rag_chunks (id, submission_id, chunk_index, page_number, text,
                                 embedding, submission_status, submission_summary,
+                                product_line,
                                 embedding_model, embedding_dim, updated_at)
         VALUES (:id, :submission_id, :chunk_index, :page_number, :text,
                 CAST(:embedding AS VECTOR), :submission_status, :submission_summary,
+                :product_line,
                 :embedding_model, :embedding_dim, NOW())
         ON CONFLICT (id) DO UPDATE SET
+          product_line = EXCLUDED.product_line,
           submission_id = EXCLUDED.submission_id,
           chunk_index = EXCLUDED.chunk_index,
           page_number = EXCLUDED.page_number,
@@ -214,12 +224,15 @@ _UPSERT_SQL: Dict[IndexName, str] = {
     "rag_source_docs": """
         INSERT INTO rag_source_docs (id, document_id, document_title, regulator,
                                      chunk_index, page_number, text, embedding,
-                                     derived_rule_ids, embedding_model, embedding_dim,
+                                     derived_rule_ids, product_line,
+                                     embedding_model, embedding_dim,
                                      uploaded_at)
         VALUES (:id, :document_id, :document_title, :regulator,
                 :chunk_index, :page_number, :text, CAST(:embedding AS VECTOR),
-                CAST(:derived_rule_ids AS UUID[]), :embedding_model, :embedding_dim, NOW())
+                CAST(:derived_rule_ids AS UUID[]), :product_line,
+                :embedding_model, :embedding_dim, NOW())
         ON CONFLICT (id) DO UPDATE SET
+          product_line = EXCLUDED.product_line,
           document_id = EXCLUDED.document_id,
           document_title = EXCLUDED.document_title,
           regulator = EXCLUDED.regulator,
@@ -262,13 +275,14 @@ _UPSERT_SQL: Dict[IndexName, str] = {
     "rag_product_docs": """
         INSERT INTO rag_product_docs (id, product_document_id, uin, product_name,
                                       chunk_index, page_number, section_path,
-                                      block_type, text, embedding,
+                                      block_type, text, embedding, product_line,
                                       embedding_model, embedding_dim, updated_at)
         VALUES (:id, :product_document_id, :uin, :product_name,
                 :chunk_index, :page_number, :section_path,
-                :block_type, :text, CAST(:embedding AS VECTOR),
+                :block_type, :text, CAST(:embedding AS VECTOR), :product_line,
                 :embedding_model, :embedding_dim, NOW())
         ON CONFLICT (id) DO UPDATE SET
+          product_line = EXCLUDED.product_line,
           product_document_id = EXCLUDED.product_document_id,
           uin = EXCLUDED.uin,
           product_name = EXCLUDED.product_name,
@@ -349,9 +363,13 @@ def _upsert_params(index: IndexName, doc: VectorDoc) -> Dict[str, Any]:
         "embedding_model": model,
         "embedding_dim": dim,
     }
+    # Product scope on the four rag_* corpora (0036). Absent -> NULL, which
+    # stays retrievable under every scope (the filter always admits NULL) and
+    # visibly unscoped for curation — never guessed into a family here.
+    scoped = {**base, "product_line": f.get("product_line")}
     if index == "rag_rules":
         return {
-            **base,
+            **scoped,
             "category": f.get("category", ""),
             "severity": f.get("severity", "medium"),
             "is_active": bool(f.get("is_active", True)),
@@ -362,7 +380,7 @@ def _upsert_params(index: IndexName, doc: VectorDoc) -> Dict[str, Any]:
         }
     if index == "rag_chunks":
         return {
-            **base,
+            **scoped,
             "submission_id": f["submission_id"],
             "chunk_index": int(f.get("chunk_index", 0)),
             "page_number": f.get("page_number"),
@@ -375,7 +393,7 @@ def _upsert_params(index: IndexName, doc: VectorDoc) -> Dict[str, Any]:
         # Postgres UUID[] literal: '{uuid1,uuid2}' (each element validated)
         derived_lit = _uuid_array_literal(derived)
         return {
-            **base,
+            **scoped,
             "document_id": f["document_id"],
             "document_title": f.get("document_title", ""),
             "regulator": f.get("regulator", ""),
@@ -403,7 +421,7 @@ def _upsert_params(index: IndexName, doc: VectorDoc) -> Dict[str, Any]:
         }
     if index == "rag_product_docs":
         return {
-            **base,
+            **scoped,
             "product_document_id": f["product_document_id"],
             "uin": f.get("uin"),
             "product_name": f.get("product_name", ""),
@@ -453,7 +471,7 @@ def _vector_leg_sql(index: IndexName, filter_clause: str) -> str:
         FROM {index}
         WHERE TRUE {filter_clause}
           AND 1 - (embedding <=> CAST(:qvec AS VECTOR)) >= :min_cosine
-        ORDER BY embedding <=> CAST(:qvec AS VECTOR)
+        ORDER BY embedding <=> CAST(:qvec AS VECTOR), id
         LIMIT :recall
     """
 
@@ -468,7 +486,7 @@ def _keyword_leg_sql(index: IndexName, filter_clause: str) -> str:
         FROM {index}
         WHERE search_tsv @@ plainto_tsquery('english', :qtext) {filter_clause}
           AND ts_rank_cd(search_tsv, plainto_tsquery('english', :qtext)) >= :min_ts_rank
-        ORDER BY score DESC
+        ORDER BY score DESC, id
         LIMIT :recall
     """
 
@@ -590,6 +608,12 @@ class PgVectorStore:
         rrf_k: int,
         filters: Optional[Dict[str, Any]] = None,
     ) -> List[SearchHit]:
+        # Per-leg scores/ranks otherwise die inside _do(). Resolved HERE, in the
+        # async body: run_in_executor does not copy the context, so a contextvar
+        # read from the worker thread would always miss. None => nobody is
+        # collecting and the trace costs one dict lookup.
+        tracer = rag_trace.begin_query(index=index, top_k=top_k, filters=filters)
+
         def _do() -> List[SearchHit]:
             db = self._session()
             try:
@@ -616,8 +640,13 @@ class PgVectorStore:
                     kw_rows = db.execute(text(_keyword_leg_sql(index, fclause)), params).all()
                     kw_ranked = [(str(r[0]), float(r[1])) for r in kw_rows]
 
-                # Fuse
-                fused = reciprocal_rank_fusion([vec_ranked, kw_ranked], k=rrf_k)[:top_k]
+                # Fuse. The FULL fused list is traced before the cut — the rows
+                # just below top_k are exactly the "it was retrieved, it just
+                # ranked out" answer the inspector needs.
+                fused_all = reciprocal_rank_fusion([vec_ranked, kw_ranked], k=rrf_k)
+                if tracer is not None:
+                    tracer.record(vec_ranked, kw_ranked, fused_all)
+                fused = fused_all[:top_k]
                 if not fused:
                     return []
 

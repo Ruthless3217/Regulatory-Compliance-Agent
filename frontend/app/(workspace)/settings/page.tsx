@@ -54,15 +54,21 @@ const GRADE_BANDS = [
   { grade: "F", range: "0–59", tone: "text-sev-critical" },
 ];
 
-// Keys are the literal `rules.category` values in the database. "irdai" and
-// "regulatory" are DIFFERENT categories — labelling "regulatory" as IRDAI
-// reported 23 rules where the real IRDAI count is 62.
-const RULE_CATEGORIES = [
-  { key: "irdai", label: "IRDAI" },
-  { key: "regulatory", label: "Regulatory (other)" },
-  { key: "brand", label: "Brand" },
-  { key: "sebi", label: "SEBI" },
-];
+// Display casing only — same table as the rules page. Buckets are derived from
+// the categories the data actually contains, NOT from a fixed list: the four
+// hardcoded keys here silently hid every `legal`, `financial` and `seo` rule,
+// so this panel under-reported the corpus it claims to describe. "irdai" and
+// "regulatory" are DIFFERENT categories and stay separate rows.
+const CATEGORY_LABELS: Record<string, string> = {
+  irdai: "IRDAI",
+  sebi: "SEBI",
+  regulatory: "Regulatory (other)",
+};
+
+function categoryLabel(key: string): string {
+  if (!key) return "Uncategorised";
+  return CATEGORY_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
+}
 
 export default function SettingsPage() {
   const [pinging, setPinging] = React.useState(false);
@@ -85,8 +91,13 @@ export default function SettingsPage() {
   const [modelsErr, setModelsErr] = React.useState<string | null>(null);
   const [rag, setRag] = React.useState<RagHealth | null>(null);
   const [ragErr, setRagErr] = React.useState<string | null>(null);
-  const [ruleCounts, setRuleCounts] = React.useState<Record<string, number> | null>(null);
+  const [ruleCounts, setRuleCounts] = React.useState<
+    { key: string; label: string; count: number }[] | null
+  >(null);
   const [ruleCountsErr, setRuleCountsErr] = React.useState<string | null>(null);
+  // Loaded vs. server total, so a truncated page never reads as the whole corpus.
+  const [ruleLoaded, setRuleLoaded] = React.useState(0);
+  const [ruleTotal, setRuleTotal] = React.useState(0);
 
   React.useEffect(() => {
     setMounted(true);
@@ -98,13 +109,23 @@ export default function SettingsPage() {
     healthRag()
       .then(setRag)
       .catch((e) => setRagErr((e as Error).message));
-    Promise.all(RULE_CATEGORIES.map((c) => listRules({ category: c.key, limit: 1 })))
-      .then((results) => {
-        const counts: Record<string, number> = {};
-        RULE_CATEGORIES.forEach((c, i) => {
-          counts[c.key] = results[i].total;
-        });
-        setRuleCounts(counts);
+    // One fetch, then group by the rule's own category — a per-category query
+    // can only ask about categories we already knew about.
+    listRules({ is_active: true, limit: 500 })
+      .then((res) => {
+        const rules = res.rules ?? [];
+        const byCategory = new Map<string, number>();
+        for (const r of rules) {
+          const key = (r.category ?? "").toLowerCase().trim();
+          byCategory.set(key, (byCategory.get(key) ?? 0) + 1);
+        }
+        setRuleCounts(
+          [...byCategory.entries()]
+            .map(([key, count]) => ({ key, label: categoryLabel(key), count }))
+            .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+        );
+        setRuleLoaded(rules.length);
+        setRuleTotal(res.total ?? rules.length);
       })
       .catch((e) => setRuleCountsErr((e as Error).message));
   }, []);
@@ -171,14 +192,27 @@ export default function SettingsPage() {
           </Row>
         </Section>
 
-        <Section icon={<Database className="h-4 w-4" />} title="Rule corpus" description="Active rules the pipeline evaluates against.">
-          {RULE_CATEGORIES.map((c) => (
-            <Row key={c.key} label={c.label}>
-              <span className="font-mono text-xs">
-                {ruleCountsErr ? "unavailable" : ruleCounts ? ruleCounts[c.key] : "…"}
-              </span>
-            </Row>
-          ))}
+        <Section icon={<Database className="h-4 w-4" />} title="Rule corpus" description="Active rules the pipeline evaluates against, by category.">
+          {ruleCountsErr ? (
+            <Row label="Categories"><span className="font-mono text-xs">unavailable</span></Row>
+          ) : ruleCounts === null ? (
+            <Row label="Categories"><span className="font-mono text-xs">…</span></Row>
+          ) : ruleCounts.length === 0 ? (
+            <Row label="Active rules"><span className="font-mono text-xs">0</span></Row>
+          ) : (
+            <>
+              {ruleCounts.map((c) => (
+                <Row key={c.key} label={c.label}>
+                  <span className="font-mono text-xs">{c.count}</span>
+                </Row>
+              ))}
+              {ruleTotal > ruleLoaded && (
+                <p className="pt-2 text-[11px] text-muted-foreground">
+                  Counted from the {ruleLoaded} rules loaded of {ruleTotal} active.
+                </p>
+              )}
+            </>
+          )}
         </Section>
 
         <Section icon={<Gauge className="h-4 w-4" />} title="Scoring" description="Letter-grade bands applied to the 0–100 compliance score.">

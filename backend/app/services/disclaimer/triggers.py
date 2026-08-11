@@ -198,7 +198,7 @@ async def resolve_required(
                 survivors.discard(suppressed)
 
         out: Dict[str, Dict[str, str]] = {}
-        for did in survivors:
+        for did in sorted(survivors):  # set order is not stable across runs
             if did in required:
                 out[did] = required[did]
             else:

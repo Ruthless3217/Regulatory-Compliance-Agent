@@ -26,6 +26,7 @@ def _chunk_to_doc(
     embedding: List[float],
     submission_status: str,
     submission_summary: Optional[str],
+    product_line: Optional[str] = None,
 ) -> VectorDoc:
     meta = chunk.chunk_metadata or {}
     return VectorDoc(
@@ -38,6 +39,9 @@ def _chunk_to_doc(
             "text": chunk.text,
             "submission_status": submission_status,
             "submission_summary": submission_summary,
+            # Declared scope of the parent submission — 0036 backfilled the
+            # existing rows from the same column; keep new ones consistent.
+            "product_line": product_line,
         },
     )
 
@@ -57,12 +61,19 @@ async def upsert_chunks_for_submission(
     if not chunks:
         return 0
 
+    from app.models.submission import Submission
+    product_line = (
+        db.query(Submission.product_line)
+        .filter(Submission.id == str(submission_id))
+        .scalar()
+    )
+
     embedder = get_embedder()
     store = get_vector_store()
     try:
         vectors = await embedder.embed([c.text for c in chunks])
         docs = [
-            _chunk_to_doc(c, v, submission_status, submission_summary)
+            _chunk_to_doc(c, v, submission_status, submission_summary, product_line)
             for c, v in zip(chunks, vectors)
         ]
         await store.upsert("rag_chunks", docs)

@@ -100,6 +100,23 @@ export interface Violation {
   section_title?: string | null;
   anchor_page?: number | null;
   anchor_bbox?: [number, number, number, number] | null;
+  // Editable-document anchors. `anchor_node_key` is a CONTENT-derived block id
+  // (sha1 of the block's normalized text — see components/editor/sectionMap.ts),
+  // not a Lexical node key: node keys exist only inside one browser tab, so
+  // nothing the backend writes could ever match one. Offsets are into the
+  // block's normalized text. `anchor_fingerprint` is the surrounding text the
+  // analysis saw, kept so a relocation can be argued for after the span itself
+  // is edited.
+  //
+  // All optional and all absent today — the backend does not write them yet.
+  // Declared here rather than read off untyped JSON so the day it does, the
+  // shape it must produce is stated in one place. findingAnchor.ts degrades to
+  // a document-wide text search when they are missing, which is what it did
+  // before they existed.
+  anchor_node_key?: string | null;
+  anchor_offset_start?: number | null;
+  anchor_offset_end?: number | null;
+  anchor_fingerprint?: string | null;
   // 0028 — has this finding's suggested_fix already been written into the
   // document via a submission_revisions entry.
   fix_applied?: boolean | null;
@@ -796,6 +813,9 @@ export interface RetrievalRunHead {
 export interface RetrievalNoData extends RetrievalRunHead {
   status: "no_retrieval_data";
   reason: string;
+  /** Exception class name, when the absence was a failed lookup rather than an
+   * empty one (e.g. the trace table does not exist yet). */
+  detail?: string;
 }
 
 export interface RetrievalTotals {
@@ -832,3 +852,100 @@ export interface RetrievalRejectedStory extends RetrievalRunHead {
 
 export type RetrievalInspection = RetrievalStory | RetrievalNoData;
 export type RetrievalRejectedInspection = RetrievalRejectedStory | RetrievalNoData;
+
+/* ---------- per-candidate trace (migration 0037) ----------
+ * The three types above read a 100-row SAMPLE out of run_metadata. These read
+ * `retrieval_candidates`: every candidate of every (chunk, category) query,
+ * with the per-leg scores the store used to discard and the stage that decided
+ * each one. Runs predating 0037 have no rows and answer with RetrievalNoData —
+ * the sampled views above still work for them. */
+
+/** What decided this candidate's fate. Vocabulary owned by
+ * backend/app/services/rag/trace.py (_FINAL_STATUS_DOC). */
+export type RetrievalFinalStatus =
+  | "in_prompt"
+  | "dropped_by_cap"
+  | "unused_fallback"
+  | "rejected_applicability"
+  | "below_threshold"
+  | "dropped_by_retriever"
+  | "not_retrieved_far_enough";
+
+export interface RetrievalTraceRow {
+  chunk_id: string | null;
+  corpus: string;
+  tier: string | null;
+  category: string | null;
+  candidate_id: string;
+  /** Alias of candidate_id, so a traced row renders through the same helpers
+   * as a sampled RetrievalCandidate. */
+  id: string;
+  /** Which leg found it. "both" = semantically AND lexically. */
+  retrieval_method: "vector" | "bm25" | "both" | null;
+  cosine: number | null;
+  ts_rank: number | null;
+  vector_rank: number | null;
+  bm25_rank: number | null;
+  fused_score: number | null;
+  fused_rank: number | null;
+  filters: { index?: string; applied?: Record<string, unknown> | null } | null;
+  scope_value: string | null;
+  /** null means the applicability judge never saw this row — it lost the
+   * fusion, or a retriever filter dropped it first. NOT "accepted". */
+  verdict: "accepted" | "rejected" | null;
+  reason: string | null;
+  final_status: RetrievalFinalStatus | string;
+  deciding_stage: string;
+  /** Computed server-side by joining the run's violations. */
+  used_in_final_verdict: boolean;
+  document?: RetrievalDocument | null;
+}
+
+export interface RetrievalCandidatesPage extends RetrievalRunHead {
+  status: "ok";
+  /** Rows traced for the whole run, before filters. */
+  total_traced: number;
+  /** Rows matching the current filters. */
+  matched: number;
+  limit: number;
+  offset: number;
+  filters: {
+    chunk_id: string | null;
+    corpus: string | null;
+    verdict: string | null;
+    final_status: string | null;
+  };
+  rows: RetrievalTraceRow[];
+  /** Honours every filter EXCEPT final_status, so the buckets you are not
+   * looking at still show their size. */
+  facets: {
+    final_status: Record<string, number>;
+    deciding_stage: Record<string, number>;
+  };
+  enrichment_notes: Record<string, string> | null;
+}
+
+export interface RetrievalChunkRollupCounts {
+  candidates: number;
+  accepted: number;
+  in_prompt: number;
+  rejected_applicability: number;
+  dropped_by_cap: number;
+  top_fused_score: number | null;
+}
+
+export interface RetrievalChunkRollup extends RetrievalChunkRollupCounts {
+  /** null = the flat active-rule fallback set, which belongs to no chunk. */
+  chunk_id: string | null;
+  by_corpus: Record<string, RetrievalChunkRollupCounts>;
+}
+
+export interface RetrievalChunksStory extends RetrievalRunHead {
+  status: "ok";
+  chunks: RetrievalChunkRollup[];
+  chunks_total: number;
+  candidates_total: number;
+}
+
+export type RetrievalCandidatesInspection = RetrievalCandidatesPage | RetrievalNoData;
+export type RetrievalChunksInspection = RetrievalChunksStory | RetrievalNoData;

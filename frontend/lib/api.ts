@@ -45,6 +45,8 @@ import type {
   CorpusLayerItems,
   CorpusLayerDocument,
   CorpusLayerDeleteResult,
+  RetrievalCandidatesInspection,
+  RetrievalChunksInspection,
   RetrievalInspection,
   RetrievalRejectedInspection,
 } from "./types";
@@ -876,3 +878,30 @@ export const getLatestSubmissionRetrieval = (submissionId: string) =>
 
 export const getRunRejectedRetrieval = (runId: string) =>
   jsonFetch<RetrievalRejectedInspection>(`${base()}/admin/retrieval/runs/${runId}/rejected`);
+
+/* Per-candidate trace (migration 0037). Runs that predate it answer
+ * {status:"no_retrieval_data"} here while the three routes above still work —
+ * discriminate on `.status`, never on an empty `rows` array. */
+export const getRunChunks = (runId: string) =>
+  jsonFetch<RetrievalChunksInspection>(`${base()}/admin/retrieval/runs/${runId}/chunks`);
+
+export const getRunCandidates = (
+  runId: string,
+  params?: {
+    chunk_id?: string;
+    corpus?: string;
+    verdict?: string;
+    final_status?: string;
+    limit?: number;
+    offset?: number;
+  }
+) => {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params ?? {})) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  const q = qs.toString();
+  return jsonFetch<RetrievalCandidatesInspection>(
+    `${base()}/admin/retrieval/runs/${runId}/candidates${q ? `?${q}` : ""}`
+  );
+};

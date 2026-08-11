@@ -18,6 +18,7 @@ from app.config import settings
 from app.services.rag.errors import RAGDegraded, RAGEmbedFailed
 from app.services.rag.factory import get_embedder, get_vector_store
 from app.services.rag.ports import SearchHit
+from app.services.rag import trace as rag_trace
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,16 @@ class RulesRetriever:
         top_k: int,
         recall_pool: Optional[int] = None,
         score_threshold: Optional[float] = None,
+        product_scope: Optional[List[Optional[str]]] = None,
     ) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
         """
         Returns:
             { chunk_id: { category: [rule_dict, ...] } }
+
+        `product_scope` (applicability.scope_filter_values) pushes the product
+        cut into SQL so out-of-scope rules stop consuming recall-pool slots.
+        It always contains None, so globally/untagged rules stay retrievable;
+        None for the whole argument means "no product resolved" -> no filter.
         """
         if not chunks or not categories:
             return {}
@@ -70,18 +77,28 @@ class RulesRetriever:
             logger.warning(f"Embedder unavailable in rules retriever: {e}")
             raise RAGDegraded(str(e)) from e
 
+        base_filters: Dict[str, Any] = {"is_active": True}
+        if product_scope:
+            base_filters["product_line"] = product_scope
+
         # 2. Parallel hybrid_search across (chunk, category).
         async def one_query(chunk_idx: int, category: str):
             try:
-                hits = await store.hybrid_search(
-                    index="rag_rules",
-                    query_text=chunk_texts[chunk_idx][:2000],
-                    query_vector=chunk_vectors[chunk_idx],
-                    top_k=top_k,
-                    recall_pool=recall,
-                    rrf_k=settings.rag_rrf_k,
-                    filters={"category": category, "is_active": True},
-                )
+                # Label the query so the retrieval trace can attribute each
+                # candidate's cosine/ts_rank to the chunk that asked — the same
+                # rule scores differently against every chunk.
+                with rag_trace.query(
+                    chunk_id=str(chunks[chunk_idx]["id"]), category=category
+                ):
+                    hits = await store.hybrid_search(
+                        index="rag_rules",
+                        query_text=chunk_texts[chunk_idx][:2000],
+                        query_vector=chunk_vectors[chunk_idx],
+                        top_k=top_k,
+                        recall_pool=recall,
+                        rrf_k=settings.rag_rrf_k,
+                        filters={**base_filters, "category": category},
+                    )
                 hits = [h for h in hits if h.score >= threshold]
                 return chunks[chunk_idx]["id"], category, hits
             except RAGDegraded:

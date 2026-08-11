@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import List
+from typing import List, Optional
 
 from app.services.brochure_parser import ParsedBrochure
 from app.services.rag.errors import RAGDegraded, RAGIndexingFailed
@@ -28,8 +28,14 @@ logger = logging.getLogger(__name__)
 async def index_product_document(
     product_document_id: uuid.UUID | str,
     brochure: ParsedBrochure,
+    product_line: Optional[str] = None,
 ) -> int:
-    """Embed + upsert all blocks of one parsed brochure. Returns vector count."""
+    """Embed + upsert all blocks of one parsed brochure. Returns vector count.
+
+    `product_line` is `product_documents.product_type` — the canonical family
+    the ingest already derived from the UIN's fact card. NULL when the UIN has
+    no card: unscoped and visible for curation, never guessed.
+    """
     entries = []  # (text, page_number, section_path, block_type)
     for i, sec in enumerate(brochure.sections):
         entries.append(
@@ -65,6 +71,7 @@ async def index_product_document(
                         "section_path": section_path,
                         "block_type": block_type,
                         "text": text,
+                        "product_line": product_line,
                     },
                 )
             )

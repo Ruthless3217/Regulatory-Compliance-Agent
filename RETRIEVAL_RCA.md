@@ -225,3 +225,17 @@ Operator steps: `alembic upgrade head` (adds `analysis_runs.run_metadata`),
 then `python -m scripts.seed_rules` (stamps `product_line` onto existing rule
 rows; insert-idempotent). No re-embedding required — scope validation is
 post-retrieval and reads the ORM/hit metadata, not the vectors.
+
+---
+
+## Postscript (2026-08-11) — contract inversion note
+
+Contracts C2/C3/C7 above describe untagged/unresolvable candidates as GLOBAL
+(fail-open). The shipped `rag/applicability.py` deliberately inverted this to
+fail-closed: untagged or unmappable scope ⇒ `rejected: scope_metadata_missing`,
+and an unresolved product rejects every tagged candidate. Consequence: active
+rules with NULL `product_line` (~81 legacy rows predating migration 0009) are
+excluded from every analysis until manually scoped. The rules-page banner now
+states this; tag via the inline scope editor. Retrieval-side product
+segregation (SQL filters both legs, migration 0036) additionally admits NULL
+rows to the recall pool — the judge remains the strict gate.
