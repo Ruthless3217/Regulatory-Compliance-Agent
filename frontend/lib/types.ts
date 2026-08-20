@@ -484,6 +484,9 @@ export interface DocumentComparison {
 }
 
 export interface Me {
+  /** GET /auth/me has always returned this; the type just never declared it.
+   *  Needed to tell "my assignment" from someone else's. */
+  id: string;
   username: string;
   role: string;
   must_change_password?: boolean;
@@ -949,3 +952,61 @@ export interface RetrievalChunksStory extends RetrievalRunHead {
 
 export type RetrievalCandidatesInspection = RetrievalCandidatesPage | RetrievalNoData;
 export type RetrievalChunksInspection = RetrievalChunksStory | RetrievalNoData;
+
+// --- Review assignments and the action trail -------------------------------
+// Mirrors backend/app/api/routes/assignments.py `_dict()` field for field.
+
+export type AssignmentStatus =
+  | "open" | "in_review" | "awaiting_signoff"
+  | "closed" | "superseded" | "cancelled";
+
+export type AssignmentPriority = "low" | "normal" | "high" | "urgent";
+
+export interface ReviewAssignment {
+  id: string;
+  submission_id: string;
+  assignee_id: string;
+  assigned_by: string | null;
+  status: AssignmentStatus;
+  priority: AssignmentPriority;
+  due_at: string | null;
+  note: string | null;
+  outcome: string | null;
+  outcome_note: string | null;
+  assigned_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  closed_at: string | null;
+  superseded_by: string | null;
+}
+
+export interface WorkloadRow {
+  user_id: string;
+  username: string;
+  role: string;
+  is_active: boolean;
+  open_count: number;
+}
+
+export interface TrailDiff {
+  revision_number: number;
+  before: string;
+  after: string;
+}
+
+export interface TrailRow {
+  id: string;
+  at: string | null;
+  event_type: string;
+  actor_id: string | null;
+  actor_role: string | null;
+  target_type: string | null;
+  target_id: string | null;
+  metadata: Record<string, unknown>;
+  diff: TrailDiff | null;
+}
+
+export interface ReviewerTrail {
+  activity: TrailRow[];
+  stats: { open: number; closed: number; total: number };
+}

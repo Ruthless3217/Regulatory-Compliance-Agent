@@ -5,7 +5,7 @@ Thin, defensive read handlers over the observability ledger
 plus user provisioning. Every route is gated by a *specific* permission via
 ``Depends(require(...))``:
 
-- user management  → ``users:manage``   (admin + super_admin; D3 enforced in-handler)
+- user management  → ``users:manage``   (super_admin ONLY — spec D5)
 - usage / cost     → ``usage:view``     (super_admin only)
 - audit feeds      → ``audit:view``     (super_admin only)
 
@@ -145,15 +145,15 @@ async def create_user(
     actor=Depends(require("users:manage")),
 ):
     """Provision a new account with a temp password (must be changed on first
-    login). Decision D3: an ``admin`` actor may create ONLY ``user`` accounts; a
-    ``super_admin`` may create any role."""
+    login).
+
+    super_admin only, and may create any role. This supersedes the earlier
+    Decision D3, under which an ``admin`` could provision ``user`` accounts:
+    ``users:manage`` is no longer held by admin at all (spec D5), so the
+    in-handler role checks that enforced D3 were unreachable and are gone."""
     role = (body.role or "user").strip()
     if role not in {"user", "admin", "super_admin"}:
         raise HTTPException(status_code=400, detail="Unknown role.")
-
-    # Decision D3 — admins provision graders only.
-    if getattr(actor, "role", None) == "admin" and role != "user":
-        raise HTTPException(status_code=403, detail="Admins may only create user accounts.")
 
     if not body.username or not body.password:
         raise HTTPException(status_code=400, detail="username and password are required.")
@@ -207,11 +207,6 @@ async def update_user(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    # D3 — an admin actor may only manage grader (``user``) accounts; only a
-    # super_admin may touch admin / super_admin rows.
-    if getattr(actor, "role", None) == "admin" and getattr(user, "role", None) != "user":
-        raise HTTPException(status_code=403, detail="Admins may only manage user accounts.")
-
     events: list = []  # (event_type, before, after) tuples, emitted after commit
 
     # --- registered_ip -----------------------------------------------------
@@ -225,9 +220,6 @@ async def update_user(
     if body.role is not None and body.role != user.role:
         if body.role not in {"user", "admin", "super_admin"}:
             raise HTTPException(status_code=400, detail="Unknown role.")
-        # Decision D3 — admins may not mint elevated roles.
-        if getattr(actor, "role", None) == "admin" and body.role != "user":
-            raise HTTPException(status_code=403, detail="Admins may only assign the user role.")
         before_role = user.role
         user.role = body.role
         events.append(("user_role_changed", {"role": before_role}, {"role": body.role}))
@@ -291,9 +283,6 @@ async def force_logout(
     target = db.get(User, user_id)
     if target is None:
         raise HTTPException(status_code=404, detail="User not found.")
-    # D3 — admins may only manage grader (``user``) accounts.
-    if getattr(actor, "role", None) == "admin" and getattr(target, "role", None) != "user":
-        raise HTTPException(status_code=403, detail="Admins may only manage user accounts.")
     await revoke_all_for_user(str(user_id))
     await audit.record(
         "user_force_logout",

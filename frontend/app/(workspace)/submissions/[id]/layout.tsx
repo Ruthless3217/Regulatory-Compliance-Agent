@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getComplianceResults, getSubmission } from "@/lib/api";
 import { SubmissionHeader } from "@/components/workspace/SubmissionHeader";
+import { AssignmentBanner } from "@/components/assignments/AssignmentBanner";
 import { SubmissionWorkspaceProvider } from "@/components/workspace/SubmissionWorkspaceContext";
 import type { ScoreBreakdown, Submission, Violation } from "@/lib/types";
 
@@ -71,6 +72,10 @@ export default async function SubmissionLayout({
           overallScore={overallScore}
           grade={grade}
         />
+        {/* Who owns this document right now, and the actions valid for the
+            caller's role in its current state. Renders nothing for a reviewer
+            when the document is unassigned. */}
+        <AssignmentBanner submissionId={submission.id} />
         {/* No padding of its own. The review workspace runs its rails to the
             window edges, the way every document tool with side panels does —
             an inset card would spend the document's width on a margin that

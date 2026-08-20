@@ -18,6 +18,7 @@ from app.services.rag.retrievers.similar_subs_retriever import (
     get_similar_submissions_retriever,
 )
 from app.auth.dependencies import require
+from app.auth.visibility import get_visible_submission
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,7 @@ async def get_similar_submissions(
     user: dict = Depends(require("submission:read")),
     db: Session = Depends(get_db),
 ):
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     retriever = get_similar_submissions_retriever()
     results = await retriever.retrieve(

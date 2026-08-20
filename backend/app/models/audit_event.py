@@ -14,6 +14,12 @@ class AuditEvent(Base):
     actor_role = Column(String(20))
     actor_ip = Column(String(64))
     session_id = Column(String(64))
+    # Denormalized document scope. Events whose target is a violation or a
+    # comment still belong to a submission's trail; this makes that trail one
+    # indexed lookup instead of a join chain or a JSONB scan (migration 0041).
+    scope_submission_id = Column(
+        UUID(as_uuid=True), ForeignKey("submissions.id", ondelete="SET NULL"), nullable=True
+    )
     target_type = Column(String(24))
     target_id = Column(String(64))
     before_state = Column("before", JSONB)
@@ -28,4 +34,5 @@ class AuditEvent(Base):
         Index("ix_audit_type_created", "event_type", desc("created_at")),
         Index("ix_audit_actor_created", "actor_user_id", desc("created_at")),
         Index("ix_audit_target", "target_type", "target_id"),
+        Index("ix_audit_scope_submission_created", "scope_submission_id", desc("created_at")),
     )

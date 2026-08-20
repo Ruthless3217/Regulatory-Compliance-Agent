@@ -161,6 +161,11 @@ app.include_router(admin_corpus.router)
 from .api.routes import admin_retrieval  # noqa: E402
 app.include_router(admin_retrieval.router)
 
+# Review buckets (admin -> reviewer hand-off) and the per-document /
+# per-reviewer action trail.
+from .api.routes import assignments  # noqa: E402
+app.include_router(assignments.router)
+
 
 @app.get("/health", tags=["Health"])
 async def health_check():

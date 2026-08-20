@@ -3,6 +3,7 @@ Submissions API Routes
 
 Handles document upload and submission management.
 """
+import asyncio
 import os
 import re
 import shutil
@@ -25,6 +26,8 @@ from app.models.document_comment import DocumentComment
 from app.models.violation import Violation
 from app.config import settings
 from app.auth.dependencies import require
+from app.auth.visibility import get_visible_submission, visible_submission_filter
+from app.services.observability import audit
 from app.schemas.submission import (
     SubmissionRevisionCreate,
     DocumentCommentCreate,
@@ -165,14 +168,26 @@ async def list_submissions(
     list — the inbox, the retrieval inspector's picker — so the ordering
     belongs here rather than in each caller.
     """
+    # Bucket scoping. `None` means the caller (admin / super_admin) sees
+    # everything; anyone else sees only what is assigned to them or what they
+    # uploaded. `total` must carry the same clause or the pager counts rows the
+    # caller will never be shown.
+    scope = visible_submission_filter(user)
+
+    listing = db.query(Submission)
+    counter = db.query(Submission)
+    if scope is not None:
+        listing = listing.filter(scope)
+        counter = counter.filter(scope)
+
     submissions = (
-        db.query(Submission)
+        listing
         .order_by(Submission.submitted_at.desc(), Submission.id.desc())
         .offset(skip)
         .limit(limit)
         .all()
     )
-    total = db.query(Submission).count()
+    total = counter.count()
 
     return {
         "total": total,
@@ -199,9 +214,7 @@ async def get_submission(
     db: Session = Depends(get_db)
 ):
     """Get a specific submission by ID."""
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     # Everything uploaded before DOCX rendering existed is stamped "skipped" and
     # would otherwise stay on the extracted-text pane forever. Re-render those
@@ -285,9 +298,7 @@ async def get_submission_import_html(
     here as a failure, and a bare `html: null` left the reviewer facing a blank
     editable page with no way to tell what had happened.
     """
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
     if submission.lexical_state is not None:
         # The saved state is authoritative; re-seeding would discard edits.
         return {
@@ -312,9 +323,7 @@ async def get_submission_page(
     Single-sided mirror of `GET /comparisons/{id}/pages/{side}/{n}` — reuses
     the same renderer, just one document instead of an old/new pair.
     """
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
     path = os.path.join(renders_dir(str(submission.id)), f"page-{n:04d}.png")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Page image not found")
@@ -363,9 +372,7 @@ async def create_revision(
     content. `source` distinguishes manual_edit/apply_fix/bulk_apply_fixes/
     restore — restore is just this same endpoint re-posting an old revision's
     content with source='restore'."""
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     revision = SubmissionRevision(
         submission_id=submission.id,
@@ -401,6 +408,21 @@ async def create_revision(
                 fixed.fix_applied_at = applied_at
                 db.add(fixed)
 
+    # record_sync, not the async record: the event rides this transaction, so
+    # an edit can never commit without the trail row that attributes it.
+    # `revision_number` is what trail_service uses to resolve the before/after.
+    audit.record_sync(
+        db, "submission_edited", actor=user,
+        target_type="submission", target_id=str(submission.id),
+        scope_submission_id=submission.id,
+        metadata={
+            "revision_number": revision.revision_number,
+            "source": revision.source,
+            "note": revision.note,
+            "applied_violation_ids": [str(v) for v in (body.applied_violation_ids or [])],
+        },
+    )
+
     db.commit()
     db.refresh(revision)
     return _serialize_revision(revision)
@@ -413,9 +435,7 @@ async def list_revisions(
     db: Session = Depends(get_db),
 ):
     """List every revision for a submission, oldest first."""
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     revisions = (
         db.query(SubmissionRevision)
@@ -477,9 +497,7 @@ async def create_comment(
     db: Session = Depends(get_db),
 ):
     """Create a freestanding comment anchored to a text selection."""
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
     if not (body.body or "").strip():
         raise HTTPException(status_code=422, detail="body is required")
 
@@ -492,6 +510,12 @@ async def create_comment(
         created_by=getattr(user, "id", None),
     )
     db.add(comment)
+    audit.record_sync(
+        db, "comment_created", actor=user,
+        target_type="comment", target_id=str(comment.id),
+        scope_submission_id=submission.id,
+        after={"body": comment.body, "anchor_text": comment.anchor_text},
+    )
     db.commit()
     db.refresh(comment)
     return _serialize_comment(comment)
@@ -504,9 +528,7 @@ async def list_comments(
     db: Session = Depends(get_db),
 ):
     """List every comment on a submission, oldest first."""
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     comments = (
         db.query(DocumentComment)
@@ -537,10 +559,20 @@ async def update_comment(
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
 
+    # Captured before mutating — the point of a before/after pair is that the
+    # "before" is the value someone actually replaced.
+    previous = {"body": comment.body, "resolved": comment.resolved}
     if body.body is not None:
         comment.body = body.body
     if body.resolved is not None:
         comment.resolved = body.resolved
+    audit.record_sync(
+        db, "comment_updated", actor=user,
+        target_type="comment", target_id=str(comment.id),
+        scope_submission_id=comment.submission_id,
+        before=previous,
+        after={"body": comment.body, "resolved": comment.resolved},
+    )
     db.commit()
     db.refresh(comment)
     return _serialize_comment(comment)
@@ -563,6 +595,12 @@ async def delete_comment(
         .first()
     )
     if comment:
+        audit.record_sync(
+            db, "comment_deleted", actor=user,
+            target_type="comment", target_id=str(comment_id),
+            scope_submission_id=comment.submission_id,
+            before={"body": comment.body, "resolved": comment.resolved},
+        )
         db.delete(comment)
         db.commit()
     return {"message": "Comment deleted", "id": comment_id}
@@ -599,9 +637,7 @@ async def submission_draft_diff(
     The conversion runs off the event loop: it is seconds of CPU on a long
     DOCX, and this handler is async (see GET /import-html for the same reason).
     """
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     baseline = await run_in_threadpool(lexical_document_service.import_text, submission)
     original = baseline if baseline is not None else (submission.original_content or "")
@@ -677,9 +713,7 @@ async def export_submission(
     """Generate and stream one export artifact."""
     if kind not in _EXPORT_MEDIA:
         raise HTTPException(status_code=404, detail="Unknown export kind")
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     # An export must never pair a corrected document with the findings of the
     # version before the correction. Enforced here, not only in the UI banner,
@@ -701,6 +735,16 @@ async def export_submission(
         raise HTTPException(status_code=502, detail=f"PDF conversion unavailable: {e}")
 
     filename = f"{_safe_title(submission.title)}-{kind}"
+
+    # An export is disclosure — worth recording, but not worth failing the
+    # download over, so this takes the best-effort path rather than record_sync.
+    asyncio.create_task(audit.record(
+        "export_generated", actor=user,
+        target_type="submission", target_id=str(submission.id),
+        scope_submission_id=submission.id,
+        metadata={"kind": kind, "bytes": len(data)},
+    ))
+
     return Response(
         content=data,
         media_type=_EXPORT_MEDIA[kind],
@@ -817,7 +861,10 @@ def _approval_gate(db: Session, submission: Submission) -> dict:
 async def approve_submission(
     submission_id: str,
     body: ApprovalRequest = Body(default=ApprovalRequest()),
-    user: dict = Depends(require("submission:create")),
+    # submission:approve, not submission:create — every role holds the latter,
+    # which let the reviewer who edited a document also sign it off. Sign-off
+    # is admin-and-above so the two are always different people (spec D4).
+    user: dict = Depends(require("submission:approve")),
     db: Session = Depends(get_db),
 ):
     """Record a human sign-off on the current document + its current findings.
@@ -826,9 +873,7 @@ async def approve_submission(
     and unresolved criticals — the last of which an `override_reason` can
     clear, and nothing else can.
     """
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     gate = _approval_gate(db, submission)
     reason = ((body.override_reason if body else None) or "").strip()
@@ -893,9 +938,7 @@ async def get_approval_state(
     blocker left is unresolved criticals, `requires_override` says so and the
     button becomes "approve with a reason" rather than disabled.
     """
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     gate = _approval_gate(db, submission)
     blockers = gate["blockers"]
@@ -917,9 +960,7 @@ async def delete_submission(
     db: Session = Depends(get_db)
 ):
     """Delete a submission."""
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     # Clean up file if exists
     if submission.file_path and os.path.exists(submission.file_path):

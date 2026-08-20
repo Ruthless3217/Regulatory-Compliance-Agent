@@ -40,6 +40,12 @@ import type {
   UsageSummary,
   UserRow,
   Violation,
+  AssignmentPriority,
+  AssignmentStatus,
+  ReviewAssignment,
+  ReviewerTrail,
+  TrailRow,
+  WorkloadRow,
   CorpusLayer,
   CorpusLayerList,
   CorpusLayerItems,
@@ -905,3 +911,84 @@ export const getRunCandidates = (
     `${base()}/admin/retrieval/runs/${runId}/candidates${q ? `?${q}` : ""}`
   );
 };
+
+// ------------------------------------------------------------- assignments
+// Review buckets + the action trail. See
+// docs/superpowers/specs/2026-08-19-review-buckets-and-trail-design.md
+
+export async function listMyBucket(): Promise<{ assignments: ReviewAssignment[]; total: number }> {
+  return jsonFetch(`${base()}/assignments/my`);
+}
+
+export async function listAssignments(
+  params: { status?: AssignmentStatus; assignee_id?: string } = {}
+): Promise<{ assignments: ReviewAssignment[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.assignee_id) qs.set("assignee_id", params.assignee_id);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return jsonFetch(`${base()}/assignments${suffix}`);
+}
+
+export async function assignSubmission(body: {
+  submission_id: string;
+  assignee_id: string;
+  priority?: AssignmentPriority;
+  due_at?: string | null;
+  note?: string | null;
+}): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function reassignAssignment(
+  id: string,
+  body: { assignee_id: string; note?: string | null }
+): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments/${id}/reassign`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function startAssignment(id: string): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments/${id}/start`, { method: "POST" });
+}
+
+export async function completeAssignment(id: string): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments/${id}/complete`, { method: "POST" });
+}
+
+export async function sendBackAssignment(id: string, reason: string): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments/${id}/send-back`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function cancelAssignment(id: string, reason?: string): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason ?? null }),
+  });
+}
+
+export async function assignmentWorkload(): Promise<{ reviewers: WorkloadRow[] }> {
+  return jsonFetch(`${base()}/assignments/workload`);
+}
+
+export async function assignmentForSubmission(
+  submissionId: string
+): Promise<{ active: ReviewAssignment | null; history: ReviewAssignment[] }> {
+  return jsonFetch(`${base()}/assignments/for-submission/${submissionId}`);
+}
+
+export async function documentTrail(submissionId: string): Promise<{ trail: TrailRow[] }> {
+  return jsonFetch(`${base()}/assignments/trail/document/${submissionId}`);
+}
+
+export async function reviewerTrail(userId: string): Promise<ReviewerTrail> {
+  return jsonFetch(`${base()}/assignments/trail/reviewer/${userId}`);
+}

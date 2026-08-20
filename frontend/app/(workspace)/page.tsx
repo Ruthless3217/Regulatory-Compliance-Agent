@@ -13,6 +13,7 @@ import { PageHeader, PageHeaderMeta } from "@/components/ui/page-header";
 import { StatusPill, statusTone } from "@/components/ui/status-pill";
 import { StatCard } from "@/components/ui/stat-card";
 import { SectionHeader } from "@/components/ui/section-header";
+import { BucketStrip } from "@/components/assignments/BucketStrip";
 import { formatDate } from "@/lib/format";
 import type { ModelsHealth, Submission } from "@/lib/types";
 
@@ -116,6 +117,11 @@ export default async function SubmissionsPage() {
           </span>
         </div>
       )}
+
+      {/* Whose desk each document is on. Sits above the status tables rather
+          than replacing them: "has this been analysed" and "who is working on
+          it" are different questions. */}
+      <BucketStrip submissions={items} />
 
       {/* KPI strip */}
       <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">

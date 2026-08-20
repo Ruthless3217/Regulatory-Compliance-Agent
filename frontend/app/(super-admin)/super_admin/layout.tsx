@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { Me } from "@/lib/types";
 import Link from "next/link";
-import { Users, Activity, BarChart, Server, ActivitySquare, Shield } from "lucide-react";
+import { Users, Activity, BarChart, Server, ActivitySquare, Shield, FileText } from "lucide-react";
 
 async function getServerMe() {
   const cookieStore = await cookies();
@@ -31,6 +31,9 @@ function SuperAdminSidebar() {
     { label: "Sessions", href: "/super_admin/sessions", icon: <Activity className="w-4 h-4" /> },
     { label: "Audit", href: "/super_admin/audit", icon: <Shield className="w-4 h-4" /> },
     { label: "Rules", href: "/super_admin/rules", icon: <Shield className="w-4 h-4" /> }, // could use better icon
+    // The console and the workspace are two halves of one product, not two
+    // products. Without this the only way back is editing the URL.
+    { label: "Workspace", href: "/", icon: <FileText className="w-4 h-4" /> },
   ];
 
   return (
@@ -68,6 +71,9 @@ function SuperAdminSidebar() {
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const me = await getServerMe();
   if (!me) redirect("/login");
+  // Mirrors the workspace layout. Without this, a super_admin still on a temp
+  // password could skip the forced change simply by landing on /super_admin.
+  if (me.must_change_password) redirect("/account/change-password");
   if (me.role !== "super_admin") redirect("/"); // Not a super admin
 
   return (

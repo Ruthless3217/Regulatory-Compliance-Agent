@@ -13,6 +13,8 @@ import {
   GitCompare,
   Layers,
   ScanSearch,
+  Users,
+  Shield,
 } from "lucide-react";
 import { DensityToggle } from "./DensityToggle";
 import { ApiHealthDot } from "./ApiHealthDot";
@@ -53,8 +55,21 @@ const SECTIONS: Section[] = [
     // it is a UI convenience, not the security boundary.
     title: "Admin",
     items: [
+      // trail:view — admin and super_admin. Deliberately in the workspace and
+      // not the console: admin does not hold console:view, so under
+      // /super_admin this would be gated away from the role that needs it.
+      { label: "Reviewers", href: "/reviewers", icon: <Users className="h-3.5 w-3.5" /> },
       { label: "Corpus layers", href: "/admin/corpus", icon: <Layers className="h-3.5 w-3.5" /> },
       { label: "Retrieval inspector", href: "/admin/retrieval", icon: <ScanSearch className="h-3.5 w-3.5" /> },
+    ],
+  },
+  {
+    // console:view / audit:view / usage:view are super_admin's alone
+    // (backend/app/auth/permissions.py). Admin answers "who did what" through
+    // the Reviewers page above instead.
+    title: "Console",
+    items: [
+      { label: "Admin console", href: "/super_admin", icon: <Shield className="h-3.5 w-3.5" /> },
     ],
   },
   {
@@ -64,6 +79,7 @@ const SECTIONS: Section[] = [
 ];
 
 const ADMIN_ROLES = new Set(["admin", "super_admin"]);
+const CONSOLE_ROLES = new Set(["super_admin"]);
 
 // The submission review screen brings its own 264px context rail and a document
 // bar that carries navigation (back arrow to "/", Review/Report tabs), per the
@@ -84,7 +100,11 @@ export function Sidebar() {
 
   if (hidesSidebar(pathname)) return null;
 
-  const sections = SECTIONS.filter(s => s.title !== "Admin" || ADMIN_ROLES.has(me?.role ?? "")).map(s => {
+  const sections = SECTIONS.filter(s => {
+    if (s.title === "Admin") return ADMIN_ROLES.has(me?.role ?? "");
+    if (s.title === "Console") return CONSOLE_ROLES.has(me?.role ?? "");
+    return true;
+  }).map(s => {
     if (s.title === "Library") {
       const items = s.items.filter(it => {
         if (it.label === "Generate rules" && me?.role === "user") return false;

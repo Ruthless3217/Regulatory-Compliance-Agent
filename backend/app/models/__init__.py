@@ -19,6 +19,7 @@ from .submission_revision import SubmissionRevision
 from .document_comment import DocumentComment
 from .rule_reliability_event import RuleReliabilityEvent
 from .corpus_layer import CorpusLayer
+from .review_assignment import ReviewAssignment
 
 __all__ = [
     "User",
@@ -43,4 +44,5 @@ __all__ = [
     "DocumentComment",
     "RuleReliabilityEvent",
     "CorpusLayer",
+    "ReviewAssignment",
 ]
