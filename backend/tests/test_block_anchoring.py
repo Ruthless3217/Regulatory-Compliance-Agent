@@ -6,7 +6,7 @@ written:
   * the id the backend mints for a block must be the id the editor mints for
     the same block — the expected values below were produced by node's own
     crypto over the frontend's normalize(), which is exactly what
-    `frontend/scripts/check-sections.mjs` pins sectionMap.ts against;
+    `frontend/components/editor/__tests__/sectionMap.test.ts` pins sectionMap.ts against;
   * a chunk must be made of whole blocks, and must say which;
   * a finding may name a block only when that block really holds its quote —
     a wrong id sends the editor's tier-0 locator to the wrong paragraph, which

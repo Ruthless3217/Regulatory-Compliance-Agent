@@ -6,7 +6,12 @@
  * suites goes red — which is the entire point. Before this existed, drift was
  * silent and showed up as findings that could no longer be located. */
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+// Imported as `URL` too, not just used via the global: a jsdom test
+// environment (see adapterContract.ts, which shares this idiom) replaces
+// `globalThis.URL` with its own implementation, which resolves a relative URL
+// against the page location instead of `import.meta.url`. Node's own URL,
+// imported explicitly, is immune to that shadowing.
+import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { blockId, nextSectionMap } from "../sectionMap";
@@ -17,7 +22,7 @@ interface Contract {
 }
 
 const contract: Contract = JSON.parse(
-  readFileSync(resolve(process.cwd(), "../contracts/block-ids.json"), "utf8")
+  readFileSync(fileURLToPath(new NodeURL("../../../../contracts/block-ids.json", import.meta.url)), "utf8")
 );
 
 describe("block-id contract (shared with Python)", () => {

@@ -22,7 +22,7 @@
  *            This needs no code — the survivor's node key lives, so its id does.
  *
  * Pure: no Lexical import, so it is testable without an editor (see
- * scripts/check-sections.mjs) and cannot mutate a document.
+ * __tests__/sectionMap.test.ts) and cannot mutate a document.
  */
 
 /** Same normalization the backend fingerprint uses: collapse whitespace, fold
@@ -142,7 +142,7 @@ function isSplitOf(whole: string, head: string, tail: string): boolean {
  * Hand-rolled because the platform's own digest (crypto.subtle) is async and
  * this runs inside a synchronous Lexical update listener, and because a
  * dependency for one hash is a dependency for one hash. Verified against
- * node:crypto over random inputs in scripts/check-sections.mjs — if this drifts
+ * node:crypto over random inputs in __tests__/sectionMap.test.ts — if this drifts
  * from the real SHA-1 the check fails, so the backend can compute the same ids
  * with a one-line hashlib call.
  */

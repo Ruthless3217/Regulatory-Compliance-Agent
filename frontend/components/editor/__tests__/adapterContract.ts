@@ -10,7 +10,13 @@
  * against too — so an adapter that passes this is agreeing with Python about
  * where the blocks are, not just with the other adapter. */
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+// Imported as `URL` too, not just used via the global: jsdom (the environment
+// `*.dom.test.tsx` specs run under, and this file is imported from one)
+// replaces `globalThis.URL` with its own implementation, which resolves a
+// relative URL against the page location (http://localhost:3000/) instead of
+// `import.meta.url` — silently producing an http: URL that fileURLToPath then
+// rejects. Node's own URL, imported explicitly, is immune to that shadowing.
+import { fileURLToPath, URL as NodeURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import type { NodeText } from "../findingAnchor";
@@ -27,7 +33,7 @@ interface Contract {
 }
 
 const contract: Contract = JSON.parse(
-  readFileSync(resolve(process.cwd(), "../contracts/block-ids.json"), "utf8")
+  readFileSync(fileURLToPath(new NodeURL("../../../../contracts/block-ids.json", import.meta.url)), "utf8")
 );
 
 export function runAdapterContract(adapter: DocumentAdapter): void {
