@@ -1,0 +1,77 @@
+{
+  "_comment": "Cross-language contract for block identity. Read by frontend/components/editor/__tests__/blockIdContract.test.ts and backend/tests/test_block_id_contract.py. Both must pass. Regenerating this file to make a test pass is a bug, not a fix: the ids are what already-analysed documents carry, so changing them orphans every stored anchor.",
+  "ids": [
+    {
+      "text": "Terms and conditions apply.",
+      "ordinal": 0,
+      "id": "7979826dd58d"
+    },
+    {
+      "text": "Terms and conditions apply.",
+      "ordinal": 1,
+      "id": "7979826dd58d~1"
+    },
+    {
+      "text": "  The   FUND\n Value ",
+      "ordinal": 0,
+      "id": "f342a5b1b246"
+    },
+    {
+      "text": "the fund value",
+      "ordinal": 0,
+      "id": "f342a5b1b246"
+    },
+    {
+      "text": "policy terms — ₹1,00,000 · 8% p.a.",
+      "ordinal": 0,
+      "id": "238a399bdefd"
+    },
+    {
+      "text": "",
+      "ordinal": 0,
+      "id": "da39a3ee5e6b"
+    }
+  ],
+  "documents": [
+    {
+      "name": "headings, paragraphs and a repeated disclaimer",
+      "html": "<h1>Maturity Benefit</h1><p>The Fund Value is payable on maturity.</p><p>Terms and conditions apply.</p><p></p><p>Terms and conditions apply.</p>",
+      "texts": [
+        "Maturity Benefit",
+        "The Fund Value is payable on maturity.",
+        "Terms and conditions apply.",
+        "Terms and conditions apply."
+      ],
+      "ids": [
+        "0cb1d17fe68f",
+        "c15cf1c560ae",
+        "7979826dd58d",
+        "7979826dd58d~1"
+      ]
+    },
+    {
+      "name": "a list is ONE block, not one per item",
+      "html": "<p>Charges applicable:</p><ul><li>Premium Allocation Charge</li><li>Policy Administration Charge</li></ul>",
+      "texts": [
+        "Charges applicable:",
+        "Premium Allocation Charge Policy Administration Charge"
+      ],
+      "ids": [
+        "59c1ae1490b6",
+        "80ac3007100d"
+      ]
+    },
+    {
+      "name": "a table is ONE block",
+      "html": "<p>Fund performance</p><table><tr><td>Year 1</td><td>8%</td></tr><tr><td>Year 2</td><td>6%</td></tr></table>",
+      "texts": [
+        "Fund performance",
+        "Year 1 8% Year 2 6%"
+      ],
+      "ids": [
+        "052ad5e86d27",
+        "3a01cdc80bc1"
+      ]
+    }
+  ]
+}
