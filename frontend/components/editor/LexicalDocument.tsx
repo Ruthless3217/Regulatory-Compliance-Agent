@@ -131,6 +131,21 @@ function ImportFailureNotice({
   );
 }
 
+/** Keeps the editor's editable flag in step with the `readOnly` prop.
+ *
+ * `initialConfig.editable` is read ONCE, at mount, and ReviewTab does not
+ * remount this component when the reviewer opens a historical run — so without
+ * this effect a read-only record accepted typing. The initialConfig value is
+ * kept as well: it is correct for the first paint, and this effect covers every
+ * change after it. */
+export function EditableSync({ editable }: { editable: boolean }) {
+  const [editor] = useLexicalComposerContext();
+  React.useEffect(() => {
+    editor.setEditable(editable);
+  }, [editor, editable]);
+  return null;
+}
+
 export function LexicalDocument({
   initialState,
   submissionId,
@@ -204,6 +219,7 @@ export function LexicalDocument({
 
   return (
     <LexicalComposer initialConfig={config}>
+      <EditableSync editable={!readOnly} />
       {/* Toolbar sits outside the scroll container so it stays put while the
           document scrolls. Hidden when read-only: a historical run is a record,
           not a draft, and offering formatting buttons that do nothing is worse
