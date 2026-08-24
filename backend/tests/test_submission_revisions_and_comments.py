@@ -101,8 +101,12 @@ class FakeSession:
 
 
 class _User:
-    def __init__(self):
+    # Admin: these tests cover revisions and comments, not visibility, and a
+    # plain `user` now 404s on a submission that is neither theirs nor
+    # assigned. test_lexical_revision.py imports this class too.
+    def __init__(self, role="admin"):
         self.id = uuid.uuid4()
+        self.role = role
 
 
 def _submission() -> Submission:

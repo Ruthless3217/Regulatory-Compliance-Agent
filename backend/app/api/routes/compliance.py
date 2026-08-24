@@ -40,6 +40,25 @@ from app.models.compliance_check import ComplianceCheck
 from app.models.violation import Violation
 from app.models.analysis_run import AnalysisRun
 from app.models.rule_feedback import RuleFeedback
+
+
+def _submission_id_for_violation(db, violation_id):
+    """The document a finding belongs to, for `audit_events.scope_submission_id`.
+
+    A violation event is part of its document's trail, but the routes that act
+    on findings only ever see a violation id. Resolved through the finding's
+    compliance check. Returns None rather than raising — a trail row with no
+    scope is worth more than a 500 on the action itself.
+    """
+    violation = db.query(Violation).filter(Violation.id == violation_id).first()
+    if violation is None:
+        return None
+    check = (
+        db.query(ComplianceCheck)
+        .filter(ComplianceCheck.id == violation.compliance_check_id)
+        .first()
+    )
+    return getattr(check, "submission_id", None)
 from app.services.agents.compliance.engine import ComplianceEngine
 from app.services.violation_serializer import (
     finding_counts,
@@ -47,6 +66,7 @@ from app.services.violation_serializer import (
     serialize_violation,
 )
 from app.auth.dependencies import require
+from app.auth.visibility import get_visible_submission
 from app.auth.permissions import role_has
 
 logger = logging.getLogger(__name__)
@@ -67,9 +87,7 @@ async def analyze_submission(
     Runs asynchronously in the background.
     """
     # Check submission exists
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     if submission.status in ("analyzing",):
         from app.config import settings
@@ -118,9 +136,7 @@ async def analyze_submission_sync(
     Trigger compliance analysis and wait for results (synchronous).
     Use for testing or small submissions.
     """
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     try:
         session_id = getattr(getattr(request, 'state', None), 'session_id', None)
@@ -207,9 +223,7 @@ async def analyze_submission_scoped(
             ),
         )
 
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     prior_check = (
         db.query(ComplianceCheck)
@@ -324,9 +338,7 @@ async def list_submission_scopes(
 ):
     """The section titles a scoped re-analysis can actually name, with the
     finding count in each — so a UI offers real scopes instead of free text."""
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     check = (
         db.query(ComplianceCheck)
@@ -397,6 +409,9 @@ async def _analyze_and_stream(submission_id: str, user=None, session_id=None):
     # Validate submission exists in its own DB session
     init_db = SessionLocal()
     try:
+        # visibility: exempt - runs after the response on its own session, with
+        # no request context and no user to check. The route that spawns this
+        # generator carries the guard.
         submission = init_db.query(Submission).filter(Submission.id == submission_id).first()
         if not submission:
             yield _sse("error", {"message": "Submission not found"})
@@ -425,6 +440,8 @@ async def _analyze_and_stream(submission_id: str, user=None, session_id=None):
         while True:
             db = SessionLocal()
             try:
+                # visibility: exempt - polling tick inside the same post-response
+                # generator; see the note on the initial lookup above.
                 sub = db.query(Submission).filter(Submission.id == submission_id).first()
                 if not sub:
                     yield _sse("error", {"message": "Submission disappeared"})
@@ -532,9 +549,7 @@ async def get_compliance_results(
     db: Session = Depends(get_db)
 ):
     """Get the latest compliance analysis results for a submission."""
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     # Get latest compliance check
     check = db.query(ComplianceCheck).filter(
@@ -744,7 +759,12 @@ async def submit_violation_action(
         )
         import asyncio
         from app.services.observability import audit
-        asyncio.create_task(audit.record("violation_action_submitted", actor=user, target_type="violation", target_id=violation_id, metadata=payload.model_dump()))
+        asyncio.create_task(audit.record(
+            "violation_action_submitted", actor=user,
+            target_type="violation", target_id=violation_id,
+            scope_submission_id=_submission_id_for_violation(db, violation_id),
+            metadata=payload.model_dump(),
+        ))
         return res
     except ValueError as e:
         if "not found" in str(e).lower():
@@ -794,9 +814,7 @@ async def create_reviewer_violation(
     graded, and that phantom check would then be counted by the dashboard,
     funnel and calibration queries as if an analysis had happened.
     """
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     check = (
         db.query(ComplianceCheck)
@@ -845,7 +863,8 @@ async def create_reviewer_violation(
     from app.services.observability import audit
     asyncio.create_task(audit.record(
         "reviewer_violation_created", actor=user, target_type="violation",
-        target_id=str(violation.id), metadata={"submission_id": submission_id},
+        target_id=str(violation.id), scope_submission_id=submission.id,
+        metadata={"submission_id": submission_id},
     ))
     return serialize_violation(violation)
 
@@ -884,13 +903,17 @@ async def delete_reviewer_violation(
             detail="Only the reviewer who created this flag, or an admin, can delete it.",
         )
 
+    # Resolved before the delete — afterwards the row is gone and the trail
+    # entry would have no document to hang off.
+    scope_submission_id = _submission_id_for_violation(db, violation_id)
+
     db.delete(violation)
     db.commit()
 
     from app.services.observability import audit
     asyncio.create_task(audit.record(
         "reviewer_violation_deleted", actor=user, target_type="violation",
-        target_id=violation_id,
+        target_id=violation_id, scope_submission_id=scope_submission_id,
     ))
     return {"message": "Violation deleted", "id": violation_id}
 
@@ -1012,9 +1035,7 @@ async def list_submission_runs(
     db: Session = Depends(get_db),
 ):
     """Reviewer-facing run history for a submission, oldest to newest."""
-    submission = db.query(Submission).filter(Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+    submission = get_visible_submission(db, submission_id, user)
 
     runs = (
         db.query(AnalysisRun)

@@ -109,8 +109,19 @@ class _User:
         self.role = role
 
 
-def _submission(db) -> Submission:
-    s = Submission(id=uuid.uuid4(), title="t", content_type="text", original_content="orig")
+def _submission(db, owner=None) -> Submission:
+    """`owner` makes the document visible to that reviewer.
+
+    Bucket-scoped visibility means a plain `user` can only open a submission
+    they uploaded or that is assigned to them. These tests are about who may
+    AUTHOR a finding, so the reviewer is given the document rather than
+    promoted to admin — otherwise the role under test would no longer be the
+    role the route sees.
+    """
+    s = Submission(
+        id=uuid.uuid4(), title="t", content_type="text", original_content="orig",
+        submitted_by=getattr(owner, "id", None),
+    )
     db.add(s)
     return s
 
@@ -153,9 +164,10 @@ def test_create_is_400_when_submission_was_never_analysed():
     """compliance_check_id is NOT NULL and inventing a check would fabricate a
     graded record — so this fails loudly instead of silently."""
     db = FakeSession()
-    sub = _submission(db)
+    author = _User()
+    sub = _submission(db, owner=author)
     with pytest.raises(HTTPException) as exc:
-        _create(db, sub.id, _User())
+        _create(db, sub.id, author)
     assert exc.value.status_code == 400
     assert "not been analysed" in exc.value.detail
     assert db.rows_for(Violation) == []
@@ -163,7 +175,8 @@ def test_create_is_400_when_submission_was_never_analysed():
 
 def test_create_attaches_to_latest_check_and_its_run_and_marks_authorship():
     db = FakeSession()
-    sub = _submission(db)
+    user = _User()
+    sub = _submission(db, owner=user)
     _check(db, sub, checked_at=1)
     newest = _check(db, sub, checked_at=2)
     check_run = AnalysisRun(
@@ -183,7 +196,6 @@ def test_create_attaches_to_latest_check_and_its_run_and_marks_authorship():
         run_number=3,
         status="failed",
     ))
-    user = _User()
 
     out = _create(db, sub.id, user, suggested_fix="Remove the guarantee claim")
 
@@ -203,9 +215,10 @@ def test_create_without_any_analysis_run_still_works():
     # A check can exist with no AnalysisRun row (pre-0022 data): the finding
     # still attaches, it just carries no run link.
     db = FakeSession()
-    sub = _submission(db)
+    author = _User()
+    sub = _submission(db, owner=author)
     _check(db, sub)
-    _create(db, sub.id, _User())
+    _create(db, sub.id, author)
     assert db.rows_for(Violation)[0].analysis_run_id is None
 
 

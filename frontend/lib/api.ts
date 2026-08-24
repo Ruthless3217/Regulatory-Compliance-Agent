@@ -40,11 +40,25 @@ import type {
   UsageSummary,
   UserRow,
   Violation,
+  AssignmentOutcome,
+  AssignmentPriority,
+  AssignmentStatus,
+  ReviewAssignment,
+  ReviewerTrail,
+  TrailRow,
+  WorkloadRow,
   CorpusLayer,
   CorpusLayerList,
   CorpusLayerItems,
   CorpusLayerDocument,
   CorpusLayerDeleteResult,
+  DeadCorpusInspection,
+  DeadCorpusSource,
+  RetrievalEvalCapability,
+  RetrievalEvaluateResult,
+  RetrievalEvaluationInspection,
+  RetrievalHealth,
+  RetrievalQueriesInspection,
   RetrievalCandidatesInspection,
   RetrievalChunksInspection,
   RetrievalInspection,
@@ -832,23 +846,29 @@ export const listCorpusLayerDocuments = (id: string) =>
 export const listCorpusDocuments = () =>
   jsonFetch<{ documents: CorpusLayerDocument[] }>(`${base()}/admin/corpus/documents`);
 
-export const deleteCorpusDocument = (sourceFile: string) =>
+/** `corpus` confines the delete to the one table the clicked row represents.
+ * The listing is per (corpus, document), so omitting it would delete a
+ * same-named document out of every corpus at once — further than the row shows. */
+export const deleteCorpusDocument = (sourceFile: string, corpus?: string) =>
   jsonFetch<{ source_file: string; precedents_deleted: number }>(
-    `${base()}/admin/corpus/documents?source_file=${encodeURIComponent(sourceFile)}`,
+    `${base()}/admin/corpus/documents?source_file=${encodeURIComponent(sourceFile)}` +
+      (corpus ? `&corpus=${encodeURIComponent(corpus)}` : ""),
     { method: "DELETE" }
   );
 
 /** Categorise one uncategorised source document into a layer. Adopts only
  * rows that belong to no layer yet. */
-export const claimCorpusLayerDocument = (id: string, sourceFile: string) =>
+export const claimCorpusLayerDocument = (id: string, sourceFile: string, corpus?: string) =>
   jsonFetch<{ layer_id: string; source_file: string; precedents_claimed: number }>(
-    `${base()}/admin/corpus/layers/${id}/documents?source_file=${encodeURIComponent(sourceFile)}`,
+    `${base()}/admin/corpus/layers/${id}/documents?source_file=${encodeURIComponent(sourceFile)}` +
+      (corpus ? `&corpus=${encodeURIComponent(corpus)}` : ""),
     { method: "POST" }
   );
 
-export const deleteCorpusLayerDocument = (id: string, sourceFile: string) =>
+export const deleteCorpusLayerDocument = (id: string, sourceFile: string, corpus?: string) =>
   jsonFetch<{ layer_id: string; source_file: string; precedents_deleted: number }>(
-    `${base()}/admin/corpus/layers/${id}/documents?source_file=${encodeURIComponent(sourceFile)}`,
+    `${base()}/admin/corpus/layers/${id}/documents?source_file=${encodeURIComponent(sourceFile)}` +
+      (corpus ? `&corpus=${encodeURIComponent(corpus)}` : ""),
     { method: "DELETE" }
   );
 
@@ -905,3 +925,162 @@ export const getRunCandidates = (
     `${base()}/admin/retrieval/runs/${runId}/candidates${q ? `?${q}` : ""}`
   );
 };
+
+
+/* ---------- admin: retrieval health ----------
+ * backend/app/api/routes/admin_retrieval_health.py, same /admin/retrieval
+ * prefix and the same rules:write scope as the inspector above.
+ *
+ * The inspector is per-run. These are cross-run: they answer "is retrieval
+ * working at all", which no single run can. Like the inspector, they can answer
+ * {status:"no_retrieval_data"} — discriminate on `.status`, never on an empty
+ * array. */
+
+/** Cross-run funnel, starved chunks, rejection reasons and floor pressure.
+ * `days` is clamped server-side to 1..90. */
+export const getRetrievalHealth = (days?: number) =>
+  jsonFetch<RetrievalHealth>(
+    `${base()}/admin/retrieval/health${days ? `?days=${days}` : ""}`
+  );
+
+/** Content retrieval never reaches. Two distinct populations — never retrieved
+ * at all, versus retrieved repeatedly and never cited — which need opposite
+ * fixes, so they are returned and rendered separately. */
+export const getDeadCorpus = (
+  corpus: DeadCorpusSource,
+  params?: { days?: number; limit?: number }
+) => {
+  const qs = new URLSearchParams({ corpus });
+  if (params?.days) qs.set("days", String(params.days));
+  if (params?.limit) qs.set("limit", String(params.limit));
+  return jsonFetch<DeadCorpusInspection>(
+    `${base()}/admin/retrieval/health/dead-corpus?${qs.toString()}`
+  );
+};
+
+/** Every hybrid_search one run fired, with what the floors did to it. Requires
+ * migration 0039; older runs answer {status:"no_retrieval_data"}. */
+export const getRunQueries = (runId: string) =>
+  jsonFetch<RetrievalQueriesInspection>(
+    `${base()}/admin/retrieval/runs/${runId}/queries`
+  );
+
+/** Free. Whether judged evaluation can run here at all — call this before
+ * offering the button, so a version skew costs one GET instead of half a paid
+ * evaluation. */
+export const getEvaluationCapability = () =>
+  jsonFetch<RetrievalEvalCapability>(
+    `${base()}/admin/retrieval/evaluation/capability`
+  );
+
+/** Free. Reads stored judgements; calls no model. */
+export const getRunEvaluation = (runId: string) =>
+  jsonFetch<RetrievalEvaluationInspection>(
+    `${base()}/admin/retrieval/runs/${runId}/evaluation`
+  );
+
+/** SPENDS TOKENS — one judge call per sample per metric. Never call this on
+ * render, on focus, or in a retry loop. `max_samples` is clamped server-side to
+ * the hard cap reported by getEvaluationCapability(). */
+export const evaluateRun = (
+  runId: string,
+  body?: { metrics?: string[]; corpus?: string; max_samples?: number }
+) =>
+  jsonFetch<RetrievalEvaluateResult>(
+    `${base()}/admin/retrieval/runs/${runId}/evaluate`,
+    { method: "POST", body: JSON.stringify(body ?? {}) }
+  );
+
+// ------------------------------------------------------------- assignments
+// Review buckets + the action trail. See
+// docs/superpowers/specs/2026-08-19-review-buckets-and-trail-design.md
+
+export async function listMyBucket(): Promise<{ assignments: ReviewAssignment[]; total: number }> {
+  return jsonFetch(`${base()}/assignments/my`);
+}
+
+export async function listAssignments(
+  params: { status?: AssignmentStatus; assignee_id?: string } = {}
+): Promise<{ assignments: ReviewAssignment[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.assignee_id) qs.set("assignee_id", params.assignee_id);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return jsonFetch(`${base()}/assignments${suffix}`);
+}
+
+export async function assignSubmission(body: {
+  submission_id: string;
+  assignee_id: string;
+  priority?: AssignmentPriority;
+  due_at?: string | null;
+  note?: string | null;
+}): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function reassignAssignment(
+  id: string,
+  body: { assignee_id: string; note?: string | null }
+): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments/${id}/reassign`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function startAssignment(id: string): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments/${id}/start`, { method: "POST" });
+}
+
+export async function completeAssignment(id: string): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments/${id}/complete`, { method: "POST" });
+}
+
+export async function sendBackAssignment(id: string, reason: string): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments/${id}/send-back`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function cancelAssignment(id: string, reason?: string): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason ?? null }),
+  });
+}
+
+/** Sign off an assignment and end it. Approving the document does this
+ *  implicitly; this is the explicit path, chiefly for `rejected`. */
+export async function closeAssignment(
+  id: string,
+  outcome: AssignmentOutcome = "approved",
+  note?: string,
+): Promise<ReviewAssignment> {
+  return jsonFetch(`${base()}/assignments/${id}/close`, {
+    method: "POST",
+    body: JSON.stringify({ outcome, note: note ?? null }),
+  });
+}
+
+export async function assignmentWorkload(): Promise<{ reviewers: WorkloadRow[] }> {
+  return jsonFetch(`${base()}/assignments/workload`);
+}
+
+export async function assignmentForSubmission(
+  submissionId: string
+): Promise<{ active: ReviewAssignment | null; history: ReviewAssignment[] }> {
+  return jsonFetch(`${base()}/assignments/for-submission/${submissionId}`);
+}
+
+export async function documentTrail(submissionId: string): Promise<{ trail: TrailRow[] }> {
+  return jsonFetch(`${base()}/assignments/trail/document/${submissionId}`);
+}
+
+export async function reviewerTrail(userId: string): Promise<ReviewerTrail> {
+  return jsonFetch(`${base()}/assignments/trail/reviewer/${userId}`);
+}

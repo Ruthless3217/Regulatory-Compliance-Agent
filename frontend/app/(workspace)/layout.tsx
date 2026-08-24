@@ -28,7 +28,10 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   const me = await getServerMe();
   if (!me) redirect("/login");
   if (me.must_change_password) redirect("/account/change-password");
-  if (me.role === "super_admin") redirect("/super_admin");
+  // super_admin is a strict superset of admin (spec D5), so it belongs in the
+  // workspace like any other role. The redirect that used to sit here bounced
+  // it straight back out to the console, which is why the highest role could
+  // not open a submission at all.
 
   return (
     <AuthProvider initialMe={me}>

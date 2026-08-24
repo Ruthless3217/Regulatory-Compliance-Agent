@@ -1,10 +1,12 @@
 """Global LLM token budget — a hard daily ceiling across ALL keys, models, and
-endpoints (analysis + chat + plain), independent of the per-key Groq TPM/TPD
-limiters.
+endpoints (analysis + chat + plain), independent of any provider-side TPM/TPD
+ceiling.
 
-The per-key Groq limiter protects each key's quota; this protects the wallet /
-contract as a whole. It is Redis-backed so the ceiling is shared across uvicorn
-workers, with an in-process fallback when Redis is down. Disabled by default
+A provider's own per-key quota is enforced reactively: a 429 rotates to the
+next key (see ``_is_rate_limit_error``). This is the proactive guard, and it
+protects the wallet / contract as a whole rather than one key. It is
+Redis-backed so the ceiling is shared across uvicorn workers, with an
+in-process fallback when Redis is down. Disabled by default
 (``llm_global_daily_token_budget = 0``) so existing behaviour is unchanged until
 an operator sets a budget.
 

@@ -231,11 +231,19 @@ class _FakeDB:
         return self._row
 
 
+class _Admin:
+    """Admin short-circuits the visibility guard on its role alone, so the
+    minimal _FakeDB needs no assignment table. These tests are about HTML
+    import, not about who may see the document."""
+    id = None
+    role = "admin"
+
+
 def _import_html_response(sub):
     from app.api.routes import submissions as routes
 
     return asyncio.run(
-        routes.get_submission_import_html(str(sub.id), db=_FakeDB(sub))
+        routes.get_submission_import_html(str(sub.id), user=_Admin(), db=_FakeDB(sub))
     )
 
 
