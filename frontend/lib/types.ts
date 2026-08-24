@@ -695,6 +695,12 @@ export interface RepeatedPatterns {
  * its precedents from retrieval on the next query and re-enabling costs nothing —
  * the embeddings never move. Deleting is the separate, destructive operation. */
 
+/** One physical table corpus layers govern (backend services/rag/corpus_registry). */
+export interface CorpusRef {
+  table: string;
+  label: string;
+}
+
 export interface CorpusLayer {
   id: string;
   name: string;
@@ -704,20 +710,33 @@ export interface CorpusLayer {
   source_ref: string | null;
   ingested_by: string | null;
   item_count: number;
+  /** Which corpora this layer's switch actually governs. A `precedent_ingest`
+   * layer spans two tables; "disable" means nothing to an admin who cannot see
+   * its blast radius. */
+  corpora: CorpusRef[];
   created_at: string | null;
   updated_at: string | null;
 }
 
 export interface CorpusLayerList {
   layers: CorpusLayer[];
-  /** Precedents belonging to no layer (the pre-0030 corpus). Always retrieved;
-   * they have no provenance and cannot be switched off. */
+  /** Rows belonging to no layer (the corpus that predates layers). Always
+   * retrieved; they have no provenance and cannot be switched off. */
   unlayered_count: number;
+  /** The same total per corpus. "0 layered, 5,229 unlayered legacy precedents"
+   * is the honest read of a v1 corpus, and the page has to be able to say it. */
+  unlayered_by_corpus: { corpus: string; label: string; count: number }[];
   kinds: string[];
+  corpora: CorpusRef[];
+  /** kind -> the tables a layer of that kind governs. */
+  kind_corpora: Record<string, string[]>;
 }
 
 export interface CorpusLayerItem {
   id: string;
+  /** Which physical table this row came from. */
+  corpus: string;
+  corpus_label: string;
   highlighted_span: string | null;
   reviewer_comment: string | null;
   issue_type: string | null;
@@ -738,6 +757,10 @@ export interface CorpusLayerItems {
 /** One source document's contribution to a layer. The admin curates in
  * documents ("drop the 2019 brochure"), not in individual reviewer comments. */
 export interface CorpusLayerDocument {
+  /** Rows are per (corpus, document), not per filename: the same name can exist
+   * in two corpora and one Delete click must not reach further than it shows. */
+  corpus: string;
+  corpus_label: string;
   source_file: string | null;
   precedent_count: number;
   /** How many of this document's precedents belong to no layer. Only ever
@@ -953,6 +976,271 @@ export interface RetrievalChunksStory extends RetrievalRunHead {
 export type RetrievalCandidatesInspection = RetrievalCandidatesPage | RetrievalNoData;
 export type RetrievalChunksInspection = RetrievalChunksStory | RetrievalNoData;
 
+/* ---------- admin: retrieval health ----------------------------------------
+ * backend/app/api/routes/admin_retrieval_health.py
+ *
+ * The inspector answers "what happened in THIS run". These answer "is retrieval
+ * working at all", across every traced run in a window. Different question,
+ * different failure modes: every individual run can look sane while a whole
+ * corpus is never retrieved from.
+ */
+
+/** Every knob that can silently decide a retrieval outcome. Returned on each
+ * health response so a number is never read against the wrong floor. */
+export interface RetrievalFloors {
+  rag_min_cosine: number;
+  rag_min_ts_rank: number;
+  rag_score_threshold: number;
+  rag_top_k_analysis: number;
+  rag_recall_pool: number;
+  rag_rrf_k: number;
+  pgvector_top_k: number;
+}
+
+/** The cross-run analogue of RetrievalNoData: no run_id, because the absence is
+ * about the window rather than about one run. */
+export interface RetrievalNoHealthData {
+  status: "no_retrieval_data";
+  reason: string;
+  detail?: string;
+  window_days: number;
+  floors?: RetrievalFloors;
+  corpus?: string;
+}
+
+/** One corpus's journey from retrieved to cited.
+ *
+ * `cited` is null when the join that would establish it is unavailable. That is
+ * NOT zero and must not render as zero — "we cannot tell" and "never cited"
+ * lead to opposite actions. */
+export interface RetrievalFunnelRow {
+  corpus: string;
+  runs: number;
+  candidates: number;
+  accepted: number;
+  rejected_applicability: number;
+  in_prompt: number;
+  dropped_by_cap: number;
+  lost_at_fusion: number;
+  dropped_by_retriever: number;
+  /** Unreachable while rag_score_threshold is 0.0 — RRF scores are strictly
+   * positive. An always-zero column here is expected, not evidence. */
+  below_threshold: number;
+  distinct_docs: number;
+  avg_fused_score: number | null;
+  in_prompt_rate: number | null;
+  cited: number | null;
+  cited_rate: number | null;
+}
+
+/** Chunks that drew candidates but got none of them into a prompt — i.e. were
+ * graded on nothing retrieved. The most actionable number on the page. */
+export interface RetrievalStarvedRow {
+  corpus: string;
+  starved_chunks: number;
+}
+
+export interface RetrievalRejectionReason {
+  corpus: string;
+  reason: string;
+  n: number;
+}
+
+/** Floor pressure per (corpus, index). Split by index because one corpus name
+ * can cover two tables, and the fallback index is exactly where retrieval
+ * behaves differently.
+ *
+ * `weakest_surviving_cosine` sitting on `min_cosine_floor` means the floor is
+ * the binding constraint; sitting well above it means recall is limited by
+ * something else. That comparison is the whole point of the row. */
+export interface RetrievalFloorPressureRow {
+  corpus: string;
+  index_name: string;
+  queries: number;
+  pool_truncated: number;
+  returned_nothing: number;
+  scope_not_pushed: number;
+  weakest_surviving_cosine: number | null;
+  mean_weakest_cosine: number | null;
+  best_cosine: number | null;
+  min_cosine_floor: number | null;
+}
+
+export interface RetrievalHealthStory {
+  status: "ok";
+  window_days: number;
+  floors: RetrievalFloors;
+  funnel: RetrievalFunnelRow[];
+  starved_chunks: RetrievalStarvedRow[];
+  top_rejection_reasons: RetrievalRejectionReason[];
+  /** Empty when migration 0039 has not been applied yet. That is ABSENT
+   * telemetry, not "no floor pressure" — the page must say which. */
+  floor_pressure: RetrievalFloorPressureRow[];
+  notes: string[];
+}
+
+export type RetrievalHealth = RetrievalHealthStory | RetrievalNoHealthData;
+
+/* --- dead corpus: content retrieval never reaches -------------------------- */
+
+export type DeadCorpusSource = "rules" | "precedents" | "precedents_legacy";
+
+/** Identity plus whatever label columns that corpus carries (title, category,
+ * severity). Loose on purpose — the projection differs per table. */
+export interface DeadCorpusEntry {
+  id: string;
+  [column: string]: unknown;
+}
+
+export interface DeadCorpusUncitedEntry {
+  id: string;
+  times_in_prompt: number;
+}
+
+export interface DeadCorpusStory {
+  status: "ok";
+  window_days: number;
+  corpus: DeadCorpusSource;
+  table: string;
+  /** Never surfaced as a candidate at all. */
+  never_retrieved: DeadCorpusEntry[];
+  never_retrieved_shown: number;
+  /** Reached a prompt repeatedly and was never cited in a finding. Retrieval
+   * works; the content is not earning its place. */
+  retrieved_never_cited: DeadCorpusUncitedEntry[];
+  retrieved_never_cited_shown: number;
+  /** Both lists are capped at this. A short list is not proof of a short tail,
+   * so the cap is rendered rather than hidden. */
+  limit: number;
+}
+
+export type DeadCorpusInspection = DeadCorpusStory | RetrievalNoHealthData;
+
+/* --- per-run query telemetry (migration 0039) ------------------------------ */
+
+/** One hybrid_search call. The floor columns sit next to the weakest survivor
+ * so the two are always read together. */
+export interface RetrievalQueryRow {
+  chunk_id: string | null;
+  corpus: string;
+  index_name: string;
+  category: string | null;
+  top_k: number | null;
+  recall_pool: number | null;
+  vector_returned: number | null;
+  keyword_returned: number | null;
+  fused_total: number | null;
+  /** False when the query text was blank, so the lexical leg never ran. Its
+   * zero is a skip, not a miss. */
+  keyword_leg_ran: boolean | null;
+  min_cosine_seen: number | null;
+  max_cosine_seen: number | null;
+  min_ts_rank_seen: number | null;
+  min_cosine_floor: number | null;
+  min_ts_rank_floor: number | null;
+  /** The recall pool came back short. Could be the cosine floor, the filters,
+   * or a corpus smaller than the pool — this flag does not say which. */
+  pool_truncated: boolean | null;
+  notes: Record<string, unknown> | null;
+}
+
+export interface RetrievalQueryCorpusSummary {
+  corpus: string;
+  indexes: string[];
+  queries: number;
+  pool_truncated: number;
+  returned_nothing: number;
+  keyword_leg_skipped: number;
+  scope_not_pushed: number;
+  weakest_surviving_cosine: number | null;
+  median_weakest_cosine: number | null;
+}
+
+export interface RetrievalQueriesStory extends RetrievalRunHead {
+  status: "ok";
+  floors: RetrievalFloors;
+  queries: RetrievalQueryRow[];
+  queries_total: number;
+  by_corpus: RetrievalQueryCorpusSummary[];
+}
+
+export type RetrievalQueriesInspection = RetrievalQueriesStory | RetrievalNoData;
+
+/* --- judged evaluation (RAGAS) --------------------------------------------- */
+
+/** Answers "can this environment evaluate" without spending anything. RAGAS
+ * moves its metric surface between minor versions; finding that out mid-run
+ * costs money and leaves half-written rows. */
+export interface RetrievalEvalCapability {
+  installed: boolean;
+  version: string | null;
+  metrics_available: string[];
+  metrics_missing: string[];
+  error: string | null;
+  supported_metrics: string[];
+  default_metrics: string[];
+  default_max_samples: number;
+  hard_max_samples: number;
+  excluded_metrics_note: string;
+}
+
+export interface RetrievalEvalSummaryRow {
+  corpus: string;
+  metric: string;
+  samples: number;
+  /** Scored and unscored are counted apart on purpose. Folding a NULL into the
+   * mean as zero makes "the judge could not decide" and "the context was
+   * irrelevant" the same number. */
+  scored: number;
+  unscored: number;
+  mean: number | null;
+  min: number | null;
+  max: number | null;
+}
+
+export interface RetrievalEvalRow {
+  corpus: string;
+  chunk_id: string | null;
+  metric: string;
+  score: number | null;
+  reason: string | null;
+  evaluator: string;
+  model: string | null;
+  contexts: number | null;
+  created_at: string;
+}
+
+export interface RetrievalEvaluationStory extends RetrievalRunHead {
+  status: "ok";
+  summary: RetrievalEvalSummaryRow[];
+  rows: RetrievalEvalRow[];
+  rows_total: number;
+}
+
+/** A run nobody has paid to evaluate yet. Distinct from a run that scored
+ * nothing. */
+export interface RetrievalNotEvaluated extends RetrievalRunHead {
+  status: "not_evaluated";
+  hint: string;
+}
+
+export type RetrievalEvaluationInspection =
+  | RetrievalEvaluationStory
+  | RetrievalNotEvaluated;
+
+/** Result of a POST that actually spent tokens. */
+export interface RetrievalEvaluateResult {
+  status: "ok";
+  metrics: string[];
+  samples_scored: number;
+  /** Samples with no retrieved context. Skipped rather than scored 0 — an
+   * absent score, not a bad one. */
+  samples_skipped: number;
+  rows_written: number;
+  summary: RetrievalEvalSummaryRow[];
+}
+
+
 // --- Review assignments and the action trail -------------------------------
 // Mirrors backend/app/api/routes/assignments.py `_dict()` field for field.
 
@@ -961,6 +1249,9 @@ export type AssignmentStatus =
   | "closed" | "superseded" | "cancelled";
 
 export type AssignmentPriority = "low" | "normal" | "high" | "urgent";
+
+/** Mirrors VALID_OUTCOMES in backend/app/services/assignment_service.py. */
+export type AssignmentOutcome = "approved" | "rejected" | "cancelled" | "superseded";
 
 export interface ReviewAssignment {
   id: string;

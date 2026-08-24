@@ -67,8 +67,11 @@ class FakeSession:
 
 
 class _User:
-    def __init__(self):
+    # Admin: these tests cover export dispatch, not visibility, and a plain
+    # `user` now 404s on a submission that is neither theirs nor assigned.
+    def __init__(self, role="admin"):
         self.id = uuid.uuid4()
+        self.role = role
 
 
 def _submission() -> Submission:

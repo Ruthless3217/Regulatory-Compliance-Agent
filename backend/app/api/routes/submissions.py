@@ -27,6 +27,7 @@ from app.models.violation import Violation
 from app.config import settings
 from app.auth.dependencies import require
 from app.auth.visibility import get_visible_submission, visible_submission_filter
+from app.services import assignment_service
 from app.services.observability import audit
 from app.schemas.submission import (
     SubmissionRevisionCreate,
@@ -138,7 +139,7 @@ async def create_submission(
 
     import asyncio
     from app.services.observability import audit
-    asyncio.create_task(audit.record("submission_created", actor=user, target_type="submission", target_id=str(submission.id), metadata={"title": submission.title}))
+    asyncio.create_task(audit.record("submission_created", actor=user, target_type="submission", target_id=str(submission.id), scope_submission_id=submission.id, metadata={"title": submission.title}))
 
     return {
         "id": str(submission.id),
@@ -885,8 +886,22 @@ async def approve_submission(
 
     previous = submission.approval_status
     submission.approval_status = "approved"
+
+    # Sign-off ends the review that produced the document. Without this the
+    # assignment stayed active forever: the reviewer's bucket never drained and
+    # the partial unique index kept the document locked to work nobody could
+    # finish. Same transaction as the approval on purpose — the two records must
+    # not be able to disagree, and `close` cannot fail here (the outcome is a
+    # known one, and `active_for_submission` only returns closeable states).
+    active = assignment_service.active_for_submission(db, submission.id)
+    if active is not None:
+        assignment_service.close(
+            db, assignment=active, actor=user, outcome="approved",
+            note=f"Closed by approval of {submission.id}.",
+        )
     db.commit()
 
+    closed_assignment_id = str(active.id) if active is not None else None
     check_id = str(gate["check"].id) if gate["check"] else None
     approver = str(user.id) if getattr(user, "id", None) else None
     approved_at = datetime.now(timezone.utc).isoformat()
@@ -902,6 +917,10 @@ async def approve_submission(
         actor=user,
         target_type="submission",
         target_id=str(submission.id),
+        # Without this the sign-off is absent from the document's own trail,
+        # which filters on scope_submission_id alone — leaving the one entry a
+        # compliance reviewer most needs to find out of the record.
+        scope_submission_id=submission.id,
         before={"approval_status": previous},
         after={"approval_status": "approved"},
         metadata={
@@ -910,6 +929,7 @@ async def approve_submission(
             "approved_at": approved_at,
             "override_reason": reason or None,
             "unresolved_critical_count": len(gate["criticals"]),
+            "closed_assignment_id": closed_assignment_id,
         },
     )
 
@@ -975,6 +995,6 @@ async def delete_submission(
 
     import asyncio
     from app.services.observability import audit
-    asyncio.create_task(audit.record("submission_deleted", actor=user, target_type="submission", target_id=submission_id))
+    asyncio.create_task(audit.record("submission_deleted", actor=user, target_type="submission", target_id=submission_id, scope_submission_id=submission_id))
 
     return {"message": "Submission deleted", "id": submission_id}

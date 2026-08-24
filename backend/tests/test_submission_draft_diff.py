@@ -99,8 +99,18 @@ class _FakeDB:
         return self._row
 
 
+class _Admin:
+    """Admin short-circuits the visibility guard on its role alone, so the
+    minimal _FakeDB above needs no assignment table. These tests are about the
+    redline, not about who may see the document."""
+    id = None
+    role = "admin"
+
+
 def _diff(sub):
-    return asyncio.run(routes.submission_draft_diff(str(sub.id), db=_FakeDB(sub)))
+    return asyncio.run(
+        routes.submission_draft_diff(str(sub.id), user=_Admin(), db=_FakeDB(sub))
+    )
 
 
 def _baseline(path):

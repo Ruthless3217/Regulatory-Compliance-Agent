@@ -49,6 +49,11 @@ class CancelIn(BaseModel):
     reason: Optional[str] = None
 
 
+class CloseIn(BaseModel):
+    outcome: str = "approved"
+    note: Optional[str] = None
+
+
 def _dict(a: ReviewAssignment) -> dict:
     return {
         "id": str(a.id),
@@ -267,6 +272,26 @@ async def send_back_assignment(
     a = _load(db, assignment_id)
     return _dict(_run(
         lambda: svc.send_back(db, assignment=a, actor=user, reason=body.reason), db))
+
+
+@router.post("/{assignment_id}/close")
+async def close_assignment(
+    assignment_id: str,
+    body: CloseIn,
+    user=Depends(require("assignments:manage")),
+    db: Session = Depends(get_db),
+):
+    """Sign off an assignment and end it.
+
+    Admin-and-above, deliberately: the reviewer who did the work must not be
+    the one who closes it (spec D4). The usual path is implicit — approving the
+    document closes its assignment in the same transaction — and this route is
+    the explicit one, for closing work that will not be approved (`rejected`)
+    or that no longer needs a reviewer.
+    """
+    a = _load(db, assignment_id)
+    return _dict(_run(lambda: svc.close(
+        db, assignment=a, actor=user, outcome=body.outcome, note=body.note), db))
 
 
 @router.post("/{assignment_id}/cancel")

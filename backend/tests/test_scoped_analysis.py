@@ -108,7 +108,10 @@ class FakeSession:
 
 
 class _User:
-    def __init__(self, role="user"):
+    # Admin by default — these tests cover scoped analysis, not visibility, and
+    # a plain `user` now 404s on a submission that is neither theirs nor
+    # assigned to them.
+    def __init__(self, role="admin"):
         self.id = uuid.uuid4()
         self.role = role
 

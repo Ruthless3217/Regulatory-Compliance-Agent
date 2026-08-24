@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   assignmentForSubmission,
+  closeAssignment,
   completeAssignment,
   sendBackAssignment,
   startAssignment,
@@ -141,6 +142,18 @@ export function AssignmentBanner({ submissionId }: { submissionId: string }) {
                 if (reason?.trim()) run(() => sendBackAssignment(active.id, reason));
               }}>
               Send back
+            </Button>
+          )}
+          {/* Approving the document closes the assignment too, so this is the
+              path for work that ends without approval. Both routes are
+              admin-only: the reviewer must not sign off their own review. */}
+          {isAdmin && active.status === "awaiting_signoff" && (
+            <Button size="sm" variant="outline" disabled={busy}
+              onClick={() => {
+                const note = window.prompt("Close without approving — why?");
+                if (note?.trim()) run(() => closeAssignment(active.id, "rejected", note));
+              }}>
+              Close as rejected
             </Button>
           )}
           {isAdmin && active.status !== "closed" && (

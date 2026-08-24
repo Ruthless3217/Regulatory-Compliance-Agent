@@ -31,6 +31,7 @@ from app.models.compliance_check import ComplianceCheck
 from app.models.submission import Submission
 from app.models.submission_revision import SubmissionRevision
 from app.models.violation import Violation
+from app.services import assignment_service as assignment_svc
 
 NOW = datetime(2026, 8, 3, 12, 0, tzinfo=timezone.utc)
 
@@ -127,7 +128,12 @@ class FakeSession:
 
 
 class _User:
-    def __init__(self, role="user"):
+    # Defaults to admin: these tests are about the approval gate, not about who
+    # can see the document. Since bucket-scoped visibility landed, a plain
+    # `user` cannot open a submission that is neither theirs nor assigned to
+    # them, so a reviewer default would 404 before reaching the gate. Approval
+    # is admin-only anyway (submission:approve).
+    def __init__(self, role="admin"):
         self.id = uuid.uuid4()
         self.role = role
 
@@ -558,3 +564,96 @@ def test_approval_state_reports_a_never_analysed_document():
     assert state["can_approve"] is False
     assert _codes(state) == {"no_analysis"}
     assert state["check_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# Approval closes the assignment it signs off
+# ---------------------------------------------------------------------------
+# Approving a document used to leave its assignment untouched. Because
+# `awaiting_signoff` counts as active, the row stayed alive forever: the
+# reviewer's bucket never drained, workload counts drifted, and the partial
+# unique index kept the document locked to an assignment nobody could finish.
+
+def _assigned(db, sub, reviewer, admin, *, state="awaiting_signoff"):
+    a = assignment_svc.assign(
+        db, submission_id=sub.id, assignee_id=reviewer.id, actor=admin)
+    if state in ("in_review", "awaiting_signoff"):
+        assignment_svc.start(db, assignment=a, actor=reviewer)
+    if state == "awaiting_signoff":
+        assignment_svc.complete(db, assignment=a, actor=reviewer)
+    return a
+
+
+@pytest.mark.parametrize("state", ["open", "in_review", "awaiting_signoff"])
+def test_approving_closes_the_active_assignment(audited, state):
+    db = FakeSession()
+    sub = _submission(db)
+    _analyzed(db, sub)
+    admin, reviewer = _User(role="admin"), _User(role="user")
+    a = _assigned(db, sub, reviewer, admin, state=state)
+
+    _approve(db, sub, user=admin)
+
+    assert a.status == "closed", f"assignment left active after approval from {state!r}"
+    assert a.outcome == "approved"
+    assert a.closed_by == admin.id
+
+
+def test_approving_an_unassigned_document_still_approves(audited):
+    """Most documents are never assigned. Approval must not depend on one."""
+    db = FakeSession()
+    sub = _submission(db)
+    _analyzed(db, sub)
+
+    result = _approve(db, sub, user=_User(role="admin"))
+
+    assert result["approval_status"] == "approved"
+
+
+def test_a_refused_approval_leaves_the_assignment_alone(audited):
+    """The close and the approval are one transaction — if the gate refuses,
+    the assignment must not have moved."""
+    db = FakeSession()
+    sub = _submission(db, status="failed")
+    _analyzed(db, sub)
+    admin, reviewer = _User(role="admin"), _User(role="user")
+    a = _assigned(db, sub, reviewer, admin)
+
+    _refusal(db, sub, user=admin)
+
+    assert a.status == "awaiting_signoff"
+    assert sub.approval_status == "pending"
+
+
+def test_approval_records_the_assignment_it_closed(audited):
+    db = FakeSession()
+    sub = _submission(db)
+    _analyzed(db, sub)
+    admin, reviewer = _User(role="admin"), _User(role="user")
+    a = _assigned(db, sub, reviewer, admin)
+
+    _approve(db, sub, user=admin)
+
+    event = [e for e in audited if e["event_type"] == "submission_approved"][-1]
+    assert event["metadata"]["closed_assignment_id"] == str(a.id)
+
+
+@pytest.mark.parametrize("reason,event_type", [
+    (None, "submission_approved"),
+    ("critical is a false positive", "submission_approval_override"),
+])
+def test_the_signoff_lands_in_the_documents_own_trail(audited, reason, event_type):
+    """`trail_service.document_trail` filters on scope_submission_id and nothing
+    else, so an approval without it is invisible on the document — the one entry
+    a compliance reviewer most needs to find."""
+    db = FakeSession()
+    sub = _submission(db)
+    check = _analyzed(db, sub)
+    if reason:
+        _critical(db, check)
+
+    _approve(db, sub, user=_User(role="admin"), override_reason=reason)
+
+    event = audited[-1]
+    assert event["event_type"] == event_type
+    assert event["scope_submission_id"] == sub.id
