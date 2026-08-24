@@ -214,8 +214,8 @@ class LLMService:
 
         # One client per configured key. Multiple keys = TPM failover: the
         # request drivers below rotate to the next key when one is 429'd or
-        # over its daily budget. key_id (last 8 chars of the key) ties each
-        # key to its own per-key rate limiter without logging the secret.
+        # over its daily budget. key_id (last 8 chars of the key) identifies a
+        # key in logs and usage records without printing the secret.
         self.api_keys = cfg["api_keys"]
         if not self.api_keys:
             logger.warning("[%s] LLM API key is not set. LLM service will fail.", profile)
@@ -360,10 +360,7 @@ class LLMService:
         estimate = self._estimate_tokens(messages)
         last_exc: Optional[Exception] = None
         for key_id, client in self._client_pool:
-            limiter = self._groq_limiter_for(key_id)
             try:
-                if limiter is not None:
-                    await limiter.acquire(estimate)
                 await global_budget.reserve(estimate)
                 response = await client.chat.completions.create(
                     model=self.model,
@@ -396,8 +393,6 @@ class LLMService:
                 )
 
                 actual = total_tokens or estimate
-                if limiter is not None:
-                    limiter.reconcile(estimate, actual)
                 await global_budget.reconcile(estimate, actual)
                 await self._log_to_json(prompt, response_text, system_prompt, context)
                 return response_text
@@ -445,10 +440,7 @@ class LLMService:
         # text we can't restart on another key without duplicating output.
         last_exc: Optional[Exception] = None
         for key_id, client in self._client_pool:
-            limiter = self._groq_limiter_for(key_id)
             try:
-                if limiter is not None:
-                    await limiter.acquire(estimate)
                 await global_budget.reserve(estimate)
                 stream = await client.chat.completions.create(
                     model=self.model,
@@ -533,46 +525,21 @@ class LLMService:
         from app.services.llm_budget import get_global_budget
         global_budget = get_global_budget()
 
-        # Groq enforces TPM/TPD ceilings PER KEY. Reserve budget before each call
-        # so we rotate (or queue) rather than burn a 429-doomed run. Only applies
-        # to Groq — other providers (Gemini) must not inherit Groq's limits.
-        # See architect-audit C7.
-        is_groq = "groq" in (self.base_url or "").lower()
-        get_rate_limiter = None
-        DailyLimitApproaching = ()  # so `except DailyLimitApproaching` is a no-op when not Groq
-        if is_groq:
-            from app.services.groq_rate_limiter import (
-                get_rate_limiter,
-                DailyLimitApproaching,
-            )
-
+        # Per-key TPM/TPD ceilings are handled reactively: a 429 is caught by
+        # _is_rate_limit_error and rotates to the next key. The global wallet
+        # ceiling below is the proactive guard, and it applies to every provider.
         last_exc: Optional[Exception] = None
-        daily_blocked = 0
         pool = self._client_pool
         for key_id, client in pool:
             # Fresh message copy per key — a failed key's JSON-correction turns
             # must not leak into the next key's conversation.
             current_messages = list(base_messages)
 
-            limiter = None
-            token_estimate = 0
-            if get_rate_limiter is not None:
-                limiter = get_rate_limiter(self.model, key_id)
-                token_estimate = self._estimate_tokens(current_messages)
-                try:
-                    await limiter.acquire(token_estimate)
-                except DailyLimitApproaching as e:
-                    logger.warning(
-                        f"[failover] key …{key_id} at daily cap; trying next key ({e})"
-                    )
-                    last_exc = e
-                    daily_blocked += 1
-                    continue
-            else:
-                token_estimate = self._estimate_tokens(current_messages)
+            token_estimate = self._estimate_tokens(current_messages)
 
-            # Global wallet ceiling — independent of per-key Groq quota. Applies
-            # to every key, so exhaustion fails closed rather than rotating.
+            # Global wallet ceiling — independent of any provider-side quota.
+            # Applies to every key, so exhaustion fails closed rather than
+            # rotating.
             from app.services.llm_budget import LLMBudgetExceeded
             try:
                 await global_budget.reserve(token_estimate)
@@ -592,7 +559,6 @@ class LLMService:
                     db=db,
                     tool_name=tool_name,
                     temperature=temperature,
-                    limiter=limiter,
                     token_estimate=token_estimate,
                 )
             except _RateLimitFailover as e:
@@ -620,7 +586,6 @@ class LLMService:
         db: Optional[Session],
         tool_name: str,
         temperature: float,
-        limiter=None,
         token_estimate: int = 0,
     ) -> T:
         """Run the schema-validation retry loop against a single key's client.
@@ -713,10 +678,8 @@ class LLMService:
                 result = output_model.model_validate_json(response_text)
                 end_time = time.time()
 
-                # Correct the reserved estimate against Groq's reported usage.
+                # Correct the reserved estimate against the provider's usage.
                 actual = token_usage or token_estimate
-                if limiter is not None:
-                    limiter.reconcile(token_estimate, actual)
                 from app.services.llm_budget import get_global_budget
                 await get_global_budget().reconcile(token_estimate, actual)
 
@@ -808,14 +771,6 @@ class LLMService:
                 f"({settings.llm_context_window}). Refusing to send a prompt that "
                 f"would be silently truncated."
             )
-
-    def _groq_limiter_for(self, key_id: str):
-        """Return the per-key Groq limiter for the active model, or None when the
-        provider isn't Groq (other providers must not inherit Groq's ceilings)."""
-        if "groq" not in (self.base_url or "").lower():
-            return None
-        from app.services.groq_rate_limiter import get_rate_limiter
-        return get_rate_limiter(self.model, key_id)
 
     def _build_chat_messages(
         self,

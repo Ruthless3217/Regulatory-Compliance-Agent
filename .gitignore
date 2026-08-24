@@ -30,6 +30,12 @@ htmlcov/
 # Superseded / experimental frontend — not built or deployed by any compose
 frontend-v2/
 
+# UI reskin sandbox — a local scratch app (node_modules + .next only), not
+# built or deployed by any compose. Ignored whole: without this rule its
+# ~877 MB of node_modules is ordinary untracked content that `git add -A`
+# would sweep into a commit.
+frontend-studio/
+
 # Playwright MCP page dumps (debug artifacts)
 .playwright-mcp/
 
