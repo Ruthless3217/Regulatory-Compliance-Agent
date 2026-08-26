@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { History, Eye, RotateCcw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { listSubmissionRevisions, applySubmissionRevision } from "@/lib/api";
+import { listSubmissionRevisions } from "@/lib/api";
 import { Popover } from "@/components/ui/popover";
 import type { SubmissionRevision } from "@/lib/types";
 
@@ -17,10 +17,12 @@ const SOURCE_LABEL: Record<string, string> = {
 
 interface Props {
   submissionId: string;
-  /** Hand the restored content back so the live document view adopts it —
-   * without this the pane keeps showing the pre-restore text, since nothing
-   * re-fetches the submission after a restore. */
-  onRestore?: (content: string) => void;
+  /** Write the chosen revision back as a new one, through the workspace's
+   * single protected save path — so a restore states the revision it was based
+   * on and is refused if the document has moved on, exactly like every other
+   * mutation. Resolves false when refused; the workspace has already put the
+   * conflict on screen by then. */
+  onRestore: (rev: SubmissionRevision) => Promise<boolean>;
 }
 
 export function VersionHistoryPopover({ submissionId, onRestore }: Props) {
@@ -47,17 +49,16 @@ export function VersionHistoryPopover({ submissionId, onRestore }: Props) {
     if (restoringId) return;
     setRestoringId(rev.id);
     try {
-      await applySubmissionRevision(submissionId, {
-        content: rev.content,
-        source: "restore",
-        note: `Restored from revision ${rev.revision_number}`,
-      });
-      onRestore?.(rev.content);
+      const ok = await onRestore(rev);
+      if (!ok) {
+        // Refused, or saving is paused. Either way nothing was written and the
+        // document on screen is untouched; the workspace banner says why.
+        toast.error("Could not restore — this document has unresolved changes");
+        return;
+      }
       toast.success(`Restored revision ${rev.revision_number}`);
       router.refresh();
       await load();
-    } catch {
-      toast.error("Could not restore this version");
     } finally {
       setRestoringId(null);
     }

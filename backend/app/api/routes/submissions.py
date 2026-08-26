@@ -14,6 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Up
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -350,16 +351,85 @@ def _serialize_revision(r: SubmissionRevision) -> dict:
     }
 
 
-def _next_revision_number(db: Session, submission_id) -> int:
-    """1-based, per submission. Mirrors run_tracker.open_run's count+1 idiom —
-    no extra app-level locking; UNIQUE(submission_id, revision_number) is the
-    backstop against a genuine race."""
+def _current_revision_number(db: Session, submission_id) -> int:
+    """The submission's head revision, or 0 when it has never been edited.
+
+    This is the value a client echoes back as `expected_revision`, so 0 is
+    meaningful rather than a null: it says "I read a document nobody had
+    edited", which is a claim the server can check like any other.
+    """
     existing = (
         db.query(SubmissionRevision)
         .filter(SubmissionRevision.submission_id == submission_id)
         .all()
     )
-    return max((r.revision_number for r in existing), default=0) + 1
+    return max((r.revision_number for r in existing), default=0)
+
+
+def _next_revision_number(db: Session, submission_id) -> int:
+    """1-based, per submission. Mirrors run_tracker.open_run's count+1 idiom —
+    no extra app-level locking; UNIQUE(submission_id, revision_number) is the
+    backstop against a genuine race."""
+    return _current_revision_number(db, submission_id) + 1
+
+
+# The constraint that decides a genuine race. Named here so the handler below
+# can tell it apart from every other way this transaction could violate
+# integrity, rather than reporting all of them as a reviewer conflict.
+_REVISION_NUMBER_CONSTRAINT = "uq_submission_revisions_submission_number"
+_UNIQUE_VIOLATION = "23505"  # SQLSTATE
+
+
+def _is_duplicate_revision_number(exc: IntegrityError) -> bool:
+    """True only for UNIQUE(submission_id, revision_number).
+
+    Prefers the driver's structured diagnostics: psycopg2 reports both the
+    SQLSTATE and the violated constraint by name, which is exact and needs no
+    guessing at message wording. Only when the driver offers neither does this
+    look for the constraint in the text — and then for that specific name, not
+    an arbitrary fragment like "duplicate key".
+
+    Anything else — a deleted user breaking `created_by`, an audit row failing
+    its own constraints — is NOT this race, and must not be dressed up as one:
+    telling a reviewer another reviewer changed the document, when the real
+    fault is a broken foreign key, sends them to a "Keep my version" button
+    that can never succeed.
+    """
+    orig = getattr(exc, "orig", None)
+    constraint = getattr(getattr(orig, "diag", None), "constraint_name", None)
+    if constraint is not None:
+        return constraint == _REVISION_NUMBER_CONSTRAINT
+    sqlstate = getattr(orig, "pgcode", None)
+    if sqlstate is not None and sqlstate != _UNIQUE_VIOLATION:
+        return False
+    return _REVISION_NUMBER_CONSTRAINT in str(orig if orig is not None else exc)
+
+
+def _conflict(expected: Optional[int], current: int) -> HTTPException:
+    """409 for a write built on a revision that is no longer current.
+
+    A structured detail rather than this route's usual sentence, because the
+    editor has to act on it — stop autosaving, keep the reviewer's local text,
+    and offer the newer revision — and cannot do that by parsing prose. The
+    `message` key keeps it readable wherever an error is shown as-is.
+
+    `saved: False` is the load-bearing field. It states plainly that nothing
+    was written, so the client knows the reviewer's work exists only in their
+    browser and must not be discarded.
+    """
+    return HTTPException(
+        status_code=409,
+        detail={
+            "error": "revision_conflict",
+            "message": (
+                "This document was changed by someone else while you were editing. "
+                "Your work has not been saved and is still in your editor."
+            ),
+            "expected_revision": expected,
+            "current_revision": current,
+            "saved": False,
+        },
+    )
 
 
 @router.post("/{submission_id}/revisions")
@@ -375,9 +445,15 @@ async def create_revision(
     content with source='restore'."""
     submission = get_visible_submission(db, submission_id, user)
 
+    # Optimistic concurrency. Read the head once and use it for both the check
+    # and the allocation, so the number written is the one that was verified.
+    head = _current_revision_number(db, submission.id)
+    if body.expected_revision is not None and body.expected_revision != head:
+        raise _conflict(body.expected_revision, head)
+
     revision = SubmissionRevision(
         submission_id=submission.id,
-        revision_number=_next_revision_number(db, submission.id),
+        revision_number=head + 1,
         content=body.content,
         source=body.source,
         note=body.note,
@@ -424,7 +500,26 @@ async def create_revision(
         },
     )
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Roll back first either way: the transaction is dead once the database
+        # has rejected it, and revision, current_content, the working document,
+        # fix_applied flags and the audit row all die together because they
+        # share this one commit.
+        db.rollback()
+        if not _is_duplicate_revision_number(exc):
+            # Not the race. Let it surface as the server error it actually is
+            # rather than blaming an imaginary second reviewer.
+            raise
+        # Two writers passed the check above against the same head and raced to
+        # insert the same revision_number, and UNIQUE(submission_id,
+        # revision_number) decided between them. This is why the constraint
+        # stays a backstop rather than the mechanism: it turns an
+        # unserialisable race into the same 409 the ordinary stale write
+        # already gets, so the client has one thing to handle instead of two.
+        raise _conflict(body.expected_revision, _current_revision_number(db, submission.id))
+
     db.refresh(revision)
     return _serialize_revision(revision)
 

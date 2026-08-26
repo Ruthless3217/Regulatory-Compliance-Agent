@@ -447,7 +447,8 @@ function EditorToolbar({ readOnly }: { readOnly?: boolean }) {
     saveState,
     saveNow,
     revertToSaved,
-    adoptServerText,
+    restoreRevision,
+    baseline,
   } = useSubmissionWorkspace();
 
   return (
@@ -463,6 +464,7 @@ function EditorToolbar({ readOnly }: { readOnly?: boolean }) {
             <TriangleAlert className="h-3 w-3" />
             {unsavedEdits || 1} unsaved change{(unsavedEdits || 1) === 1 ? "" : "s"}
             {saveState === "error" && " · save failed"}
+            {saveState === "conflict" && " · not saved, this document changed while you were editing"}
           </span>
         ) : (
           <span className="flex items-center gap-1 text-muted-foreground">
@@ -479,7 +481,15 @@ function EditorToolbar({ readOnly }: { readOnly?: boolean }) {
       <div className="flex items-center gap-2">
         {documentDirty && (
           <>
-            <Button size="sm" variant="outline" disabled={saveState === "saving"} onClick={saveNow}>
+            {/* Save is dead while a conflict stands — the server has already
+                refused this payload, so the button would do nothing. The
+                banner above the document carries the ways out. */}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={saveState === "saving" || saveState === "conflict" || baseline !== "ready"}
+              onClick={saveNow}
+            >
               Save
             </Button>
             <Button size="sm" variant="ghost" onClick={revertToSaved}>
@@ -487,7 +497,7 @@ function EditorToolbar({ readOnly }: { readOnly?: boolean }) {
             </Button>
           </>
         )}
-        <VersionHistoryPopover submissionId={submission.id} onRestore={adoptServerText} />
+        <VersionHistoryPopover submissionId={submission.id} onRestore={restoreRevision} />
       </div>
     </div>
   );

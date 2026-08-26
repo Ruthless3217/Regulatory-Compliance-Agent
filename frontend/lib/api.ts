@@ -99,6 +99,49 @@ async function serverAuthHeaders(): Promise<Record<string, string>> {
   }
 }
 
+/** A failed response, with the parts a caller may need to act on.
+ *
+ * The message is unchanged from what this module always threw, so anything
+ * that catches an Error and shows `.message` keeps working. `status` and
+ * `body` are additions for the handful of callers that must branch on a
+ * specific failure — a 409 revision conflict has to know the server's current
+ * revision, and cannot get that by parsing an error sentence. */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly body: unknown;
+
+  constructor(status: number, statusText: string, raw: string, url: string) {
+    super(`${status} ${statusText}: ${raw || url}`);
+    this.name = "ApiError";
+    this.status = status;
+    try {
+      this.body = raw ? JSON.parse(raw) : null;
+    } catch {
+      this.body = null;
+    }
+  }
+}
+
+/** The structured 409 the revision route returns when a save was built on a
+ * revision that is no longer current. `saved: false` is the important field:
+ * nothing was written, so the caller must keep the user's local work. */
+export interface RevisionConflict {
+  error: "revision_conflict";
+  message: string;
+  expected_revision: number | null;
+  current_revision: number;
+  saved: false;
+}
+
+export function revisionConflict(e: unknown): RevisionConflict | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (detail && typeof detail === "object" && (detail as RevisionConflict).error === "revision_conflict") {
+    return detail as RevisionConflict;
+  }
+  return null;
+}
+
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const authHeaders = await serverAuthHeaders();
   const res = await fetch(url, {
@@ -109,7 +152,7 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText}: ${text || url}`);
+    throw new ApiError(res.status, res.statusText, text, url);
   }
   return (await res.json()) as T;
 }
@@ -187,6 +230,10 @@ export async function applySubmissionRevision(
     // free of an editor dependency; the workspace context holds the real type.
     lexical_state?: unknown;
     lexical_html?: string;
+    /** The revision this edit was made against. The server refuses the write
+     * if the document has moved on, so a stale save is rejected rather than
+     * silently replacing someone else's. */
+    expected_revision?: number;
   }
 ): Promise<SubmissionRevision> {
   return jsonFetch(`${base()}/submissions/${submissionId}/revisions`, {
