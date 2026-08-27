@@ -23,6 +23,14 @@ _ADMIN = _USER | frozenset({
     "assignments:manage",   # assign, reassign, cancel, see every bucket
     "trail:view",           # per-document and per-reviewer trail
     "submission:approve",   # split out of submission:create — reviewers lose it
+    # Split out of submission:delete for the same reason, and by the same rule.
+    # "submission:delete" guards TWO different things: removing one comment,
+    # which is ordinary reviewer work, and DELETE /submissions/{id}, which
+    # cascades away every revision, check, violation, comment, run and
+    # assignment the document ever had. A reviewer being handed a document to
+    # review is not a reason to let them destroy it — and moving the existing
+    # permission wholesale would have taken comment deletion with it.
+    "submission:purge",
 })
 
 # Console permissions stay here rather than in _ADMIN: widening admin was not

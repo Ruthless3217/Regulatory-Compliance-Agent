@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 from app.database import get_db
+from app.auth.visibility import get_visible_comparison, visible_comparison_filter
 from app.models.document_comparison import DocumentComparison
 from app.models.comparison_annotation import ComparisonAnnotation
 from app.config import settings
@@ -279,7 +280,13 @@ async def list_comparisons(
     db: Session = Depends(get_db),
 ):
     """List past comparisons, most recent first."""
-    query = db.query(DocumentComparison).order_by(DocumentComparison.created_at.desc())
+    # Scoped for ordinary callers, unfiltered for roles that see every
+    # bucket — the same shape as the submission list in submissions.py.
+    query = db.query(DocumentComparison)
+    scope = visible_comparison_filter(user)
+    if scope is not None:
+        query = query.filter(scope)
+    query = query.order_by(DocumentComparison.created_at.desc())
     total = query.count()
     comparisons = query.offset(skip).limit(limit).all()
     return {
@@ -295,9 +302,7 @@ async def get_comparison(
     db: Session = Depends(get_db),
 ):
     """Get a comparison, including its full diff result, render overlay, and annotations."""
-    comparison = db.query(DocumentComparison).filter(DocumentComparison.id == comparison_id).first()
-    if not comparison:
-        raise HTTPException(status_code=404, detail="Comparison not found")
+    comparison = get_visible_comparison(db, comparison_id, user)
     annotations = (
         db.query(ComparisonAnnotation)
         .filter(ComparisonAnnotation.comparison_id == comparison.id)
@@ -317,9 +322,7 @@ async def get_comparison_page(
     """Stream one rendered page PNG for the pixel document view."""
     if side not in ("old", "new"):
         raise HTTPException(status_code=422, detail="side must be 'old' or 'new'")
-    comparison = db.query(DocumentComparison).filter(DocumentComparison.id == comparison_id).first()
-    if not comparison:
-        raise HTTPException(status_code=404, detail="Comparison not found")
+    comparison = get_visible_comparison(db, comparison_id, user)
     path = os.path.join(renders_dir(str(comparison.id)), side, f"page-{n:04d}.png")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Page image not found")
@@ -337,9 +340,7 @@ async def search_comparison(
     """Positioned text search over one side's stored PDF (PDF-only)."""
     if side not in ("old", "new"):
         raise HTTPException(status_code=422, detail="side must be 'old' or 'new'")
-    comparison = db.query(DocumentComparison).filter(DocumentComparison.id == comparison_id).first()
-    if not comparison:
-        raise HTTPException(status_code=404, detail="Comparison not found")
+    comparison = get_visible_comparison(db, comparison_id, user)
     content_type = comparison.old_content_type if side == "old" else comparison.new_content_type
     path = comparison.old_file_path if side == "old" else comparison.new_file_path
     if content_type != "pdf" or not path or not os.path.exists(path):
@@ -358,9 +359,7 @@ async def upsert_annotation(
     change_id = (body.change_id or "").strip()
     if not change_id:
         raise HTTPException(status_code=422, detail="change_id is required")
-    comparison = db.query(DocumentComparison).filter(DocumentComparison.id == comparison_id).first()
-    if not comparison:
-        raise HTTPException(status_code=404, detail="Comparison not found")
+    comparison = get_visible_comparison(db, comparison_id, user)
 
     ann = (
         db.query(ComparisonAnnotation)
@@ -392,10 +391,15 @@ async def delete_annotation(
     db: Session = Depends(get_db),
 ):
     """Remove the annotation for one change (idempotent)."""
+    # Resolved through the guard even though the annotation is queried
+    # directly: this route never loaded the comparison, so there was nothing
+    # to check an owner against and any caller could delete any annotation by
+    # id. The lookup is the authorization.
+    comparison = get_visible_comparison(db, comparison_id, user)
     ann = (
         db.query(ComparisonAnnotation)
         .filter(
-            ComparisonAnnotation.comparison_id == comparison_id,
+            ComparisonAnnotation.comparison_id == comparison.id,
             ComparisonAnnotation.change_id == change_id,
         )
         .first()
@@ -416,9 +420,7 @@ async def export_comparison(
     """Generate and stream one export artifact."""
     if kind not in _EXPORT_MEDIA:
         raise HTTPException(status_code=404, detail="Unknown export kind")
-    comparison = db.query(DocumentComparison).filter(DocumentComparison.id == comparison_id).first()
-    if not comparison:
-        raise HTTPException(status_code=404, detail="Comparison not found")
+    comparison = get_visible_comparison(db, comparison_id, user)
     if kind in _PDF_EXPORT_KINDS and comparison.render_status != "completed":
         raise HTTPException(status_code=409, detail="Document rendering unavailable for this comparison")
 
@@ -466,9 +468,7 @@ async def rerun_comparison(
     Clears all annotations (change ids are not stable across a re-run). 409 while
     a render is still processing.
     """
-    comparison = db.query(DocumentComparison).filter(DocumentComparison.id == comparison_id).first()
-    if not comparison:
-        raise HTTPException(status_code=404, detail="Comparison not found")
+    comparison = get_visible_comparison(db, comparison_id, user)
     if comparison.render_status == "processing":
         raise HTTPException(status_code=409, detail="A render is still in progress")
 
@@ -547,9 +547,7 @@ async def delete_comparison(
     db: Session = Depends(get_db),
 ):
     """Delete a comparison and any files it saved to disk (uploads + rendered pages)."""
-    comparison = db.query(DocumentComparison).filter(DocumentComparison.id == comparison_id).first()
-    if not comparison:
-        raise HTTPException(status_code=404, detail="Comparison not found")
+    comparison = get_visible_comparison(db, comparison_id, user)
 
     for path in (comparison.old_file_path, comparison.new_file_path):
         if path and os.path.exists(path):

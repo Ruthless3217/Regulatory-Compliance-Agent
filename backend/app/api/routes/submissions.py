@@ -976,7 +976,7 @@ async def get_approval_state(
 @router.delete("/{submission_id}")
 async def delete_submission(
     submission_id: str,
-    user: dict = Depends(require("submission:delete")),
+    user: dict = Depends(require("submission:purge")),
     db: Session = Depends(get_db)
 ):
     """Delete a submission."""
