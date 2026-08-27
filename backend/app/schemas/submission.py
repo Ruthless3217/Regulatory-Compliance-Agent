@@ -37,6 +37,17 @@ class SubmissionRevisionCreate(BaseModel):
     source: RevisionSource
     note: Optional[str] = None
     applied_violation_ids: Optional[List[uuid.UUID]] = None
+    # The revision the client believes is current — its edit's base. The server
+    # accepts the write only if the document is still there, so a save built on
+    # a stale view is refused instead of silently replacing someone else's.
+    #
+    # Optional, and omitting it is deprecated rather than rejected: every
+    # pre-existing caller posts without it, and refusing those outright would
+    # break text-only saves that never read a revision number. A caller that
+    # omits it still cannot create a duplicate revision number — the UNIQUE
+    # constraint and the conflict handler below cover the true race — but it
+    # forfeits protection for the submission's own current_content mirror.
+    expected_revision: Optional[int] = None
     # Lexical editor state for this revision, and the HTML the client
     # serialized from it at the same instant. Optional: a text-only edit path
     # (and every pre-existing client) still posts just `content`.

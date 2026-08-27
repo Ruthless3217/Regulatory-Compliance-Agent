@@ -7,6 +7,7 @@ import { LexicalDocument } from "@/components/editor/LexicalDocument";
 import { ContextRail } from "./ContextRail";
 import { SplitOriginalView } from "./SplitOriginalView";
 import { DocumentPane } from "./DocumentPane";
+import { RevisionConflictBanner } from "./RevisionConflictBanner";
 import { PdfPagePane } from "./PdfPagePane";
 import { ViolationsPane } from "./ViolationsPane";
 import { Button } from "@/components/ui/button";
@@ -570,7 +571,7 @@ export function ReviewTab() {
                 <span
                   className={cn(
                     "h-[7px] w-[7px] rounded-full",
-                    saveState === "error"
+                    saveState === "error" || saveState === "conflict"
                       ? "bg-sev-critical"
                       : saveState === "saving"
                         ? "bg-warning"
@@ -579,7 +580,9 @@ export function ReviewTab() {
                           : "bg-success"
                   )}
                 />
-                {saveState === "saving"
+                {saveState === "conflict"
+                  ? "Not saved — conflict"
+                  : saveState === "saving"
                   ? "Saving…"
                   : saveState === "error"
                     ? "Not saved"
@@ -587,7 +590,7 @@ export function ReviewTab() {
                       ? "Unsaved — autosaving"
                       : "All changes saved"}
               </span>
-              {(saveState === "error" || lexicalDirty) && (
+              {saveState !== "conflict" && (saveState === "error" || lexicalDirty) && (
                 <Button size="sm" variant="outline" onClick={() => void saveLexical()}>
                   {saveState === "error" ? "Retry" : "Save now"}
                 </Button>
@@ -595,6 +598,8 @@ export function ReviewTab() {
             </span>
           )}
         </div>
+
+        <RevisionConflictBanner />
 
         {/* View is the only mode with no working document on screen, so it is
             the only one that may replace this subtree. Split and Edit both
