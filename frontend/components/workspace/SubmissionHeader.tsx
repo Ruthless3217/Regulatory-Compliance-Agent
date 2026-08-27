@@ -10,6 +10,8 @@ import { ScoreRing } from "@/components/ui/score-ring";
 import { SubmissionExportPopover } from "@/components/review/SubmissionExportPopover";
 import { StatusPill, statusTone } from "@/components/ui/status-pill";
 import { analyzeSubmission, deleteSubmission } from "@/lib/api";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { can } from "@/lib/permissions";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import type { Submission } from "@/lib/types";
 
@@ -50,6 +52,7 @@ function RunPicker() {
 export function SubmissionHeader({ submission, overallScore, grade }: Props) {
   const pathname = usePathname() ?? "";
   const router = useRouter();
+  const { me } = useAuth();
   const { setOptimisticAnalyzing, setSelectedRunId } = useSubmissionWorkspace();
 
   const id = submission.id;
@@ -135,9 +138,18 @@ export function SubmissionHeader({ submission, overallScore, grade }: Props) {
               that can produce clean.docx) mounted nowhere, so the corrected
               document was unreachable from the UI. */}
           <SubmissionExportPopover submissionId={id} />
-          <Button variant="ghost" size="icon" onClick={del} title="Delete submission" className="text-muted-foreground hover:text-sev-critical">
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {/* DELETE /submissions/{id} requires submission:purge, which reviewers
+              do not hold — it cascades away every revision, check, violation,
+              comment, run and assignment the document ever had. The button was
+              shown to everyone, so a reviewer's only way to learn that was a
+              403 behind a confirm() that says "this cannot be undone". The
+              backend guard is the authorization; this just stops offering an
+              action that is never going to work. */}
+          {can(me, "submission:purge") && (
+            <Button variant="ghost" size="icon" onClick={del} title="Delete submission" className="text-muted-foreground hover:text-sev-critical">
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </div>
     </header>
