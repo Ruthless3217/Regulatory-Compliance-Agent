@@ -7,6 +7,7 @@ The upload is also the *template*: "put a docx in, get the same docx back"
 means the export clones the original's styles, page setup, headers and footers
 rather than building a default-styled Word file from scratch.
 """
+import base64
 import io
 
 from docx import Document
@@ -15,6 +16,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, Inches
 
 from app.services.lexical_export import lexical_html_to_docx
+from app.services.lexical_import import docx_to_html
 
 # 1x1 transparent PNG — the smallest thing python-docx will accept as a picture.
 _PNG_B64 = (
@@ -257,3 +259,337 @@ def test_template_file_is_byte_identical_after_export(tmp_path):
     lexical_html_to_docx("<h2>New</h2><h3>Page footer</h3><p>New footer.</p>", "t", path)
     with open(path, "rb") as f:
         assert f.read() == before
+
+
+# ---------------------------------------------------------------------------
+# In-place body editing — the ORIGINAL body's own formatting is the export's
+#
+# Cloning the template carried styles.xml, sectPr and the headers across, but
+# the body was still discarded and rebuilt from semantic HTML: every font,
+# size, colour, indent and table style the upload set DIRECTLY on its body was
+# lost, even when the reviewer changed nothing. These pin the other half of
+# "put a docx in, get the same docx back" — the body is EDITED, not rebuilt.
+# ---------------------------------------------------------------------------
+
+from docx.shared import RGBColor  # noqa: E402
+
+
+def _branded(tmp_path) -> str:
+    """An upload formatted the way a real creative is: directly, on the runs
+    and paragraphs, in a style Word never named."""
+    doc = Document()
+
+    title = doc.add_paragraph()
+    run = title.add_run("BAJAJ ALLIANZ LIFE GOAL ASSURE")
+    run.font.name, run.font.size = "Georgia", Pt(22)
+    run.font.color.rgb = RGBColor(0x00, 0x33, 0x99)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title.paragraph_format.space_after = Pt(18)
+
+    body = doc.add_paragraph()
+    body_run = body.add_run("A unit linked plan with guaranteed returns of 8% a year.")
+    body_run.font.name, body_run.font.size = "Calibri", Pt(11)
+    body.paragraph_format.left_indent = Inches(0.5)
+
+    doc.add_paragraph()  # a blank line the layout depends on
+
+    table = doc.add_table(rows=2, cols=2)
+    table.style = "Light Grid Accent 1"
+    table.rows[0].cells[0].text = "Policy year"
+    table.rows[0].cells[1].text = "Allocation charge"
+    table.rows[1].cells[0].text = "1"
+    table.rows[1].cells[1].text = "6%"
+
+    path = tmp_path / "branded.docx"
+    doc.save(str(path))
+    return str(path)
+
+
+def _round_trip(template: str, html: str) -> Document:
+    return Document(io.BytesIO(lexical_html_to_docx(html, "t", template)))
+
+
+def _run_of(doc: Document, needle: str):
+    return next(
+        r
+        for p in doc.paragraphs
+        for r in p.runs
+        if needle in r.text
+    )
+
+
+_UNCHANGED = (
+    "<p>BAJAJ ALLIANZ LIFE GOAL ASSURE</p>"
+    "<p>A unit linked plan with guaranteed returns of 8% a year.</p>"
+    "<table><tr><td>Policy year</td><td>Allocation charge</td></tr>"
+    "<tr><td>1</td><td>6%</td></tr></table>"
+)
+
+
+def test_direct_run_formatting_survives_an_untouched_export(tmp_path):
+    """The reviewer changed nothing, so the file must come back as it went in."""
+    out = _round_trip(_branded(tmp_path), _UNCHANGED)
+    title = _run_of(out, "GOAL ASSURE")
+    assert title.font.name == "Georgia"
+    assert title.font.size == Pt(22)
+    assert title.font.color.rgb == RGBColor(0x00, 0x33, 0x99)
+
+
+def test_paragraph_formatting_survives_an_untouched_export(tmp_path):
+    out = _round_trip(_branded(tmp_path), _UNCHANGED)
+    title = next(p for p in out.paragraphs if "GOAL ASSURE" in p.text)
+    body = next(p for p in out.paragraphs if "unit linked plan" in p.text)
+    assert title.alignment == WD_ALIGN_PARAGRAPH.CENTER
+    assert title.paragraph_format.space_after == Pt(18)
+    assert body.paragraph_format.left_indent == Inches(0.5)
+
+
+def test_table_keeps_its_style(tmp_path):
+    out = _round_trip(_branded(tmp_path), _UNCHANGED)
+    assert out.tables[0].style.name == "Light Grid Accent 1"
+
+
+def test_blank_layout_paragraphs_are_not_deleted(tmp_path):
+    """mammoth drops blank paragraphs, so the editor never held them. Reading
+    their absence as a reviewer deletion would re-flow the page."""
+    out = _round_trip(_branded(tmp_path), _UNCHANGED)
+    assert any(not p.text.strip() for p in out.paragraphs)
+
+
+def test_corrected_wording_keeps_the_formatting_around_it(tmp_path):
+    """The point of patching rather than rebuilding: the run that held "8%"
+    is the run that now holds "6%", so it is still Calibri 11."""
+    html = _UNCHANGED.replace("returns of 8% a year", "returns of 6% a year")
+    out = _round_trip(_branded(tmp_path), html)
+    corrected = _run_of(out, "6% a year")
+    assert corrected.font.name == "Calibri"
+    assert corrected.font.size == Pt(11)
+
+
+def test_a_corrected_table_cell_keeps_the_table(tmp_path):
+    html = _UNCHANGED.replace("<td>6%</td>", "<td>4%</td>")
+    out = _round_trip(_branded(tmp_path), html)
+    assert out.tables[0].style.name == "Light Grid Accent 1"
+    assert out.tables[0].rows[1].cells[1].text == "4%"
+
+
+def test_a_new_paragraph_is_set_like_the_one_it_follows(tmp_path):
+    html = _UNCHANGED.replace(
+        "</p><table>",
+        "</p><p>Tax benefits are subject to change in tax laws.</p><table>",
+    )
+    out = _round_trip(_branded(tmp_path), html)
+    added = next(p for p in out.paragraphs if "Tax benefits" in p.text)
+    assert added.paragraph_format.left_indent == Inches(0.5)
+    assert added.runs[0].font.name == "Calibri"
+
+
+def test_a_deleted_paragraph_is_removed(tmp_path):
+    html = _UNCHANGED.replace(
+        "<p>A unit linked plan with guaranteed returns of 8% a year.</p>", ""
+    )
+    out = _round_trip(_branded(tmp_path), html)
+    assert "unit linked plan" not in "\n".join(p.text for p in out.paragraphs)
+    assert "GOAL ASSURE" in "\n".join(p.text for p in out.paragraphs)
+
+
+def test_bold_applied_in_the_editor_reaches_the_export(tmp_path):
+    html = _UNCHANGED.replace(
+        "guaranteed returns", "<strong>guaranteed</strong> returns"
+    )
+    out = _round_trip(_branded(tmp_path), html)
+    assert _run_of(out, "guaranteed").bold is True
+    # ...on top of the run's own formatting, not instead of it.
+    assert _run_of(out, "guaranteed").font.name == "Calibri"
+
+
+def test_corrected_footer_keeps_its_own_formatting(tmp_path):
+    """A mandated disclaimer is set small by hand. Re-typing the line as plain
+    text would hand it back in the body font."""
+    path = _branded(tmp_path)
+    doc = Document(path)
+    footer_run = doc.sections[0].footer.paragraphs[0].add_run(
+        "Insurance is the subject matter of solicitation."
+    )
+    footer_run.font.size = Pt(7)
+    doc.save(path)
+
+    html = (
+        _UNCHANGED
+        + "<h3>Page footer</h3>"
+        + "<p>Insurance is the subject matter of the solicitation.</p>"
+    )
+    out = Document(io.BytesIO(lexical_html_to_docx(html, "t", path)))
+    corrected = out.sections[0].footer.paragraphs[0]
+    assert corrected.text == "Insurance is the subject matter of the solicitation."
+    assert corrected.runs[0].font.size == Pt(7)
+
+
+# ---------------------------------------------------------------------------
+# Text boxes — a mandated disclaimer is very often set in one
+# ---------------------------------------------------------------------------
+
+_TXBX = (
+    '<w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+    ' xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"'
+    ' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"'
+    ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+    "<w:drawing><wp:inline><a:graphic><a:graphicData><wps:wsp><wps:txbx>"
+    "<w:txbxContent><w:p><w:r><w:rPr><w:sz w:val=\"14\"/></w:rPr>"
+    "<w:t>{text}</w:t></w:r></w:p></w:txbxContent>"
+    "</wps:txbx></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>"
+)
+
+
+def _with_textbox(tmp_path, text: str) -> str:
+    """An upload whose disclaimer sits in a DrawingML text box — the shape
+    mammoth walks into and does not convert, so lexical_import appends it to
+    the body as a labelled section."""
+    from lxml import etree
+
+    doc = Document()
+    doc.add_paragraph("Body copy.")
+    doc.add_paragraph()._p.append(etree.fromstring(_TXBX.format(text=text)))
+    path = tmp_path / "textbox.docx"
+    doc.save(str(path))
+    return str(path)
+
+
+def test_text_box_label_is_not_written_into_the_body(tmp_path):
+    """The label is scaffolding lexical_import adds so the box can be read in
+    the editor. Exporting it leaves the word "Text box" in the document."""
+    path = _with_textbox(tmp_path, "Tax benefits are subject to change.")
+    html = "<p>Body copy.</p><h3>Text box</h3><p>Tax benefits are subject to change.</p>"
+    out = _round_trip(path, html)
+    body = "\n".join(p.text for p in out.paragraphs)
+    assert "Text box" not in body
+
+
+def test_text_box_wording_is_not_relocated_into_the_body(tmp_path):
+    """Writing it out as a body paragraph moves the disclaimer out of the box
+    it was designed into — and leaves the box saying the old thing."""
+    path = _with_textbox(tmp_path, "Tax benefits are subject to change.")
+    html = "<p>Body copy.</p><h3>Text box</h3><p>Tax benefits are subject to change.</p>"
+    out = _round_trip(path, html)
+    assert "Tax benefits" not in "\n".join(p.text for p in out.paragraphs)
+    assert "Tax benefits are subject to change." in out.element.body.xml
+
+
+def test_a_corrected_text_box_is_corrected_in_place(tmp_path):
+    path = _with_textbox(tmp_path, "Tax benefits are subject to change.")
+    html = (
+        "<p>Body copy.</p><h3>Text box</h3>"
+        "<p>Tax benefits are subject to change in tax laws.</p>"
+    )
+    out = _round_trip(path, html)
+    xml = out.element.body.xml
+    assert "Tax benefits are subject to change in tax laws." in xml
+    assert 'w:val="14"' in xml  # the box's own type size, kept
+    assert "Tax benefits" not in "\n".join(p.text for p in out.paragraphs)
+
+
+def test_an_unmappable_text_box_label_is_dropped_not_written_to_the_body(tmp_path):
+    path = _with_textbox(tmp_path, "Tax benefits are subject to change.")
+    html = "<p>Body copy.</p><h3>Text box 9</h3><p>Orphaned disclaimer.</p>"
+    out = _round_trip(path, html)
+    body = "\n".join(p.text for p in out.paragraphs)
+    assert "Orphaned disclaimer." not in body
+    assert "Text box" not in body
+
+
+def test_vertically_merged_cells_do_not_shift_the_row(tmp_path):
+    """Word keeps an empty ``w:tc`` in every row a merge continues through;
+    mammoth writes the merge as one ``rowspan`` and omits them. Pairing cells
+    by raw position therefore slides a row's data one cell to the right — into
+    the continuation cell, which Word requires to stay empty — from the first
+    merged cell to the end of the table."""
+    doc = Document()
+    table = doc.add_table(rows=3, cols=2)
+    table.style = "Table Grid"
+    table.cell(0, 0).text = "Rs. 25 Lakhs"
+    table.cell(0, 0).merge(table.cell(1, 0))
+    table.cell(0, 1).text = "1,75,825"
+    table.cell(1, 1).text = "1,86,025"
+    table.cell(2, 0).text = "Age at entry"
+    table.cell(2, 1).text = "50 years"
+    path = str(tmp_path / "merged.docx")
+    doc.save(path)
+
+    with open(path, "rb") as f:
+        html = docx_to_html(f.read())
+    out = Document(io.BytesIO(lexical_html_to_docx(html, "t", path)))
+
+    # Read at the XML level: `row.cells` resolves a merge back to its origin,
+    # so it reports the right answer even when the continuation cell has been
+    # written into — which is exactly the corruption to catch.
+    from docx.oxml.ns import qn
+
+    rows = [
+        [" ".join(t.text or "" for t in tc.iter(qn("w:t"))).strip()
+         for tc in tr.findall(qn("w:tc"))]
+        for tr in out.tables[0]._tbl.findall(qn("w:tr"))
+    ]
+    assert rows == [
+        ["Rs. 25 Lakhs", "1,75,825"],
+        ["", "1,86,025"],  # the continuation cell stays empty, as Word requires
+        ["Age at entry", "50 years"],
+    ]
+
+
+def test_repeated_paragraphs_keep_their_own_formatting_when_one_is_edited(tmp_path):
+    """These documents repeat a line verbatim — "Terms and conditions apply."
+    under three different tables, each set differently.
+
+    Block alignment is LCS-based, and LCS is free to match ANY equal pair. With
+    repeats it will happily match the first original to the first edit and the
+    *second* original to the *third* edit, reading the one real edit as an
+    insert plus a delete somewhere else — which drops a paragraph's formatting
+    on the floor and shifts the rest up one.
+    """
+    doc = Document()
+    for size, name in ((9, "Georgia"), (14, "Calibri"), (20, "Arial")):
+        run = doc.add_paragraph().add_run("Terms and conditions apply.")
+        run.font.size, run.font.name = Pt(size), name
+    path = str(tmp_path / "repeated.docx")
+    doc.save(path)
+
+    out = _round_trip(path, (
+        "<p>Terms and conditions apply.</p>"
+        "<p>Terms and conditions may apply.</p>"  # only the MIDDLE one edited
+        "<p>Terms and conditions apply.</p>"
+    ))
+
+    written = [
+        (p.text, p.runs[0].font.size, p.runs[0].font.name)
+        for p in out.paragraphs if p.text.strip()
+    ]
+    assert written == [
+        ("Terms and conditions apply.", Pt(9), "Georgia"),
+        ("Terms and conditions may apply.", Pt(14), "Calibri"),
+        ("Terms and conditions apply.", Pt(20), "Arial"),
+    ]
+
+
+def test_an_unchanged_picture_does_not_leave_a_blank_paragraph_behind(tmp_path):
+    """mammoth hands the document's OWN pictures back as base64 `data:` URIs,
+    so an image-only `<p>` in the editor is usually just the picture that is
+    already sitting in the body untouched.
+
+    Treating it as a block to insert adds an empty paragraph on every export —
+    and that paragraph is cloned from its neighbour, so in a numbered document
+    it inherits `numPr` and Word renders it as an empty bullet.
+    """
+    doc = Document()
+    doc.add_paragraph("Body copy.", style="List Number")
+    doc.add_picture(io.BytesIO(base64.b64decode(_PNG_B64)))
+    doc.add_paragraph("More body copy.", style="List Number")
+    path = str(tmp_path / "pictured.docx")
+    doc.save(path)
+
+    with open(path, "rb") as f:
+        html = docx_to_html(f.read())
+    assert "<img" in html, "the fixture must round-trip a picture through mammoth"
+    out = _round_trip(path, html)
+
+    assert len(out.inline_shapes) == 1, "the picture must not be embedded twice"
+    assert len(out.paragraphs) == len(Document(path).paragraphs)
