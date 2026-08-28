@@ -95,8 +95,11 @@ def _clean_docx(submission: Submission) -> bytes:
     the editor have no working document and fall back to the plain-text rebuild.
 
     A DOCX upload is also handed over as the export's template, so the corrected
-    document comes back in the format it went in as. It is read, never written
-    (same guard shape as ``lexical_document_service.build_import_html``).
+    document comes back looking like the document it went in as: the corrections
+    are written INTO a copy of the upload, paragraph by paragraph, rather than
+    the file being rebuilt from the editor's HTML — which would return every
+    fixed brochure in default-styled Word. It is read, never written (same guard
+    shape as ``lexical_document_service.build_import_html``).
     """
     if not submission.lexical_html:
         return _rebuilt_clean_docx(submission)

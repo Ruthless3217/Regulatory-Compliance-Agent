@@ -8,12 +8,21 @@ The upload is also the export's *template*. Building a fresh ``Document()``
 returns a default-styled Word file, which loses the original's fonts, styles,
 numbering, page setup, headers, footers and embedded media — "put a docx in,
 get the same docx back" is the product promise, so instead the original is
-cloned in memory and only its body content is replaced. The uploaded file
-itself is opened read-only and never written; it stays the immutable original.
+cloned in memory and its content is *edited in place*: every paragraph, table
+and run keeps its own formatting and only the words inside it are rewritten
+(see ``docx_body_patch``). The uploaded file itself is opened read-only and
+never written; it stays the immutable original.
+
+Without a template — a pasted-text submission, or a PDF, which has no DOCX to
+preserve — there is nothing to edit, so the document is built from scratch out
+of the HTML's semantics. That path is the one below; it produces a correct,
+default-styled Word file and cannot produce anything better, because the
+formatting was never in the HTML to begin with.
 """
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import logging
 import re
@@ -23,6 +32,10 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 from docx import Document
 from docx.document import Document as DocxDocument
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
+
+from app.services import docx_body_patch as patch
+from app.services.docx_body_patch import EditedParagraph, EditedTable
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +64,16 @@ _TEXT_ALIGN = re.compile(r"text-align\s*:\s*([a-z]+)", re.IGNORECASE)
 # turns HTML's incidental whitespace into single spaces.
 _HORIZONTAL_WS = re.compile(r"[^\S\n]+")
 
-# lexical_import appends each header/footer to the body as a labelled
-# `<h3>Page header</h3>` / `<h3>Page footer 2</h3>` section so the reviewer can
-# read and correct text that mammoth does not convert. Those must go back where
-# they came from — writing them out as body paragraphs would relocate a mandated
-# disclaimer from the footer into the body of the approved document.
-_REGION_LABEL = re.compile(r"^Page (header|footer)(?: (\d+))?$", re.IGNORECASE)
+# lexical_import appends each header, footer and unconverted text box to the
+# body as a labelled `<h3>Page header</h3>` / `<h3>Page footer 2</h3>` /
+# `<h3>Text box</h3>` section so the reviewer can read and correct text that
+# mammoth does not convert. Those must go back where they came from — writing
+# them out as body paragraphs would relocate a mandated disclaimer out of the
+# footer, or out of the box it was set in, into the body of the approved
+# document, and leave the label itself in the file as a heading.
+_REGION_LABEL = re.compile(
+    r"^(?:Page (header|footer)|(Text box))(?: (\d+))?$", re.IGNORECASE
+)
 
 
 def _styled(doc: DocxDocument, text: str, style: str):
@@ -184,6 +201,83 @@ def _add_pictures(doc: DocxDocument, el: Tag) -> None:
             logger.warning("lexical_export: skipping image: %s", exc)
 
 
+def _decode_image(src: str) -> Optional[bytes]:
+    """The bytes behind a `data:` URI, or None for anything else."""
+    meta, _, payload = src.partition(",")
+    if not meta.startswith("data:") or not payload:
+        logger.warning("lexical_export: skipping image: unsupported src %r", src[:40])
+        return None
+    try:
+        return base64.b64decode(payload)
+    except Exception as exc:  # noqa: BLE001 — a bad image must not lose the document
+        logger.warning("lexical_export: skipping image: %s", exc)
+        return None
+
+
+def _prune_unchanged_images(doc: DocxDocument, blocks: List) -> None:
+    """Forget the pictures the document already has, before anything aligns.
+
+    mammoth hands the upload's OWN pictures back as base64, so an image-only
+    `<p>` in the editor is normally just the picture already sitting in the
+    body — whose paragraph carries no text and is therefore not in the
+    alignment at all. Left in, that block matches nothing and is inserted: a
+    blank paragraph appended on every single export, cloned from its neighbour,
+    so in a numbered document it arrives wearing that neighbour's ``numPr`` and
+    Word draws it as an empty bullet.
+
+    What survives here is only what the reviewer actually added.
+    """
+    existing = {part.sha1 for part in doc.part.package.image_parts}
+    for block in blocks:
+        srcs = getattr(block, "images", None)
+        if not srcs:
+            continue
+        block.images = [
+            src for src in srcs
+            if (blob := _decode_image(src)) is not None
+            and hashlib.sha1(blob).hexdigest() not in existing
+        ]
+
+
+def _place_new_images(doc: DocxDocument, placements: List[Tuple[object, object]]) -> None:
+    """Embed the pictures the reviewer ADDED, where they added them.
+
+    The upload's own pictures are already in the document — the patch left
+    their runs alone — and mammoth hands every one of them back to the editor
+    as a base64 `data:` URI, so the HTML cannot tell an added picture from an
+    original one. The image parts can: a picture already in the package is one
+    the document came with, and re-embedding it would print the logo twice.
+
+    Compared by raw digest rather than by ``Image.from_blob``, which is how
+    ``ImagePart`` computes its own ``sha1`` anyway. python-docx cannot identify
+    every format Word embeds — the EMF and WMF vector logos in these brochures
+    raise ``UnrecognizedImageError`` — and one of those must still be
+    recognised as the original it is, not reported as a picture we dropped.
+    """
+    existing = {part.sha1 for part in doc.part.package.image_parts}
+    for block, element in placements:
+        for src in getattr(block, "images", ()):
+            blob = _decode_image(src)
+            if blob is None:
+                continue
+            sha1 = hashlib.sha1(blob).hexdigest()
+            if sha1 in existing:
+                continue  # the document came with it; it is still in place
+            try:
+                doc.add_picture(io.BytesIO(blob))
+            except Exception as exc:  # noqa: BLE001 — a bad image must not lose the document
+                logger.warning("lexical_export: skipping image: %r", exc)
+                continue
+            existing.add(sha1)
+            # Moved out of the paragraph add_picture made and into the block's
+            # own, so the picture sits where the reviewer put it.
+            holder = doc.paragraphs[-1]._element
+            for run in list(holder):
+                if run.tag == qn("w:r"):
+                    element.append(run)
+            holder.getparent().remove(holder)
+
+
 def _add_list(doc: DocxDocument, el: Tag, level: int = 1) -> None:
     """A `ul`/`ol` and every list nested inside it.
 
@@ -236,66 +330,139 @@ def _add_block(doc: DocxDocument, el: Tag) -> None:
         _align(paragraph, el)
 
 
-def _open_template(template_path: Optional[str]) -> DocxDocument:
-    """The uploaded document with its body emptied, or a default document.
+def _open_template(template_path: Optional[str]) -> Tuple[DocxDocument, bool]:
+    """(document, is_the_upload). The uploaded document, body and all, or a
+    default one when there is no usable upload to preserve.
 
-    `sectPr` — the last child of `w:body` — carries page size, margins and the
-    references to the header/footer parts, so it is the one block-level element
-    that must survive the emptying.
+    The body is NOT emptied. Emptying it was the whole problem: a body's own
+    fonts, sizes, colours, indents and table styles live on the body's own XML
+    and are not in the HTML to write back. It is edited instead — see
+    ``docx_body_patch``.
     """
     if not template_path:
-        return Document()
+        return Document(), False
     try:
         with open(template_path, "rb") as f:  # read-only: the upload is immutable
-            doc = Document(io.BytesIO(f.read()))
+            return Document(io.BytesIO(f.read())), True
     except Exception as exc:  # noqa: BLE001 — a missing or corrupt upload still exports
         logger.warning(
             "lexical_export: template %s unusable, using default styles: %s",
             template_path,
             exc,
         )
-        return Document()
+        return Document(), False
 
-    body = doc.element.body
-    for child in list(body):
-        if not child.tag.endswith("}sectPr"):
-            body.remove(child)
-    return doc
+
+# --- The editor's blocks, as data ---------------------------------------------
+#
+# `_add_block` writes soup straight into a fresh document. The patch path
+# cannot: it has to line the reviewer's blocks up against the upload's own
+# paragraphs before anything is written, so the HTML is read into the plain
+# (text, formats) structures `docx_body_patch` aligns on.
+
+_CELL_BLOCKS = ("p", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "div")
+
+
+def _edited_blocks(el: Tag, blocks: List) -> None:
+    """Append `el` to `blocks` as one entry per *paragraph* — the unit Word
+    stores. A list is its items, not a single block: each ``<li>`` is a ``w:p``
+    of its own and has to align with one."""
+    if el.name in ("ul", "ol"):
+        for li in el.find_all("li", recursive=False):
+            blocks.append(EditedParagraph(_inline_pieces(li), _image_sources(li)))
+            for nested in li.find_all(["ul", "ol"], recursive=False):
+                _edited_blocks(nested, blocks)
+    elif el.name == "table":
+        blocks.append(
+            EditedTable([
+                [_edited_cell(cell) for cell in row.find_all(["td", "th"])]
+                for row in el.find_all("tr")
+            ])
+        )
+    else:
+        blocks.append(EditedParagraph(_inline_pieces(el), _image_sources(el)))
+
+
+def _image_sources(el: Tag) -> List[str]:
+    return [src for src in (img.get("src") or "" for img in el.find_all("img")) if src]
+
+
+def _edited_cell(cell: Tag) -> List[EditedParagraph]:
+    """A cell's paragraphs. mammoth wraps cell text in ``<p>``; Lexical's own
+    export does not, so a cell with neither is read as one paragraph."""
+    inner = cell.find_all(_CELL_BLOCKS, recursive=False)
+    if inner:
+        return [EditedParagraph(_inline_pieces(child)) for child in inner]
+    return [EditedParagraph(_inline_pieces(cell))]
 
 
 def _region_label(el: Tag) -> Optional[Tuple[str, int]]:
-    """(kind, 1-based section number) if `el` labels a header/footer section."""
+    """(kind, 1-based number) if `el` labels a header, footer or text box."""
     if el.name != "h3":
         return None
     match = _REGION_LABEL.match(_plain(el))
     if not match:
         return None
-    return match.group(1).lower(), int(match.group(2) or 1)
+    kind = "textbox" if match.group(2) else match.group(1).lower()
+    return kind, int(match.group(3) or 1)
 
 
-def _write_region(doc: DocxDocument, kind: str, index: int, lines: List[str]) -> None:
-    """Put `lines` back into section `index`'s header or footer."""
-    if not lines:
+def _write_region(
+    doc: DocxDocument, kind: str, index: int, blocks: List, boxes: List
+) -> None:
+    """Put `blocks` back into the region they were imported from.
+
+    Patched, not rewritten: a footer's mandated disclaimer is usually set small
+    and grey by hand, and re-typing the line as plain text would return it in
+    the body font.
+    """
+    if not blocks:
         return
-    try:
-        section = doc.sections[index - 1]
-    except IndexError:
+    container = _region_container(doc, kind, index, boxes)
+    if container is None:
         # Unmappable: keep the template's own wording rather than guess, and
         # never fall back to writing it into the body.
         logger.warning(
-            "lexical_export: no section %d for its page %s; left the original in place",
-            index,
+            "lexical_export: no %s %d to write back to; left the original in place",
             kind,
+            index,
         )
         return
-    region = getattr(section, kind)
-    existing = region.paragraphs
-    for paragraph in existing[1:]:
-        paragraph._element.getparent().remove(paragraph._element)
-    first = existing[0] if existing else region.add_paragraph()
-    first.text = lines[0]
-    for line in lines[1:]:
-        region.add_paragraph(line)
+    patch.patch_container(container, blocks)
+
+
+def _region_container(doc: DocxDocument, kind: str, index: int, boxes: List):
+    """The XML element behind one labelled region, or None if it is gone."""
+    if index < 1:
+        return None  # "Page footer 0" must not resolve to sections[-1]
+    if kind == "textbox":
+        return boxes[index - 1] if index - 1 < len(boxes) else None
+    try:
+        return getattr(doc.sections[index - 1], kind)._element
+    except IndexError:
+        return None
+
+
+def _importable_textboxes(doc: DocxDocument) -> List:
+    """The text boxes ``lexical_import`` labelled, in the order it numbered
+    them.
+
+    It appends only the boxes mammoth did NOT convert — a box whose wording is
+    already in the converted body is left out, so it is not imported twice —
+    and numbers what is left from 1. Reproducing that filter here is what makes
+    "Text box 2" name the same box on the way back out.
+    """
+    body_text = patch.normalize(patch.container_text(doc.element.body))
+    boxes = []
+    for box in doc.element.body.iter(qn("w:txbxContent")):
+        lines = [
+            text
+            for text in (patch.normalize(patch.paragraph_text(p)) for p in box.iter(qn("w:p")))
+            if text
+        ]
+        if lines and not all(line in body_text for line in lines):
+            boxes.append(box)
+    return boxes
 
 
 def lexical_html_to_docx(
@@ -303,17 +470,22 @@ def lexical_html_to_docx(
 ) -> bytes:
     """DOCX bytes for the editor's HTML. An empty document is valid output.
 
-    With a readable `template_path` the export is the uploaded document with its
-    body replaced, so styles, numbering, page setup and headers/footers carry
-    over. Without one (a pasted-text submission, or an upload that no longer
-    reads) it is a default-styled document, as before.
+    With a readable `template_path` the export IS the uploaded document, with
+    the reviewer's corrections written into it — every style, font, colour,
+    indent, table and page setting the upload had, it still has. Without one (a
+    pasted-text submission, a PDF, or an upload that no longer reads) the
+    document is built from the HTML's semantics on default styles instead.
     """
-    doc = _open_template(template_path)
+    doc, patching = _open_template(template_path)
     soup = BeautifulSoup(html or "", "html.parser")
+    # Enumerated before the body is touched, because the filter that numbers
+    # them reads the body's text.
+    boxes = _importable_textboxes(doc) if patching else []
 
-    # Everything after a header/footer label belongs to that region — the
-    # importer appends them, in order, at the end of the body.
+    # Everything after a region label belongs to that region — the importer
+    # appends them, in order, at the end of the body.
     regions: dict = {}
+    body: List[Tag] = []
     current: Optional[Tuple[str, int]] = None
     for el in soup.find_all(recursive=False):
         if not isinstance(el, Tag):
@@ -323,14 +495,24 @@ def lexical_html_to_docx(
             current = label
             regions.setdefault(current, [])
         elif current is not None:
-            text = _plain(el)
-            if text:
-                regions[current].append(text)
+            _edited_blocks(el, regions[current])
         else:
+            body.append(el)
+
+    if patching:
+        blocks: List = []
+        for el in body:
+            _edited_blocks(el, blocks)
+        _prune_unchanged_images(doc, blocks)
+        for region_blocks in regions.values():
+            _prune_unchanged_images(doc, region_blocks)
+        _place_new_images(doc, patch.patch_container(doc.element.body, blocks))
+    else:
+        for el in body:
             _add_block(doc, el)
 
-    for (kind, index), lines in regions.items():
-        _write_region(doc, kind, index, lines)
+    for (kind, index), blocks in regions.items():
+        _write_region(doc, kind, index, blocks, boxes)
 
     buf = io.BytesIO()
     doc.save(buf)
