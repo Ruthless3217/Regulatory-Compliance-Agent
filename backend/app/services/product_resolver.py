@@ -9,13 +9,79 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, List
+from collections import Counter
+from typing import Any, Dict, FrozenSet, List, Set
 
 from rapidfuzz import fuzz
 
 logger = logging.getLogger(__name__)
 
 _UIN_RE = re.compile(r"\b\d{3}[A-Z]\d{3}V\d{2}\b", re.IGNORECASE)
+
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
+# Version/variant markers (eTouch II, Goal Assure IV, Fortune Gain 2). They
+# distinguish editions of one product, not one product from another, so a
+# document naming "eTouch" without the edition still names eTouch.
+_VERSION_TOKEN_RE = re.compile(r"^(?:i{1,3}v?|iv|vi{0,3}|vii|v|\d{1,2})$", re.IGNORECASE)
+
+# A token this common across product names is the BRAND, not a product: on the
+# real corpus `bajaj` and `life` each occur in 100% of the 44 names and nothing
+# else exceeds 25%. Measured across 30%-90% the derived set is identical, so the
+# cutoff sits inside a wide gap rather than on a tuned edge. It is derived from
+# the loaded corpus, never hardcoded, so a rebrand re-derives it.
+_BRAND_TOKEN_MIN_SHARE = 0.9
+
+
+def _tokens(value: str) -> List[str]:
+    return _WORD_RE.findall((value or "").lower())
+
+
+def _brand_tokens(names: List[str]) -> FrozenSet[str]:
+    """Tokens carried by (nearly) every product name — zero identifying power."""
+    total = len(names)
+    if not total:
+        return frozenset()
+    frequency: Counter = Counter()
+    for name in names:
+        for token in set(_tokens(name)):
+            frequency[token] += 1
+    return frozenset(
+        token for token, count in frequency.items()
+        if count / total >= _BRAND_TOKEN_MIN_SHARE
+    )
+
+
+def _identity_tokens(name: str, brand: FrozenSet[str]) -> Set[str]:
+    """The tokens that name THIS product rather than the brand.
+
+    Falls back to every non-version token when stripping the brand would leave
+    nothing: a product whose name is brand-only cannot be identified by name,
+    and demanding its full name is the fail-closed reading.
+    """
+    identity = {
+        token for token in _tokens(name)
+        if token not in brand and not _VERSION_TOKEN_RE.match(token)
+    }
+    return identity or {
+        token for token in _tokens(name) if not _VERSION_TOKEN_RE.match(token)
+    }
+
+
+def _document_names(text_tokens: Set[str], name: str, brand: FrozenSet[str]) -> bool:
+    """True when the document carries this product's whole distinctive name.
+
+    This is the gate `fuzz.partial_ratio` cannot provide. partial_ratio slides
+    the shorter string over the longer one, so the bare brand is an EXACT
+    substring of every product name and scores 100 — the same score a full-name
+    match gets. Twelve generic corporate inputs each resolved to three products
+    at the production threshold. No metric swap fixes it: token_set_ratio and
+    WRatio score "Bajaj Life" and "Smart Secure ROP" identically (100/100 and
+    90/90), and `ratio` inverts on long documents. The missing signal is
+    coverage of the product's own name, so that is what is required here.
+    """
+    identity = _identity_tokens(name, brand)
+    return bool(identity) and identity <= text_tokens
 
 
 def unresolved_product_signals(
@@ -119,6 +185,12 @@ def resolve_products(
     # matched on word boundaries only — partial_ratio on a 3-letter needle
     # fires on noise like "months".
     lowered = text.lower()
+    # A fuzzy score alone cannot establish product identity here (see
+    # _document_names): every name shares the brand prefix, so the document must
+    # be shown to carry the product's own distinguishing name before its score
+    # is allowed to mean anything.
+    brand = _brand_tokens([p.get("product_name") or "" for p in products])
+    text_tokens = set(_tokens(text))
     best_fuzzy: Dict[str, Dict[str, Any]] = {}
 
     def _consider(uin: str, display_name: str, confidence: float, method: str) -> None:
@@ -131,7 +203,7 @@ def resolve_products(
         if p["uin"] in seen_uins:
             continue
         name = (p.get("product_name") or "").strip()
-        if name:
+        if name and _document_names(text_tokens, name, brand):
             score = fuzz.partial_ratio(name.lower(), lowered)
             if score >= min_fuzzy_score:
                 _consider(p["uin"], name, round(score / 100.0, 3), "name_fuzzy")
@@ -142,6 +214,8 @@ def resolve_products(
             if len(alias) < 8:
                 if re.search(rf"\b{re.escape(alias)}\b", text, re.IGNORECASE):
                     _consider(p["uin"], name or alias, 0.9, "alias_match")
+                continue
+            if not _document_names(text_tokens, alias, brand):
                 continue
             score = fuzz.partial_ratio(alias.lower(), lowered)
             if score >= min_fuzzy_score:
