@@ -16,6 +16,7 @@ import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspa
 import { useSSEStream } from "@/lib/sse";
 import { analyzeSubmission, diffRun, getCheck } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { AnalysisStateBanner } from "@/components/review/AnalysisStateBanner";
 import type { RunDiff, Violation } from "@/lib/types";
 
 /** A rail's open/closed flag, remembered across navigation.
@@ -172,6 +173,9 @@ export function ReviewTab() {
     selectedRunId,
     setSelectedRunId,
     findingsStale,
+    analysisState,
+    analysisMessage,
+    degradedReason,
     setLexicalDoc,
     lexicalDirty,
     saveLexical,
@@ -466,6 +470,19 @@ export function ReviewTab() {
               </div>
             )}
           </div>
+        )}
+
+        {/* A run that finished without a grade. This is the tab the reviewer
+            lands on, and with no findings and no score it is also the tab where
+            a fail-closed refusal is completely invisible — the notice used to
+            exist only on Report. */}
+        {!isAnalyzing && (
+          <AnalysisStateBanner
+            analysisState={analysisState}
+            analysisStatus={submission.status}
+            analysisMessage={analysisMessage}
+            degradedReason={degradedReason}
+          />
         )}
 
         {/* One notice, not two. Both of these say "the document moved on since

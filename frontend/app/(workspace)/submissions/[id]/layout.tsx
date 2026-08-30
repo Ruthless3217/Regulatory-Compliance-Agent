@@ -28,6 +28,8 @@ export default async function SubmissionLayout({
   let scores: ScoreBreakdown | null = null;
   let analysisStatus: string | null = null;
   let analysisMessage: string | null = null;
+  let analysisState: string | null = null;
+  let degradedReason: string | null = null;
   let findingsStale = false;
   try {
     const res = await getComplianceResults(id);
@@ -41,6 +43,10 @@ export default async function SubmissionLayout({
     // NOT be cleanly graded. Carrying it through stops the UI from rendering an
     // un-gradeable doc as "clean" (full-pipeline audit 2026-06-16).
     analysisMessage = res.message ?? null;
+    // What the pipeline actually did, and why. Without these a fail-closed
+    // refusal is indistinguishable from a document nobody analysed yet.
+    analysisState = res.analysis_state ?? null;
+    degradedReason = res.degraded_reason ?? null;
   } catch {
     // Submission may not yet have a check.
   }
@@ -58,6 +64,8 @@ export default async function SubmissionLayout({
       initialScores={scores}
       analysisStatus={analysisStatus}
       analysisMessage={analysisMessage}
+      analysisState={analysisState}
+      degradedReason={degradedReason}
       initialFindingsStale={findingsStale}
     >
       {/* Pin to the height the workspace <main> actually hands us — the viewport

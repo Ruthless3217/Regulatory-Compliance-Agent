@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import type { SerializedEditorState } from "lexical";
 import type { EditorFixApply, EditorFixMode } from "@/components/editor/EditorApplyPlugin";
+import { analysisIsIncomplete } from "@/components/review/AnalysisStateBanner";
 
 /** The three views of the working document, always written together. */
 export type LexicalDoc = { state: SerializedEditorState; html: string; text: string };
@@ -116,8 +117,15 @@ interface Ctx {
   // showing an un-gradeable document as "clean".
   analysisStatus: string | null;
   analysisMessage: string | null;
+  // What the pipeline actually did when it produced no check, and the internal
+  // reason token for it. A fail-closed refusal ("needs_review"/"failed") is a
+  // verdict; "not_analyzed" is the absence of one, and they used to be
+  // indistinguishable from the client's side.
+  analysisState: string | null;
+  degradedReason: string | null;
   // True when the document could NOT be cleanly graded (degraded/failed/needs
-  // review). Distinct from a genuine clean grade (which has no message).
+  // review). Distinct from a genuine clean grade and from a document nobody
+  // has analysed yet.
   analysisIncomplete: boolean;
   // Optimistic "analyzing" flag: SubmissionHeader's rerun button sets this
   // immediately on click, before router.refresh() lands a fresh `submission`
@@ -181,6 +189,8 @@ interface ProviderProps {
   initialScores?: ScoreBreakdown | null;
   analysisStatus?: string | null;
   analysisMessage?: string | null;
+  analysisState?: string | null;
+  degradedReason?: string | null;
   initialFindingsStale?: boolean;
   children: React.ReactNode;
 }
@@ -195,6 +205,8 @@ export function SubmissionWorkspaceProvider({
   initialScores = null,
   analysisStatus = null,
   analysisMessage = null,
+  analysisState = null,
+  degradedReason = null,
   initialFindingsStale = false,
   children,
 }: ProviderProps) {
@@ -619,10 +631,11 @@ export function SubmissionWorkspaceProvider({
     };
   }, [submission.id, submission.status]);
 
-  const analysisIncomplete =
-    !!analysisMessage ||
-    analysisStatus === "failed" ||
-    analysisStatus === "waiting_for_review";
+  const analysisIncomplete = analysisIsIncomplete({
+    analysisState,
+    analysisStatus,
+    analysisMessage,
+  });
 
   const value = React.useMemo(
     () => ({
@@ -650,6 +663,8 @@ export function SubmissionWorkspaceProvider({
       scores: initialScores,
       analysisStatus,
       analysisMessage,
+      analysisState,
+      degradedReason,
       analysisIncomplete,
       optimisticAnalyzing,
       setOptimisticAnalyzing,
@@ -693,6 +708,8 @@ export function SubmissionWorkspaceProvider({
       initialScores,
       analysisStatus,
       analysisMessage,
+      analysisState,
+      degradedReason,
       analysisIncomplete,
       optimisticAnalyzing,
       runs,
