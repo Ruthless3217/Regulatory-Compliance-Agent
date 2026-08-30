@@ -770,9 +770,11 @@ async def preprocess_node(state: ComplianceState) -> Dict:
                         "product grounding corpus unavailable: "
                         + ", ".join(fact_cards.availability_issues)
                     )
+                # Every identified product: this feeds build_scope, and a
+                # capped list silently narrowed the regulatory envelope.
+                # product_match_max bounds the PROMPT below, not the scope.
                 product_match = resolve_products(
                     full_text, fact_cards,
-                    max_matches=_s.product_match_max,
                     min_fuzzy_score=_s.kb_min_fuzzy_score,
                 )
                 product_unresolved = unresolved_product_signals(full_text, fact_cards)
@@ -799,6 +801,16 @@ async def preprocess_node(state: ComplianceState) -> Dict:
             narrowed = _global_scope_narrowing(
                 md.get("declared_product_line"), product_match, fact_cards
             )
+            budget = _grounding_budget_signal(product_match, _s.product_match_max)
+            if budget:
+                # Scope covers every product; the prompt cannot. Say so on the
+                # run instead of dropping the surplus without a trace.
+                md["product_grounding_budget"] = budget
+                logger.warning(
+                    "product grounding: %d product(s) detected but only %d fit the "
+                    "prompt budget; not grounded: %s (scope still covers all)",
+                    budget["detected"], budget["grounded"], budget["not_grounded"],
+                )
             if narrowed:
                 # Not a refusal (see _submission_scope_signals), but the run WAS
                 # graded against a narrower envelope than the one filed. Keep it
@@ -912,6 +924,28 @@ def _submission_scope_signals(
     return []
 
 
+def _grounding_budget_signal(
+    product_match: List[Dict[str, Any]],
+    budget: int,
+) -> Optional[Dict[str, Any]]:
+    """Audit record for products that were identified but not prompt-grounded.
+
+    Each grounded product adds a ~650-token fact-card block to every analysis
+    prompt, so the number injected stays bounded. The regulatory scope is built
+    from the full set and is unaffected. Returns None when everything fits.
+    """
+    matches = product_match or []
+    if budget is None or len(matches) <= budget:
+        return None
+    return {
+        "detected": len(matches),
+        "grounded": budget,
+        "not_grounded": sorted(
+            str(m.get("uin")) for m in matches[budget:] if m.get("uin")
+        ),
+    }
+
+
 def _global_scope_narrowing(
     declared_product_line: Optional[str],
     product_match: List[Dict[str, Any]],
@@ -970,7 +1004,11 @@ async def _resolve_product_grounding(
         )
         return [], {}
 
-    uins = [m["uin"] for m in matches]
+    # The prompt budget lives here, not in the resolver: fact cards are what
+    # scales with the product count (~650 tokens each, in every chunk prompt).
+    # matches is ranked exact-first, so the budget keeps deterministic
+    # identities. _grounding_budget_signal records anything left out.
+    uins = [m["uin"] for m in matches][: settings.product_match_max]
     try:
         from app.services.fact_card_service import get_fact_card_service
         product_facts = get_fact_card_service().lookup_many(uins)

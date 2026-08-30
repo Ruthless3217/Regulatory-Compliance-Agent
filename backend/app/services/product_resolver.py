@@ -1,16 +1,24 @@
 """Resolve which approved product(s) a submission is about.
 
 UIN regex first (exact, high confidence), then fuzzy product-name match against
-the known fact-card names. Returns up to ``max_matches`` matches; an empty list
-means "no confident product" — downstream product grounding then no-ops, leaving
-precedent/rule/novel grading unchanged.
+the known fact-card names. Returns EVERY confidently identified product; an
+empty list means "no confident product" — downstream product grounding then
+no-ops, leaving precedent/rule/novel grading unchanged.
+
+The result is the document's product IDENTITY, and `build_scope` turns it into
+the regulatory envelope, so it must be complete: capping it silently dropped
+whole product families out of applicability. Bounding what the LLM prompt can
+carry is a separate concern with a separate budget (settings.product_match_max,
+applied at grounding in graph/nodes.py), because that is the only thing that
+actually scales — measured, the cap changes neither resolver time nor the SQL
+filter, which is bounded by the category vocabulary.
 """
 from __future__ import annotations
 
 import logging
 import re
 from collections import Counter
-from typing import Any, Dict, FrozenSet, List, Set
+from typing import Any, Dict, FrozenSet, List, Optional, Set
 
 from rapidfuzz import fuzz
 
@@ -136,9 +144,15 @@ def resolve_products(
     text: str,
     fact_card_service,
     *,
-    max_matches: int,
     min_fuzzy_score: int,
+    max_matches: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
+    """Every product this document confidently identifies, exact matches first.
+
+    `max_matches` is an optional hard cap for callers that genuinely want a
+    shortlist. It is NOT the grounding budget and no longer defaults to one:
+    truncating here silently narrowed the regulatory scope.
+    """
     text = text or ""
     products = fact_card_service.all_products()
     known_uins = {str(p["uin"]).upper() for p in products}
@@ -223,9 +237,10 @@ def resolve_products(
     fuzzy = sorted(best_fuzzy.values(), key=lambda x: x["confidence"], reverse=True)
 
     ranked = matches + fuzzy
-    if len(ranked) > max_matches:
+    if max_matches is not None and len(ranked) > max_matches:
         logger.info(
-            "product_resolver: %d products matched; capping to %d (dropped %s)",
+            "product_resolver: %d products matched; caller capped to %d (dropped %s)",
             len(ranked), max_matches, [m["uin"] for m in ranked[max_matches:]],
         )
-    return ranked[:max_matches]
+        return ranked[:max_matches]
+    return ranked
