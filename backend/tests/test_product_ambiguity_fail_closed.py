@@ -47,15 +47,18 @@ def test_missing_resolved_and_declared_product_scope_fails_closed():
     assert "no product was resolved" in issues[0]
 
 
-def test_explicit_global_scope_is_allowed_only_without_detected_product():
-    assert _submission_scope_signals("global", [], None) == []
+def test_explicit_global_scope_is_allowed_with_or_without_a_detected_product():
+    """Global is the universal scope; a detected product narrows it, safely.
 
-    issues = _submission_scope_signals(
-        "global",
-        [{"uin": "116L999V01"}],
-        _UlipCards(),
-    )
-    assert "conflicts with detected product" in issues[0]
+    This previously refused the combination, which discarded completed analyses
+    of multi-product collateral as `product_unresolved` while every UIN was in
+    fact fully grounded. See tests/test_global_scope_not_a_conflict.py for the
+    reproduction and the superset argument.
+    """
+    assert _submission_scope_signals("global", [], None) == []
+    assert _submission_scope_signals(
+        "global", [{"uin": "116L999V01"}], _UlipCards()
+    ) == []
 
 
 def test_declared_family_must_agree_with_detected_product():

@@ -796,6 +796,20 @@ async def preprocess_node(state: ComplianceState) -> Dict:
             )
             if scope_signals:
                 product_unresolved["submission_scope"] = scope_signals
+            narrowed = _global_scope_narrowing(
+                md.get("declared_product_line"), product_match, fact_cards
+            )
+            if narrowed:
+                # Not a refusal (see _submission_scope_signals), but the run WAS
+                # graded against a narrower envelope than the one filed. Keep it
+                # on the run record so an audit can see which products a
+                # "Generic" submission was actually judged under.
+                md["scope_narrowed_from_global"] = narrowed
+                logger.info(
+                    "product grounding: declared global narrowed to detected "
+                    "product scope %s (UINs %s)",
+                    narrowed["categories"], narrowed["uins"],
+                )
         if product_resolution_failed:
             md["degraded"] = "product_resolution_failed"
             md["product_resolution_failed"] = product_resolution_failed
@@ -867,23 +881,59 @@ def _submission_scope_signals(
             "no product was resolved and no supported product_line was declared"
         ]
 
-    actual_scope = build_scope(product_match, fact_cards)
-    detected_uins = sorted(
-        {str(match.get("uin")) for match in product_match if match.get("uin")}
-    )
     if declared_is_global:
-        return [
-            "declared global scope conflicts with detected product UIN(s): "
-            + ", ".join(detected_uins)
-        ]
+        # Global is the UNIVERSAL scope, not a claim that the copy names no
+        # product: `applicability._EXPLICIT_GLOBAL` is judged as "applies to
+        # every product", and a submission filed under it is a superset of any
+        # family the document turns out to be about. Detected products only
+        # NARROW it, and narrowing is safe in one direction that matters here:
+        # `build_scope` derives its categories from the fact cards alone, so
+        # the resulting envelope admits a strict superset of the global-only
+        # evidence (global + cross-cutting tags stay accepted, the products'
+        # categories are added). Grading can therefore only gain findings, and
+        # a run cannot become falsely clean by resolving a product.
+        #
+        # Refusing this combination also protected nothing: declaring any ONE
+        # of a multi-product document's families built the identical scope and
+        # was accepted, so the refusal turned on the declaration string alone.
+        # It fired on the one honest answer for range/comparison collateral —
+        # which has no single family — and discarded a completed analysis as
+        # `product_unresolved` while every UIN was in fact fully grounded.
+        # See tests/test_global_scope_not_a_conflict.py.
+        return []
     if declared and not declared_category:
         return [f"unsupported declared product_line: {declared}"]
+    actual_scope = build_scope(product_match, fact_cards)
     if declared_category and declared_category not in actual_scope.categories:
         return [
             f"declared {declared_category} conflicts with detected scope "
             f"{sorted(actual_scope.categories)}"
         ]
     return []
+
+
+def _global_scope_narrowing(
+    declared_product_line: Optional[str],
+    product_match: List[Dict[str, Any]],
+    fact_cards: Any,
+) -> Optional[Dict[str, List[str]]]:
+    """Audit record for a global submission that resolved to real products.
+
+    Returns None unless the submission was filed under the universal scope AND
+    products were detected — the case where the effective grading envelope is
+    narrower than the one declared.
+    """
+    from app.services.rag.applicability import build_scope
+
+    declared = (declared_product_line or "").strip().lower()
+    if declared not in {"global", "all_products"} or not product_match:
+        return None
+    scope = build_scope(product_match, fact_cards)
+    return {
+        "declared": declared,
+        "uins": sorted(scope.uins),
+        "categories": sorted(scope.categories),
+    }
 
 
 async def _resolve_product_grounding(

@@ -542,6 +542,65 @@ async def analyze_submission_stream(
     )
 
 
+# Why a completed run refused to produce a grade, in the reviewer's terms. The
+# next action differs completely between these, and `degraded_reason` on its own
+# is an internal token. Keys track ComplianceEngine._NEEDS_REVIEW_REASONS.
+_REFUSAL_EXPLANATIONS = {
+    "product_unresolved": (
+        "the document names a product the fact-card corpus cannot ground, so "
+        "the applicable regulatory scope could not be proven"
+    ),
+    "product_ambiguous": (
+        "a product identifier in the document matches more than one fact card, "
+        "so grading it would mean picking one variant arbitrarily"
+    ),
+    "product_resolution_failed": "product resolution itself errored",
+    "scope_metadata_missing": (
+        "retrieved rules or precedents carry no product scope, so their "
+        "applicability could not be established"
+    ),
+    "knowledge_base_empty": "the knowledge base returned nothing to check against",
+    "rules_unavailable": "the rule corpus was unavailable",
+    "disclosure_unavailable": "the required-disclosure corpus was unavailable",
+    "disclosure_recall_degraded": (
+        "the required-disclosure sweep covered only part of the document"
+    ),
+    "rag_degraded": "retrieval was degraded",
+    "analysis_incomplete": "one or more sections failed to grade",
+    "no_content": "no analyzable content could be extracted",
+}
+
+
+def _analysis_state(submission, latest_run) -> tuple:
+    """(state, degraded_reason) for a submission that has no ComplianceCheck."""
+    if latest_run is None:
+        return "not_analyzed", None
+    if latest_run.status == "running":
+        return "analyzing", None
+    if latest_run.status in {"needs_review", "failed"}:
+        return latest_run.status, latest_run.degraded_reason
+    # A run that closed 'completed' with no check is not a state the engine
+    # produces; report the submission's own status rather than inventing one.
+    return submission.status or "not_analyzed", latest_run.degraded_reason
+
+
+def _analysis_state_message(state: str, reason: Optional[str]) -> str:
+    if state == "not_analyzed":
+        return "No compliance check found. Run analysis to grade this document."
+    if state == "analyzing":
+        return "Analysis is still running."
+    explanation = _REFUSAL_EXPLANATIONS.get(reason or "")
+    detail = f" — {explanation}" if explanation else ""
+    if state == "needs_review":
+        return (
+            "Analysis completed but this document was NOT graded and needs "
+            f"human review{detail}. No compliance score was recorded."
+        )
+    if state == "failed":
+        return f"Analysis failed{detail}. No compliance score was recorded."
+    return f"This document has not been graded{detail}."
+
+
 @router.get("/results/{submission_id}")
 async def get_compliance_results(
     submission_id: str,
@@ -557,10 +616,24 @@ async def get_compliance_results(
     ).order_by(ComplianceCheck.checked_at.desc()).first()
 
     if not check:
+        # No check can mean two very different things, and they used to read
+        # identically: the document was never analysed, OR a run completed and
+        # `evaluate_persistability` deliberately refused to grade it. Telling a
+        # reviewer to "run analysis first" on a document the pipeline has
+        # already judged un-gradeable hides the verdict behind an empty page.
+        latest_run = (
+            db.query(AnalysisRun)
+            .filter(AnalysisRun.submission_id == submission_id)
+            .order_by(AnalysisRun.run_number.desc())
+            .first()
+        )
+        state, reason = _analysis_state(submission, latest_run)
         return {
             "submission_id": submission_id,
             "status": submission.status,
-            "message": "No compliance check found. Run analysis first."
+            "analysis_state": state,
+            "degraded_reason": reason,
+            "message": _analysis_state_message(state, reason),
         }
 
     violations = db.query(Violation).filter(

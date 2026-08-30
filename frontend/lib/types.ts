@@ -243,6 +243,12 @@ export interface ComplianceResults {
   findings_stale?: boolean;
   status?: SubmissionStatus;
   message?: string;
+  /** Present only when there is no check: what the pipeline actually did.
+   * "needs_review" / "failed" are deliberate refusals with a reason;
+   * "not_analyzed" / "analyzing" are not. */
+  analysis_state?: "needs_review" | "failed" | "analyzing" | "not_analyzed" | string;
+  /** AnalysisRun.degraded_reason for the refusing run. */
+  degraded_reason?: string | null;
 }
 
 // GET /compliance/check/{check_id} — reviewer-facing summary for one specific

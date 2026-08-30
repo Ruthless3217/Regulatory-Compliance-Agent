@@ -5,6 +5,7 @@ import { KPIStrip } from "./KPIStrip";
 import { ViolationGroup } from "./ViolationGroup";
 import { ExportPdfButton } from "./ExportPdfButton";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
+import { AnalysisStateBanner } from "@/components/review/AnalysisStateBanner";
 import { normalizeSeverity } from "@/lib/format";
 
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
@@ -18,6 +19,8 @@ export function ReportTab() {
     scores,
     analysisIncomplete,
     analysisMessage,
+    analysisState,
+    degradedReason,
   } = useSubmissionWorkspace();
 
   const {
@@ -78,18 +81,15 @@ export function ReportTab() {
 
   return (
     <div className="h-full overflow-y-auto rounded-md border border-border bg-background pb-12">
-      {analysisIncomplete && (
-        <div className="mx-8 mt-6 rounded-md border border-sev-medium/50 bg-sev-medium/5 px-4 py-3 text-sm text-sev-medium">
-          <p className="font-medium">
-            This document could not be fully analyzed — it has NOT been graded as
-            compliant.
-          </p>
-          <p className="mt-1 text-xs">
-            {analysisMessage ??
-              "The analysis was incomplete or degraded. Re-run the check or send it for manual review before relying on this result."}
-          </p>
-        </div>
-      )}
+      {/* One banner definition for both tabs, so the reason the reviewer reads
+          on Review is the reason they read on the printed report. */}
+      <AnalysisStateBanner
+        analysisState={analysisState}
+        analysisStatus={submission.status}
+        analysisMessage={analysisMessage}
+        degradedReason={degradedReason}
+        className="mx-8 mt-6 rounded-md border"
+      />
       <ScoreHero score={overallScore} grade={grade} scores={scores} />
       <input type="hidden" data-submission-id={submission.id} />
       <KPIStrip violations={violations} />
