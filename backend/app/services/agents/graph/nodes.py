@@ -1983,7 +1983,11 @@ async def analysis_node(state: ComplianceState) -> Dict:
                         sweep_prompt = context_service.create_completeness_sweep_prompt(
                             chunk_text, precedents, rules=rules, already_found=already,
                             document_context=document_context,
-                            product_facts=product_facts, product_passages=passages,
+                            # MUST be the same list the first pass and the parser
+                            # use: a product_fact_finding's product_index points
+                            # into the rendered "--- PRODUCT n ---" order, and
+                            # merge_findings hands both passes to one mapping.
+                            product_facts=chunk_facts, product_passages=passages,
                         )
                         sweep = await _call(sweep_prompt)
                         citations, rule_findings, novel, product_ff = merge_findings(
