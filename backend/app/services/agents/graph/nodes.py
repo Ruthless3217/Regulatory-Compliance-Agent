@@ -1258,9 +1258,11 @@ async def _resolve_product_grounding(
     uins = list(metadata.get("product_grounding_uins") or []) or [
         m["uin"] for m in matches
     ][: settings.product_match_max]
+    fact_cards_for_scope = None
     try:
         from app.services.fact_card_service import get_fact_card_service
-        product_facts = get_fact_card_service().lookup_many(uins)
+        fact_cards_for_scope = get_fact_card_service()
+        product_facts = fact_cards_for_scope.lookup_many(uins)
     except Exception as e:
         logger.warning(f"fact-card lookup failed (non-fatal): {e}")
         product_facts = []
@@ -1269,16 +1271,27 @@ async def _resolve_product_grounding(
     try:
         from app.services.rag.retrievers.product_docs_retriever import get_product_docs_retriever
         retriever = get_product_docs_retriever()
-        primary_uin = uins[0]  # scope passages to the first/strongest match
+        # The corpus is strictly product-partitioned — the indexer stamps one
+        # brochure's uin/product_name onto every vector — and the prompt frames
+        # the block as "approved wording for THIS product". Scoping every chunk
+        # to uins[0] therefore handed N-1 of N chunks another product's approved
+        # wording and none of their own (measured: 1/2 at two products, 4/5 at
+        # five). Each chunk is scoped to the products it is actually about,
+        # falling back to the document selection when it names none, so a
+        # claim-bearing section that never repeats the name keeps its evidence.
         for c in chunks:
             cid = str(c.get("id"))
             text = c.get("text") or ""
             if not text.strip():
                 product_passages[cid] = []
                 continue
+            chunk_uins = _select_grounded_products(
+                _chunk_product_matches(text, matches), text,
+                fact_cards_for_scope, settings.product_match_max,
+            ) or uins
             try:
                 product_passages[cid] = await retriever.retrieve(
-                    query=text, uin=primary_uin, top_k=settings.product_docs_top_k,
+                    query=text, uin=chunk_uins[0], top_k=settings.product_docs_top_k,
                     product_scope=product_scope,
                 )
             except Exception as e:
