@@ -140,19 +140,29 @@ def run_context_fingerprint(
 
 
 def chunk_context_key(
-    run_fingerprint: str, chunk_text: str, document_context: Optional[str]
+    run_fingerprint: str,
+    chunk_text: str,
+    document_context: Optional[str],
+    product_uins: Optional[List[str]] = None,
 ) -> str:
     """The per-chunk half: run fingerprint + this chunk's text + the exact
-    document-context string rendered into its prompt."""
-    return sha256_hex(
-        "|".join(
-            [
-                run_fingerprint,
-                chunk_content_hash(chunk_text),
-                sha256_hex(document_context or ""),
-            ]
-        )
-    )
+    document-context string rendered into its prompt + the product fact cards
+    grounded in it.
+
+    Grounding is per chunk, so two runs can agree on the run-level product set
+    while disagreeing on which cards THIS chunk carried. The cards decide which
+    product findings the chunk can emit at all, so a chunk whose grounding
+    changed must re-grade rather than carry last run's verdicts forward.
+    Omitted (None) reproduces the pre-chunk-grounding key exactly.
+    """
+    parts = [
+        run_fingerprint,
+        chunk_content_hash(chunk_text),
+        sha256_hex(document_context or ""),
+    ]
+    if product_uins is not None:
+        parts.append(sha256_hex("|".join(sorted(str(u) for u in product_uins))))
+    return sha256_hex("|".join(parts))
 
 
 def plan_chunk_reuse(

@@ -1046,6 +1046,113 @@ def _families_not_grounded(
     return sorted(in_scope - covered)
 
 
+def _chunk_product_matches(
+    chunk_text: str,
+    product_match: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """The document's resolved products that THIS chunk actually names.
+
+    Strictly a filter over `product_match`. Chunk detection never introduces
+    product identity of its own, so the resolver's precision gate, the fact-card
+    grounding check and ambiguity handling all still decide who is a product —
+    this only decides where in the document each one is discussed.
+
+    Matching is exact on purpose: the UIN, or the product's full name. The same
+    discipline the resolver's identity gate uses, for the same reason — the
+    brand prefix is shared by every product name and identifies none of them.
+    """
+    text = chunk_text or ""
+    lowered = text.lower()
+    named: List[Dict[str, Any]] = []
+    for match in product_match or []:
+        uin = str(match.get("uin") or "")
+        product_name = (match.get("product_name") or "").strip().lower()
+        if (uin and uin.lower() in lowered) or (product_name and product_name in lowered):
+            named.append(match)
+    return named
+
+
+def _chunk_product_facts(
+    chunks: List[Dict[str, Any]],
+    product_match: List[Dict[str, Any]],
+    fact_cards: Any,
+    document_grounded: List[str],
+    budget: int,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """{chunk_id: fact cards} — the cards each chunk's prompt should carry.
+
+    Analysis is per chunk; grounding was per document, so all chunks carried the
+    same up-to-`budget` cards. Measured with the real chunker on a 5-product
+    range brochure that left 2 of 5 chunk-product pairs without the card for the
+    product the section is about, and a product_fact_finding for those two was
+    therefore impossible.
+
+    A chunk is grounded with the products it names, selected by the same
+    deterministic rule the document uses (mentions, then family coverage), and
+    capped by the same budget.
+
+    A chunk that names NO product inherits the document-level selection. That
+    fallback is the safety property, not a convenience: a claim-bearing section
+    that never repeats the product name ("The product guarantees returns of 12%
+    every year...") would otherwise be grounded with nothing, which is strictly
+    worse than the behaviour this replaces. With it, no chunk is ever grounded
+    with less than it had before.
+    """
+    from app.services.fact_card_service import get_fact_card_service
+
+    lookup = fact_cards if fact_cards is not None else get_fact_card_service()
+    fallback = lookup.lookup_many(document_grounded or [])
+    by_chunk: Dict[str, List[Dict[str, Any]]] = {}
+    for chunk in chunks or []:
+        chunk_id = str(chunk.get("id"))
+        text = chunk.get("text") or ""
+        named = _chunk_product_matches(text, product_match)
+        if not named:
+            by_chunk[chunk_id] = list(fallback)
+            continue
+        uins = _select_grounded_products(named, text, lookup, budget)
+        by_chunk[chunk_id] = lookup.lookup_many(uins)
+    return by_chunk
+
+
+def _chunk_grounding_audit(
+    chunks: List[Dict[str, Any]],
+    product_facts_by_chunk: Dict[str, List[Dict[str, Any]]],
+    product_match: List[Dict[str, Any]],
+    document_grounded: List[str],
+) -> Dict[str, Any]:
+    """Which product was grounded in which chunk, reconstructable from the run.
+
+    `products_grounded` is a set of products; `product_chunks` is the mapping
+    that makes it a set of product/chunk relationships. A product may be
+    grounded in several chunks, and the two counts must not be conflated.
+    """
+    index_by_id = {str(c.get("id")): i for i, c in enumerate(chunks or [])}
+    product_chunks: Dict[str, List[int]] = {}
+    fallback_chunks: List[int] = []
+    fallback = list(document_grounded or [])
+    for chunk_id, cards in (product_facts_by_chunk or {}).items():
+        index = index_by_id.get(chunk_id)
+        if index is None:
+            continue
+        uins = [str(c.get("uin")) for c in cards if c.get("uin")]
+        if uins and uins == fallback and not _chunk_product_matches(
+            next((c.get("text") for c in chunks if str(c.get("id")) == chunk_id), ""),
+            product_match,
+        ):
+            fallback_chunks.append(index)
+        for uin in uins:
+            product_chunks.setdefault(uin, []).append(index)
+    return {
+        "products_detected": len(product_match or []),
+        "products_grounded": sorted(product_chunks),
+        "chunks": len(chunks or []),
+        "product_chunks": {u: sorted(v) for u, v in sorted(product_chunks.items())},
+        "chunks_using_document_fallback": sorted(fallback_chunks),
+        "document_selection": sorted(fallback),
+    }
+
+
 def _grounding_budget_signal(
     product_match: List[Dict[str, Any]],
     budget: int,
@@ -1504,6 +1611,31 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         state, chunks, product_scope
     )
 
+    # Analysis is per chunk, so a product's card belongs in the chunk carrying
+    # its claims. Chunks naming no product inherit the document-level cards, so
+    # no chunk is grounded with less than it was before. Fail-soft: any error
+    # leaves the map empty and every chunk falls back to product_facts.
+    product_facts_by_chunk: Dict[str, List[Dict[str, Any]]] = {}
+    if product_facts:
+        try:
+            from app.services.fact_card_service import get_fact_card_service
+            from app.config import settings as _gs
+
+            document_grounded = [
+                str(c.get("uin")) for c in product_facts if c.get("uin")
+            ]
+            product_facts_by_chunk = _chunk_product_facts(
+                chunks, md.get("product_match") or [], get_fact_card_service(),
+                document_grounded, _gs.product_match_max,
+            )
+            md["product_grounding_chunks"] = _chunk_grounding_audit(
+                chunks, product_facts_by_chunk,
+                md.get("product_match") or [], document_grounded,
+            )
+        except Exception as e:
+            logger.warning("chunk-aware product grounding failed (non-fatal): %s", e)
+            product_facts_by_chunk = {}
+
     return {
         "active_rules": rules_serializable,
         "chunk_rules": chunk_rules,
@@ -1511,6 +1643,10 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         "active_agents": active_agents,
         "metadata": md,
         "product_facts": product_facts,
+        # Per-chunk grounding: analysis is per chunk, so a product's card
+        # belongs in the chunk its claims are in. Chunks naming no product
+        # inherit product_facts, so no chunk is grounded with less than before.
+        "product_facts_by_chunk": product_facts_by_chunk,
         "product_passages": product_passages,
         "messages": [AIMessage(
             content=(
@@ -1640,6 +1776,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
     active_rules = state.get("active_rules") or {}
     rag_degraded = bool((state.get("metadata") or {}).get("rag_degraded"))
     product_facts = state.get("product_facts") or []
+    product_facts_by_chunk = state.get("product_facts_by_chunk") or {}
     product_passages_by_chunk = state.get("product_passages") or {}
     submission_id = state.get("submission_id")
     user_id = state.get("user_id")
@@ -1701,6 +1838,12 @@ async def analysis_node(state: ComplianceState) -> Dict:
             run_fingerprint,
             c.get("text") or "",
             doc_context_by_chunk.get(str(c.get("id"))),
+            # Only when grounding is per chunk; otherwise the key is unchanged.
+            [
+                str(card.get("uin"))
+                for card in product_facts_by_chunk.get(str(c.get("id"))) or []
+                if card.get("uin")
+            ] if product_facts_by_chunk else None,
         )
         for c in chunks_data
     }
@@ -1736,6 +1879,11 @@ async def analysis_node(state: ComplianceState) -> Dict:
         precedents = retrieved.get(str(chunk_id), [])
         rules = _rules_for_chunk(chunk_id)
         passages = product_passages_by_chunk.get(str(chunk_id), [])
+        # This chunk's own fact cards; the document-level set is the fallback
+        # for a chunk that names no product (see _chunk_product_facts). The SAME
+        # list feeds the prompt and the finding parser, because a
+        # product_fact_finding's product_index indexes into it.
+        chunk_facts = product_facts_by_chunk.get(str(chunk_id)) or product_facts
         # No early-return on empty precedents: the prompt still emits rule-grounded
         # (Tier-2) and novel (Tier-3) findings so issues outside the precedent
         # corpus are still caught (2026-05-28 reviewer-voice design + Fix A).
@@ -1777,7 +1925,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 document_context = doc_context_by_chunk.get(str(chunk_id))
                 prompt = context_service.create_precedent_prompts(
                     chunk_text, precedents, rules=rules, document_context=document_context,
-                    product_facts=product_facts, product_passages=passages,
+                    product_facts=chunk_facts, product_passages=passages,
                 )
                 system_prompt = (
                     "You are a senior Bajaj Life Insurance compliance reviewer. Cite "
@@ -1866,7 +2014,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
                     novel_findings=novel, product_fact_findings=product_ff,
                 )
                 for v in map_findings_to_violations(
-                    filtered, precedents, rules=rules, product_facts=product_facts,
+                    filtered, precedents, rules=rules, product_facts=chunk_facts,
                     chunk_id=chunk_id, chunk_index=chunk_index, location=loc,
                 ):
                     ok, errs = validate_agent_output(v)

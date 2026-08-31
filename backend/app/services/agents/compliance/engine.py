@@ -118,6 +118,8 @@ class ComplianceEngine:
         # Products identified but not injected into the prompt (scope still
         # covers them). Never let a grounding cap be a silent loss.
         "product_grounding_budget",
+        # Which product was grounded in which chunk (chunk-aware grounding).
+        "product_grounding_chunks",
         "disclosure_recall_degraded", "rag_rules_per_chunk", "precedents_per_chunk",
         # Chunk-level analysis reuse (analysis_cache.py): how much of this run
         # was carried forward, and the context fingerprint it was graded under —

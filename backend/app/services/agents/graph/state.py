@@ -29,9 +29,15 @@ class ComplianceState(TypedDict):
 
     # Product-doc grounding (2026-06-22). Set by dispatch_node when the
     # submission matched ≥1 approved product (metadata.product_match).
-    # product_facts: deterministic fact cards, per DOCUMENT (same for all chunks).
+    # product_facts: deterministic fact cards for the DOCUMENT — the fallback a
+    #   chunk uses when it names no product of its own.
+    # product_facts_by_chunk: the cards each chunk's prompt actually carries.
+    #   Analysis is per chunk, so a product's guardrails belong in the chunk its
+    #   claims are in; a document-level set left the sections about the
+    #   ungrounded products unable to emit a product finding at all.
     # product_passages: approved brochure passages, per CHUNK.
     product_facts: List[Dict[str, Any]]
+    product_facts_by_chunk: Dict[str, List[Dict[str, Any]]]
     product_passages: Dict[str, List[Dict[str, Any]]]
 
     # Analysis Results - Using operator.add to append violations from parallel agents
