@@ -40,6 +40,14 @@ _VERSION_TOKEN_RE = re.compile(r"^(?:i{1,3}v?|iv|vi{0,3}|vii|v|\d{1,2})$", re.IG
 # the loaded corpus, never hardcoded, so a rebrand re-derives it.
 _BRAND_TOKEN_MIN_SHARE = 0.9
 
+# How far apart a product's identity tokens may sit and still count as NAMING it.
+# Measured on the real corpus and a real 25KB document: the longest legitimate
+# product name needs a span of 7, a genuinely named product spans 2, and the
+# nearest accidental co-occurrence of an unnamed product's tokens spans 18. The
+# band [8, 15] gives 44/44 recall and zero false matches; 18 breaks it. This is
+# the middle of that band, not an edge of it.
+_IDENTITY_WINDOW_TOKENS = 12
+
 
 def _tokens(value: str) -> List[str]:
     return _WORD_RE.findall((value or "").lower())
@@ -76,8 +84,53 @@ def _identity_tokens(name: str, brand: FrozenSet[str]) -> Set[str]:
     }
 
 
-def _document_names(text_tokens: Set[str], name: str, brand: FrozenSet[str]) -> bool:
-    """True when the document carries this product's whole distinctive name.
+def _token_positions(text: str) -> Dict[str, List[int]]:
+    """token -> every position it occupies, built once per document."""
+    positions: Dict[str, List[int]] = {}
+    for index, token in enumerate(_tokens(text)):
+        positions.setdefault(token, []).append(index)
+    return positions
+
+
+def _min_identity_window(
+    positions: Dict[str, List[int]], identity: Set[str]
+) -> Optional[int]:
+    """Smallest token span containing every identity token, None if any is absent.
+
+    Standard minimum-window sweep over the merged occurrence lists of just this
+    product's tokens, so the cost is proportional to how often those few words
+    occur rather than to the document length.
+    """
+    occurrences = sorted(
+        (index, token)
+        for token in identity
+        for index in positions.get(token, ())
+    )
+    if len({token for _, token in occurrences}) != len(identity):
+        return None
+    counts: Dict[str, int] = {}
+    distinct = 0
+    best: Optional[int] = None
+    low = 0
+    for high, (_, token) in enumerate(occurrences):
+        counts[token] = counts.get(token, 0) + 1
+        if counts[token] == 1:
+            distinct += 1
+        while distinct == len(identity):
+            span = occurrences[high][0] - occurrences[low][0]
+            best = span if best is None else min(best, span)
+            leaving = occurrences[low][1]
+            counts[leaving] -= 1
+            if counts[leaving] == 0:
+                distinct -= 1
+            low += 1
+    return best
+
+
+def _document_names(
+    positions: Dict[str, List[int]], name: str, brand: FrozenSet[str]
+) -> bool:
+    """True when the document NAMES this product — locally, not by scattering.
 
     This is the gate `fuzz.partial_ratio` cannot provide. partial_ratio slides
     the shorter string over the longer one, so the bare brand is an EXACT
@@ -85,11 +138,26 @@ def _document_names(text_tokens: Set[str], name: str, brand: FrozenSet[str]) -> 
     match gets. Twelve generic corporate inputs each resolved to three products
     at the production threshold. No metric swap fixes it: token_set_ratio and
     WRatio score "Bajaj Life" and "Smart Secure ROP" identically (100/100 and
-    90/90), and `ratio` inverts on long documents. The missing signal is
-    coverage of the product's own name, so that is what is required here.
+    90/90), and `ratio` inverts on long documents.
+
+    Requiring the identity tokens to be PRESENT was still not enough. Presence is
+    a document-wide test, and a real 25KB document is dense in the words product
+    names are built from — `secure` x52, `term` x51, `smart` x44 in the one that
+    exposed this. Seven products the document never names satisfied it, one of
+    them a three-variant collision UIN, so a fabricated match also fabricated an
+    ambiguity and failed the run closed.
+
+    So the evidence must be LOCAL: every identity token inside one window. On
+    that document a genuinely named product spans 2 tokens and the nearest
+    accidental co-occurrence spans 18, while the longest legitimate name in the
+    corpus needs 7 — a real gap, not a tuned edge. The window band [8, 15] holds
+    44/44 recall with zero false matches and breaks at 18; this sits mid-band.
     """
     identity = _identity_tokens(name, brand)
-    return bool(identity) and identity <= text_tokens
+    if not identity:
+        return False
+    span = _min_identity_window(positions, identity)
+    return span is not None and span <= _IDENTITY_WINDOW_TOKENS
 
 
 def unresolved_product_signals(
@@ -200,11 +268,11 @@ def resolve_products(
     # fires on noise like "months".
     lowered = text.lower()
     # A fuzzy score alone cannot establish product identity here (see
-    # _document_names): every name shares the brand prefix, so the document must
-    # be shown to carry the product's own distinguishing name before its score
-    # is allowed to mean anything.
+    # _document_names): every name shares the brand prefix, and a long document
+    # scatters the words names are built from, so the document must be shown to
+    # name the product LOCALLY before its score is allowed to mean anything.
     brand = _brand_tokens([p.get("product_name") or "" for p in products])
-    text_tokens = set(_tokens(text))
+    text_positions = _token_positions(text)
     best_fuzzy: Dict[str, Dict[str, Any]] = {}
 
     def _consider(uin: str, display_name: str, confidence: float, method: str) -> None:
@@ -217,7 +285,7 @@ def resolve_products(
         if p["uin"] in seen_uins:
             continue
         name = (p.get("product_name") or "").strip()
-        if name and _document_names(text_tokens, name, brand):
+        if name and _document_names(text_positions, name, brand):
             score = fuzz.partial_ratio(name.lower(), lowered)
             if score >= min_fuzzy_score:
                 _consider(p["uin"], name, round(score / 100.0, 3), "name_fuzzy")
@@ -229,7 +297,7 @@ def resolve_products(
                 if re.search(rf"\b{re.escape(alias)}\b", text, re.IGNORECASE):
                     _consider(p["uin"], name or alias, 0.9, "alias_match")
                 continue
-            if not _document_names(text_tokens, alias, brand):
+            if not _document_names(text_positions, alias, brand):
                 continue
             score = fuzz.partial_ratio(alias.lower(), lowered)
             if score >= min_fuzzy_score:
