@@ -91,6 +91,24 @@ def _build_critic_prompt(
                 f"    CHECK: does the precedent genuinely apply to current_text "
                 f"(same issue, present verbatim in the document)?"
             )
+        elif grounding == "product_fact":
+            # The most deterministic tier: one approved fact card's guardrail for
+            # ONE product. Rendering it under the novel branch told the critic the
+            # finding had no evidence and was the model's own judgment, so it
+            # could be dropped for lacking evidence it was never shown. The
+            # guardrail travels with the finding on violation_metadata — show it,
+            # and keep the check on the INTERPRETATION: a guardrail existing is
+            # not proof that this text breaches it.
+            evidence = (
+                f"\n    cited product fact card: {meta.get('product_name') or '?'} "
+                f"(UIN {meta.get('product_uin') or '?'})\n"
+                f"    guardrail [{meta.get('finding_kind') or 'unspecified'}]: "
+                f"\"{(meta.get('guardrail_text') or '').strip()[:200]}\"\n"
+                f"    CHECK: does current_text actually breach THIS product's "
+                f"guardrail, with the breach visible verbatim in the document? "
+                f"The guardrail is authoritative for this product — the question "
+                f"is whether it applies to this text."
+            )
         else:  # novel
             evidence = (
                 "\n    no rule / no precedent (model's own judgment)\n"
@@ -101,7 +119,9 @@ def _build_critic_prompt(
     viol_block = "\n".join(lines)
 
     return f"""You are an independent compliance critic. Another LLM produced the
-violation list below across three grounding tiers (rule / precedent / novel).
+violation list below across four evidence tiers: rule-backed, precedent-backed,
+product-fact-backed (an approved product fact card's guardrail), and novel
+model-derived.
 Verify each one against the actual document text and its cited evidence.
 Be skeptical: stylistic preferences and vague claims are NOT compliance violations.
 
