@@ -5,6 +5,7 @@ state.retrieved_examples for the precedent analysis path.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -162,8 +163,12 @@ class PrecedentRetriever:
             )
             return {str(c.get("id")): [] for c in chunks}
 
-        out: Dict[str, List[Dict[str, Any]]] = {}
-        for chunk, qvec in zip(chunks, vectors):
+        # Parallel hybrid_search across chunks (mirrors RulesRetriever's
+        # per-(chunk, category) gather — each chunk's query is independent,
+        # so N sequential store round-trips would just be latency for no
+        # benefit). Each task resolves to (cid, precedents) with a per-chunk
+        # RAGDegraded->[] fallback, never propagating, so gather can't abort.
+        async def one_query(chunk: Dict[str, Any], qvec: List[float]) -> tuple:
             cid = str(chunk.get("id"))
             try:
                 # Label the query so the retrieval trace can attribute each
@@ -193,10 +198,17 @@ class PrecedentRetriever:
                         if p.get("document_id") is None
                         or str(p.get("document_id")) != str(exclude_document_id)
                     ]
-                out[cid] = precedents
+                return cid, precedents
             except RAGDegraded as e:
                 logger.warning(f"precedent retrieval degraded for chunk {cid}: {e}")
-                out[cid] = []
+                return cid, []
+
+        tasks = [one_query(chunk, qvec) for chunk, qvec in zip(chunks, vectors)]
+        results = await asyncio.gather(*tasks)
+
+        out: Dict[str, List[Dict[str, Any]]] = {}
+        for cid, precedents in results:
+            out[cid] = precedents
         return out
 
 

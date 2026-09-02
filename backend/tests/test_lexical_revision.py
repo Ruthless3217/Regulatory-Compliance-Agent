@@ -44,12 +44,15 @@ def test_saving_a_state_writes_it_to_both_the_revision_and_the_submission():
     db.add(sub)
 
     state = {"root": {"children": []}}
-    _save(db, sub, user, content="edited", source="manual_edit",
-          lexical_state=state, lexical_html="<p>edited</p>")
+    serialized = _save(db, sub, user, content="edited", source="manual_edit",
+                        lexical_state=state, lexical_html="<p>edited</p>")
 
     revision = db.rows_for(SubmissionRevision)[0]
     assert revision.lexical_state == state
     assert revision.lexical_html == "<p>edited</p>"
+    # _serialize_revision must surface both fields for the frontend editor.
+    assert serialized["lexical_state"] == state
+    assert serialized["lexical_html"] == "<p>edited</p>"
     # The submission's working copy moves with the revision, or the next open
     # would rehydrate the editor from a stale document.
     assert sub.lexical_state == state

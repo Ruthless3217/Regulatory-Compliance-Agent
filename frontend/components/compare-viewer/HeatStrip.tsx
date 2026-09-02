@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { useViewer, deriveViewerChanges, type Side } from "./ViewerContext";
+import { useViewer, type Side } from "./ViewerContext";
 
 const barColor = (kind: string) =>
   kind === "removed"
@@ -19,7 +19,6 @@ const barColor = (kind: string) =>
  */
 export function HeatStrip() {
   const {
-    comparison,
     effectiveMode,
     showMoves,
     selectedChangeId,
@@ -27,12 +26,8 @@ export function HeatStrip() {
     scroll,
     singleSide,
     layoutMode,
+    viewerChanges: changes,
   } = useViewer();
-
-  const changes = React.useMemo(
-    () => deriveViewerChanges(comparison, effectiveMode, showMoves),
-    [comparison, effectiveMode, showMoves]
-  );
 
   const [viewport, setViewport] = React.useState<{ fraction: number; side: Side }>({
     fraction: 0,

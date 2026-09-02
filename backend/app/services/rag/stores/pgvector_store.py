@@ -534,11 +534,6 @@ def _assert_embedding_compat(db: Session, index: IndexName) -> None:
     _embedding_checked.add(index)
 
 
-def reset_embedding_check_cache() -> None:
-    """Test/ops helper — clears the per-process validation cache."""
-    _embedding_checked.clear()
-
-
 # =========================================================== PgVectorStore
 
 class PgVectorStore:

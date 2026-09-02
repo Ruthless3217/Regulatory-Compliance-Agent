@@ -352,7 +352,7 @@ def parse_brochure(path: str) -> ParsedBrochure:
 
         def flush() -> None:
             body = "\n".join(b for b in body_buf if b.strip()).strip()
-            if not body or not heading_stack:
+            if not body:
                 body_buf.clear()
                 return
             path_titles = [t for _, t in heading_stack]

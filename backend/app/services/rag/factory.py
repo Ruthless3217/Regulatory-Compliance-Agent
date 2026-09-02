@@ -41,9 +41,3 @@ def get_vector_store() -> VectorStore:
         logger.info("RAG vector store: PgVectorStore")
         return PgVectorStore()
     raise RAGDegraded(f"Unknown RAG_VECTOR_BACKEND: {backend}")
-
-
-def reset_singletons() -> None:
-    """Test helper — clears cached instances so env-var changes take effect."""
-    get_embedder.cache_clear()
-    get_vector_store.cache_clear()

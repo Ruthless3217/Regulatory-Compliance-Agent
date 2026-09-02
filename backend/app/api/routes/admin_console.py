@@ -24,13 +24,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth.dependencies import require
-from app.auth.passwords import hash_password
+from app.auth.passwords import hash_password, MIN_PASSWORD_LEN
 from app.auth.sessions import revoke_all_for_user
 from app.services.observability import audit
 from app.models.user import User
@@ -74,7 +74,7 @@ def _since(days: int) -> datetime:
 
 class CreateUserIn(BaseModel):
     username: str
-    password: str
+    password: str = Field(min_length=MIN_PASSWORD_LEN)
     registered_ip: Optional[str] = None
     role: str = "user"
 
@@ -84,7 +84,7 @@ class UpdateUserIn(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
     reset_password: Optional[bool] = None
-    new_password: Optional[str] = None
+    new_password: Optional[str] = Field(default=None, min_length=MIN_PASSWORD_LEN)
 
 
 # ===========================================================================

@@ -137,8 +137,6 @@ async def create_submission(
     if will_render:
         background_tasks.add_task(run_render, str(submission.id))
 
-    import asyncio
-    from app.services.observability import audit
     asyncio.create_task(audit.record("submission_created", actor=user, target_type="submission", target_id=str(submission.id), scope_submission_id=submission.id, metadata={"title": submission.title}))
 
     return {
@@ -347,6 +345,8 @@ def _serialize_revision(r: SubmissionRevision) -> dict:
         "applied_violation_ids": [str(v) for v in (r.applied_violation_ids or [])],
         "created_by": str(r.created_by) if r.created_by else None,
         "created_at": r.created_at.isoformat() if r.created_at else None,
+        "lexical_state": r.lexical_state,
+        "lexical_html": r.lexical_html,
     }
 
 
@@ -456,10 +456,12 @@ async def get_revision(
 ):
     """Fetch one revision by its 1-based number — lets the UI address a past
     version directly (e.g. to preview it before restoring)."""
+    submission = get_visible_submission(db, submission_id, user)
+
     revision = (
         db.query(SubmissionRevision)
         .filter(
-            SubmissionRevision.submission_id == submission_id,
+            SubmissionRevision.submission_id == submission.id,
             SubmissionRevision.revision_number == revision_number,
         )
         .first()
@@ -549,10 +551,12 @@ async def update_comment(
     db: Session = Depends(get_db),
 ):
     """Update a comment's body and/or resolved flag."""
+    submission = get_visible_submission(db, submission_id, user)
+
     comment = (
         db.query(DocumentComment)
         .filter(
-            DocumentComment.submission_id == submission_id,
+            DocumentComment.submission_id == submission.id,
             DocumentComment.id == comment_id,
         )
         .first()
@@ -587,10 +591,12 @@ async def delete_comment(
     db: Session = Depends(get_db),
 ):
     """Remove a comment (idempotent)."""
+    submission = get_visible_submission(db, submission_id, user)
+
     comment = (
         db.query(DocumentComment)
         .filter(
-            DocumentComment.submission_id == submission_id,
+            DocumentComment.submission_id == submission.id,
             DocumentComment.id == comment_id,
         )
         .first()
@@ -993,8 +999,6 @@ async def delete_submission(
     db.delete(submission)
     db.commit()
 
-    import asyncio
-    from app.services.observability import audit
     asyncio.create_task(audit.record("submission_deleted", actor=user, target_type="submission", target_id=submission_id, scope_submission_id=submission_id))
 
     return {"message": "Submission deleted", "id": submission_id}

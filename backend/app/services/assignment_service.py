@@ -19,6 +19,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app.models.review_assignment import ACTIVE_STATUSES, ReviewAssignment
+from app.models.user import User
 from app.services.observability import audit
 
 # `closed` is reachable from every ACTIVE state, not just `awaiting_signoff`.
@@ -81,6 +82,16 @@ def active_for_submission(db, submission_id):
     return None
 
 
+def _require_valid_assignee(db, assignee_id):
+    """assignee_id lands in a NOT NULL, ondelete=RESTRICT foreign key
+    (review_assignment.py). A bad id previously reached db.commit() unguarded
+    and surfaced as a raw IntegrityError (500) instead of a clean 400 — check
+    it here, once, so both assign() and reassign() get the same guard."""
+    user = db.query(User).filter(User.id == assignee_id).first()
+    if user is None or not user.is_active or user.role not in ("user", "admin"):
+        raise ValueError(f"{assignee_id!r} is not an assignable reviewer.")
+
+
 def _require_assignee(assignment, actor):
     if str(getattr(actor, "id", None)) != str(assignment.assignee_id):
         raise NotAssignee("This assignment belongs to someone else.")
@@ -107,6 +118,7 @@ def assign(db, *, submission_id, assignee_id, actor, priority="normal",
            due_at=None, note=None):
     if priority not in VALID_PRIORITIES:
         raise ValueError(f"Unknown priority {priority!r}.")
+    _require_valid_assignee(db, assignee_id)
     if active_for_submission(db, submission_id) is not None:
         raise ActiveAssignmentExists(
             "This document is already assigned. Reassign it instead."
@@ -141,6 +153,7 @@ def reassign(db, *, assignment, new_assignee_id, actor, note=None):
     Order matters: the old row is superseded BEFORE the new one is added, so
     the partial unique index never observes two active rows for the submission.
     """
+    _require_valid_assignee(db, new_assignee_id)
     previous_assignee = assignment.assignee_id
     _transition(assignment, "superseded")
     assignment.outcome = "superseded"

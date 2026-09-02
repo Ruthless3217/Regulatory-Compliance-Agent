@@ -70,20 +70,6 @@ def project_2d_with_method(
     return coords.tolist(), "pca"
 
 
-def project_2d(vectors: List[List[float]], method: str = "umap") -> List[List[float]]:
-    """Project N D-dim vectors to N 2-D points. PCA fallback if UMAP missing or n<4.
-
-    Existing callers that only need the coordinates should use this function.
-    Use :func:`project_2d_with_method` when the *actual* method used is needed.
-    """
-    points, _ = project_2d_with_method(vectors, method=method)
-    return points
-
-
-def _count(db, table: str) -> int:
-    return int(db.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar() or 0)
-
-
 def compute_projection(method: str = "umap", refresh: bool = False) -> Dict[str, Any]:
     cap = settings.viz_points_per_index
     db = SessionLocal()

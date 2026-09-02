@@ -52,7 +52,6 @@ export default function NewAnalysisPage() {
   const [dragOver, setDragOver] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [productLine, setProductLine] = React.useState("");
-  const [scope, setScope] = React.useState<string[]>(["irdai", "brand", "sebi"]);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Real per-category counts. `limit: 1` because only `total` is wanted, and
@@ -66,9 +65,6 @@ export default function NewAnalysisPage() {
       // No count beats a made-up count — the row just renders without one.
       .catch(() => setRuleCounts(null));
   }, []);
-
-  const toggleScope = (k: string) =>
-    setScope((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
   const loadSample = () => {
     setTitle("Sample ULIP brochure draft");
@@ -137,7 +133,7 @@ export default function NewAnalysisPage() {
     <div className="mx-auto max-w-6xl px-8 py-8">
       <PageHeader
         title="New analysis"
-        description="Paste marketing content, choose the rule scope, and the compliance pipeline returns highlighted violations and a 0–100 score in under a minute for typical copy."
+        description="Paste marketing content, choose its product applicability, and the compliance pipeline returns highlighted violations and a 0–100 score in under a minute for typical copy."
         meta={
           <>
             <PageHeaderMeta label="Pipeline" value="LangGraph · 5 nodes" />
@@ -203,7 +199,7 @@ export default function NewAnalysisPage() {
                 <span>Markdown allowed · Plain text preferred</span>
                 <span className="font-mono">{text.length.toLocaleString()} chars</span>
               </div>
-              <ScopeChips scope={scope} toggle={toggleScope} />
+              <ScopeBadges />
               <div className="mt-6 flex items-center gap-3">
                 <Button onClick={() => submit("text")} disabled={submitting} size="hero">
                   {submitting ? "Submitting…" : "Run compliance pass →"}
@@ -265,7 +261,7 @@ export default function NewAnalysisPage() {
               <p className="mt-2 text-xs text-muted-foreground">
                 For HTML files, meta-tags (title, description, og:*) are also analyzed.
               </p>
-              <ScopeChips scope={scope} toggle={toggleScope} />
+              <ScopeBadges />
               <div className="mt-6 flex items-center gap-3">
                 <Button onClick={() => submit("file")} disabled={submitting || !file} size="hero">
                   {submitting ? "Uploading…" : "Run compliance pass →"}
@@ -322,32 +318,25 @@ function RuleCount({ n }: { n?: number }) {
   );
 }
 
-function ScopeChips({ scope, toggle }: { scope: string[]; toggle: (k: string) => void }) {
+/** Static, not a control — v1 always evaluates all active rules regardless of
+ * category, so these badges say what runs rather than implying a choice that
+ * has no effect on the request. */
+function ScopeBadges() {
   return (
     <div className="mt-6">
-      <div className="micro-label mb-2">Run with</div>
+      <div className="micro-label mb-2">Runs with</div>
       <div className="flex flex-wrap gap-1.5">
-        {CATEGORIES.map((c) => {
-          const active = scope.includes(c.key);
-          return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => toggle(c.key)}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-sm border px-3 py-1.5 text-xs transition-colors",
-                active
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground"
-              )}
-            >
-              {c.label}
-            </button>
-          );
-        })}
+        {CATEGORIES.map((c) => (
+          <span
+            key={c.key}
+            className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground"
+          >
+            {c.label}
+          </span>
+        ))}
       </div>
       <p className="mt-2 text-[10px] text-muted-foreground">
-        Note: scope is informational in v1 — the backend evaluates all active rules.
+        Every active rule in these categories is evaluated — this isn&rsquo;t a per-run selector.
       </p>
     </div>
   );

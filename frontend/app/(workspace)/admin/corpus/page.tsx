@@ -679,7 +679,7 @@ export default function AdminCorpusPage() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[264px_1fr] xl:grid-cols-[264px_1fr_372px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[264px_1fr] grid-rows-[minmax(0,1fr)_auto] overflow-y-auto xl:grid-cols-[264px_1fr_372px] xl:grid-rows-1 xl:overflow-hidden">
         {/* Layers */}
         <div className="flex min-h-0 flex-col border-r border-border bg-background">
           <RailHead
@@ -737,11 +737,11 @@ export default function AdminCorpusPage() {
           )}
         </div>
 
-        {/* Layer operations. Below xl there is no room for a third column and
-            the operations would squeeze the documents they act on; the layer
-            still toggles from its card, and the destructive ones wait for a
-            wider window rather than being crammed. */}
-        <div className="hidden min-h-0 flex-col border-l border-border bg-background xl:flex">
+        {/* Layer operations. Below xl there is no room for a third column
+            beside the documents pane, so this renders as its own row
+            underneath it instead — still reachable, just stacked rather
+            than side-by-side. */}
+        <div className="col-span-2 row-start-2 flex min-h-0 flex-col border-t border-border bg-background xl:col-span-1 xl:col-start-3 xl:row-start-1 xl:border-l xl:border-t-0">
           {selected ? (
             <LayerOperations
               layer={selected}

@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.auth.dependencies import require
 from app.config import settings
 from app.database import get_db
 from app.services.rag.errors import RAGDegraded, RAGEmbedFailed
@@ -24,9 +25,25 @@ router = APIRouter(tags=["RAG"])
 
 
 @router.get("/health/rag")
-async def health_rag(db: Session = Depends(get_db)):
-    embedder = get_embedder()
-    store = get_vector_store()
+async def health_rag(
+    db: Session = Depends(get_db), user: dict = Depends(require("knowledgebase:view"))
+):
+    try:
+        embedder = get_embedder()
+        store = get_vector_store()
+    except RAGDegraded as e:
+        # A disabled/unknown provider is exactly what this probe exists to
+        # report; it used to escape as a 500 before the payload was built.
+        return {
+            "backend": settings.rag_vector_backend,
+            "embedder": settings.rag_embedding_provider,
+            "model": settings.rag_embedding_model,
+            "dim": settings.rag_embedding_dim,
+            "embedder_ok": False,
+            "embedder_error": str(e),
+            "vector_store_ok": False,
+            "last_indexed_at": {},
+        }
 
     # Embedder probe — try a 1-token embed.
     embed_ok = False
@@ -77,7 +94,9 @@ class DebugSearchRequest(BaseModel):
 
 
 @router.post("/debug/rag/search")
-async def debug_rag_search(req: DebugSearchRequest):
+async def debug_rag_search(
+    req: DebugSearchRequest, user: dict = Depends(require("knowledgebase:view"))
+):
     embedder = get_embedder()
     store = get_vector_store()
     try:

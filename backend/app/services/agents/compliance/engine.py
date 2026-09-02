@@ -112,7 +112,7 @@ class ComplianceEngine:
         "product_resolution_failed",
         "scope_metadata_missing",
         "declared_product_line",
-        "disclosure_recall_degraded", "rag_rules_per_chunk", "precedents_per_chunk",
+        "disclosure_recall_degraded", "required_disclosures", "rag_rules_per_chunk", "precedents_per_chunk",
         # Chunk-level analysis reuse (analysis_cache.py): how much of this run
         # was carried forward, and the context fingerprint it was graded under —
         # the one field that says WHY a later run did or didn't reuse it. The

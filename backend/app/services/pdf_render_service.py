@@ -4,7 +4,7 @@ Compare view. No LLM calls."""
 import os
 import logging
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from app.services.comparison_service import _detect_running_lines, _PAGE_NUMBER
 
@@ -80,15 +80,21 @@ def render_pages(pdf_path: str, out_dir: str, cap: int) -> Tuple[List[PageMeta],
         pdf.close()
 
 
-def positioned_words(pdf_path: str) -> List[PositionedWord]:
+def positioned_words(pdf_path: str, cap: Optional[int] = None) -> List[PositionedWord]:
     """Words in reading order with bboxes (PDF points), running headers/footers
-    and page-number lines removed (same policy as the text extractor)."""
+    and page-number lines removed (same policy as the text extractor).
+
+    ``cap``, when given, limits extraction to the first ``cap`` pages — mirrors
+    ``render_pages``' min(total, cap) so a capped render never carries a change
+    reference to a page beyond what was rendered. Default is unbounded (needed by
+    the full-document callers: submission_render_service, violation_anchor_service)."""
     import pdfplumber
 
     page_lines: List[List[str]] = []
     raw: List[List[dict]] = []
     with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
+        pages = pdf.pages if cap is None else pdf.pages[:cap]
+        for page in pages:
             words = page.extract_words() or []
             raw.append(words)
             # group words into visual lines (by rounded top) to reuse running-line detection

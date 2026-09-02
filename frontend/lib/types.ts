@@ -179,6 +179,9 @@ export interface SubmissionRevision {
   applied_violation_ids: string[];
   created_by: string | null;
   created_at: string | null;
+  /** Rich-editor snapshot of this revision; null for plain-text submissions or pre-editor revisions. */
+  lexical_state?: Record<string, unknown> | null;
+  lexical_html?: string | null;
 }
 
 export type ActionType =
@@ -450,19 +453,6 @@ export interface Annotation {
 export interface SearchHit {
   page: number;
   bbox: [number, number, number, number];
-}
-
-/**
- * A single entry in the Compare "Changes" sidebar, derived from one non-equal
- * DiffBlock. `id` matches the block's index in the diff so the viewer can scroll
- * to it. For "modified", removedText/addedText hold only the changed words.
- */
-export interface ChangeItem {
-  id: string;
-  blockIndex: number;
-  kind: ChangeKind;
-  removedText?: string;
-  addedText?: string;
 }
 
 export interface DocumentComparison {

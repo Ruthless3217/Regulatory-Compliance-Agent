@@ -52,9 +52,15 @@ type SeedFailure = { status: string; reason: string | null };
 function SeedFromImport({
   submissionId,
   onFailure,
+  onSettled,
 }: {
   submissionId: string;
   onFailure: (failure: SeedFailure) => void;
+  /** Called once the import has landed, one way or another — success,
+   * "nothing to import", or a broken conversion. Lets the caller tell a real
+   * empty document (the reviewer cleared it) from this async gap, where the
+   * editor is transiently empty only because nothing has arrived yet. */
+  onSettled: () => void;
 }) {
   const [editor] = useLexicalComposerContext();
   const seeded = React.useRef(false);
@@ -75,9 +81,14 @@ function SeedFromImport({
           reason?: string | null;
         };
         if (!html) {
+          onSettled();
           onFailure({ status: status ?? "failed", reason: reason ?? null });
           return;
         }
+        // Settle before the insert: it synchronously fires the editor's
+        // onChange (see OnChangePlugin below), and that emission must already
+        // read as trustworthy, not as the pre-arrival placeholder.
+        onSettled();
         editor.update(() => {
           const dom = new DOMParser().parseFromString(html, "text/html");
           const nodes = $generateNodesFromDOM(editor, dom);
@@ -86,10 +97,13 @@ function SeedFromImport({
         });
       })
       .catch((e: unknown) => {
-        if (!cancelled) onFailure({ status: "failed", reason: (e as Error).message });
+        if (!cancelled) {
+          onSettled();
+          onFailure({ status: "failed", reason: (e as Error).message });
+        }
       });
     return () => { cancelled = true; };
-  }, [editor, submissionId, onFailure]);
+  }, [editor, submissionId, onFailure, onSettled]);
   return null;
 }
 
@@ -206,6 +220,18 @@ export function LexicalDocument({
   // document. A ref, not state: it changes on every keystroke and nothing
   // renders from it.
   const sectionsRef = React.useRef<NodeText[] | null>(null);
+  // Whether THIS mount's editor has settled on its real content. `initialState`
+  // means it already has — the composer applies it synchronously before any
+  // listener can fire. With no saved state, SeedFromImport is what settles it
+  // (onSettled below); until then, an onChange emission is the placeholder
+  // empty document every fresh editor starts from, not a reviewer's edit, and
+  // must not reach the parent — a remount (switching View/Split/Edit) is
+  // exactly this provider-outlives-the-editor case, and the parent's saved
+  // copy is real content the placeholder must never be allowed to overwrite.
+  const seededRef = React.useRef(!!initialState);
+  const handleSettled = React.useCallback(() => {
+    seededRef.current = true;
+  }, []);
   const config = {
     namespace: "compliance-document",
     editable: !readOnly,
@@ -224,7 +250,7 @@ export function LexicalDocument({
           document scrolls. Hidden when read-only: a historical run is a record,
           not a draft, and offering formatting buttons that do nothing is worse
           than offering none. */}
-      {!readOnly && <EditorToolbar />}
+      {!readOnly && <EditorToolbar submissionId={submissionId} />}
       {/* A page, not a text box. The app canvas is grey (globals.css sets
           --surface on the body) and an editor that inherits it reads as a flat
           panel; every document editor floats a white sheet on that canvas
@@ -322,6 +348,11 @@ export function LexicalDocument({
           <OnChangePlugin
             ignoreSelectionChange
             onChange={(editorState, editor) => {
+              // Before settling, this mount's content is the placeholder the
+              // editor starts every fresh instance with, not the reviewer's
+              // doing — reporting it would read as a deliberate clear to
+              // whoever consumes `onChange` (see `seededRef` above).
+              if (!seededRef.current) return;
               // Serialize both views in one pass, from the same state. Doing
               // them separately would let export render a document the editor
               // never displayed.
@@ -339,7 +370,11 @@ export function LexicalDocument({
           />
         )}
         {!initialState && (
-          <SeedFromImport submissionId={submissionId} onFailure={setSeedFailure} />
+          <SeedFromImport
+            submissionId={submissionId}
+            onFailure={setSeedFailure}
+            onSettled={handleSettled}
+          />
         )}
       </div>
     </LexicalComposer>

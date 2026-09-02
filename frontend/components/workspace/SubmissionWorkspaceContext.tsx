@@ -78,6 +78,9 @@ interface Ctx {
   // and a mismatch would show the reviewer one document and export another.
   lexicalDoc: LexicalDoc | null;
   setLexicalDoc: (d: LexicalDoc) => void;
+  /** Adopt a rich-editor snapshot that is already persisted (a restore) as
+   * both the live and the saved document — no POST. */
+  adoptServerLexical: (d: LexicalDoc) => void;
   /** Editor content differs from the last persisted revision. */
   lexicalDirty: boolean;
   /** Persist the editor's current content as a revision. Autosave calls this
@@ -141,25 +144,30 @@ export function SubmissionWorkspaceProvider({
   const lexicalDocRef = React.useRef<LexicalDoc | null>(null);
 
   const setLexicalDoc = React.useCallback((d: LexicalDoc) => {
-    // A freshly-mounted editor emits an EMPTY document before its content
-    // arrives, and this provider outlives the editor — switching View/Split/Edit
-    // re-parents it, so React remounts it and that empty emission lands here
-    // with `savedLexicalRef` already holding the real document. Treating it as
-    // an edit marks the submission dirty and lets the next autosave write a
-    // blank revision over the reviewer's working copy.
-    //
-    // So an empty document is only ever accepted as the truth when what we hold
-    // is also empty. Clearing a document deliberately still works — it goes
-    // through the editor with content already loaded, so `text` is empty only
-    // after the reviewer has actually emptied it, which the seeded ref reflects.
-    if (!d.text.trim() && (savedLexicalRef.current ?? "").trim()) {
-      return;
-    }
+    // The editor (LexicalDocument) is the one that knows whether a given
+    // emission is trustworthy — it withholds onChange entirely until this
+    // mount has settled on its real content (initial state or the import),
+    // so by the time an emission reaches here an empty `d.text` is always a
+    // genuine, deliberate clear, never the placeholder a fresh mount starts
+    // from. See `seededRef` in LexicalDocument.tsx.
     lexicalDocRef.current = d;
     setLexicalDocState(d);
     setLexicalDirty(savedLexicalRef.current !== null && savedLexicalRef.current !== d.html);
     // First emission after load is the seeded document, not an edit.
     if (savedLexicalRef.current === null) savedLexicalRef.current = d.html;
+  }, []);
+
+  /** Adopt a revision's rich-editor snapshot as both the live and the saved
+   * document, without posting anything — the caller (restoring a prior
+   * revision) already persisted it. Mirrors `adoptServerText` for the
+   * plain-text side; without this, a restore on the rich-editor path had no
+   * way to tell the mode bar its own write was now the saved baseline, so the
+   * next autosave would immediately re-post the exact content it just wrote. */
+  const adoptServerLexical = React.useCallback((d: LexicalDoc) => {
+    lexicalDocRef.current = d;
+    setLexicalDocState(d);
+    savedLexicalRef.current = d.html;
+    setLexicalDirty(false);
   }, []);
   const [violations, setViolations] = React.useState<Violation[]>(initialViolations);
   const [selectedViolationId, setSelectedViolationId] = React.useState<string | null>(null);
@@ -307,11 +315,8 @@ export function SubmissionWorkspaceProvider({
   const saveLexical = React.useCallback(async () => {
     const doc = lexicalDocRef.current;
     if (!doc) return false;
-    // Second line of the same defence as setLexicalDoc: whatever route got us
-    // here — autosave, the toolbar, Apply fix — an empty document never
-    // overwrites a non-empty saved one. The cost of being wrong is the
-    // reviewer's corrected wording.
-    if (!doc.text.trim() && (savedLexicalRef.current ?? "").trim()) return false;
+    // Nothing to persist if the editor's content already matches what the
+    // server has (including a genuine empty document — see setLexicalDoc).
     if (savedLexicalRef.current === doc.html) return true;
     const ok = await persist(doc.text, "manual_edit");
     if (ok) {
@@ -411,6 +416,7 @@ export function SubmissionWorkspaceProvider({
       findingsStale,
       lexicalDoc,
       setLexicalDoc,
+      adoptServerLexical,
       lexicalDirty,
       saveLexical,
       registerEditorApply,
@@ -422,6 +428,7 @@ export function SubmissionWorkspaceProvider({
       findingsStale,
       lexicalDoc,
       setLexicalDoc,
+      adoptServerLexical,
       lexicalDirty,
       saveLexical,
       submission,

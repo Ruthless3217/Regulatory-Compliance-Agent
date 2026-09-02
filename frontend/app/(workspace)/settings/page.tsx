@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { DensityToggle } from "@/components/workspace/DensityToggle";
 import { PageHeader } from "@/components/ui/page-header";
 import { health, healthModels, healthRag, listRules } from "@/lib/api";
+import { ruleCategoryLabel as categoryLabel } from "@/lib/format";
 import type { ModelsHealth, RagHealth } from "@/lib/types";
 
 function Section({
@@ -53,22 +54,6 @@ const GRADE_BANDS = [
   { grade: "D", range: "60–69", tone: "text-sev-high" },
   { grade: "F", range: "0–59", tone: "text-sev-critical" },
 ];
-
-// Display casing only — same table as the rules page. Buckets are derived from
-// the categories the data actually contains, NOT from a fixed list: the four
-// hardcoded keys here silently hid every `legal`, `financial` and `seo` rule,
-// so this panel under-reported the corpus it claims to describe. "irdai" and
-// "regulatory" are DIFFERENT categories and stay separate rows.
-const CATEGORY_LABELS: Record<string, string> = {
-  irdai: "IRDAI",
-  sebi: "SEBI",
-  regulatory: "Regulatory (other)",
-};
-
-function categoryLabel(key: string): string {
-  if (!key) return "Uncategorised";
-  return CATEGORY_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
-}
 
 export default function SettingsPage() {
   const [pinging, setPinging] = React.useState(false);

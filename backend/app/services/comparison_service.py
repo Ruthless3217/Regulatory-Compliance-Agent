@@ -35,53 +35,6 @@ def split_text_paragraphs(text: str) -> List[str]:
     return [b.strip() for b in blocks if b.strip()]
 
 
-def extract_docx_paragraphs(file_path: str) -> List[str]:
-    """Extract paragraph text from a DOCX file, one entry per Word paragraph."""
-    from docx import Document
-    doc = Document(file_path)
-    paragraphs: List[str] = []
-    for para in doc.paragraphs:
-        text = para.text.strip()
-        if not text:
-            continue
-        style = getattr(para.style, "name", "") or ""
-        if style.startswith("Heading") or style == "Title":
-            paragraphs.append(f"## {text}")
-        else:
-            paragraphs.append(text)
-    return paragraphs
-
-
-def extract_pdf_paragraphs(file_path: str) -> List[str]:
-    """Extract paragraph text from a PDF: page text joined, then split on blank lines."""
-    import pdfplumber
-    pages: List[str] = []
-    with pdfplumber.open(file_path) as pdf:
-        for page in pdf.pages:
-            page_text = page.extract_text()
-            if page_text:
-                pages.append(page_text)
-    return split_text_paragraphs("\n\n".join(pages))
-
-
-def extract_paragraphs(
-    file_path: Optional[str], content_type: str, pasted_text: Optional[str] = None
-) -> List[str]:
-    """Dispatch extraction by content_type: docx/pdf read from file_path, else split pasted_text."""
-    if content_type == "docx":
-        if not file_path:
-            raise ValueError("docx content_type requires file_path")
-        return extract_docx_paragraphs(file_path)
-    if content_type == "pdf":
-        if not file_path:
-            raise ValueError("pdf content_type requires file_path")
-        return extract_pdf_paragraphs(file_path)
-    if file_path:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-            return split_text_paragraphs(f.read())
-    return split_text_paragraphs(pasted_text or "")
-
-
 # ---------------------------------------------------------------------------
 # Cross-format normalization: sentence segmentation, header/footer stripping,
 # placeholder-aware matching keys.
@@ -117,17 +70,6 @@ def split_sentences(text: str) -> List[str]:
     if not text:
         return []
     return [s.strip() for s in _SENTENCE_BOUNDARY.split(text) if s.strip()]
-
-
-def normalize_for_match(text: str) -> str:
-    """Normalized alignment key: drop heading markers, collapse whitespace, lowercase.
-
-    Only used to decide whether two segments are 'the same'; the original text is
-    always what gets displayed.
-    """
-    t = _HEADING_MARKER.sub("", (text or "").strip())
-    t = re.sub(r"\s+", " ", t)
-    return t.strip().lower()
 
 
 def _detect_running_lines(page_lines: List[List[str]]) -> Set[str]:

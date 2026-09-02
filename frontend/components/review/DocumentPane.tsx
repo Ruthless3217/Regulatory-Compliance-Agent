@@ -487,7 +487,10 @@ function EditorToolbar({ readOnly }: { readOnly?: boolean }) {
             </Button>
           </>
         )}
-        <VersionHistoryPopover submissionId={submission.id} onRestore={adoptServerText} />
+        <VersionHistoryPopover
+          submissionId={submission.id}
+          onRestore={(rev) => adoptServerText(rev.content)}
+        />
       </div>
     </div>
   );

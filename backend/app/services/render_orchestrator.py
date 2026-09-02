@@ -99,8 +99,8 @@ def _render_pair(comparison_id: str, old_path: str, new_path: str) -> dict:
     old_metas, old_trunc = render_pages(old_pdf, os.path.join(base, "old"), cap)
     new_metas, new_trunc = render_pages(new_pdf, os.path.join(base, "new"), cap)
 
-    old_words = positioned_words(old_pdf)
-    new_words = positioned_words(new_pdf)
+    old_words = positioned_words(old_pdf, cap)
+    new_words = positioned_words(new_pdf, cap)
 
     old_marks, new_marks, changes = word_level_ops(
         [w.text for w in old_words], [w.text for w in new_words]

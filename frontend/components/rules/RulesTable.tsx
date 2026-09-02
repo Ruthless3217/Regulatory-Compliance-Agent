@@ -5,7 +5,7 @@ import { Pencil, Check, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge, Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { categoryLabel } from "@/lib/format";
+import { categoryLabel, productScopeLabel } from "@/lib/format";
 import { updateRule, deleteRule } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { Rule } from "@/lib/types";
@@ -189,11 +189,11 @@ export function RulesTable({ initialRules }: Props) {
                       >
                         <option value="">Select scope</option>
                         {PRODUCT_SCOPES.map((scope) => (
-                          <option key={scope} value={scope}>{categoryLabel(scope)}</option>
+                          <option key={scope} value={scope}>{productScopeLabel(scope)}</option>
                         ))}
                       </select>
                     ) : (
-                      <Badge>{r.product_line ? categoryLabel(r.product_line) : "Unclassified"}</Badge>
+                      <Badge>{r.product_line ? productScopeLabel(r.product_line) : "Unclassified"}</Badge>
                     )}
                   </td>
                   <td className="px-4 py-3">

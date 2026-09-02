@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { listSessions } from "@/lib/api";
 import { SessionRow } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatDate } from "@/lib/format";
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
@@ -41,8 +42,8 @@ export default function SessionsPage() {
                       <span className="text-zinc-500">Offline</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-zinc-400">{new Date(s.login_time).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-zinc-400">{new Date(s.last_seen).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-zinc-400">{formatDate(s.login_time)}</td>
+                  <td className="px-4 py-3 text-zinc-400">{formatDate(s.last_seen)}</td>
                   <td className="px-4 py-3 text-right">{Math.floor(s.duration_seconds / 60)}m</td>
                 </tr>
               ))}

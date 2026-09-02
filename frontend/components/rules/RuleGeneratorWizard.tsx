@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { SeverityBadge, Badge } from "@/components/ui/badge";
 import { deleteRule, generateRulesFromDocument, updateRule } from "@/lib/api";
-import { categoryLabel } from "@/lib/format";
+import { categoryLabel, productScopeLabel } from "@/lib/format";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 type Step = "upload" | "review";
@@ -26,15 +26,8 @@ interface DraftRule {
 }
 
 const PRODUCT_SCOPES = [
-  ["global", "Global / all products"],
-  ["term", "Term"],
-  ["ulip", "ULIP"],
-  ["par", "Participating"],
-  ["non_par", "Non-participating"],
-  ["savings_endowment", "Savings / endowment"],
-  ["pension_annuity", "Pension / annuity"],
-  ["rider", "Rider"],
-  ["group", "Group"],
+  "global", "term", "ulip", "par", "non_par",
+  "savings_endowment", "pension_annuity", "rider", "group",
 ] as const;
 
 export function RuleGeneratorWizard() {
@@ -169,8 +162,8 @@ export function RuleGeneratorWizard() {
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
               <option value="">Select a scope</option>
-              {PRODUCT_SCOPES.map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+              {PRODUCT_SCOPES.map((value) => (
+                <option key={value} value={value}>{productScopeLabel(value)}</option>
               ))}
             </select>
             <p className="mt-1 text-xs text-muted-foreground">

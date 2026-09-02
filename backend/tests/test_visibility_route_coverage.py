@@ -73,3 +73,56 @@ def test_exemptions_are_only_the_two_background_helpers():
     user to check — the guard belongs on the route that spawns them."""
     src = (ROUTES / "compliance.py").read_text(encoding="utf-8")
     assert len(EXEMPT.findall(src)) == 2
+
+
+# Handlers that are scoped by a violation_id/check_id/run_id/comment_id path
+# param rather than submission_id directly — RAW_LOOKUP above can't see these,
+# since they never touch `db.query(Submission)` at all. Each must still
+# resolve the owning submission and check it through get_visible_submission
+# before reading or mutating anything.
+VIOLATION_CHECK_RUN_SCOPED_HANDLERS = {
+    "compliance.py": [
+        "submit_violation_feedback",
+        "submit_violation_action",
+        "delete_reviewer_violation",
+        "diff_run",
+        "submit_reviewer_score",
+        "rewrite_violation_text",
+        "get_compliance_check",
+    ],
+    "submissions.py": [
+        "get_revision",
+        "update_comment",
+        "delete_comment",
+    ],
+}
+
+
+def _function_body(src: str, name: str) -> str:
+    """Source of one top-level `def <name>(...):` / `async def <name>(...):`
+    block, up to the next top-level def (or end of file)."""
+    lines = src.splitlines()
+    start = next(
+        (i for i, line in enumerate(lines) if re.match(rf"^(async )?def {re.escape(name)}\(", line)),
+        None,
+    )
+    assert start is not None, f"no function named {name!r} found"
+    end = next(
+        (i for i in range(start + 1, len(lines)) if re.match(r"^(async )?def \w+\(", lines[i])),
+        len(lines),
+    )
+    return "\n".join(lines[start:end])
+
+
+def test_violation_check_run_scoped_handlers_check_visibility():
+    """Path params other than submission_id (violation_id, check_id, run_id,
+    comment_id) still hang off a submission, and a caller who can't see that
+    submission must not be able to act through the child id."""
+    for filename, names in VIOLATION_CHECK_RUN_SCOPED_HANDLERS.items():
+        src = (ROUTES / filename).read_text(encoding="utf-8")
+        for name in names:
+            body = _function_body(src, name)
+            assert "get_visible_submission" in body, (
+                f"{filename}:{name} does not call get_visible_submission "
+                "before acting on its violation/check/run/comment id"
+            )

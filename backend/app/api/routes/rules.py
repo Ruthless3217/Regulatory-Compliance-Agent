@@ -480,6 +480,7 @@ async def generate_rules_from_document(
             document_content = await service._extract_from_file(file_path, content_type)
         finally:
             temp_db.close()
+            os.remove(file_path)
 
     if not document_content:
         raise HTTPException(status_code=400, detail="No content provided for rule generation")

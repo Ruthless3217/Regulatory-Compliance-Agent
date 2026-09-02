@@ -16,6 +16,7 @@ from fastapi import (
     BackgroundTasks, Response,
 )
 from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
@@ -249,9 +250,13 @@ async def create_comparison(
     )
 
     try:
-        old_segments = extract_segments_labeled(old_file_path, old_content_type, old_content, "original")
-        new_segments = extract_segments_labeled(new_file_path, new_content_type, new_content, "revised")
-        comparison.diff_result = build_diff(old_segments, new_segments)
+        old_segments = await run_in_threadpool(
+            extract_segments_labeled, old_file_path, old_content_type, old_content, "original"
+        )
+        new_segments = await run_in_threadpool(
+            extract_segments_labeled, new_file_path, new_content_type, new_content, "revised"
+        )
+        comparison.diff_result = await run_in_threadpool(build_diff, old_segments, new_segments)
         comparison.status = "completed"
     except Exception as e:
         logger.error("Comparison failed for '%s': %s", title, e, exc_info=True)
@@ -344,7 +349,7 @@ async def search_comparison(
     path = comparison.old_file_path if side == "old" else comparison.new_file_path
     if content_type != "pdf" or not path or not os.path.exists(path):
         raise HTTPException(status_code=409, detail="Search is only available for PDF documents")
-    return {"hits": _search_pdf(path, q)}
+    return {"hits": await run_in_threadpool(_search_pdf, path, q)}
 
 
 @router.post("/{comparison_id}/annotations")
@@ -502,13 +507,15 @@ async def rerun_comparison(
         )
 
     try:
-        old_segments = extract_segments_labeled(
-            comparison.old_file_path, comparison.old_content_type, comparison.old_original_content, "original"
+        old_segments = await run_in_threadpool(
+            extract_segments_labeled,
+            comparison.old_file_path, comparison.old_content_type, comparison.old_original_content, "original",
         )
-        new_segments = extract_segments_labeled(
-            comparison.new_file_path, comparison.new_content_type, comparison.new_original_content, "revised"
+        new_segments = await run_in_threadpool(
+            extract_segments_labeled,
+            comparison.new_file_path, comparison.new_content_type, comparison.new_original_content, "revised",
         )
-        comparison.diff_result = build_diff(old_segments, new_segments)
+        comparison.diff_result = await run_in_threadpool(build_diff, old_segments, new_segments)
         comparison.status = "completed"
         comparison.error_message = None
     except Exception as e:

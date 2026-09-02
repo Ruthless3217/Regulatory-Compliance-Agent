@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Popover } from "@/components/ui/popover";
 import { sideLabel } from "@/lib/format";
-import { useViewer, deriveViewerChanges } from "./ViewerContext";
+import { useViewer } from "./ViewerContext";
 import { ExportPopover } from "./ExportPopover";
 import { AdjustComparisonPopover } from "./AdjustComparisonPopover";
 
@@ -73,12 +73,8 @@ export function Toolbar() {
     setShowMoves,
     selectedChangeId,
     setSelectedChangeId,
+    viewerChanges: changes,
   } = useViewer();
-
-  const changes = React.useMemo(
-    () => deriveViewerChanges(comparison, effectiveMode, showMoves),
-    [comparison, effectiveMode, showMoves]
-  );
 
   const oldLabel = sideLabel(comparison, "old");
   const newLabel = sideLabel(comparison, "new");

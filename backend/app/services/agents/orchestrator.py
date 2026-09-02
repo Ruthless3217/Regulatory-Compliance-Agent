@@ -112,18 +112,6 @@ class ComplianceOrchestrator:
         await self._ensure_checkpointer_setup()
         return await self.graph.ainvoke(initial_state, config=config)
 
-    async def get_state(self, config: RunnableConfig):
-        """Gets current graph state."""
-        await self._ensure_checkpointer_setup()
-        return await self.graph.aget_state(config)
-
-    async def resume_workflow(self, config: RunnableConfig, feedback: str = None):
-        """Resumes the workflow after a HITL interrupt."""
-        await self._ensure_checkpointer_setup()
-        if feedback:
-            await self.graph.aupdate_state(config, {"user_feedback": feedback})
-        return await self.graph.ainvoke(None, config=config)
-
 
 # Singleton orchestrator instance
 orchestrator = ComplianceOrchestrator()

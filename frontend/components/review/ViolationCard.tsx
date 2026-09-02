@@ -280,8 +280,16 @@ export const ViolationCard = React.forwardRef<HTMLDivElement, Props>(function Vi
     // fixes compose instead of each splicing a stale base.
     const baseText = documentText;
     const evidence = violation.current_text;
+    const firstAt = evidence ? baseText.indexOf(evidence) : -1;
 
-    if (!evidence || !baseText.includes(evidence)) {
+    if (!evidence || firstAt === -1) {
+      return copyInstead(replacement, label);
+    }
+    // A second occurrence means a plain-text `replace` (first match only)
+    // would silently leave it unfixed while this card still marks the finding
+    // applied. Ambiguous anchoring gets the same fallback as not finding the
+    // text at all, rather than a partial fix reported as done.
+    if (baseText.indexOf(evidence, firstAt + 1) !== -1) {
       return copyInstead(replacement, label);
     }
 

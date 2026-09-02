@@ -3,24 +3,10 @@ import { listRules } from "@/lib/api";
 import { RulesTable } from "@/components/rules/RulesTable";
 import { Button } from "@/components/ui/button";
 import { PageHeader, PageHeaderMeta } from "@/components/ui/page-header";
+import { ruleCategoryLabel as categoryLabel } from "@/lib/format";
 import type { Rule } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-// Display casing only. Buckets are derived from the categories the data
-// actually contains, NOT from a fixed list — a hardcoded list silently drops
-// every category nobody remembered to add (it was hiding `irdai`, `legal` and
-// `financial`, i.e. 79 of 150 active rules, under a header reading "Active 150").
-const CATEGORY_LABELS: Record<string, string> = {
-  irdai: "IRDAI",
-  sebi: "SEBI",
-  regulatory: "Regulatory (other)",
-};
-
-function categoryLabel(key: string): string {
-  if (!key) return "Uncategorised";
-  return CATEGORY_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
-}
 
 export default async function RulesPage() {
   let rules: Rule[] = [];

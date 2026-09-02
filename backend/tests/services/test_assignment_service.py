@@ -14,16 +14,20 @@ from datetime import datetime, timezone
 import pytest
 
 from app.models.audit_event import AuditEvent
+from app.models.user import User
 from app.services import assignment_service as svc
 from tests.support.fake_session import FakeSession
 
 NOW = datetime(2026, 8, 19, 10, 0, tzinfo=timezone.utc)
 
 
-class _User:
-    def __init__(self, role="admin"):
-        self.id = uuid.uuid4()
-        self.role = role
+def _user(db, role="admin"):
+    """A real, active User row registered in `db` — assign()/reassign() look
+    the assignee up against the users table."""
+    u = User(id=uuid.uuid4(), role=role, is_active=True,
+             username=f"u-{uuid.uuid4().hex[:8]}")
+    db.add(u)
+    return u
 
 
 @pytest.fixture
@@ -32,13 +36,13 @@ def db():
 
 
 @pytest.fixture
-def admin():
-    return _User("admin")
+def admin(db):
+    return _user(db, "admin")
 
 
 @pytest.fixture
-def reviewer():
-    return _User("user")
+def reviewer(db):
+    return _user(db, "user")
 
 
 def test_assign_creates_an_open_assignment(db, admin, reviewer):
@@ -69,7 +73,7 @@ def test_second_active_assignment_is_refused(db, admin, reviewer):
     svc.assign(db, submission_id=sub_id, assignee_id=reviewer.id, actor=admin)
 
     with pytest.raises(svc.ActiveAssignmentExists):
-        svc.assign(db, submission_id=sub_id, assignee_id=_User("user").id, actor=admin)
+        svc.assign(db, submission_id=sub_id, assignee_id=_user(db, "user").id, actor=admin)
 
 
 def test_a_closed_assignment_frees_the_submission(db, admin, reviewer):
@@ -98,7 +102,7 @@ def test_only_the_assignee_may_start(db, admin, reviewer):
     a = svc.assign(db, submission_id=uuid.uuid4(), assignee_id=reviewer.id, actor=admin)
 
     with pytest.raises(svc.NotAssignee):
-        svc.start(db, assignment=a, actor=_User("user"))
+        svc.start(db, assignment=a, actor=_user(db, "user"))
 
 
 def test_complete_moves_to_awaiting_signoff(db, admin, reviewer):
@@ -147,7 +151,7 @@ def test_close_records_outcome_and_closer(db, admin, reviewer):
 
 def test_reassign_supersedes_the_old_row_and_chains_it(db, admin, reviewer):
     sub_id = uuid.uuid4()
-    other = _User("user")
+    other = _user(db, "user")
     first = svc.assign(db, submission_id=sub_id, assignee_id=reviewer.id, actor=admin)
 
     second = svc.reassign(db, assignment=first, new_assignee_id=other.id, actor=admin)
@@ -166,7 +170,7 @@ def test_reassign_leaves_exactly_one_active_row(db, admin, reviewer):
     unique index must still see a single active assignment afterwards."""
     sub_id = uuid.uuid4()
     first = svc.assign(db, submission_id=sub_id, assignee_id=reviewer.id, actor=admin)
-    svc.reassign(db, assignment=first, new_assignee_id=_User("user").id, actor=admin)
+    svc.reassign(db, assignment=first, new_assignee_id=_user(db, "user").id, actor=admin)
 
     assert svc.active_for_submission(db, sub_id) is not None
 
@@ -175,7 +179,7 @@ def test_reassign_carries_over_due_and_priority(db, admin, reviewer):
     first = svc.assign(db, submission_id=uuid.uuid4(), assignee_id=reviewer.id,
                        actor=admin, priority="urgent", due_at=NOW)
 
-    second = svc.reassign(db, assignment=first, new_assignee_id=_User("user").id, actor=admin)
+    second = svc.reassign(db, assignment=first, new_assignee_id=_user(db, "user").id, actor=admin)
 
     assert second.priority == "urgent"
     assert second.due_at == NOW

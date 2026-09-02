@@ -241,9 +241,13 @@ def _delete(db, violation_id, user):
     ))
 
 
-def _violation(db, source="reviewer", created_by=None) -> Violation:
+def _violation(db, source="reviewer", created_by=None, owner=None) -> Violation:
+    """`owner` sees the document (see _submission). Deleting resolves the
+    finding's document before anything else, so a flag whose check does not
+    lead to a visible submission is a 404 — every flag here gets a real one."""
+    check = _check(db, _submission(db, owner=owner))
     v = Violation(
-        id=uuid.uuid4(), compliance_check_id=uuid.uuid4(), category="irdai",
+        id=uuid.uuid4(), compliance_check_id=check.id, category="irdai",
         severity="high", description="d", source=source, created_by=created_by,
     )
     db.add(v)
@@ -260,7 +264,7 @@ def test_delete_is_404_for_unknown_violation():
 def test_model_authored_violation_is_never_deletable():
     db = FakeSession()
     author = _User()
-    v = _violation(db, source="model", created_by=author.id)
+    v = _violation(db, source="model", created_by=author.id, owner=author)
     for user in (author, _User(role="admin"), _User(role="super_admin")):
         with pytest.raises(HTTPException) as exc:
             _delete(db, v.id, user)
@@ -281,7 +285,7 @@ def test_violation_with_no_source_is_treated_as_model_authored():
 def test_author_can_delete_their_own_flag():
     db = FakeSession()
     author = _User()
-    v = _violation(db, created_by=author.id)
+    v = _violation(db, created_by=author.id, owner=author)
     out = _delete(db, v.id, author)
     assert out["id"] == str(v.id)
     assert db.rows_for(Violation) == []
@@ -289,10 +293,21 @@ def test_author_can_delete_their_own_flag():
 
 def test_another_reviewer_cannot_delete_someone_elses_flag():
     db = FakeSession()
+    other = _User()
+    v = _violation(db, created_by=_User().id, owner=other)
+    with pytest.raises(HTTPException) as exc:
+        _delete(db, v.id, other)
+    assert exc.value.status_code == 403
+    assert db.rows_for(Violation) == [v]
+
+
+def test_reviewer_who_cannot_see_the_document_gets_404_not_403():
+    # Bucket-scoped visibility fails closed: a 403 would confirm the flag exists.
+    db = FakeSession()
     v = _violation(db, created_by=_User().id)
     with pytest.raises(HTTPException) as exc:
         _delete(db, v.id, _User())
-    assert exc.value.status_code == 403
+    assert exc.value.status_code == 404
     assert db.rows_for(Violation) == [v]
 
 

@@ -76,7 +76,10 @@ class AzureSearchStore:
         from azure.search.documents.aio import SearchClient
         from azure.core.credentials import AzureKeyCredential
 
-        index_name = getattr(settings, _INDEX_MAP[index])
+        setting_name = _INDEX_MAP.get(index)
+        if setting_name is None:
+            raise RAGDegraded(f"no Azure Search index mapping for {index!r}")
+        index_name = getattr(settings, setting_name)
         if index_name not in self._clients:
             self._clients[index_name] = SearchClient(
                 endpoint=self._endpoint,

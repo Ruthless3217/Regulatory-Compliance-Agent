@@ -4,6 +4,7 @@ import { auditFeed } from "@/lib/api";
 import { AuditRow } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/format";
 
 export default function AuditPage() {
   const [feed, setFeed] = useState<AuditRow[]>([]);
@@ -30,7 +31,7 @@ export default function AuditPage() {
             <tbody>
               {feed.map(a => (
                 <tr key={a.id} className="border-b border-zinc-800 last:border-0 align-top hover:bg-zinc-800/30">
-                  <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">{new Date(a.timestamp).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">{formatDate(a.timestamp)}</td>
                   <td className="px-4 py-3 font-medium">{a.actor}</td>
                   <td className="px-4 py-3"><Badge variant="outline" className="text-zinc-300 border-zinc-700">{a.event_type}</Badge></td>
                   <td className="px-4 py-3 font-mono text-xs text-zinc-400">{a.target || "-"}</td>

@@ -64,7 +64,6 @@ def extract_client_key(request: Request, *, trust_forwarded_for: Optional[bool] 
 
 # Process-wide fallback limiter for the paid LLM endpoints.
 _llm_limiter = FixedWindowLimiter(settings.http_rate_limit_per_min, 60.0)
-_WINDOW_SECONDS = 60
 
 
 def _principal(request: Request) -> str:
@@ -76,24 +75,6 @@ def _principal(request: Request) -> str:
         return f"key:{api_key.strip()[-12:]}"
     return f"ip:{request.client.host}" if request.client else "ip:unknown"
 
-
-async def _redis_allow(principal: str) -> Optional[bool]:
-    """Redis-backed window. Returns True/False, or None if Redis is unavailable
-    (so the caller falls back to the in-process limiter)."""
-    try:
-        from app.services.cache.redis_client import get_redis
-        r = await get_redis()
-        if r is None:
-            return None
-        bucket = int(time.time() // _WINDOW_SECONDS)
-        key = f"httprl:llm:{principal}:{bucket}"
-        count = await r.incr(key)
-        if count == 1:
-            await r.expire(key, _WINDOW_SECONDS * 2)
-        return int(count) <= settings.http_rate_limit_per_min
-    except Exception as e:  # pragma: no cover
-        logger.debug(f"HTTP rate limit: Redis unavailable, using in-process: {e}")
-        return None
 
 _WINDOW_SECONDS = 60
 _REDIS_KEY_PREFIX = "rl:llm:"

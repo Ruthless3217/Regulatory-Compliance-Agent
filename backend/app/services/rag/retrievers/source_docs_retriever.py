@@ -1,9 +1,8 @@
 """Source-doc retriever — fetches regulator passages that produced a given
 rule, used by chat to quote source material verbatim ("explain rule X").
 
-Two access patterns:
-1. by_rule(rule_id) — exact lookup via the derived_rule_ids GIN index.
-2. semantic(query)  — fallback semantic search across all source docs.
+Access pattern: by_rule(rule_id) — exact lookup via the derived_rule_ids
+GIN index.
 """
 from __future__ import annotations
 
@@ -16,8 +15,6 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import SessionLocal
-from app.services.rag.errors import RAGDegraded, RAGEmbedFailed
-from app.services.rag.factory import get_embedder, get_vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +24,8 @@ class SourceDocsRetriever:
         """Return passages that produced the given rule, ordered by recency.
 
         Implemented as a direct SQL call on rag_source_docs since it's a
-        single equality lookup with no vector math. The Azure backend
-        skips this path and falls through to `semantic()`.
+        single equality lookup with no vector math. Returns [] on the
+        Azure backend, which has no equivalent index-based lookup.
         """
         if settings.rag_vector_backend != "pgvector":
             return []
@@ -65,24 +62,6 @@ class SourceDocsRetriever:
             return []
         finally:
             db.close()
-
-    async def semantic(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
-        embedder = get_embedder()
-        store = get_vector_store()
-        try:
-            qvec = (await embedder.embed([query], input_type="search_query"))[0]
-            hits = await store.hybrid_search(
-                index="rag_source_docs",
-                query_text=query,
-                query_vector=qvec,
-                top_k=top_k,
-                recall_pool=settings.rag_recall_pool,
-                rrf_k=settings.rag_rrf_k,
-            )
-            return [{"id": h.id, "score": h.score, **h.fields} for h in hits]
-        except (RAGEmbedFailed, RAGDegraded) as e:
-            logger.warning(f"source-doc semantic search degraded: {e}")
-            return []
 
 
 _singleton: Optional[SourceDocsRetriever] = None

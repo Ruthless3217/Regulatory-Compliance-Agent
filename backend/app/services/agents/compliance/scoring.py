@@ -38,7 +38,6 @@ class ScoringService:
         violations: List[Dict],
         db: Optional[Session] = None,
         project_config: Optional[Dict] = None,
-        categories: Optional[List[str]] = None
     ) -> Dict[str, object]:
         """
         Absolute-deduction compliance score.
@@ -55,7 +54,7 @@ class ScoringService:
         critical could out-score a document with five mixed findings. Category
         count must not change the grade; only severity × confidence does.
 
-        `categories`/`project_config` are accepted for back-compat but no longer
+        `project_config` is accepted for back-compat but no longer
         re-weight the overall score (which is now category-count-independent).
         Per-category sub-scores are still returned for the UI, computed the same
         absolute way within each category.

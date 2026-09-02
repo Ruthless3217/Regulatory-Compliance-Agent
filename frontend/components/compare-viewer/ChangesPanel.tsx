@@ -4,12 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
 import { countDiffStats, pluralizeWords } from "@/lib/format";
-import {
-  useViewer,
-  deriveViewerChanges,
-  type ViewerFilter,
-  type ViewerChange,
-} from "./ViewerContext";
+import { useViewer, type ViewerFilter, type ViewerChange } from "./ViewerContext";
 import { ChangeCard } from "./ChangeCard";
 
 const CHIPS: { key: ViewerFilter; label: string }[] = [
@@ -24,19 +19,13 @@ const CHIPS: { key: ViewerFilter; label: string }[] = [
 export function ChangesPanel() {
   const {
     comparison,
-    effectiveMode,
-    showMoves,
     filter,
     setFilter,
     selectedChangeId,
     setSelectedChangeId,
     annotationFor,
+    viewerChanges: changes,
   } = useViewer();
-
-  const changes = React.useMemo(
-    () => deriveViewerChanges(comparison, effectiveMode, showMoves),
-    [comparison, effectiveMode, showMoves]
-  );
 
   const isNoted = React.useCallback(
     (c: ViewerChange) => {

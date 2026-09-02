@@ -10,4 +10,12 @@ export function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/((?!_next|favicon|assets).*)"] };
+// Excludes /api: this middleware runs before next.config.ts's rewrite of
+// /api/* to the backend, so a matched /api request that lacks rca_session
+// (e.g. the cookie expired while the SPA tab stayed open — no full
+// navigation to trigger this redirect on the page) got 307-redirected to
+// /login. fetch() follows redirects by default, so jsonFetch received the
+// login page's 200 HTML instead of JSON and threw a raw parse error. Backend
+// route-level auth (backend/app/auth/dependencies.py) already returns a
+// proper 401 for unauthenticated API calls, so no protection is lost here.
+export const config = { matcher: ["/((?!_next|favicon|assets|api).*)"] };

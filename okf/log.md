@@ -9,6 +9,45 @@ timestamp: 2026-07-03T12:00:00Z
 
 # Change Log
 
+## 2026-09-02 — Audit-driven remediation (9 domains, 10 parallel implementers)
+
+A read-only audit of every feature domain (bugs, dead code, redundancy, performance), each finding adversarially verified,
+then fixed by parallel implementers with disjoint file ownership. Suite: **983 passed** (was 965); `tsc` clean; vitest 62
+(was 47); `next build` clean.
+
+- **Security / visibility** — `ip_allowed` now receives the `User` row, so `cidr`/`list` IP-binding modes are enforced (they
+  fell through to allow); `/health/rag` + `/debug/rag/search` require `knowledgebase:view`; admin-console passwords enforce
+  `MIN_PASSWORD_LEN`; dashboard `recent_submissions` respects `visible_submission_filter`; every violation/check/run/comment
+  scoped handler in `compliance.py`/`submissions.py` (10 routes incl. `GET /check/{id}`) now calls `get_visible_submission`
+  (404-not-403), guarded by `test_visibility_route_coverage.py`; `assign()`/`reassign()` reject unknown/inactive assignees
+  with a 4xx instead of an IntegrityError.
+- **Bugs** — `brochure_parser.flush()` no longer drops body text before the first heading; `azure_search_store._client()`
+  raises `RAGDegraded` on an unmapped index; `positioned_words(cap)` matches `render_pages`' page cap so capped renders never
+  reference unrendered pages; `middleware.ts` matcher excludes `/api` (expired cookie no longer 307s API calls to the login
+  page); rules-generation temp upload is removed after extraction; duplicate `_redis_allow` in `rate_limit.py` removed.
+- **Editor** — a genuine select-all-delete now persists (the empty-emission guard moved into `LexicalDocument`'s per-mount
+  `seededRef`); Apply-fix refuses an ambiguous multi-occurrence splice; version history is reachable on the rich-editor path
+  and restores re-seed the Lexical state (`_serialize_revision` now emits `lexical_state`/`lexical_html`); the Report tab's
+  button is honestly labelled "Copy fix".
+- **Performance** — `PrecedentRetriever.retrieve_per_chunk` fans out per chunk with `asyncio.gather` (was sequential);
+  `comparisons.py` runs extraction/diff/search under `run_in_threadpool`; the compare viewer derives its change list once
+  in `ViewerProvider` instead of three times per render.
+- **UX** — corpus-layer operations reachable below `xl`; product-scope labels via `productScopeLabel` (were mangled by
+  `categoryLabel`); dashboard volume chart gets a legend and a distinct Reviewer-added colour; super-admin Add User works;
+  super-admin pages use `formatDate`; the New-analysis scope chips are static badges (they never affected the request);
+  truncated-pages banner restored in the compare viewer.
+- **Deleted (zero callers, grep-verified)** — `agents/{agent_factory,base_agent,standard_agent}.py`, `redaction.py`,
+  `entity_registry.py` (+ `data/entities/balic.json`, its test), `LLMService.stream_response`/`_record_budget_tokens`/
+  `_get_fallback_response`, orchestrator `get_state`/`resume_workflow`, `comparison_service.extract_paragraphs` family +
+  `normalize_for_match`, `llm_budget.is_over_budget`/`reset_global_budget`, `rag.factory.reset_singletons`,
+  `pgvector_store.reset_embedding_check_cache`, `vector_projection.project_2d`/`_count`, `source_docs_retriever.semantic`,
+  `preprocessing_service._cap2`, four unused `schemas/submission.py` classes, three ad-hoc `backend/scripts/_*.py` probes,
+  `gunicorn`/`markdown`/`pandas` from requirements; frontend `components/compare/*` (3 files), `Masthead`, `KPICards`,
+  `SeverityHeatmap`, `ui/skeleton`, `ui/scroll-area`, `deriveChanges`/`ChangeItem`, nine unused `lib/api.ts` functions,
+  `@radix-ui/react-scroll-area`.
+- `required_disclosures` is now persisted in run metadata (`_RUN_METADATA_KEYS`), making the disclosure node's audit-trail
+  docstring true. Plan + per-finding evidence: `docs/superpowers/plans/2026-09-02-feature-audit-remediation.md`.
+
 ## 2026-08-11 — Determinism, chunk reuse, product segregation, feedback layer, anchoring, inspector
 
 Eight coordinated changes (migrations `0035`–`0037`; suite 840 tests green):

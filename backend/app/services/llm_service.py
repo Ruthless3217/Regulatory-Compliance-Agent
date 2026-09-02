@@ -2,7 +2,7 @@ import json
 import asyncio
 import time
 import os
-from typing import Dict, Any, Optional, Type, TypeVar, AsyncIterator, List, Callable
+from typing import Dict, Any, Optional, Type, TypeVar, List
 from sqlalchemy.orm import Session
 import logging
 from datetime import datetime
@@ -46,18 +46,6 @@ logger = logging.getLogger(__name__)
 _HEALTH_TTL_SECONDS = 60.0
 _HEALTH_CACHE: Dict[str, tuple] = {}
 _monotonic = time.monotonic
-
-
-async def _record_budget_tokens(tokens: int) -> None:
-    """Add real token usage to the global daily budget counter. Best-effort:
-    a budget/Redis hiccup must never break an LLM call (imported lazily to
-    avoid a circular import at module load)."""
-    try:
-        from .llm_budget import record_tokens
-
-        await record_tokens(tokens)
-    except Exception:  # pragma: no cover - defensive
-        pass
 
 
 class LLMUnavailableError(RuntimeError):
@@ -410,87 +398,6 @@ class LLMService:
             f"All {len(self._client_pool)} LLM key(s) rate-limited; last error: {last_exc}"
         ) from last_exc
 
-    @traceable(run_type="llm", name="LLM.stream_response")
-    async def stream_response(
-        self,
-        prompt: str,
-        system_prompt: Optional[str] = None,
-        history: Optional[List[Dict[str, str]]] = None,
-        temperature: float = 0.7,
-        on_usage: Optional[Callable[[int], None]] = None,
-    ) -> AsyncIterator[str]:
-        """Stream response tokens from LLM. Yields text deltas.
-
-        ``on_usage`` (optional) is invoked once with the real total token count
-        from the provider's final usage chunk (requires stream_options below).
-        """
-        messages: List[Dict[str, str]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        if history:
-            messages.extend(history)
-        messages.append({"role": "user", "content": prompt})
-
-        self._enforce_context_budget(messages)
-        from app.services.llm_budget import get_global_budget
-        global_budget = get_global_budget()
-        estimate = self._estimate_tokens(messages)
-
-        # Failover can only happen BEFORE the first token: once we have yielded
-        # text we can't restart on another key without duplicating output.
-        last_exc: Optional[Exception] = None
-        for key_id, client in self._client_pool:
-            try:
-                await global_budget.reserve(estimate)
-                stream = await client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    stream=True,
-                    stream_options={"include_usage": True},
-                    **self._gen_params(temperature),
-                )
-            except Exception as e:
-                if _is_rate_limit_error(e) and len(self._client_pool) > 1:
-                    logger.warning(f"[failover] stream key …{key_id} rate-limited; trying next key")
-                    last_exc = e
-                    continue
-                logger.error(f"LLM streaming failed: {e}")
-                yield f"\n\n[Error: streaming failed — {str(e)}]"
-                return
-            try:
-                input_tokens = 0
-                output_tokens = 0
-                total_tokens = 0
-                async for chunk in stream:
-                    usage = getattr(chunk, "usage", None)
-                    if usage:
-                        input_tokens = getattr(usage, "prompt_tokens", 0)
-                        output_tokens = getattr(usage, "completion_tokens", 0)
-                        total_tokens = getattr(usage, "total_tokens", 0)
-
-                    if not chunk.choices:
-                        continue
-                    delta = chunk.choices[0].delta
-                    if delta and delta.content:
-                        yield delta.content
-
-                if total_tokens > 0:
-                    self._update_langsmith_usage(input_tokens, output_tokens, total_tokens)
-                    await usage_recorder.record(
-                        model=self.model,
-                        provider=self.provider,
-                        profile=self.profile,
-                        prompt_tokens=input_tokens,
-                        completion_tokens=output_tokens
-                    )
-                return
-            except Exception as e:
-                logger.error(f"LLM streaming failed mid-stream: {e}")
-                yield f"\n\n[Error: streaming failed — {str(e)}]"
-                return
-        logger.error(f"LLM streaming failed — all keys rate-limited: {last_exc}")
-        yield "\n\n[Error: streaming failed — all API keys are rate-limited]"
-
     @traceable(run_type="llm", name="LLM.generate_structured_response")
     async def generate_structured_response(
         self,
@@ -788,10 +695,6 @@ class LLMService:
         else:
             messages.append({"role": "user", "content": prompt})
         return messages
-
-    def _get_fallback_response(self, prompt: str, context: Dict = None) -> str:
-        """Return a fallback response when LLM fails."""
-        return "Unable to generate response at this time. Please check LLM configuration."
 
     async def _record_tool_invocation(
         self,

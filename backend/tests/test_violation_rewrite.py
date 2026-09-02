@@ -13,6 +13,16 @@ from app.api.routes import compliance as routes
 from app.models.violation import Violation
 
 
+@pytest.fixture(autouse=True)
+def _document_is_visible(monkeypatch):
+    """The route resolves the finding's document and applies bucket-scoped
+    visibility before proposing wording (covered by
+    test_visibility_route_coverage / test_submission_visibility). The one-row
+    _Db below has no check or submission to resolve, so stub that step."""
+    monkeypatch.setattr(routes, "_submission_id_for_violation", lambda db, vid: uuid.uuid4())
+    monkeypatch.setattr(routes, "get_visible_submission", lambda db, sid, user: None)
+
+
 class _Query:
     def __init__(self, row):
         self._row = row

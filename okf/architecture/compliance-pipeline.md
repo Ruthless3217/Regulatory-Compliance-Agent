@@ -41,4 +41,4 @@ out-of-range indices. See [three-tier grounding](three-tier-grounding.md) for th
 - The `README.md` still describes a **5-node** graph on Gemini; the real graph is **6 nodes** (adds `disclosure`) on Azure
   gpt-5.4. The `nodes.py` module docstring also omits `disclosure_node`. `docs/ARCHITECTURE.md` is accurate.
 - **HITL is disabled at compile time** (no `interrupt_before`); `refinement_node` is effectively a passthrough despite a stale
-  docstring claiming otherwise. Resume machinery (`resume_workflow`, `POST /compliance/resume/{id}`) exists but is a dead path.
+  docstring claiming otherwise. The dead resume machinery (`resume_workflow`/`get_state`) was deleted on 2026-09-02.

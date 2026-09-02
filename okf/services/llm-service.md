@@ -27,8 +27,8 @@ key for failover.
 
 ## Streaming & plain text
 
-`generate_response` (plain) and `stream_response` (SSE, used by [chat](../api/chat.md)) share the failover pattern; streaming can
-only fail over before the first token and requests `stream_options={"include_usage": True}` for real token usage.
+`generate_response` (plain) carries the same failover pattern as the structured call. `stream_response` had no callers (chat and
+rewrite use the non-streaming call) and was deleted on 2026-09-02.
 
 ## Token accounting
 

@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  Legend,
   CartesianGrid,
   ResponsiveContainer,
 } from "recharts";
@@ -109,10 +110,11 @@ export function VolumeTrend({ points }: { points: TimeseriesPoint[] }) {
             <XAxis dataKey="x" tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={20} />
             <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} width={36} allowDecimals={false} />
             <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "hsl(var(--muted))" }} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
             <Bar dataKey="Submissions" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} maxBarSize={28} />
             <Bar dataKey="Scored findings" fill="hsl(var(--sev-high))" radius={[3, 3, 0, 0]} maxBarSize={28} />
             <Bar dataKey="Needs review" fill="hsl(var(--sev-medium))" radius={[3, 3, 0, 0]} maxBarSize={28} />
-            <Bar dataKey="Reviewer-added" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="Reviewer-added" fill="hsl(var(--sev-low))" radius={[3, 3, 0, 0]} maxBarSize={28} />
           </BarChart>
         </ResponsiveContainer>
       )}

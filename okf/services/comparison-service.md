@@ -15,7 +15,7 @@ timestamp: 2026-07-12T00:00:00Z
 
 - `extract_segments` dispatches by content type: DOCX via python-docx (headings prefixed `## `, tables incl. nested walked),
   PDF via pdfplumber (running headers/footers + page numbers stripped, line-wraps de-hyphenated), else blank-line split →
-  sentence segments. (The older `extract_paragraphs` family still exists but the route uses the segment path.)
+  sentence segments. (The older `extract_paragraphs` family was deleted on 2026-09-02; only the segment path remains.)
 - `build_diff` flattens both sides to a normalized `(display, match_key)` token stream and aligns with
   `difflib.SequenceMatcher`; identical prose stays aligned across formats even when the two extractors chunk differently.
   Template placeholders (`<field>`, `____`, `XXXX`) collapse to a shared wildcard so filling one in is not a change. Token

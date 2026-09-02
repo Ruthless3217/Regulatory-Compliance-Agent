@@ -18,10 +18,13 @@ from app.models.user import User
 from tests.support.fake_session import FakeSession
 
 
-class _User:
-    def __init__(self, role="admin"):
-        self.id = uuid.uuid4()
-        self.role = role
+def _User(db, role="admin"):
+    """A real, active User row registered in `db` — assign()/reassign() look
+    the assignee up against the users table."""
+    u = User(id=uuid.uuid4(), role=role, is_active=True,
+             username=f"u-{uuid.uuid4().hex[:8]}")
+    db.add(u)
+    return u
 
 
 @pytest.fixture
@@ -43,7 +46,7 @@ def _assign(db, sub, assignee, actor, **kw):
 
 
 def test_create_assignment_returns_the_bucket_row(db):
-    admin, reviewer = _User("admin"), _User("user")
+    admin, reviewer = _User(db, "admin"), _User(db, "user")
     sub = _submission(db)
 
     out = _assign(db, sub, reviewer, admin, priority="high", note="check disclaimers")
@@ -55,7 +58,7 @@ def test_create_assignment_returns_the_bucket_row(db):
 
 
 def test_double_assign_is_a_409(db):
-    admin, reviewer = _User("admin"), _User("user")
+    admin, reviewer = _User(db, "admin"), _User(db, "user")
     sub = _submission(db)
     _assign(db, sub, reviewer, admin)
 
@@ -65,7 +68,7 @@ def test_double_assign_is_a_409(db):
 
 
 def test_unknown_priority_is_a_400(db):
-    admin, reviewer = _User("admin"), _User("user")
+    admin, reviewer = _User(db, "admin"), _User(db, "user")
     sub = _submission(db)
 
     with pytest.raises(HTTPException) as exc:
@@ -76,7 +79,7 @@ def test_unknown_priority_is_a_400(db):
 def test_assigning_an_invisible_submission_is_a_404(db):
     """The guard runs before the service, so this route cannot become a way to
     confirm a document exists."""
-    reviewer = _User("user")
+    reviewer = _User(db, "user")
     sub = _submission(db)
 
     with pytest.raises(HTTPException) as exc:
@@ -85,16 +88,16 @@ def test_assigning_an_invisible_submission_is_a_404(db):
 
 
 def test_start_by_a_non_assignee_is_a_403(db):
-    admin, reviewer = _User("admin"), _User("user")
+    admin, reviewer = _User(db, "admin"), _User(db, "user")
     created = _assign(db, _submission(db), reviewer, admin)
 
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(routes.start_assignment(created["id"], user=_User("user"), db=db))
+        asyncio.run(routes.start_assignment(created["id"], user=_User(db, "user"), db=db))
     assert exc.value.status_code == 403
 
 
 def test_illegal_transition_is_a_409(db):
-    admin, reviewer = _User("admin"), _User("user")
+    admin, reviewer = _User(db, "admin"), _User(db, "user")
     created = _assign(db, _submission(db), reviewer, admin)
     asyncio.run(routes.start_assignment(created["id"], user=reviewer, db=db))
 
@@ -104,7 +107,7 @@ def test_illegal_transition_is_a_409(db):
 
 
 def test_send_back_without_a_reason_is_a_400(db):
-    admin, reviewer = _User("admin"), _User("user")
+    admin, reviewer = _User(db, "admin"), _User(db, "user")
     created = _assign(db, _submission(db), reviewer, admin)
     asyncio.run(routes.start_assignment(created["id"], user=reviewer, db=db))
     asyncio.run(routes.complete_assignment(created["id"], user=reviewer, db=db))
@@ -116,7 +119,7 @@ def test_send_back_without_a_reason_is_a_400(db):
 
 
 def test_reassign_returns_the_new_row(db):
-    admin, first, second = _User("admin"), _User("user"), _User("user")
+    admin, first, second = _User(db, "admin"), _User(db, "user"), _User(db, "user")
     created = _assign(db, _submission(db), first, admin)
 
     out = asyncio.run(routes.reassign_assignment(
@@ -128,7 +131,7 @@ def test_reassign_returns_the_new_row(db):
 
 
 def test_my_bucket_returns_only_my_active_assignments(db):
-    admin, mine, theirs = _User("admin"), _User("user"), _User("user")
+    admin, mine, theirs = _User(db, "admin"), _User(db, "user"), _User(db, "user")
     for owner in (mine, theirs):
         _assign(db, _submission(db), owner, admin)
 
@@ -139,7 +142,7 @@ def test_my_bucket_returns_only_my_active_assignments(db):
 
 
 def test_my_bucket_excludes_closed_work(db):
-    admin, reviewer = _User("admin"), _User("user")
+    admin, reviewer = _User(db, "admin"), _User(db, "user")
     created = _assign(db, _submission(db), reviewer, admin)
     asyncio.run(routes.start_assignment(created["id"], user=reviewer, db=db))
     asyncio.run(routes.complete_assignment(created["id"], user=reviewer, db=db))
@@ -151,12 +154,12 @@ def test_my_bucket_excludes_closed_work(db):
 
 def test_unknown_assignment_is_a_404(db):
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(routes.start_assignment(str(uuid.uuid4()), user=_User("user"), db=db))
+        asyncio.run(routes.start_assignment(str(uuid.uuid4()), user=_User(db, "user"), db=db))
     assert exc.value.status_code == 404
 
 
 def test_workload_counts_open_work_least_loaded_first(db):
-    admin = _User("admin")
+    admin = _User(db, "admin")
     busy = User(id=uuid.uuid4(), username="busy", role="user", is_active=True)
     idle = User(id=uuid.uuid4(), username="idle", role="user", is_active=True)
     db.add(busy)
@@ -164,14 +167,17 @@ def test_workload_counts_open_work_least_loaded_first(db):
     for _ in range(2):
         _assign(db, _submission(db), busy, admin)
 
-    rows = asyncio.run(routes.workload(user=admin, db=db))["reviewers"]
+    # workload() also lists admin as a candidate assignee (admins are valid
+    # reviewers too) — exclude admin's own row, it's not what this test checks.
+    rows = [r for r in asyncio.run(routes.workload(user=admin, db=db))["reviewers"]
+            if r["user_id"] != str(admin.id)]
 
     assert [r["username"] for r in rows] == ["idle", "busy"]
     assert [r["open_count"] for r in rows] == [0, 2]
 
 
 def test_assignment_for_submission_reports_active_and_history(db):
-    admin, first, second = _User("admin"), _User("user"), _User("user")
+    admin, first, second = _User(db, "admin"), _User(db, "user"), _User(db, "user")
     sub = _submission(db)
     created = _assign(db, sub, first, admin)
     asyncio.run(routes.reassign_assignment(
@@ -194,7 +200,7 @@ def _close(db, assignment_id, actor, outcome="approved", note=None):
 
 
 def test_close_signs_off_and_returns_the_closed_row(db):
-    admin, reviewer = _User("admin"), _User("user")
+    admin, reviewer = _User(db, "admin"), _User(db, "user")
     sub = _submission(db)
     a = _assign(db, sub, reviewer, admin)
     asyncio.run(routes.start_assignment(a["id"], user=reviewer, db=db))
@@ -210,17 +216,17 @@ def test_close_signs_off_and_returns_the_closed_row(db):
 def test_close_frees_the_submission_for_a_new_assignment(db):
     """The point of closing: the partial unique index stops seeing an active
     row, so the document can be assigned again."""
-    admin, reviewer = _User("admin"), _User("user")
+    admin, reviewer = _User(db, "admin"), _User(db, "user")
     sub = _submission(db)
     a = _assign(db, sub, reviewer, admin)
     _close(db, a["id"], admin)
 
-    again = _assign(db, sub, _User("user"), admin)
+    again = _assign(db, sub, _User(db, "user"), admin)
     assert again["status"] == "open"
 
 
 def test_close_with_an_unknown_outcome_is_a_400(db):
-    admin, reviewer = _User("admin"), _User("user")
+    admin, reviewer = _User(db, "admin"), _User(db, "user")
     sub = _submission(db)
     a = _assign(db, sub, reviewer, admin)
 
@@ -230,7 +236,7 @@ def test_close_with_an_unknown_outcome_is_a_400(db):
 
 
 def test_closing_an_already_closed_assignment_is_a_409(db):
-    admin, reviewer = _User("admin"), _User("user")
+    admin, reviewer = _User(db, "admin"), _User(db, "user")
     sub = _submission(db)
     a = _assign(db, sub, reviewer, admin)
     _close(db, a["id"], admin)
@@ -242,5 +248,5 @@ def test_closing_an_already_closed_assignment_is_a_409(db):
 
 def test_close_of_a_missing_assignment_is_a_404(db):
     with pytest.raises(HTTPException) as exc:
-        _close(db, str(uuid.uuid4()), _User("admin"))
+        _close(db, str(uuid.uuid4()), _User(db, "admin"))
     assert exc.value.status_code == 404

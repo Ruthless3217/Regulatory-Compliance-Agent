@@ -1,5 +1,10 @@
 # Document Comparison — Feature Guide
 
+> **2026-09-02:** the `frontend/components/compare/*` stack described in §1 and §4 (`CompareWorkspace`, `PixelDiffViewer`,
+> `ChangesPane`, `deriveChanges`) was superseded by the full-screen viewer in `frontend/components/compare-viewer/*`
+> (2026-07-12) and the old files have now been deleted. The backend sections stay accurate, except that the paragraph-level
+> `extract_paragraphs` family is gone — only `extract_segments`/`extract_segments_labeled` remain.
+
 > Written to support a UI rework of the Compare feature and to identify patterns worth
 > copying from (and into) the rest of the app. Sources: the OKF bundle (`okf/`) plus a
 > direct read of the code on `main` (2026-07-10).

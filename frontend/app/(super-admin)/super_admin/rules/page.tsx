@@ -4,6 +4,7 @@ import { ruleAudit } from "@/lib/api";
 import { RuleAuditRow } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight } from "lucide-react";
+import { formatDate } from "@/lib/format";
 
 export default function RulesAuditPage() {
   const [audits, setAudits] = useState<RuleAuditRow[]>([]);
@@ -29,7 +30,7 @@ export default function RulesAuditPage() {
             <tbody>
               {audits.map(a => (
                 <tr key={a.id} className="border-b border-zinc-800 last:border-0 align-top hover:bg-zinc-800/30">
-                  <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">{new Date(a.timestamp).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">{formatDate(a.timestamp)}</td>
                   <td className="px-4 py-3 font-medium">{a.actor}</td>
                   <td className="px-4 py-3 font-mono text-xs text-zinc-400">{a.rule_id}</td>
                   <td className="px-4 py-3">

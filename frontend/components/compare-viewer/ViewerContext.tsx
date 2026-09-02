@@ -201,6 +201,8 @@ interface ViewerState {
 
   scroll: ScrollRegistry;
 
+  viewerChanges: ViewerChange[];
+
   annotationFor: (changeId: string) => Annotation | undefined;
   setAnnotationLocal: (a: Annotation) => void;
   removeAnnotationLocal: (changeId: string) => void;
@@ -232,6 +234,12 @@ export function ViewerProvider({
 
   const hasPixel = comparison.render_status === "completed" && !!comparison.render_result;
   const effectiveMode: ViewMode = hasPixel && viewMode === "pixel" ? "pixel" : "text";
+
+  const viewerChanges = React.useMemo(
+    () => deriveViewerChanges(comparison, effectiveMode, showMoves),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [comparison.render_result, comparison.diff_result, effectiveMode, showMoves]
+  );
 
   const setZoom = React.useCallback((side: Side, value: number) => {
     const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
@@ -279,6 +287,7 @@ export function ViewerProvider({
     filter,
     setFilter,
     scroll,
+    viewerChanges,
     annotationFor,
     setAnnotationLocal,
     removeAnnotationLocal,

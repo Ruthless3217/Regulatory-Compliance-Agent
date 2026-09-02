@@ -1066,10 +1066,6 @@ Constraints:
         product_facts = product_facts or []
         product_passages = product_passages or []
 
-        def _cap2(s, n):  # local cap mirroring _cap, for product tiers
-            s = (s or "").strip()
-            return s if len(s) <= n else s[: n - 1].rstrip() + "…"
-
         if product_facts:
             pf_blocks = []
             for i, card in enumerate(product_facts):
@@ -1084,9 +1080,9 @@ Constraints:
                     f"Product: {card.get('product_name') or '?'} (UIN {card.get('uin') or '?'})\n"
                     f"Regulatory descriptor: {card.get('regulatory_descriptor') or '(not captured)'}\n"
                     f"Structural flags: {flag_str}\n"
-                    f"MUST AVOID (banned claims): {_cap2(must_avoid, 800)}\n"
-                    f"MUST SUPPORT (variant-qualified claims): {_cap2(must_support, 800)}\n"
-                    f"MUST STATE (mandatory elements): {_cap2(must_state, 600)}\n"
+                    f"MUST AVOID (banned claims): {_cap(must_avoid, 800)}\n"
+                    f"MUST SUPPORT (variant-qualified claims): {_cap(must_support, 800)}\n"
+                    f"MUST STATE (mandatory elements): {_cap(must_state, 600)}\n"
                 )
             product_facts_block = "".join(pf_blocks)
         else:
@@ -1099,7 +1095,7 @@ Constraints:
                     f"\n[{p.get('product_name') or '?'}"
                     f"{(' · UIN ' + p.get('uin')) if p.get('uin') else ''}"
                     f" · {p.get('section_path') or '?'} · p.{p.get('page_number') or '?'}]\n"
-                    f"{_cap2(p.get('text'), 900)}\n"
+                    f"{_cap(p.get('text'), 900)}\n"
                 )
             product_passages_block = "".join(pp_blocks)
         else:

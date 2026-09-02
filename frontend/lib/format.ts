@@ -1,4 +1,4 @@
-import type { ChangeItem, DiffBlock, DocumentComparison, Severity } from "./types";
+import type { DiffBlock, DocumentComparison, Severity } from "./types";
 
 /**
  * Human label for a comparison side: the original uploaded file name if we have
@@ -35,31 +35,6 @@ export function countDiffStats(blocks: DiffBlock[]): { removed: number; added: n
 
 export function pluralizeWords(n: number): string {
   return `${n} ${n === 1 ? "word" : "words"}`;
-}
-
-/**
- * Flatten a diff into a list of change entries for the Compare sidebar — one per
- * non-equal block. Each entry's `id`/`blockIndex` maps to the block's position
- * so the viewer can scroll to it. Equal blocks are skipped.
- */
-export function deriveChanges(blocks: DiffBlock[]): ChangeItem[] {
-  const items: ChangeItem[] = [];
-  blocks.forEach((b, i) => {
-    if (b.type === "delete") {
-      items.push({ id: String(i), blockIndex: i, kind: "removed", removedText: b.old_text });
-    } else if (b.type === "insert") {
-      items.push({ id: String(i), blockIndex: i, kind: "added", addedText: b.new_text });
-    } else if (b.type === "replace") {
-      items.push({
-        id: String(i),
-        blockIndex: i,
-        kind: "modified",
-        removedText: b.old_words.filter((w) => w.changed).map((w) => w.text).join(" "),
-        addedText: b.new_words.filter((w) => w.changed).map((w) => w.text).join(" "),
-      });
-    }
-  });
-  return items;
 }
 
 export function formatDate(iso?: string | null): string {
@@ -185,6 +160,49 @@ export function categoryLabel(c: string): string {
   if (k === "regulatory") return "Regulatory";
   if (k === "seo") return "SEO";
   return c.charAt(0).toUpperCase() + c.slice(1);
+}
+
+/** Human labels for the product-scope codes (`Rule.product_line` /
+ * submission `product_line`). Single source of truth — was previously
+ * duplicated as a [value, label] tuple list inside RuleGeneratorWizard.tsx
+ * and re-derived (incorrectly, via the unrelated `categoryLabel`) in
+ * RulesTable.tsx. */
+const PRODUCT_SCOPE_LABELS: Record<string, string> = {
+  global: "Global / all products",
+  term: "Term",
+  ulip: "ULIP",
+  par: "Participating",
+  non_par: "Non-participating",
+  savings_endowment: "Savings / endowment",
+  pension_annuity: "Pension / annuity",
+  rider: "Rider",
+  group: "Group",
+};
+
+export function productScopeLabel(scope: string): string {
+  return (
+    PRODUCT_SCOPE_LABELS[scope] ??
+    scope
+      .split("_")
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ")
+  );
+}
+
+/** Human labels for rule *categories* (irdai/sebi/regulatory/…), with an
+ * explicit "Uncategorised" fallback for an empty key. Distinct from
+ * `categoryLabel` above (different vocabulary — no brand/seo cases here) —
+ * was duplicated byte-for-byte across rules/page.tsx and settings/page.tsx. */
+const RULE_CATEGORY_LABELS: Record<string, string> = {
+  irdai: "IRDAI",
+  sebi: "SEBI",
+  regulatory: "Regulatory (other)",
+};
+
+export function ruleCategoryLabel(key: string): string {
+  if (!key) return "Uncategorised";
+  return RULE_CATEGORY_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 export function truthyAutoFix(v: string | boolean | undefined): boolean {

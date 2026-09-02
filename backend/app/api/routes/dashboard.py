@@ -13,6 +13,7 @@ from app.models.compliance_check import ComplianceCheck
 from app.models.violation import Violation
 from app.models.rule import Rule
 from app.auth.dependencies import require
+from app.auth.visibility import visible_submission_filter
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -101,8 +102,13 @@ async def get_dashboard_summary(user: dict = Depends(require("dashboard:view")),
         auto_fixable_count = 0
         auto_fix_rate = 0.0
 
-    # Recent submissions
-    recent = db.query(Submission).order_by(Submission.submitted_at.desc()).limit(5).all()
+    # Recent submissions — scoped to what this caller may see (visibility
+    # model, app/auth/visibility.py), not company-wide.
+    recent_q = db.query(Submission)
+    scope = visible_submission_filter(user)
+    if scope is not None:
+        recent_q = recent_q.filter(scope)
+    recent = recent_q.order_by(Submission.submitted_at.desc()).limit(5).all()
 
     return {
         "stats": {

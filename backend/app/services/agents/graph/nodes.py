@@ -1809,12 +1809,13 @@ async def disclosure_node(state: ComplianceState) -> Dict:
 
     if recall_degraded:
         md["disclosure_recall_degraded"] = True
+    if summary:
+        md["required_disclosures"] = summary
 
     logger.info("disclosure_node: %d required, %d findings", len(required), len(violations))
     return {
         "violations": violations,
         "disclosure_findings": list(violations),
-        "required_disclosures": summary,
         "metadata": md,
     }
 
@@ -1831,10 +1832,8 @@ async def scoring_node(state: ComplianceState) -> Dict:
 
     db = GraphContext.get_db_session()
     violations = state.get("violations", [])
-    active_rules = state.get("active_rules", {})
-    categories = list(active_rules.keys())
 
-    scores = scoring_service.calculate_scores(violations, db=db, categories=categories)
+    scores = scoring_service.calculate_scores(violations, db=db)
 
     return {
         "scores": scores,

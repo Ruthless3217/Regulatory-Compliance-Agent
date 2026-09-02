@@ -17,10 +17,12 @@ const SOURCE_LABEL: Record<string, string> = {
 
 interface Props {
   submissionId: string;
-  /** Hand the restored content back so the live document view adopts it —
-   * without this the pane keeps showing the pre-restore text, since nothing
-   * re-fetches the submission after a restore. */
-  onRestore?: (content: string) => void;
+  /** Hand the whole restored revision back so the live document view adopts
+   * it — without this the pane keeps showing the pre-restore text, since
+   * nothing re-fetches the submission after a restore. The full revision, not
+   * just its `content`, because the rich-editor path needs `lexical_state` /
+   * `lexical_html` to reseed the editor itself. */
+  onRestore?: (revision: SubmissionRevision) => void;
 }
 
 export function VersionHistoryPopover({ submissionId, onRestore }: Props) {
@@ -51,8 +53,13 @@ export function VersionHistoryPopover({ submissionId, onRestore }: Props) {
         content: rev.content,
         source: "restore",
         note: `Restored from revision ${rev.revision_number}`,
+        // Both or neither, same as every other writer of a revision — a rich
+        // document restored without them would export the OLD html next to
+        // the NEW plain text.
+        lexical_state: rev.lexical_state ?? undefined,
+        lexical_html: rev.lexical_html ?? undefined,
       });
-      onRestore?.(rev.content);
+      onRestore?.(rev);
       toast.success(`Restored revision ${rev.revision_number}`);
       router.refresh();
       await load();

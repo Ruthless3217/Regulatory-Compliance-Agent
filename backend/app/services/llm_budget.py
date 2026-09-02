@@ -32,17 +32,6 @@ class LLMBudgetExceeded(RuntimeError):
         super().__init__(f"Global LLM daily token budget exhausted ({spent}/{budget})")
 
 
-def is_over_budget(spent: int, budget: int) -> bool:
-    """Pure decision: has cumulative ``spent`` reached the ``budget`` ceiling?
-
-    ``budget <= 0`` disables the guard (never over). Reaching the ceiling fails
-    closed — the call that would tip us to/over the limit is refused.
-    """
-    if budget <= 0:
-        return False
-    return spent >= budget
-
-
 def _day_index(clock: Callable[[], float]) -> int:
     return int(clock() // 86_400)
 
@@ -166,12 +155,6 @@ def get_global_budget() -> GlobalTokenBudget:
         from app.config import settings
         _budget = GlobalTokenBudget(settings.llm_global_daily_token_budget)
     return _budget
-
-
-def reset_global_budget() -> None:
-    """Test helper — drop the cached singleton."""
-    global _budget
-    _budget = None
 
 
 async def llm_budget_guard() -> None:

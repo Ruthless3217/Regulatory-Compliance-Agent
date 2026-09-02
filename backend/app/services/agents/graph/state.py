@@ -54,7 +54,8 @@ class ComplianceState(TypedDict):
     user_feedback: Optional[str]
 
     # Mandatory-Disclosure Checker (2026-06-26). Set by disclosure_node.
-    # required_disclosures: per-doc obligation summary for the audit trail.
     # disclosure_findings: the missing/altered findings (also merged into violations).
-    required_disclosures: List[Dict[str, Any]]
+    # The per-doc obligation summary (status/similarity/provenance per disclaimer)
+    # is folded into metadata["required_disclosures"] for the audit trail instead
+    # of a separate top-level key — see ComplianceEngine._RUN_METADATA_KEYS.
     disclosure_findings: List[Dict[str, Any]]

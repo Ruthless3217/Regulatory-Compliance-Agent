@@ -1,5 +1,7 @@
 """Render overlay mapping — synthetic words/marks, no real PDF."""
-from app.services.pdf_render_service import PositionedWord, PageMeta
+import pytest
+
+from app.services.pdf_render_service import PositionedWord, PageMeta, positioned_words
 from app.services.render_orchestrator import _build_pages, _build_changes
 
 
@@ -65,3 +67,26 @@ def test_build_changes_attaches_old_and_new_refs():
     assert set(by_id["r2"].keys()) == {"id", "kind", "new"}
     assert by_id["r2"]["new"]["text"] == "fresh"
     assert "old" in by_id["r1"] and "new" in by_id["r1"]  # modified carries both
+
+
+def test_positioned_words_cap_matches_render_pages_cap(tmp_path):
+    """positioned_words(pdf_path, cap) must only see pages render_pages(cap)
+    actually rendered — a capped render must never carry a change reference to a
+    page with no rendered PNG (be-comparison#0)."""
+    reportlab = pytest.importorskip("reportlab")
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import letter
+
+    pdf_path = str(tmp_path / "multi.pdf")
+    c = canvas.Canvas(pdf_path, pagesize=letter)
+    for i in range(5):
+        c.drawString(72, 720, f"page {i + 1} content word")
+        c.showPage()
+    c.save()
+
+    words = positioned_words(pdf_path, cap=2)
+    assert words  # sanity: extraction actually found words
+    assert max(w.page for w in words) <= 2
+
+    uncapped = positioned_words(pdf_path)
+    assert max(w.page for w in uncapped) == 5

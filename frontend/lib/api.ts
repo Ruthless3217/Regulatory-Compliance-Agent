@@ -52,13 +52,6 @@ import type {
   CorpusLayerItems,
   CorpusLayerDocument,
   CorpusLayerDeleteResult,
-  DeadCorpusInspection,
-  DeadCorpusSource,
-  RetrievalEvalCapability,
-  RetrievalEvaluateResult,
-  RetrievalEvaluationInspection,
-  RetrievalHealth,
-  RetrievalQueriesInspection,
   RetrievalCandidatesInspection,
   RetrievalChunksInspection,
   RetrievalInspection,
@@ -801,14 +794,6 @@ export const ruleAudit = async (q: string = ""): Promise<RuleAuditRow[]> => {
  * All routes gated on `rules:write` (admin + super_admin) — a plain user gets 403. */
 export const listCorpusLayers = () => jsonFetch<CorpusLayerList>(`${base()}/admin/corpus/layers`);
 
-export const createCorpusLayer = (b: {
-  name: string;
-  kind: string;
-  description?: string;
-  source_ref?: string;
-  claim?: boolean;
-}) => jsonFetch<CorpusLayer>(`${base()}/admin/corpus/layers`, { method: "POST", body: JSON.stringify(b) });
-
 /** Enable/disable is one boolean UPDATE — retrieval sees it on the next query
  * and nothing is ever re-embedded. */
 export const updateCorpusLayer = (id: string, b: { enabled?: boolean; description?: string }) =>
@@ -872,20 +857,6 @@ export const deleteCorpusLayerDocument = (id: string, sourceFile: string, corpus
     { method: "DELETE" }
   );
 
-export const deleteCorpusLayerItem = (id: string, itemId: string) =>
-  jsonFetch<{ layer_id: string; precedent_id: string; deleted: number }>(
-    `${base()}/admin/corpus/layers/${id}/items/${itemId}`,
-    { method: "DELETE" }
-  );
-
-/** Embeds server-side, so the caller never supplies a vector. Retrievable on
- * the next query. */
-export const addCorpusLayerItems = (id: string, precedents: Record<string, unknown>[]) =>
-  jsonFetch<{ indexed: number; assigned: number }>(
-    `${base()}/admin/corpus/layers/${id}/items`,
-    { method: "POST", body: JSON.stringify({ precedents }) }
-  );
-
 /* ---------- admin: retrieval inspector ----------
  * Each of these can legitimately answer {status:"no_retrieval_data", reason}
  * instead of a story — that is a real state, not an error. Discriminate on
@@ -926,70 +897,6 @@ export const getRunCandidates = (
   );
 };
 
-
-/* ---------- admin: retrieval health ----------
- * backend/app/api/routes/admin_retrieval_health.py, same /admin/retrieval
- * prefix and the same rules:write scope as the inspector above.
- *
- * The inspector is per-run. These are cross-run: they answer "is retrieval
- * working at all", which no single run can. Like the inspector, they can answer
- * {status:"no_retrieval_data"} — discriminate on `.status`, never on an empty
- * array. */
-
-/** Cross-run funnel, starved chunks, rejection reasons and floor pressure.
- * `days` is clamped server-side to 1..90. */
-export const getRetrievalHealth = (days?: number) =>
-  jsonFetch<RetrievalHealth>(
-    `${base()}/admin/retrieval/health${days ? `?days=${days}` : ""}`
-  );
-
-/** Content retrieval never reaches. Two distinct populations — never retrieved
- * at all, versus retrieved repeatedly and never cited — which need opposite
- * fixes, so they are returned and rendered separately. */
-export const getDeadCorpus = (
-  corpus: DeadCorpusSource,
-  params?: { days?: number; limit?: number }
-) => {
-  const qs = new URLSearchParams({ corpus });
-  if (params?.days) qs.set("days", String(params.days));
-  if (params?.limit) qs.set("limit", String(params.limit));
-  return jsonFetch<DeadCorpusInspection>(
-    `${base()}/admin/retrieval/health/dead-corpus?${qs.toString()}`
-  );
-};
-
-/** Every hybrid_search one run fired, with what the floors did to it. Requires
- * migration 0039; older runs answer {status:"no_retrieval_data"}. */
-export const getRunQueries = (runId: string) =>
-  jsonFetch<RetrievalQueriesInspection>(
-    `${base()}/admin/retrieval/runs/${runId}/queries`
-  );
-
-/** Free. Whether judged evaluation can run here at all — call this before
- * offering the button, so a version skew costs one GET instead of half a paid
- * evaluation. */
-export const getEvaluationCapability = () =>
-  jsonFetch<RetrievalEvalCapability>(
-    `${base()}/admin/retrieval/evaluation/capability`
-  );
-
-/** Free. Reads stored judgements; calls no model. */
-export const getRunEvaluation = (runId: string) =>
-  jsonFetch<RetrievalEvaluationInspection>(
-    `${base()}/admin/retrieval/runs/${runId}/evaluation`
-  );
-
-/** SPENDS TOKENS — one judge call per sample per metric. Never call this on
- * render, on focus, or in a retry loop. `max_samples` is clamped server-side to
- * the hard cap reported by getEvaluationCapability(). */
-export const evaluateRun = (
-  runId: string,
-  body?: { metrics?: string[]; corpus?: string; max_samples?: number }
-) =>
-  jsonFetch<RetrievalEvaluateResult>(
-    `${base()}/admin/retrieval/runs/${runId}/evaluate`,
-    { method: "POST", body: JSON.stringify(body ?? {}) }
-  );
 
 // ------------------------------------------------------------- assignments
 // Review buckets + the action trail. See

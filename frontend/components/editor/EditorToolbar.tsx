@@ -12,6 +12,7 @@ import {
   FORMAT_TEXT_COMMAND,
   REDO_COMMAND,
   UNDO_COMMAND,
+  type SerializedEditorState,
 } from "lexical";
 import {
   $createHeadingNode,
@@ -41,9 +42,13 @@ import {
   Underline,
   Undo2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { VersionHistoryPopover } from "@/components/review/VersionHistoryPopover";
+import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
 import { cn } from "@/lib/utils";
+import type { SubmissionRevision } from "@/lib/types";
 
 /** Only the blocks the registered nodes can actually produce. Anything else the
  *  selection lands in reports as "paragraph", so no button lights up for a node
@@ -122,11 +127,39 @@ function ToolbarButton({
   );
 }
 
-export function EditorToolbar(): React.ReactElement {
+export function EditorToolbar({ submissionId }: { submissionId: string }): React.ReactElement {
   const [editor] = useLexicalComposerContext();
+  const { adoptServerLexical } = useSubmissionWorkspace();
   const [active, setActive] = React.useState<Active>(INITIAL);
   const [canUndo, setCanUndo] = React.useState(false);
   const [canRedo, setCanRedo] = React.useState(false);
+
+  // Restoring a revision on the rich-editor path has to change two things
+  // together: the Lexical editor on screen, and the workspace's own record of
+  // what is saved — without the second, the next autosave tick would re-post
+  // the exact content this just (successfully) restored.
+  const restoreInEditor = React.useCallback(
+    (rev: SubmissionRevision) => {
+      if (!rev.lexical_state || rev.lexical_html == null) {
+        // Pre-editor or plain-text-era revision: no rich snapshot to load.
+        // The plain-text projection was still restored server-side; this
+        // editor mount just cannot show it without a remount (toggle to View
+        // and back to Edit, which re-seeds from the now-restored submission).
+        toast.message(
+          "Restored, but this editor can't reload it in place — switch to View and back to Edit to see it."
+        );
+        return;
+      }
+      const nextState = editor.parseEditorState(rev.lexical_state as unknown as SerializedEditorState);
+      editor.setEditorState(nextState);
+      adoptServerLexical({
+        state: rev.lexical_state as unknown as SerializedEditorState,
+        html: rev.lexical_html,
+        text: rev.content,
+      });
+    },
+    [editor, adoptServerLexical]
+  );
 
   React.useEffect(
     () =>
@@ -278,6 +311,14 @@ export function EditorToolbar(): React.ReactElement {
       {/* The slash menu is the only affordance here with no button of its own
           (SlashCommandPlugin), so the toolbar is where it gets discovered. */}
       <span className="px-1 font-mono text-[11px] text-faint">/ for commands</span>
+
+      {/* The rich-editor path's only way to reach version history — without
+          it, a DOCX/PDF import (the common case) had no restore affordance
+          at all, even though the plain-text pane's toolbar has always had
+          one. */}
+      <span className="ml-auto">
+        <VersionHistoryPopover submissionId={submissionId} onRestore={restoreInEditor} />
+      </span>
     </div>
   );
 }

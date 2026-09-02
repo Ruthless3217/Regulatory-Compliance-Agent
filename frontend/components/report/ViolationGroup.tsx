@@ -86,7 +86,7 @@ export function ViolationGroup({ severity, violations }: Props) {
                           }
                         }}
                       >
-                        Apply fix
+                        Copy fix
                       </Button>
                     </div>
                   </li>

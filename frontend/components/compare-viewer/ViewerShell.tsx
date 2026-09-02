@@ -3,7 +3,7 @@ import * as React from "react";
 import { AlertTriangle } from "lucide-react";
 import type { DocumentComparison } from "@/lib/types";
 import { getComparison } from "@/lib/api";
-import { ViewerProvider, useViewer, deriveViewerChanges } from "./ViewerContext";
+import { ViewerProvider, useViewer } from "./ViewerContext";
 import { Toolbar } from "./Toolbar";
 import { PagePane } from "./PagePane";
 import { TextRedline } from "./TextRedline";
@@ -25,9 +25,9 @@ function ViewerShellInner() {
     effectiveMode,
     layoutMode,
     singleSide,
-    showMoves,
     selectedChangeId,
     setSelectedChangeId,
+    viewerChanges,
   } = useViewer();
 
   // Left/Right arrow keys step through changes (same order as the Toolbar's
@@ -48,22 +48,21 @@ function ViewerShellInner() {
       ) {
         return;
       }
-      const changes = deriveViewerChanges(comparison, effectiveMode, showMoves);
-      if (changes.length === 0) return;
+      if (viewerChanges.length === 0) return;
       e.preventDefault();
       const dir = e.key === "ArrowRight" ? 1 : -1;
-      const cur = changes.findIndex((c) => c.id === selectedChangeId);
+      const cur = viewerChanges.findIndex((c) => c.id === selectedChangeId);
       const next =
         cur < 0
           ? dir === 1
             ? 0
-            : changes.length - 1
-          : (cur + dir + changes.length) % changes.length;
-      setSelectedChangeId(changes[next].id);
+            : viewerChanges.length - 1
+          : (cur + dir + viewerChanges.length) % viewerChanges.length;
+      setSelectedChangeId(viewerChanges[next].id);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [comparison, effectiveMode, showMoves, selectedChangeId, setSelectedChangeId]);
+  }, [viewerChanges, selectedChangeId, setSelectedChangeId]);
 
   // Poll while the pixel render is processing: 2 s, backing off to 5 s after
   // 60 s, and stopping on any terminal status.
@@ -93,6 +92,7 @@ function ViewerShellInner() {
   }, [comparison.id, comparison.render_status, setComparison]);
 
   const renderFailed = comparison.render_status === "failed";
+  const truncatedPages = comparison.render_result?.truncated_pages ?? 0;
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -105,6 +105,13 @@ function ViewerShellInner() {
             Document view unavailable — showing text.
             {comparison.render_error ? ` (${comparison.render_error})` : ""}
           </span>
+        </div>
+      )}
+
+      {truncatedPages > 0 && (
+        <div className="flex items-center gap-2 border-b border-sev-critical/30 bg-sev-critical/5 px-3 py-1.5 text-[11px] text-sev-critical">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          <span>{truncatedPages} page(s) not shown (render cap reached).</span>
         </div>
       )}
 

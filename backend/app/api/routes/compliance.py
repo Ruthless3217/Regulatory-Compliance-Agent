@@ -600,6 +600,10 @@ async def get_compliance_check(
     db: Session = Depends(get_db)
 ):
     """Get details of a specific compliance check by ID."""
+    check = db.query(ComplianceCheck).filter(ComplianceCheck.id == check_id).first()
+    if not check:
+        raise HTTPException(status_code=404, detail="Compliance check not found")
+    get_visible_submission(db, check.submission_id, user)
     summary = await ComplianceEngine.get_check_summary(check_id, db)
     if not summary:
         raise HTTPException(status_code=404, detail="Compliance check not found")
@@ -642,6 +646,11 @@ async def submit_violation_feedback(
     """
     from app.services.rule_feedback_service import RuleFeedbackService
 
+    submission_id = _submission_id_for_violation(db, violation_id)
+    if submission_id is None:
+        raise HTTPException(status_code=404, detail="Violation not found")
+    get_visible_submission(db, submission_id, user)
+
     try:
         res = RuleFeedbackService.apply_feedback(
             db,
@@ -651,7 +660,6 @@ async def submit_violation_feedback(
             severity_override=payload.severity_override,
             comment=payload.comment,
         )
-        import asyncio
         from app.services.observability import audit
         asyncio.create_task(audit.record("feedback_submitted", actor=user, target_type="violation", target_id=violation_id, metadata=payload.model_dump()))
         return res
@@ -730,6 +738,11 @@ async def submit_violation_action(
     from app.services import rule_feedback_service as rfs
     from app.services.rule_feedback_service import RuleFeedbackService
 
+    submission_id = _submission_id_for_violation(db, violation_id)
+    if submission_id is None:
+        raise HTTPException(status_code=404, detail="Violation not found")
+    get_visible_submission(db, submission_id, user)
+
     # Stored in the same spelling the queue map uses, so the queues endpoint's
     # (rule_id, reason) pattern count can't split one reason across two keys.
     reason = normalize_reason(payload.reason)
@@ -757,7 +770,6 @@ async def submit_violation_action(
             explanation=payload.explanation,
             final_text=payload.final_text,
         )
-        import asyncio
         from app.services.observability import audit
         asyncio.create_task(audit.record(
             "violation_action_submitted", actor=user,
@@ -886,6 +898,11 @@ async def delete_reviewer_violation(
     if not violation:
         raise HTTPException(status_code=404, detail="Violation not found")
 
+    scope_submission_id = _submission_id_for_violation(db, violation_id)
+    if scope_submission_id is None:
+        raise HTTPException(status_code=404, detail="Violation not found")
+    get_visible_submission(db, scope_submission_id, user)
+
     if (violation.source or "model") != "reviewer":
         raise HTTPException(
             status_code=403,
@@ -902,10 +919,6 @@ async def delete_reviewer_violation(
             status_code=403,
             detail="Only the reviewer who created this flag, or an admin, can delete it.",
         )
-
-    # Resolved before the delete — afterwards the row is gone and the trail
-    # entry would have no document to hang off.
-    scope_submission_id = _submission_id_for_violation(db, violation_id)
 
     db.delete(violation)
     db.commit()
@@ -1062,6 +1075,8 @@ async def diff_run(
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
 
+    get_visible_submission(db, run.submission_id, user)
+
     if against == "previous":
         against_run = (
             db.query(AnalysisRun)
@@ -1136,6 +1151,8 @@ async def submit_reviewer_score(
     if not check:
         raise HTTPException(status_code=404, detail="Compliance check not found")
 
+    get_visible_submission(db, check.submission_id, user)
+
     check.reviewer_score = payload.score
     check.reviewer_scored_at = datetime.utcnow()
     db.commit()
@@ -1195,6 +1212,11 @@ async def rewrite_violation_text(
     violation = db.query(Violation).filter(Violation.id == violation_id).first()
     if not violation:
         raise HTTPException(status_code=404, detail="Violation not found")
+
+    submission_id = _submission_id_for_violation(db, violation_id)
+    if submission_id is None:
+        raise HTTPException(status_code=404, detail="Violation not found")
+    get_visible_submission(db, submission_id, user)
 
     original = (violation.current_text or "").strip()
     if not original:

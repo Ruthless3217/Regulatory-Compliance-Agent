@@ -30,6 +30,7 @@ from app.models.analysis_run import AnalysisRun
 from app.models.compliance_check import ComplianceCheck
 from app.models.submission import Submission
 from app.models.submission_revision import SubmissionRevision
+from app.models.user import User
 from app.models.violation import Violation
 from app.services import assignment_service as assignment_svc
 
@@ -575,6 +576,8 @@ def test_approval_state_reports_a_never_analysed_document():
 # unique index kept the document locked to an assignment nobody could finish.
 
 def _assigned(db, sub, reviewer, admin, *, state="awaiting_signoff"):
+    # assign() verifies the assignee is a real, active reviewer row.
+    db.add(User(id=reviewer.id, role=reviewer.role, is_active=True))
     a = assignment_svc.assign(
         db, submission_id=sub.id, assignee_id=reviewer.id, actor=admin)
     if state in ("in_review", "awaiting_signoff"):
