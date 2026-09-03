@@ -1,11 +1,18 @@
-/** Pins that the auth gate redirects WITHIN the deployment's basePath.
+/** Pins the two things the auth gate has actually got wrong in production.
  *
- * Behind the shared platform nginx the app is served at /compliance, so the
- * frontend image is built with NEXT_PUBLIC_BASE_PATH=/compliance. Building a
- * redirect with `new URL("/login", req.url)` drops that prefix: the browser
- * gets `Location: /login`, nginx routes it to the platform root app, and the
- * compliance app looks like it "redirects away" for every signed-out visitor.
- * req.nextUrl carries the basePath and re-applies it on serialization.
+ * 1. basePath. Behind the shared platform nginx the app is served at
+ *    /compliance, so the image is built with NEXT_PUBLIC_BASE_PATH=/compliance.
+ *    Building a redirect with `new URL("/login", req.url)` drops that prefix:
+ *    the browser gets `Location: /login`, nginx routes it to the platform root
+ *    app, and compliance looks like it bounces every signed-out visitor away.
+ *
+ * 2. The redirect loop. This file only sees whether a cookie EXISTS; it has no
+ *    database or Redis to ask whether the session behind it is alive. The
+ *    server-side gate in (workspace)/layout.tsx does ask, via /auth/me, and
+ *    redirects to /login when that fails. So a cookie whose session has expired
+ *    looks signed-in here and signed-out there. If this file also bounces
+ *    /login -> / for cookie holders, those two gates volley the browser
+ *    forever and the user can never reach the form to fix it.
  */
 import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
@@ -35,12 +42,21 @@ describe("middleware auth gate", () => {
     expect(res.headers.get("location")).toBe("http://host/login");
   });
 
-  it("sends a signed-in visitor off /login to the app root, not the platform root", () => {
-    const res = middleware(req("/login", { session: true }));
-    expect(res.headers.get("location")).toBe("http://host/compliance");
+  it("drops the query string rather than carrying it onto /login", () => {
+    const r = new NextRequest(`http://host${BASE_PATH}/dashboard?tab=open`, {
+      nextConfig: { basePath: BASE_PATH },
+    });
+    expect(middleware(r).headers.get("location")).toBe("http://host/compliance/login");
   });
 
-  it("serves the login page itself to a signed-out visitor", () => {
+  it("serves the login page to a visitor holding a cookie, instead of bouncing them", () => {
+    // The loop: layout.tsx sends a dead-cookie holder here, and bouncing them
+    // back to / sends them straight back again. Serving the form ends it.
+    const res = middleware(req("/login", { session: true }));
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("serves the login page to a signed-out visitor", () => {
     const res = middleware(req("/login"));
     expect(res.headers.get("location")).toBeNull();
   });
@@ -50,10 +66,8 @@ describe("middleware auth gate", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it("drops the query string rather than carrying it onto /login", () => {
-    const r = new NextRequest(`http://host${BASE_PATH}/dashboard?tab=open`, {
-      nextConfig: { basePath: BASE_PATH },
-    });
-    expect(middleware(r).headers.get("location")).toBe("http://host/compliance/login");
+  it("lets a cookie holder through to the app", () => {
+    const res = middleware(req("/dashboard", { session: true }));
+    expect(res.headers.get("location")).toBeNull();
   });
 });
