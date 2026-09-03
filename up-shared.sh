@@ -24,6 +24,12 @@
 #     the whole app tree, and passed the image smoke-test — then the container
 #     died on `alembic upgrade head` with ModuleNotFoundError. We now marker-check
 #     the manifests, and import the boot path out of the built image.
+#   * And it truncates APP SOURCE. 2026-09-03: backend/app/main.py 220 lines -> 28,
+#     with all 14 include_router calls gone. That image builds, installs, boots,
+#     and answers /health 200 — while every real route 404s, so nobody can log in.
+#     Nothing above catches it, because the file it stubs is not a build input.
+#     Hence: a marker check on main.py, a dirty check over the whole backend/ and
+#     frontend/ trees, and a route-registration check inside the built image.
 #   * The old health probe shelled out to curl, which the backend image does not
 #     install — so it ALWAYS printed "not healthy yet". We now probe with python.
 #   * rules.product_line only lands via `scripts.seed_rules`; skipping it silently
@@ -133,10 +139,24 @@ guard_worktree() {
        Restore it:  git checkout -- frontend/package.json"
   done
 
+  # The stub main.py keeps `app = FastAPI(...)` and a /health route, so the
+  # container boots and looks healthy while serving no API at all. The routers
+  # are the load-bearing part.
+  local routers
+  routers="$(grep -c 'include_router' backend/app/main.py || true)"
+  if [ "${routers:-0}" -lt 5 ]; then
+    die "backend/app/main.py registers only ${routers:-0} routers ($(wc -l < backend/app/main.py) lines).
+       That is the scaffold stub: it boots, answers /health, and 404s every real
+       route, so nobody can log in.  Restore it:  git checkout -- backend/app/main.py"
+  fi
+
   if command -v git >/dev/null 2>&1 && [ -d .git ]; then
     local dirty
-    dirty="$(git status --porcelain -- backend/Dockerfile frontend/Dockerfile \
-             "$COMPOSE_FILE" backend/requirements.txt frontend/package.json 2>/dev/null || true)"
+    # The whole app tree, not a hand-listed handful: the 2026-09-03 stub landed in
+    # backend/app/main.py, which was not on the old list and so sailed through.
+    # --untracked-files=no keeps runtime junk (uploads/, logs/, .env) out of it.
+    dirty="$(git status --porcelain --untracked-files=no -- backend frontend \
+             "$COMPOSE_FILE" 2>/dev/null || true)"
     if [ -n "$dirty" ] && [ -z "${ALLOW_DIRTY:-}" ]; then
       echo "ERROR: build inputs have uncommitted local edits:" >&2
       echo "$dirty" >&2
@@ -186,6 +206,10 @@ verify_images() {
     # requirements.txt every check above still passes and the container dies
     # seconds after start, so import the boot path here instead.
     python -c "import fastapi, uvicorn, sqlalchemy, alembic, langgraph, openai"
+    # Last line of defence: whatever stubbed main.py, the shipped file must still
+    # mount the routers. Checked as text, not by importing app.main, so it cannot
+    # fail merely because this throwaway container has no DATABASE_URL.
+    test "$(grep -c include_router app/main.py)" -ge 5
   ' || die "backend image is incomplete — missing appuser, migrations, seeds, data/
        or its core Python dependencies. That is a partial/stub build, not a
        deployable image."
@@ -241,9 +265,18 @@ wait_healthy() {
   echo "==> Waiting for backend (alembic upgrade head, then uvicorn)…"
   while [ "$i" -lt "$tries" ]; do
     if ! c_running compliance-backend; then
-      echo "    backend container is not running. Last 40 log lines:"
-      cli logs --tail 40 compliance-backend 2>&1 | sed 's/^/      /' || true
-      return 1
+      # "Not running" is not the same as "failed". podman-compose returns before
+      # the container is listed, and the CMD then spends its first seconds in
+      # `alembic upgrade head`. Bailing on the first poll reported a healthy
+      # deploy as "the stack is NOT deployed" (2026-09-03). Only a container that
+      # has actually exited is terminal; anything else just needs another 2s.
+      if c_exists compliance-backend \
+         && [ "$(cli inspect compliance-backend --format '{{.State.Status}}' 2>/dev/null)" = exited ]; then
+        echo "    backend container exited. Last 40 log lines:"
+        cli logs --tail 40 compliance-backend 2>&1 | sed 's/^/      /' || true
+        return 1
+      fi
+      i=$((i + 1)); sleep 2; continue
     fi
     if cli exec compliance-backend python -c \
          'import urllib.request as u; u.urlopen("http://localhost:8000/", timeout=5)' \
