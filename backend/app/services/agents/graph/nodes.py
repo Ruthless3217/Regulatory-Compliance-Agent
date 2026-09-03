@@ -814,6 +814,7 @@ async def preprocess_node(state: ComplianceState) -> Dict:
                 # Scope covers every product; the prompt cannot. Say so on the
                 # run instead of dropping the surplus without a trace.
                 md["product_grounding_budget"] = budget
+                _add_warning(md, "product_grounding_budget", budget)
                 logger.warning(
                     "product grounding: %d product(s) detected, %d grounded (%s); "
                     "not grounded: %s; families without a grounded product: %s "
@@ -836,13 +837,46 @@ async def preprocess_node(state: ComplianceState) -> Dict:
             md["degraded"] = "product_resolution_failed"
             md["product_resolution_failed"] = product_resolution_failed
         elif any(product_unresolved.values()):
-            md["degraded"] = "product_unresolved"
             md["product_unresolved"] = product_unresolved
-            logger.error(
-                "product grounding: unresolved product signal(s) %s; routing "
-                "run to needs_review until fact-card coverage is complete",
-                product_unresolved,
-            )
+            if product_unresolved.get(_SCOPE_UNPROVABLE_SIGNAL):
+                # The submission's regulatory envelope itself cannot be
+                # established (nothing resolvable to derive it from, or a
+                # declared line that contradicts the products found). No amount
+                # of retrieval fixes that — refuse.
+                md["degraded"] = "product_unresolved"
+                logger.error(
+                    "product grounding: submission scope unprovable %s; routing "
+                    "run to needs_review",
+                    product_unresolved[_SCOPE_UNPROVABLE_SIGNAL],
+                )
+            else:
+                # Scope IS provable; what is missing is one product's own
+                # authoritative record. Grade what the proven scope covers and
+                # say, by UIN and by section, what it does not. Refusing here
+                # discarded a complete analysis of a document whose scope was
+                # never in doubt — and, worse, discarded it AFTER withholding
+                # the grounding it did have (see _resolve_product_grounding).
+                for signal in (
+                    "unknown_uins",
+                    "rider_uins_without_fact_cards",
+                    "declared_products_without_fact_cards",
+                ):
+                    values = list(product_unresolved.get(signal) or [])
+                    if not values:
+                        continue
+                    detail: Dict[str, Any] = {"uins": values}
+                    located = _ungrounded_uin_locations(chunks_data, values)
+                    if located:
+                        detail["chunk_indexes"] = sorted(
+                            {index for hits in located.values() for index in hits}
+                        )
+                        detail["by_uin"] = located
+                    _add_warning(md, signal, detail)
+                logger.warning(
+                    "product grounding: %s cannot be grounded (%s); grading "
+                    "under the proven scope with an explicit warning",
+                    product_unresolved, md.get("analysis_warnings"),
+                )
         ambiguous_uins = _ambiguous_product_uins(product_match)
         if ambiguous_uins:
             # A UIN is the key used to inject deterministic fact cards.  When
@@ -873,6 +907,67 @@ async def preprocess_node(state: ComplianceState) -> Dict:
             "messages": [AIMessage(content=f"Librarian: Error during preprocessing - {str(e)}")],
             "status": "failed"
         }
+
+
+# The sub-signal of `product_unresolved` that is a SCOPE failure rather than an
+# evidence gap: nothing resolvable to build an envelope from, or a declared line
+# that contradicts the products found. Everything else in that dict names a
+# product whose own obligations are missing from a document whose scope IS
+# provable — a bounded, locatable gap, not an unprovable determination.
+_SCOPE_UNPROVABLE_SIGNAL = "submission_scope"
+
+
+def scope_is_unprovable(metadata: Dict[str, Any]) -> bool:
+    """True when the run cannot establish which rules apply at all."""
+    unresolved = (metadata or {}).get("product_unresolved") or {}
+    return bool(unresolved.get(_SCOPE_UNPROVABLE_SIGNAL))
+
+
+def _add_warning(md: Dict[str, Any], code: str, detail: Any = None) -> None:
+    """Record a named limitation of a run that still reached a determination.
+
+    A warning is not a refusal (engine.evaluate_persistability): it says which
+    evidence was unavailable so a reviewer can see what the grade covers and
+    what it does not. Deliberately a LIST — `metadata["degraded"]` is a single
+    last-writer-wins slot, and the real 8a3c2db4 run proved the cost of that:
+    dispatch overwrote `product_unresolved` with `knowledge_base_empty`, so the
+    run record named one of its three limitations and hid the other two.
+    """
+    warnings = list(md.get("analysis_warnings") or [])
+    if any(w.get("code") == code for w in warnings):
+        return
+    entry: Dict[str, Any] = {"code": code}
+    if detail is not None:
+        entry["detail"] = detail
+    warnings.append(entry)
+    md["analysis_warnings"] = warnings
+
+
+def _ungrounded_uin_locations(
+    chunks: List[Dict[str, Any]], uins: List[str]
+) -> Dict[str, List[int]]:
+    """{uin: [chunk_index, ...]} for the sections that actually name each UIN.
+
+    This is the useful half of chunk-level partial analysis: it says WHERE the
+    grounding gap is, so the warning points at a section instead of the whole
+    document. It is deliberately NOT used to exclude those chunks from
+    analysis — measured on the real submission, the only chunk naming
+    116N216V01 is the Disclaimers block, the single densest piece of compliance
+    content in the file. Skipping it would delete findings, not protect them.
+    """
+    located: Dict[str, List[int]] = {}
+    for uin in uins or []:
+        needle = str(uin or "").lower()
+        if not needle:
+            continue
+        hits = [
+            int(chunk.get("chunk_index", index))
+            for index, chunk in enumerate(chunks or [])
+            if needle in (chunk.get("text") or "").lower()
+        ]
+        if hits:
+            located[str(uin)] = hits
+    return located
 
 
 def _ambiguous_product_uins(matches: List[Dict[str, Any]]) -> List[str]:
@@ -1230,9 +1325,17 @@ async def _resolve_product_grounding(
         return [], {}
     metadata = state.get("metadata") or {}
     matches = metadata.get("product_match") or []
+    # Withhold grounding only when the run's product IDENTITY or SCOPE is
+    # unsafe. It used to bail on ANY unresolved signal, which inverted the
+    # intent: a document naming one ungroundable rider had BOTH of its fully
+    # resolved products' authoritative guardrails and approved wording removed
+    # from every chunk prompt — the least-grounded analysis the pipeline could
+    # produce — and was then refused for being ungrounded. The resolved
+    # products' cards are looked up by their own UINs (below), so a missing
+    # card is never substituted by another product's.
     if (
         metadata.get("product_resolution_failed")
-        or any((metadata.get("product_unresolved") or {}).values())
+        or scope_is_unprovable(metadata)
     ):
         return [], {}
     if not matches:
@@ -1517,7 +1620,14 @@ async def dispatch_node(state: ComplianceState) -> Dict:
     # base returned nothing — the empty-chunks case is already labelled
     # "no_content" above and must not be overwritten with a misleading reason.
     if chunks and total_precedents == 0:
-        md["degraded"] = "knowledge_base_empty"
+        # A warning, not a refusal. An empty precedent corpus removes ONE
+        # evidence tier; the rule and product-fact tiers are unaffected, and
+        # `grounded_evidence` below still refuses a run that has no tier left.
+        # Representing "we have no prior cases" as a compliance failure told
+        # the reviewer nothing and withheld the findings the other tiers did
+        # support.
+        md["knowledge_base_empty"] = True
+        _add_warning(md, "precedent_evidence_unavailable", {"precedents": 0})
         logger.warning(
             "Knowledge base returned ZERO precedents across all chunks — "
             "analysis will produce no violations. Ingest the precedent corpus "
@@ -1552,8 +1662,16 @@ async def dispatch_node(state: ComplianceState) -> Dict:
                 for corpus, item_id, scope_value in sorted(unique_gaps)[:100]
             ],
         }
-        # Never silently grade with a materially incomplete grounded corpus.
-        md.setdefault("degraded", "scope_metadata_missing")
+        # Never SILENTLY grade with an incomplete grounded corpus — but the
+        # applicability judge already fails closed per item (every untagged
+        # candidate is rejected, never admitted on a guess), so this is a
+        # recall loss with a known cause, not an unprovable determination.
+        # Name it; `grounded_evidence` below still refuses if it left the run
+        # with no evidence tier at all.
+        _add_warning(md, "rule_scope_metadata_incomplete", {
+            "count": md["scope_metadata_missing"]["count"],
+            "corpora": sorted({str(row.get("corpus")) for row in _scope_gap_rows}),
+        })
     md["retrieval_debug"] = {
         "scope": scope.as_dict(),
         "candidates_total": len(retrieval_debug),
@@ -1648,6 +1766,31 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         except Exception as e:
             logger.warning("chunk-aware product grounding failed (non-fatal): %s", e)
             product_facts_by_chunk = {}
+
+    # What the analysis will actually be grounded in, after applicability. This
+    # is the floor the persistability gate enforces: with all three at zero the
+    # only tier left is `novel` — the model's own judgment — and that is an
+    # opinion, never a regulatory determination. Recorded unconditionally so
+    # the gate is judging a measurement rather than the absence of one.
+    if rag_degraded:
+        _add_warning(md, "retrieval_degraded", {"per_chunk_retrieval": "failed"})
+    md["grounded_evidence"] = {
+        "rules": len({
+            str(rule.get("id"))
+            for cid in (str(c.get("id")) for c in chunks)
+            for rule in _select_rules_for_chunk(
+                cid, chunk_rules, rules_serializable, rag_degraded
+            )
+        }),
+        "precedents": total_precedents,
+        "product_facts": len(product_facts),
+    }
+    if not any(md["grounded_evidence"].values()):
+        logger.error(
+            "dispatch_node: no applicable rule, precedent or product fact card "
+            "survived for this submission (%s) — the run cannot produce a "
+            "grounded compliance determination", md["grounded_evidence"],
+        )
 
     return {
         "active_rules": rules_serializable,

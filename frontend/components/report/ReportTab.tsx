@@ -5,7 +5,10 @@ import { KPIStrip } from "./KPIStrip";
 import { ViolationGroup } from "./ViolationGroup";
 import { ExportPdfButton } from "./ExportPdfButton";
 import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspaceContext";
-import { AnalysisStateBanner } from "@/components/review/AnalysisStateBanner";
+import {
+  AnalysisStateBanner,
+  AnalysisWarningsBanner,
+} from "@/components/review/AnalysisStateBanner";
 import { normalizeSeverity } from "@/lib/format";
 
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
@@ -21,6 +24,7 @@ export function ReportTab() {
     analysisMessage,
     analysisState,
     degradedReason,
+    analysisWarnings,
   } = useSubmissionWorkspace();
 
   const {
@@ -88,6 +92,11 @@ export function ReportTab() {
         analysisStatus={submission.status}
         analysisMessage={analysisMessage}
         degradedReason={degradedReason}
+        className="mx-8 mt-6 rounded-md border"
+      />
+      {/* The score below is real, but it may not cover the whole document. */}
+      <AnalysisWarningsBanner
+        warnings={analysisWarnings}
         className="mx-8 mt-6 rounded-md border"
       />
       <ScoreHero score={overallScore} grade={grade} scores={scores} />

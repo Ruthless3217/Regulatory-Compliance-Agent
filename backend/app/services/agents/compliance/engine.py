@@ -23,6 +23,10 @@ from app.models.compliance_check import ComplianceCheck
 from app.models.violation import Violation
 from app.schemas.compliance_schemas import ComplianceAnalysisResult
 from app.services.agents.compliance.scoring import scoring_service
+# The one classifier both sides need: the graph writes `product_unresolved`,
+# the gate below decides what it means. Keeping it in one place is what stops
+# the two drifting apart. nodes.py does not import this module, so no cycle.
+from app.services.agents.graph import nodes as graph_nodes
 from app.services.violation_serializer import (
     finding_counts,
     latest_feedback_map,
@@ -48,6 +52,7 @@ class ComplianceEngine:
     # rather than being marked "failed".
     _NEEDS_REVIEW_REASONS = {
         "knowledge_base_empty",
+        "no_grounded_evidence",
         "analysis_incomplete",
         "rag_degraded",
         "rules_unavailable",
@@ -85,10 +90,17 @@ class ComplianceEngine:
             return False, "product_resolution_failed"
         if md.get("product_ambiguous_uins"):
             return False, "product_ambiguous"
-        if any((md.get("product_unresolved") or {}).values()):
+        # Only the SCOPE sub-signal refuses. `product_unresolved` is a bucket of
+        # four different things, and treating them alike conflated "we cannot
+        # prove which rules apply" with "one named product's own record is
+        # missing". The first is unprovable; the second is a bounded gap in a
+        # document whose scope is proven, and it is reported as a warning with
+        # the UIN and the sections it occurs in (graph/nodes._add_warning).
+        # Measured on submission 8a3c2db4: scope {ulip} resolved from two fully
+        # grounded products, the gap confined to 1 of 27 chunks, 38 findings
+        # discarded. See tests/test_partial_analysis_unresolved_products.py.
+        if graph_nodes.scope_is_unprovable(md):
             return False, "product_unresolved"
-        if md.get("scope_metadata_missing"):
-            return False, "scope_metadata_missing"
         # The disclosure sweep only covered part of the document (or the LLM
         # backstop failed outright), so required-disclaimer findings are
         # silently missing. Fail closed: review it, don't grade it.
@@ -99,7 +111,62 @@ class ComplianceEngine:
             return False, degraded
         if md.get("analysis_failed_chunks"):
             return False, "analysis_incomplete"
+        # The floor. Precedent absence and an untagged rule corpus are now
+        # warnings, so this is what stops them adding up to a grade with no
+        # grounding behind it: with no applicable rule, no precedent and no
+        # fact card, the only tier that ran is `novel` — the model's own
+        # judgment — and that is an opinion, not a regulatory determination.
+        # Judged only when dispatch actually reported the census; inventing a
+        # refusal from an unset key would fail closed on absent data rather
+        # than on evidence.
+        if "grounded_evidence" in md and not ComplianceEngine._grounded_tier_count(
+            md["grounded_evidence"]
+        ):
+            return False, "no_grounded_evidence"
         return True, None
+
+    # The tiers whose presence makes a verdict a grounded determination rather
+    # than the model's own opinion. A tier this build does not know about does
+    # NOT clear the floor: adding one is a deliberate act, and failing closed on
+    # an unrecognised census is the safe direction.
+    _GROUNDED_TIERS = ("rules", "precedents", "product_facts")
+
+    @staticmethod
+    def _grounded_tier_count(evidence: Any) -> int:
+        """How much grounded evidence the census actually reports.
+
+        Strict on purpose. `any(evidence.values())` was truthy for the string
+        "0", for an unknown key, for a negative count, for `True`, and for a
+        non-dict — five ways to clear a floor whose only job is to stop an
+        ungrounded run being graded. Anything unreadable counts as zero, so a
+        malformed census refuses instead of passing through.
+        """
+        if not isinstance(evidence, dict):
+            return 0
+        return sum(
+            value
+            for key, value in evidence.items()
+            if key in ComplianceEngine._GROUNDED_TIERS
+            # bool is an int subclass; True must not stand in for a count.
+            and isinstance(value, int) and not isinstance(value, bool)
+            and value > 0
+        )
+
+    # A run that reached a determination with named limitations must never be
+    # recorded as a clean pass: "not evaluated" is not "compliant". The SCORE is
+    # left alone deliberately — deducting points for absent evidence would
+    # fabricate a compliance judgment, which is the opposite error. It is the
+    # verdict that refuses to certify.
+    _UNCERTIFIABLE_STATUS = "flagged"
+
+    @staticmethod
+    def cap_status_for_warnings(status: str, warnings: Optional[List[Any]]) -> str:
+        if not warnings:
+            return status
+        return (
+            ComplianceEngine._UNCERTIFIABLE_STATUS
+            if status == "passed" else status
+        )
 
     # Whitelisted observability keys persisted onto analysis_runs.run_metadata.
     # Everything else in graph state (chunks, prompts, messages) stays out —
@@ -111,7 +178,14 @@ class ComplianceEngine:
         "product_unresolved",
         "product_resolution_failed",
         "scope_metadata_missing",
+        "knowledge_base_empty",
         "declared_product_line",
+        # Named limitations of a run that still reached a determination, and
+        # the evidence census the persistability floor is judged on. Both are
+        # load-bearing for the audit: they are the record of what the grade
+        # does and does not cover.
+        "analysis_warnings",
+        "grounded_evidence",
         # A global submission graded under the narrower scope its detected
         # products imply — not a refusal, but the audit must show it.
         "scope_narrowed_from_global",
@@ -295,6 +369,9 @@ class ComplianceEngine:
                     db=db,
                     analysis_run_id=str(run.id),
                     chunk_keys=(final_state.get("metadata") or {}).get("chunk_keys"),
+                    analysis_warnings=(
+                        (final_state.get("metadata") or {}).get("analysis_warnings")
+                    ),
                 )
 
                 # 7. Flip RAG chunk status to 'analyzed' so they become eligible
@@ -480,9 +557,15 @@ class ComplianceEngine:
         db: Session,
         analysis_run_id: Optional[str] = None,
         chunk_keys: Optional[Dict[str, str]] = None,
+        analysis_warnings: Optional[List[Dict[str, Any]]] = None,
     ) -> ComplianceCheck:
         """
         Persist compliance analysis results to the database.
+
+        `analysis_warnings` are the run's named evidence limitations. They do
+        not change the score — that would fabricate a penalty for something
+        that was never evaluated — but they do cap the verdict, so a partially
+        grounded run can never be stored as a clean "passed".
         """
         try:
             # Create ComplianceCheck
@@ -490,7 +573,9 @@ class ComplianceEngine:
                 submission_id=submission_id,
                 overall_score=scores.get("overall", 0.0),
                 grade=scores.get("grade", "F"),
-                status=scores.get("status", "completed"),
+                status=ComplianceEngine.cap_status_for_warnings(
+                    scores.get("status", "completed"), analysis_warnings
+                ),
                 scores=scores,
                 checked_at=datetime.utcnow()
             )

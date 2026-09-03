@@ -12,7 +12,14 @@ import { analysisIsIncomplete } from "@/components/review/AnalysisStateBanner";
 
 /** The three views of the working document, always written together. */
 export type LexicalDoc = { state: SerializedEditorState; html: string; text: string };
-import type { RevisionSource, RunSummary, ScoreBreakdown, Submission, Violation } from "@/lib/types";
+import type {
+  AnalysisWarning,
+  RevisionSource,
+  RunSummary,
+  ScoreBreakdown,
+  Submission,
+  Violation,
+} from "@/lib/types";
 
 export type SaveState = "idle" | "saving" | "error" | "conflict";
 
@@ -123,6 +130,9 @@ interface Ctx {
   // indistinguishable from the client's side.
   analysisState: string | null;
   degradedReason: string | null;
+  // Named evidence limitations of a run that DID grade the document — what the
+  // score does not cover. Empty on a fully grounded run.
+  analysisWarnings: AnalysisWarning[];
   // True when the document could NOT be cleanly graded (degraded/failed/needs
   // review). Distinct from a genuine clean grade and from a document nobody
   // has analysed yet.
@@ -191,6 +201,7 @@ interface ProviderProps {
   analysisMessage?: string | null;
   analysisState?: string | null;
   degradedReason?: string | null;
+  analysisWarnings?: AnalysisWarning[] | null;
   initialFindingsStale?: boolean;
   children: React.ReactNode;
 }
@@ -207,6 +218,7 @@ export function SubmissionWorkspaceProvider({
   analysisMessage = null,
   analysisState = null,
   degradedReason = null,
+  analysisWarnings = null,
   initialFindingsStale = false,
   children,
 }: ProviderProps) {
@@ -665,6 +677,7 @@ export function SubmissionWorkspaceProvider({
       analysisMessage,
       analysisState,
       degradedReason,
+      analysisWarnings: analysisWarnings ?? [],
       analysisIncomplete,
       optimisticAnalyzing,
       setOptimisticAnalyzing,
@@ -710,6 +723,7 @@ export function SubmissionWorkspaceProvider({
       analysisMessage,
       analysisState,
       degradedReason,
+      analysisWarnings,
       analysisIncomplete,
       optimisticAnalyzing,
       runs,

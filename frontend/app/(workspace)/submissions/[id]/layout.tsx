@@ -3,7 +3,12 @@ import { getComplianceResults, getSubmission } from "@/lib/api";
 import { SubmissionHeader } from "@/components/workspace/SubmissionHeader";
 import { AssignmentBanner } from "@/components/assignments/AssignmentBanner";
 import { SubmissionWorkspaceProvider } from "@/components/workspace/SubmissionWorkspaceContext";
-import type { ScoreBreakdown, Submission, Violation } from "@/lib/types";
+import type {
+  AnalysisWarning,
+  ScoreBreakdown,
+  Submission,
+  Violation,
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +35,7 @@ export default async function SubmissionLayout({
   let analysisMessage: string | null = null;
   let analysisState: string | null = null;
   let degradedReason: string | null = null;
+  let analysisWarnings: AnalysisWarning[] = [];
   let findingsStale = false;
   try {
     const res = await getComplianceResults(id);
@@ -47,6 +53,9 @@ export default async function SubmissionLayout({
     // refusal is indistinguishable from a document nobody analysed yet.
     analysisState = res.analysis_state ?? null;
     degradedReason = res.degraded_reason ?? null;
+    // A run that DID grade the document, on incomplete evidence. Without these
+    // the score reads as coverage it does not have.
+    analysisWarnings = res.analysis_warnings ?? [];
   } catch {
     // Submission may not yet have a check.
   }
@@ -66,6 +75,7 @@ export default async function SubmissionLayout({
       analysisMessage={analysisMessage}
       analysisState={analysisState}
       degradedReason={degradedReason}
+      analysisWarnings={analysisWarnings}
       initialFindingsStale={findingsStale}
     >
       {/* Pin to the height the workspace <main> actually hands us — the viewport

@@ -547,8 +547,12 @@ async def analyze_submission_stream(
 # is an internal token. Keys track ComplianceEngine._NEEDS_REVIEW_REASONS.
 _REFUSAL_EXPLANATIONS = {
     "product_unresolved": (
-        "the document names a product the fact-card corpus cannot ground, so "
-        "the applicable regulatory scope could not be proven"
+        "the submission's regulatory scope could not be established from the "
+        "declared product line and the products found in the document"
+    ),
+    "no_grounded_evidence": (
+        "no applicable rule, precedent or product fact card survived for this "
+        "document, so there was nothing authoritative to grade it against"
     ),
     "product_ambiguous": (
         "a product identifier in the document matches more than one fact card, "
@@ -569,6 +573,58 @@ _REFUSAL_EXPLANATIONS = {
     "analysis_incomplete": "one or more sections failed to grade",
     "no_content": "no analyzable content could be extracted",
 }
+
+
+# What a run's named limitation means for the reviewer. A warning is NOT a
+# refusal: the analysis reached a determination, and this says what that
+# determination does not cover. Keys track graph/nodes._add_warning.
+_WARNING_EXPLANATIONS = {
+    "rider_uins_without_fact_cards": (
+        "a rider or combination component named in this document has no "
+        "authoritative record of its own, so its specific benefits and "
+        "guardrails were not checked"
+    ),
+    "unknown_uins": (
+        "a product identifier in this document is not in the product corpus, "
+        "so that product's own obligations were not checked"
+    ),
+    "declared_products_without_fact_cards": (
+        "a product named in this document is on the declared catalogue but has "
+        "no authoritative record yet, so its own obligations were not checked"
+    ),
+    "precedent_evidence_unavailable": (
+        "no prior reviewer cases were available, so findings rest on rules and "
+        "product facts alone"
+    ),
+    "rule_scope_metadata_incomplete": (
+        "some rules carry no product scope and could not be proven applicable, "
+        "so they were not applied"
+    ),
+    "product_grounding_budget": (
+        "more products were identified than the analysis prompt can carry; the "
+        "regulatory scope still covers all of them"
+    ),
+    "retrieval_degraded": (
+        "per-section retrieval failed and the analysis fell back to the flat "
+        "rule set"
+    ),
+}
+
+
+def _warnings_payload(run) -> list:
+    """The run's warnings, each with a reviewer-facing explanation."""
+    raw = ((getattr(run, "run_metadata", None) or {}).get("analysis_warnings") or [])
+    out = []
+    for warning in raw:
+        if not isinstance(warning, dict):
+            continue
+        code = str(warning.get("code") or "")
+        out.append({
+            "code": code,
+            "detail": warning.get("detail"),
+            "explanation": _WARNING_EXPLANATIONS.get(code, ""),
+        })
+    return out
 
 
 def _analysis_state(submission, latest_run) -> tuple:
@@ -642,9 +698,24 @@ async def get_compliance_results(
     feedback_map = latest_feedback_map(db, [v.id for v in violations])
     counts = finding_counts(violations)
 
+    # A graded run can still be a PARTIAL one: the scope was proven and the
+    # findings are real, but some product's own record, the precedent corpus or
+    # a rule's scope tag was missing. That must not read as a clean pass — the
+    # verdict is already capped below "passed" (engine.cap_status_for_warnings)
+    # and these name exactly what the grade does not cover.
+    graded_run = (
+        db.query(AnalysisRun)
+        .filter(AnalysisRun.compliance_check_id == check.id)
+        .order_by(AnalysisRun.run_number.desc())
+        .first()
+    )
+    warnings = _warnings_payload(graded_run) if graded_run else []
+
     return {
         "submission_id": submission_id,
         "check_id": str(check.id),
+        "analysis_state": "completed_with_warnings" if warnings else "completed",
+        "analysis_warnings": warnings,
         "overall_score": check.overall_score,
         "grade": check.grade,
         "compliance_status": check.status,

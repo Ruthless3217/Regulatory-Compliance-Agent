@@ -375,3 +375,94 @@ def test_build_export_unknown_kind_raises_value_error():
     db = _db_for(check=None, violations=[], feedback=[])
     with pytest.raises(ValueError):
         ses.build_export(db, sub, "not-a-real-kind")
+
+
+# ---------------------------------------------------------------------------
+# Degraded / partial analysis state in the exported artifacts.
+#
+# The export is what LEAVES the system. A run graded on incomplete evidence
+# (engine.evaluate_persistability -> completed_with_warnings) previously
+# exported as "Score 100 · Grade A · 0 finding(s)" with nothing to say the
+# grade covered less than the whole document, and the export gate consulted
+# only `findings_are_stale`. A reader of that file could not tell a partial
+# result from a clean one.
+# ---------------------------------------------------------------------------
+
+WARNINGS = [
+    {"code": "rider_uins_without_fact_cards",
+     "detail": {"uins": ["116N216V01"], "chunk_indexes": [24]},
+     "explanation": "a rider named in this document has no authoritative record"},
+    {"code": "precedent_evidence_unavailable", "detail": {"precedents": 0}},
+]
+
+
+def _docx_text(data: bytes) -> str:
+    doc = Document(io.BytesIO(data))
+    parts = [p.text for p in doc.paragraphs]
+    for table in doc.tables:
+        parts.extend(c.text for row in table.rows for c in row.cells)
+    return "\n".join(parts)
+
+
+def test_report_docx_states_that_a_warned_grade_is_partial():
+    check = ComplianceCheck(id=uuid.uuid4(), overall_score=100.0, grade="A")
+    text = _docx_text(
+        ses._report_docx(_submission("irrelevant"), check, [], analysis_warnings=WARNINGS)
+    )
+
+    assert "incomplete evidence" in text.lower()
+    assert "116N216V01" in text
+
+
+def test_report_docx_names_every_limitation_not_just_the_first():
+    check = ComplianceCheck(id=uuid.uuid4(), overall_score=100.0, grade="A")
+    text = _docx_text(
+        ses._report_docx(_submission("irrelevant"), check, [], analysis_warnings=WARNINGS)
+    )
+
+    assert "rider_uins_without_fact_cards" in text
+    assert "precedent_evidence_unavailable" in text
+
+
+def test_report_docx_of_a_fully_grounded_run_says_nothing_extra():
+    check = ComplianceCheck(id=uuid.uuid4(), overall_score=100.0, grade="A")
+    text = _docx_text(ses._report_docx(_submission("irrelevant"), check, []))
+
+    assert "incomplete evidence" not in text.lower()
+
+
+def test_annotated_docx_carries_the_partial_state_too():
+    """The findings list is as much a claim of completeness as the score is."""
+    text = _docx_text(
+        ses._annotated_docx(_submission("guaranteed returns"), [_violation()],
+                            analysis_warnings=WARNINGS)
+    )
+
+    assert "incomplete evidence" in text.lower()
+
+
+def test_build_export_passes_the_runs_warnings_into_the_report():
+    """End to end through the dispatcher: the warnings live on the AnalysisRun
+    that produced the check, so build_export has to go and fetch them."""
+    from app.models.analysis_run import AnalysisRun
+
+    check = ComplianceCheck(id=uuid.uuid4(), overall_score=100.0, grade="A")
+    run = AnalysisRun(
+        id=uuid.uuid4(), submission_id=uuid.uuid4(), run_number=1,
+        status="completed", compliance_check_id=check.id,
+        run_metadata={"analysis_warnings": WARNINGS},
+    )
+    db = MagicMock()
+
+    def _query(model):
+        q = MagicMock()
+        q.filter.return_value = q
+        q.order_by.return_value = q
+        q.first.return_value = check if model is ComplianceCheck else run
+        q.all.return_value = []
+        return q
+
+    db.query.side_effect = _query
+    text = _docx_text(ses.build_export(db, _submission("irrelevant"), "report.docx"))
+
+    assert "incomplete evidence" in text.lower()
