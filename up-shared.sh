@@ -19,6 +19,11 @@
 #   * A platform scaffold had overwritten backend/Dockerfile + frontend/Dockerfile
 #     with placeholder stubs; the build "worked" and produced an app with no
 #     migrations, no seeds and no fact cards. We now refuse to build those.
+#   * The same scaffold also truncates the DEPENDENCY MANIFESTS (2026-09-03:
+#     backend/requirements.txt 77 lines -> 5). That build succeeds, still ships
+#     the whole app tree, and passed the image smoke-test — then the container
+#     died on `alembic upgrade head` with ModuleNotFoundError. We now marker-check
+#     the manifests, and import the boot path out of the built image.
 #   * The old health probe shelled out to curl, which the backend image does not
 #     install — so it ALWAYS printed "not healthy yet". We now probe with python.
 #   * rules.product_line only lands via `scripts.seed_rules`; skipping it silently
@@ -109,6 +114,25 @@ guard_worktree() {
     || die "frontend/Dockerfile is not the Next.js standalone build.
        Restore it:  git checkout -- frontend/Dockerfile"
 
+  # The manifests get stubbed the same way, and a stubbed manifest is worse than
+  # a stubbed Dockerfile: pip/npm install the few packages that are left, COPY . .
+  # still ships alembic/, scripts/ and data/, and verify_images passes. Nothing
+  # complains until uvicorn cannot import its own framework. Marker-check the
+  # packages the app provably cannot boot without. Deliberately NOT gated on
+  # ALLOW_DIRTY — that flag is for intentional edits, and a stub is never one.
+  local pkg dep
+  for pkg in fastapi uvicorn sqlalchemy alembic langgraph openai; do
+    grep -qi "^${pkg}[]=<>[]" backend/requirements.txt \
+      || die "backend/requirements.txt does not pin '$pkg' — that is a truncated
+       dependency manifest ($(wc -l < backend/requirements.txt) lines), not the real one.
+       Restore it:  git checkout -- backend/requirements.txt"
+  done
+  for dep in '"next"' '"react"' '"lexical"' '"recharts"'; do
+    grep -q "$dep" frontend/package.json \
+      || die "frontend/package.json does not depend on $dep — truncated manifest.
+       Restore it:  git checkout -- frontend/package.json"
+  done
+
   if command -v git >/dev/null 2>&1 && [ -d .git ]; then
     local dirty
     dirty="$(git status --porcelain -- backend/Dockerfile frontend/Dockerfile \
@@ -158,8 +182,13 @@ verify_images() {
     ls scripts/seeds/*.yaml  >/dev/null  # seed_rules reads these
     ls data/product_fact_cards/*.json >/dev/null
     ls data/disclaimers/*.json        >/dev/null
-  ' || die "backend image is incomplete — missing appuser, migrations, seeds or data/.
-       That is a partial/stub build, not a deployable image."
+    # The CMD is "alembic upgrade head && uvicorn app.main:app". With a truncated
+    # requirements.txt every check above still passes and the container dies
+    # seconds after start, so import the boot path here instead.
+    python -c "import fastapi, uvicorn, sqlalchemy, alembic, langgraph, openai"
+  ' || die "backend image is incomplete — missing appuser, migrations, seeds, data/
+       or its core Python dependencies. That is a partial/stub build, not a
+       deployable image."
 
   cli run --rm "$FRONTEND_IMAGE" sh -c 'test -f server.js && test -d .next' \
     || die "frontend image has no standalone server.js — the Next.js build stage
