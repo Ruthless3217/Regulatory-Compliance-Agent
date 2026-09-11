@@ -143,8 +143,10 @@ def test_no_product_and_no_declaration_still_fails_closed():
     assert issues and "no product was resolved" in issues[0]
 
 
-def test_unknown_uin_still_fails_closed_under_global(cards):
-    """Genuine lack of fact-card grounding is untouched by the global rule."""
+def test_unknown_uin_under_global_is_an_evidence_gap_not_a_scope_failure(cards):
+    """The global rule leaves the unknown UIN exactly where it belongs: the
+    envelope is proven, that one product's own obligations are not checked, and
+    the run says so by name instead of being discarded whole."""
     text = SYNTHETIC_DOC + "\nBajaj Life Mystery Plan (UIN: 116N999V01).\n"
     found = resolve_products(text, cards, max_matches=5, min_fuzzy_score=88)
     signals = unresolved_product_signals(text, cards)
@@ -155,10 +157,14 @@ def test_unknown_uin_still_fails_closed_under_global(cards):
     state = {
         "chunks": [{"id": "c-1", "text": text}],
         "status": "completed",
-        "metadata": {"degraded": "product_unresolved", "product_unresolved": signals},
+        "metadata": {
+            "product_unresolved": signals,
+            "grounded_evidence": {"rules": 6, "precedents": 0, "product_facts": 2},
+        },
     }
 
-    assert ComplianceEngine.evaluate_persistability(state) == (False, "product_unresolved")
+    assert "submission_scope" not in signals
+    assert ComplianceEngine.evaluate_persistability(state) == (True, None)
 
 
 # --------------------------------------------------------------------------

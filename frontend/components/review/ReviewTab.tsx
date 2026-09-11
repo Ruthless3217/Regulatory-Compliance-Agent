@@ -16,7 +16,10 @@ import { useSubmissionWorkspace } from "@/components/workspace/SubmissionWorkspa
 import { useSSEStream } from "@/lib/sse";
 import { analyzeSubmission, diffRun, getCheck } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { AnalysisStateBanner } from "@/components/review/AnalysisStateBanner";
+import {
+  AnalysisStateBanner,
+  AnalysisWarningsBanner,
+} from "@/components/review/AnalysisStateBanner";
 import type { RunDiff, Violation } from "@/lib/types";
 
 /** A rail's open/closed flag, remembered across navigation.
@@ -176,6 +179,7 @@ export function ReviewTab() {
     analysisState,
     analysisMessage,
     degradedReason,
+    analysisWarnings,
     setLexicalDoc,
     lexicalDirty,
     saveLexical,
@@ -484,6 +488,11 @@ export function ReviewTab() {
             degradedReason={degradedReason}
           />
         )}
+
+        {/* The other half of the same question. A refusal shows the banner
+            above; a grade built on incomplete evidence shows this one, so
+            "graded" never silently means "fully grounded". */}
+        {!isAnalyzing && <AnalysisWarningsBanner warnings={analysisWarnings} />}
 
         {/* One notice, not two. Both of these say "the document moved on since
             the analysis" and both are fixed by the same re-run, so stacking

@@ -233,7 +233,12 @@ def test_global_filing_with_many_products_still_grades(cards, name):
     }) == (True, None)
 
 
-def test_unknown_uin_among_many_products_still_fails_closed(cards, name):
+def test_unknown_uin_among_many_products_is_reported_not_hidden(cards, name):
+    """Five resolved products prove the envelope; the sixth, unknown one is a
+    bounded evidence gap. It must be named on the run — never silently ignored
+    (which would hide it) and never used to discard the other five's analysis
+    (which is what refusing did). See
+    tests/test_partial_analysis_unresolved_products.py."""
     from app.services.agents.compliance.engine import ComplianceEngine
     from app.services.product_resolver import unresolved_product_signals
 
@@ -242,8 +247,21 @@ def test_unknown_uin_among_many_products_still_fails_closed(cards, name):
     signals = unresolved_product_signals(text, cards)
 
     assert signals["unknown_uins"] == ["116N999V01"]
-    assert ComplianceEngine.evaluate_persistability({
+    state = {
         "chunks": [{"id": "c-1", "text": text}],
         "status": "completed",
-        "metadata": {"degraded": "product_unresolved", "product_unresolved": signals},
-    }) == (False, "product_unresolved")
+        "metadata": {
+            "product_unresolved": signals,
+            "analysis_warnings": [
+                {"code": "unknown_uins", "detail": {"uins": ["116N999V01"]}},
+            ],
+            "grounded_evidence": {"rules": 9, "precedents": 2, "product_facts": 3},
+        },
+    }
+
+    assert ComplianceEngine.evaluate_persistability(state) == (True, None)
+    audit = ComplianceEngine.run_metadata_from_state(state)
+    assert audit["analysis_warnings"][0]["detail"]["uins"] == ["116N999V01"]
+    assert ComplianceEngine.cap_status_for_warnings(
+        "passed", audit["analysis_warnings"]
+    ) == "flagged"

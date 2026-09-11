@@ -878,8 +878,8 @@ class ApprovalRequest(BaseModel):
     override_reason: Optional[str] = None
 
 
-def _latest_run_is_scoped(db: Session, check) -> bool:
-    """Was the run that produced this check a partial one? Same lookup
+def _latest_run_metadata(db: Session, check) -> dict:
+    """`run_metadata` of the run that produced this check. Same lookup
     POST /analyze/{id}/scoped uses to stamp `scoped: true` on it."""
     run = (
         db.query(AnalysisRun)
@@ -887,7 +887,24 @@ def _latest_run_is_scoped(db: Session, check) -> bool:
         .order_by(AnalysisRun.run_number.desc())
         .first()
     )
-    return bool((getattr(run, "run_metadata", None) or {}).get("scoped"))
+    return (getattr(run, "run_metadata", None) or {}) if run is not None else {}
+
+
+def _latest_run_is_scoped(db: Session, check) -> bool:
+    """Was the run that produced this check a partial re-run?"""
+    return bool(_latest_run_metadata(db, check).get("scoped"))
+
+
+def _latest_run_warnings(db: Session, check) -> list:
+    """The run's named evidence limitations (graph/nodes._add_warning).
+
+    Non-empty means the analysis reached a determination on incomplete
+    evidence: the regulatory scope was proven, but some product's own record,
+    the precedent corpus or a rule's scope tag was missing. That must not be
+    signed off by accident.
+    """
+    raw = _latest_run_metadata(db, check).get("analysis_warnings") or []
+    return [w for w in raw if isinstance(w, dict) and w.get("code")]
 
 
 def _unresolved_criticals(db: Session, check) -> list:
@@ -914,7 +931,15 @@ def _approval_gate(db: Session, submission: Submission) -> dict:
     check = export_common.latest_check(db, submission.id)
     blockers = []
 
-    if check is None or (check.status or "completed") != "completed":
+    # `check is None` is the whole question here. It used to also demand
+    # `check.status == "completed"`, which nothing writes: persist_results
+    # stores `scores["status"]` and ScoringService returns only passed /
+    # flagged / failed. That made this blocker fire on every genuinely analysed
+    # submission, so approval was unreachable in production while the tests
+    # passed against a hand-set status the pipeline never produces. The states
+    # it was reaching for are covered by `not_gradeable` (no check persisted),
+    # `scoped_run` (a partial re-run) and `partial_analysis` (below).
+    if check is None:
         blockers.append((
             "no_analysis", False,
             "There is no completed analysis to approve — run the compliance "
@@ -934,6 +959,19 @@ def _approval_gate(db: Session, submission: Submission) -> dict:
         ))
     if check is not None and _latest_run_is_scoped(db, check):
         blockers.append(("scoped_run", False, SCOPED_RUN_REFUSAL))
+    warnings = _latest_run_warnings(db, check) if check is not None else []
+    if warnings:
+        # A grade built on incomplete evidence. Overridable, deliberately: the
+        # analysis IS valid for what it covered, and a human who states a
+        # reason may sign it off. What must not happen is signing it off
+        # without being told — "not evaluated" is not "compliant".
+        blockers.append((
+            "partial_analysis", True,
+            "This document was graded on incomplete evidence "
+            f"({', '.join(w['code'] for w in warnings)}) — the score covers "
+            "less than the whole document. Approving it requires an explicit "
+            "override_reason.",
+        ))
 
     criticals = _unresolved_criticals(db, check)
     if criticals:

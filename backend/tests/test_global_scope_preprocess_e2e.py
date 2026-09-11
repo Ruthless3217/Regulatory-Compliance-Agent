@@ -154,16 +154,25 @@ def test_a_generic_document_filed_as_global_is_unaffected(graph_env):
     assert "scope_narrowed_from_global" not in out["metadata"]
 
 
-def test_unknown_uin_under_global_still_refuses_to_grade(graph_env):
-    """Fail-closed guarantee: no fact card, no proven scope, no grade."""
+def test_unknown_uin_under_global_grades_with_a_named_warning(graph_env):
+    """An unknown UIN beside three resolved products is an EVIDENCE gap, not an
+    unprovable scope — the envelope is proven by the products that did resolve
+    (and by the global filing). It used to refuse, which discarded a complete
+    analysis of the three grounded products over the fourth.
+
+    The fail-closed guarantee it was reaching for is still enforced, twice
+    over: the unknown UIN is never grounded against another product's card, and
+    the run cannot be certified — see
+    tests/test_partial_analysis_unresolved_products.py.
+    """
     out = graph_env(MULTI_PRODUCT_DOC + "\nMystery Plan (UIN: 116N999V01).\n", "global")
     md = out["metadata"]
 
-    assert md["degraded"] == "product_unresolved"
+    assert "degraded" not in md
     assert md["product_unresolved"]["unknown_uins"] == ["116N999V01"]
-    assert ComplianceEngine.evaluate_persistability(_final_state(out)) == (
-        False, "product_unresolved",
-    )
+    warning = next(w for w in md["analysis_warnings"] if w["code"] == "unknown_uins")
+    assert warning["detail"]["uins"] == ["116N999V01"]
+    assert ComplianceEngine.evaluate_persistability(_final_state(out)) == (True, None)
 
 
 def test_wrong_declared_family_still_refuses_to_grade(graph_env):

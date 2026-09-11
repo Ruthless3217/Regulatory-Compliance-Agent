@@ -82,6 +82,27 @@ def findings_are_stale(db: Session, submission_id) -> bool:
     return newest_edit > check.checked_at
 
 
+def analysis_warnings_for(db: Session, check: Optional[ComplianceCheck]) -> List[dict]:
+    """The named evidence limitations of the run that produced this check.
+
+    Lives on ``analysis_runs.run_metadata`` (graph/nodes._add_warning), so any
+    surface that reports a score has to fetch it rather than infer it from the
+    check alone. Empty for a fully grounded run, and for a check no run claims.
+    """
+    if check is None:
+        return []
+    from app.models.analysis_run import AnalysisRun
+
+    run = (
+        db.query(AnalysisRun)
+        .filter(AnalysisRun.compliance_check_id == check.id)
+        .order_by(AnalysisRun.run_number.desc())
+        .first()
+    )
+    raw = (getattr(run, "run_metadata", None) or {}).get("analysis_warnings") or []
+    return [w for w in raw if isinstance(w, dict) and w.get("code")]
+
+
 def check_violations(db: Session, check: Optional[ComplianceCheck]) -> List[Violation]:
     """All violations of one check, in finding order. Empty if never analyzed."""
     if check is None:

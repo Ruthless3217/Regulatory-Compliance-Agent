@@ -125,15 +125,21 @@ def test_ambiguity_metadata_is_retained_in_run_audit():
     assert audit["product_match"][0]["candidates"] == AMBIGUOUS_MATCH["candidates"]
 
 
-def test_unresolved_product_blocks_grade_and_is_a_review_reason():
+def test_unprovable_product_scope_blocks_grade_and_is_a_review_reason():
+    """`product_unresolved` now means exactly one thing: the regulatory scope
+    could not be established. A missing fact card for a named product is an
+    evidence gap and is reported as a warning instead
+    (tests/test_partial_analysis_unresolved_products.py)."""
     state = {
         "chunks": [{"id": "chunk-1", "text": "creative"}],
         "status": "completed",
         "metadata": {
-            "degraded": "product_unresolved",
             "product_unresolved": {
+                "submission_scope": [
+                    "no product was resolved and no supported product_line "
+                    "was declared"
+                ],
                 "unknown_uins": ["116N999V01"],
-                "declared_products_without_fact_cards": [],
             },
         },
     }
@@ -177,26 +183,52 @@ def test_resolution_failure_is_a_needs_review_reason():
     assert "product_resolution_failed" in ComplianceEngine._NEEDS_REVIEW_REASONS
 
 
-def test_scope_metadata_gap_blocks_persistence_instead_of_silent_rule_drop():
+def test_scope_metadata_gap_is_reported_instead_of_dropping_rules_silently():
+    """The applicability judge still rejects every untagged rule, per item —
+    nothing is ever admitted on a guess. What changed is that the rejection is
+    NAMED on the run rather than aborting it: an untagged rule is a recall loss
+    with a known cause, and the floor below still refuses if it leaves the run
+    with no evidence at all."""
+    metadata = {
+        "scope_metadata_missing": {
+            "count": 1,
+            "examples": [{"corpus": "rules", "id": "r-1"}],
+        },
+        "analysis_warnings": [
+            {"code": "rule_scope_metadata_incomplete", "detail": {"count": 1}},
+        ],
+    }
     state = {
         "chunks": [{"id": "chunk-1", "text": "creative"}],
         "status": "completed",
         "metadata": {
-            "scope_metadata_missing": {
-                "count": 1,
-                "examples": [{"corpus": "rules", "id": "r-1"}],
-            },
+            **metadata,
+            "grounded_evidence": {"rules": 8, "precedents": 3, "product_facts": 1},
         },
     }
 
-    assert ComplianceEngine.evaluate_persistability(state) == (
+    assert ComplianceEngine.evaluate_persistability(state) == (True, None)
+    assert ComplianceEngine.run_metadata_from_state(state)["analysis_warnings"]
+
+    starved = {
+        **state,
+        "metadata": {
+            **metadata,
+            "grounded_evidence": {"rules": 0, "precedents": 0, "product_facts": 0},
+        },
+    }
+
+    assert ComplianceEngine.evaluate_persistability(starved) == (
         False,
-        "scope_metadata_missing",
+        "no_grounded_evidence",
     )
-    assert "scope_metadata_missing" in ComplianceEngine._NEEDS_REVIEW_REASONS
 
 
-def test_unresolved_signal_skips_grounding_even_if_degraded_slot_differs(monkeypatch):
+def test_unprovable_scope_skips_grounding_even_if_degraded_slot_differs(monkeypatch):
+    """The `degraded` slot is last-writer-wins, so it must not be what decides
+    whether grounding is safe. An evidence gap no longer skips grounding at all
+    — withholding the resolved products' own cards made the analysis worse and
+    then refused it (test_partial_analysis_unresolved_products.py)."""
     from app.config import settings
 
     monkeypatch.setattr(settings, "product_grounding_enabled", True)
@@ -205,8 +237,8 @@ def test_unresolved_signal_skips_grounding_even_if_degraded_slot_differs(monkeyp
             "degraded": "rag_degraded",
             "product_match": [{"uin": "116N208V03"}],
             "product_unresolved": {
+                "submission_scope": ["unsupported declared product_line: bogus"],
                 "unknown_uins": ["116N999V01"],
-                "declared_products_without_fact_cards": [],
             },
         },
     }

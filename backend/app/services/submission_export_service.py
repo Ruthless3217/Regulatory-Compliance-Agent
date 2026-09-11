@@ -73,6 +73,49 @@ def _header(doc: Document, title: str, subtitle: str = "") -> None:
         doc.add_paragraph(subtitle)
 
 
+def _analysis_state_note(doc: Document, analysis_warnings) -> None:
+    """State, in the exported file, that the analysis was partial.
+
+    The export is what leaves the system, and a report reading
+    "Score 100 · Grade A · 0 finding(s)" is a claim of coverage. When the run
+    was graded on incomplete evidence (engine.evaluate_persistability ->
+    completed_with_warnings) the score is true about what was checked and
+    silent about what was not, so the file has to say which limitations
+    applied. No-ops for a fully grounded run.
+    """
+    warnings = [
+        w for w in (analysis_warnings or [])
+        if isinstance(w, dict) and w.get("code")
+    ]
+    if not warnings:
+        return
+    para = doc.add_paragraph()
+    para.add_run(
+        "PARTIAL ANALYSIS — this document was graded on incomplete evidence. "
+        "The score below covers less than the whole document and is not a "
+        "certification of compliance."
+    ).bold = True
+    for warning in warnings:
+        detail = warning.get("detail") if isinstance(warning.get("detail"), dict) else {}
+        scope = []
+        uins = detail.get("uins")
+        if isinstance(uins, list) and uins:
+            scope.append("UIN " + ", ".join(str(u) for u in uins))
+        sections = detail.get("chunk_indexes")
+        if isinstance(sections, list) and sections:
+            # 0-based on the wire; a reader counts sections from 1.
+            scope.append(
+                "section" + ("s " if len(sections) > 1 else " ")
+                + ", ".join(str(int(i) + 1) for i in sections)
+            )
+        line = warning.get("explanation") or warning["code"]
+        if warning.get("explanation"):
+            line = f"{line} ({warning['code']})"
+        if scope:
+            line = f"{line} — {'; '.join(scope)}"
+        doc.add_paragraph(line, style="List Bullet")
+
+
 def _rebuilt_clean_docx(submission: Submission) -> bytes:
     """Plain-text reflow. Only for uploads with no DOCX to preserve."""
     doc = Document()
@@ -115,12 +158,18 @@ def _clean_docx(submission: Submission) -> bytes:
     )
 
 
-def _annotated_docx(submission: Submission, violations: List[Violation]) -> bytes:
+def _annotated_docx(
+    submission: Submission,
+    violations: List[Violation],
+    analysis_warnings=None,
+) -> bytes:
     text = ec.document_text(submission)
     spans = ec.find_spans(text, violations) if text else []
 
     doc = Document()
     _header(doc, submission.title or "Submission", "Annotated — highlights mark flagged text")
+    # A findings list asserts completeness just as a score does.
+    _analysis_state_note(doc, analysis_warnings)
 
     if not text:
         doc.add_paragraph(_NO_CONTENT_NOTICE)
@@ -174,7 +223,10 @@ def _annotated_docx(submission: Submission, violations: List[Violation]) -> byte
 
 
 def _report_docx(
-    submission: Submission, check: Optional[ComplianceCheck], violations: List[Violation]
+    submission: Submission,
+    check: Optional[ComplianceCheck],
+    violations: List[Violation],
+    analysis_warnings=None,
 ) -> bytes:
     doc = Document()
     if check is not None:
@@ -185,6 +237,7 @@ def _report_docx(
     else:
         subtitle = "No analysis run yet"
     _header(doc, submission.title or "Submission", subtitle)
+    _analysis_state_note(doc, analysis_warnings)
 
     table = doc.add_table(rows=1, cols=7)
     table.style = "Table Grid"
@@ -240,11 +293,15 @@ def build_export(db: Session, submission: Submission, kind: str) -> bytes:
     check = ec.latest_check(db, submission.id)
     violations = ec.check_violations(db, check)
     feedback = ec.submission_feedback(db, submission.id)
+    # The run that produced this check records what its grade does NOT cover.
+    # `clean` is the document itself and `feedback-report` is the reviewer's
+    # own record — neither asserts an analysis result, so neither is annotated.
+    warnings = ec.analysis_warnings_for(db, check)
 
     builders = {
         "clean": lambda: _clean_docx(submission),
-        "annotated": lambda: _annotated_docx(submission, violations),
-        "report": lambda: _report_docx(submission, check, violations),
+        "annotated": lambda: _annotated_docx(submission, violations, warnings),
+        "report": lambda: _report_docx(submission, check, violations, warnings),
         "feedback-report": lambda: _feedback_report_docx(submission, feedback),
     }
 

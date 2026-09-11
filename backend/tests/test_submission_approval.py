@@ -151,14 +151,20 @@ def _submission(db, status="analyzed", approval_status="pending") -> Submission:
     return sub
 
 
-def _analyzed(db, sub, *, checked_at=NOW, check_status="completed", scoped=False):
-    """A completed whole-document analysis: one check + the run that made it."""
+def _analyzed(db, sub, *, checked_at=NOW, check_status="flagged", scoped=False,
+              warnings=None):
+    """A completed whole-document analysis: one check + the run that made it.
+
+    `check_status` defaults to a value the engine can actually write —
+    ScoringService returns passed / flagged / failed and nothing else."""
     check = ComplianceCheck(
         id=uuid.uuid4(), submission_id=sub.id, checked_at=checked_at,
         overall_score=82.0, grade="B", status=check_status,
     )
     db.add(check)
     meta = {"scoped": True, "scope": {"section_titles": ["Benefits"]}} if scoped else None
+    if warnings:
+        meta = {**(meta or {}), "analysis_warnings": warnings}
     db.add(AnalysisRun(
         id=uuid.uuid4(), submission_id=sub.id, run_number=1, status="completed",
         compliance_check_id=check.id, run_metadata=meta,
@@ -337,15 +343,53 @@ def test_approve_refuses_a_submission_that_was_never_analysed():
     assert sub.approval_status == "pending"
 
 
-def test_approve_refuses_when_the_latest_check_is_not_completed():
+@pytest.mark.parametrize("check_status", ["passed", "flagged", "failed"])
+def test_a_real_engine_written_check_is_approvable(check_status):
+    """The gate used to require `check.status == "completed"`. Nothing writes
+    that: `persist_results` stores `scores["status"]`, and ScoringService only
+    ever returns passed / flagged / failed. So the `no_analysis` blocker fired
+    on EVERY genuinely analysed submission and approval was unreachable. The
+    blocker's real question is whether a check exists at all."""
     db = FakeSession()
     sub = _submission(db)
-    _analyzed(db, sub, check_status="partial")
+    _analyzed(db, sub, check_status=check_status)
+
+    assert _codes(_state(db, sub)) == set()
+    _approve(db, sub)
+
+    assert sub.approval_status == "approved"
+
+
+def test_a_partially_grounded_run_blocks_approval_until_overridden():
+    """The replacement for the dead status check, on a signal the pipeline
+    actually writes. A run graded on incomplete evidence must not be signed off
+    by accident — but a human who states a reason may still sign it."""
+    db = FakeSession()
+    sub = _submission(db)
+    _analyzed(db, sub, warnings=[
+        {"code": "rider_uins_without_fact_cards", "detail": {"uins": ["116N216V01"]}},
+    ])
 
     err = _refusal(db, sub)
-
     assert err.status_code == 409
-    assert "no completed analysis" in err.detail
+    assert "incomplete evidence" in err.detail
+    assert "rider_uins_without_fact_cards" in err.detail
+    assert sub.approval_status == "pending"
+
+    state = _state(db, sub)
+    assert _codes(state) == {"partial_analysis"}
+    assert [b["overridable"] for b in state["blockers"]] == [True]
+
+    _approve(db, sub, override_reason="Rider knowledge confirmed out of band.")
+    assert sub.approval_status == "approved"
+
+
+def test_a_fully_grounded_run_raises_no_partial_blocker():
+    db = FakeSession()
+    sub = _submission(db)
+    _analyzed(db, sub, warnings=[])
+
+    assert "partial_analysis" not in _codes(_state(db, sub))
 
 
 @pytest.mark.parametrize("status", ["needs_review", "failed"])

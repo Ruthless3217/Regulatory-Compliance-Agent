@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AnalysisStateBanner,
+  AnalysisWarningsBanner,
   analysisIsIncomplete,
 } from "@/components/review/AnalysisStateBanner";
 
@@ -109,5 +110,71 @@ describe("AnalysisStateBanner", () => {
     );
 
     expect(container.firstChild).toBeNull();
+  });
+});
+
+/** The third state: graded, but not on complete evidence.
+ *
+ * A refusal shows the banner above. A fully grounded grade shows nothing. In
+ * between sits a run whose scope was proven and whose findings are real, but
+ * which could not check some product's own obligations — and whose score
+ * therefore covers less than the whole document. Without this the reviewer
+ * reads a partial grade as a full one, which is the exact failure mode the
+ * refusal was over-firing to prevent.
+ */
+describe("AnalysisWarningsBanner", () => {
+  const RIDER = {
+    code: "rider_uins_without_fact_cards",
+    detail: { uins: ["116N216V01"], chunk_indexes: [24] },
+    explanation:
+      "a rider or combination component named in this document has no authoritative record of its own",
+  };
+
+  it("renders nothing for a fully grounded run", () => {
+    const { container } = render(<AnalysisWarningsBanner warnings={[]} />);
+    expect(container.innerHTML).toBe("");
+
+    const absent = render(<AnalysisWarningsBanner warnings={null} />);
+    expect(absent.container.innerHTML).toBe("");
+  });
+
+  it("says the grade covers less than the whole document", () => {
+    render(<AnalysisWarningsBanner warnings={[RIDER]} />);
+
+    expect(screen.getByRole("status")).toBeTruthy();
+    expect(screen.getByText(/covers\s+less than the whole document/i)).toBeTruthy();
+  });
+
+  it("names the product and the section the gap is in", () => {
+    render(<AnalysisWarningsBanner warnings={[RIDER]} />);
+
+    expect(screen.getByText(/no authoritative record of its own/i)).toBeTruthy();
+    // 0-based on the wire, 1-based for a reader counting sections.
+    expect(screen.getByText(/UIN 116N216V01, section 25/)).toBeTruthy();
+  });
+
+  it("lists every warning rather than only the first", () => {
+    render(
+      <AnalysisWarningsBanner
+        warnings={[
+          RIDER,
+          {
+            code: "precedent_evidence_unavailable",
+            explanation: "no prior reviewer cases were available",
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText(/no prior reviewer cases/i)).toBeTruthy();
+  });
+
+  it("still shows a warning whose code this build has no phrasing for", () => {
+    // A newer backend's warning must never render as silence — silence reads
+    // as "fully grounded".
+    render(<AnalysisWarningsBanner warnings={[{ code: "brand_new_gap" }]} />);
+
+    expect(screen.getAllByText(/brand_new_gap/).length).toBeGreaterThan(0);
   });
 });

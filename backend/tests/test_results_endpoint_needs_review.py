@@ -83,13 +83,15 @@ def _submission(status):
     return Submission(id=SUB_ID, title="Range comparison sheet", status=status)
 
 
-def _run(status, degraded_reason, run_number=1):
+def _run(status, degraded_reason, run_number=1, run_metadata=None, check_id=None):
     return AnalysisRun(
         id=uuid.uuid4(),
         submission_id=SUB_ID,
         run_number=run_number,
         status=status,
         degraded_reason=degraded_reason,
+        run_metadata=run_metadata,
+        compliance_check_id=check_id,
         started_at=NOW,
         finished_at=NOW,
     )
@@ -168,3 +170,88 @@ def test_graded_submission_is_unchanged_by_the_refusal_reporting():
     assert body["grade"] == "B"
     assert "message" not in body
     assert body.get("degraded_reason") is None
+    assert body["analysis_state"] == "completed"
+    assert body["analysis_warnings"] == []
+
+
+# --------------------------------------------------------------------------
+# A graded run can still be a PARTIAL one. Between "refused" and "certified"
+# there is now a third answer, and it has to be legible.
+# --------------------------------------------------------------------------
+
+
+def _graded_check(status="flagged"):
+    return ComplianceCheck(
+        id=uuid.uuid4(),
+        submission_id=SUB_ID,
+        overall_score=88,
+        grade="B",
+        status=status,
+        scores={"overall": 88},
+        checked_at=NOW,
+    )
+
+
+WARNED_RUN_METADATA = {
+    "analysis_warnings": [
+        {
+            "code": "rider_uins_without_fact_cards",
+            "detail": {"uins": ["116N216V01"], "chunk_indexes": [24]},
+        },
+        {"code": "precedent_evidence_unavailable", "detail": {"precedents": 0}},
+    ],
+    "grounded_evidence": {"rules": 0, "precedents": 0, "product_facts": 2},
+}
+
+
+def test_a_partially_grounded_grade_is_reported_as_such():
+    check = _graded_check()
+    db = _Db(
+        _submission("analyzed"), check=check,
+        runs=[_run("completed", None, run_metadata=WARNED_RUN_METADATA,
+                   check_id=check.id)],
+    )
+
+    body = _results(db)
+
+    assert body["analysis_state"] == "completed_with_warnings"
+    assert body["overall_score"] == 88, "the score reports what was found"
+    assert body["compliance_status"] == "flagged", "but it is not a clean pass"
+
+
+def test_each_warning_names_what_the_grade_does_not_cover():
+    check = _graded_check()
+    db = _Db(
+        _submission("analyzed"), check=check,
+        runs=[_run("completed", None, run_metadata=WARNED_RUN_METADATA,
+                   check_id=check.id)],
+    )
+
+    warnings = {w["code"]: w for w in _results(db)["analysis_warnings"]}
+
+    assert set(warnings) == {
+        "rider_uins_without_fact_cards", "precedent_evidence_unavailable",
+    }
+    rider = warnings["rider_uins_without_fact_cards"]
+    assert rider["detail"]["uins"] == ["116N216V01"]
+    assert rider["detail"]["chunk_indexes"] == [24]
+    # An internal token is not an explanation. Every warning must arrive with
+    # one, or the reviewer is back to guessing what the grade means.
+    assert all(w["explanation"] for w in warnings.values())
+
+
+def test_an_unrecognised_warning_code_is_still_surfaced():
+    """A warning added by a newer backend must never vanish because this
+    endpoint has no phrasing for it yet — silence would read as 'fully
+    grounded'."""
+    check = _graded_check()
+    db = _Db(
+        _submission("analyzed"), check=check,
+        runs=[_run("completed", None, check_id=check.id,
+                   run_metadata={"analysis_warnings": [{"code": "brand_new"}]})],
+    )
+
+    body = _results(db)
+
+    assert body["analysis_state"] == "completed_with_warnings"
+    assert [w["code"] for w in body["analysis_warnings"]] == ["brand_new"]
