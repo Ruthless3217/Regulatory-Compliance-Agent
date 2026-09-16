@@ -79,7 +79,38 @@ def _hit_to_precedent_legacy(hit: SearchHit) -> Dict[str, Any]:
         # The legacy table has no such column; keep the key so consumers can
         # read it unconditionally.
         "is_reviewer": False,
+        # DECLARED ABSENCE, not an omission. rag_compliance_examples has no
+        # product column at all, so the applicability judge (rag/applicability
+        # ._judge) rejects every row as `scope_metadata_missing`. Emitting the
+        # key with None makes that a stated fact rather than a missing-key
+        # accident, and keeps the rejection honest: these 5,229 rows come from
+        # 431 editorial articles (tax, NPS, KYC, the Union Budget), not product
+        # collateral, so there is no product scope to derive. Tagging them
+        # `global` would raise the acceptance count by inventing grounding.
+        "product_category": None,
     }
+
+
+#: One warning per process, not one per chunk — the fallback fires on every
+#: retrieval of every chunk of every run.
+_legacy_scope_warning_emitted = False
+
+
+def warn_legacy_corpus_is_unscoped() -> None:
+    """Say once, loudly, why the legacy precedent tier contributes nothing."""
+    global _legacy_scope_warning_emitted
+    if _legacy_scope_warning_emitted:
+        return
+    _legacy_scope_warning_emitted = True
+    logger.warning(
+        "precedent fallback: rag_compliance_examples carries no "
+        "product_category column, so every row it returns is rejected by the "
+        "applicability judge as scope_metadata_missing and the precedent tier "
+        "contributes nothing. This is honest, not a bug: the corpus is "
+        "editorial content with no product scope to derive. Populating "
+        "precedent_cases (scripts.ingest_precedent_cases), or curating a "
+        "product scope onto the legacy rows, is what makes this tier usable."
+    )
 
 
 # Cache: None = not checked, True = has rows, False = empty.
@@ -107,6 +138,8 @@ def _check_precedent_cases_populated() -> bool:
         _precedent_cases_populated,
         "NOT fall back to" if _precedent_cases_populated else "fall back to",
     )
+    if not _precedent_cases_populated:
+        warn_legacy_corpus_is_unscoped()
     return _precedent_cases_populated
 
 

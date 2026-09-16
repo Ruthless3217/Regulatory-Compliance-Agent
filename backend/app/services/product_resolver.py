@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import re
 from collections import Counter
-from typing import Any, Dict, FrozenSet, List, Optional, Set
+from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from rapidfuzz import fuzz
 
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 _UIN_RE = re.compile(r"\b\d{3}[A-Z]\d{3}V\d{2}\b", re.IGNORECASE)
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
+_WORD_RE_ANY_CASE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 
 # Version/variant markers (eTouch II, Goal Assure IV, Fortune Gain 2). They
 # distinguish editions of one product, not one product from another, so a
@@ -84,12 +85,147 @@ def _identity_tokens(name: str, brand: FrozenSet[str]) -> Set[str]:
     }
 
 
+def _token_spans(text: str) -> List[Tuple[str, int, int]]:
+    """(token, char_start, char_end) for every token, in document order.
+
+    The character span is what lets the edition check honour the document's
+    own punctuation: "eTouch. Our" and "eTouch, a plan" delimit the name;
+    "Goal Plus" does not.
+    """
+    # Matched case-insensitively on the ORIGINAL text so the offsets are exact;
+    # lowercasing first could shift them for some Unicode letters.
+    return [
+        (m.group(0).lower(), m.start(), m.end())
+        for m in _WORD_RE_ANY_CASE.finditer(text or "")
+    ]
+
+
 def _token_positions(text: str) -> Dict[str, List[int]]:
     """token -> every position it occupies, built once per document."""
     positions: Dict[str, List[int]] = {}
     for index, token in enumerate(_tokens(text)):
         positions.setdefault(token, []).append(index)
     return positions
+
+
+def _name_vocabulary(names: List[str], brand: FrozenSet[str]) -> FrozenSet[str]:
+    """Every non-brand, non-version token any curated product name uses.
+
+    This is what "name-like" means for the edition check, and it is derived
+    from the corpus in the same way `_brand_tokens` is — never from a
+    hand-written list. On the real corpus it contains `plus`, `elite`,
+    `platinum`, `variant`, `rop`, `gold`, `horizon`; it does not contain
+    `is`, `our`, `offers`, `protects`.
+    """
+    vocabulary: Set[str] = set()
+    for name in names:
+        for token in _tokens(name):
+            if token not in brand and not _VERSION_TOKEN_RE.match(token):
+                vocabulary.add(token)
+    return frozenset(vocabulary)
+
+
+def _identity_mentions(
+    positions: Dict[str, List[int]], identity: Set[str], window: int
+) -> List[Tuple[int, int]]:
+    """Every (first_index, last_index) where all identity tokens co-occur
+    within `window` — each local mention, not just the tightest one.
+
+    A document can name a product several times with different neighbours
+    ("...Goal III..." here, "...Goal Plus..." there), and the edition verdict
+    must weigh all of them.
+    """
+    if not identity or any(token not in positions for token in identity):
+        return []
+    anchor = min(identity, key=lambda t: len(positions[t]))
+    others = [positions[t] for t in identity if t != anchor]
+    mentions: List[Tuple[int, int]] = []
+    for at in positions[anchor]:
+        lo, hi = at, at
+        for occurrences in others:
+            nearest = min(occurrences, key=lambda i: abs(i - at))
+            if abs(nearest - at) > window:
+                break
+            lo, hi = min(lo, nearest), max(hi, nearest)
+        else:
+            if hi - lo <= window and (lo, hi) not in mentions:
+                mentions.append((lo, hi))
+    return mentions
+
+
+def _adjacent_in_run(
+    spans: List[Tuple[str, int, int]], text: str, index: int, step: int
+) -> Optional[str]:
+    """The token one step away, if only whitespace separates it — else None.
+
+    Punctuation ends a product name in the document's own grammar, so a token
+    across a period, comma, dash or bracket is not in the edition slot.
+    """
+    neighbour = index + step
+    if neighbour < 0 or neighbour >= len(spans):
+        return None
+    a, b = sorted((index, neighbour))
+    between = text[spans[a][2]:spans[b][1]]
+    if between.strip():
+        return None
+    return spans[neighbour][0]
+
+
+def _classify_edition(
+    text: str,
+    spans: List[Tuple[str, int, int]],
+    positions: Dict[str, List[int]],
+    name: str,
+    brand: FrozenSet[str],
+    vocabulary: FrozenSet[str],
+) -> Tuple[str, Optional[str], Optional[str]]:
+    """(verdict, candidate_edition, document_edition) for one candidate name.
+
+    Only a candidate whose name carries a version token can be contradicted:
+    version stripping is the one place the resolver deliberately matches less
+    than the full name, so it is the one place the document can say more than
+    the candidate does. Each local mention is judged by the token adjacent to
+    the identity phrase in the same punctuation-free run — the EDITION SLOT,
+    which on this corpus is where 13 of 16 version-bearing names put their
+    version token:
+
+        confirmed     the candidate's own version token is in the slot
+        contradicted  a name-like token the candidate does not have is there
+        neutral       nothing name-like is there
+
+    One confirmation wins (a document naming both "Goal III" and "Goal Plus"
+    is a two-product document). Otherwise one contradiction refuses. Otherwise
+    the neutral case keeps the existing no-version recall ("eTouch" resolves
+    to "eTouch II"). Never a similarity threshold, never a UIN letter.
+    """
+    full_tokens = set(_tokens(name))
+    versions = {t for t in full_tokens if _VERSION_TOKEN_RE.match(t)}
+    if not versions:
+        return "not_applicable", None, None
+    identity = _identity_tokens(name, brand)
+    candidate_edition = ",".join(sorted(versions))
+    contradiction: Optional[str] = None
+    for lo, hi in _identity_mentions(positions, identity, _IDENTITY_WINDOW_TOKENS):
+        # Both slots of ONE mention are weighed before it counts as anything:
+        # "Group Fortune Gain II" carries a confirming suffix AND a foreign
+        # prefix, and mixed evidence is not proof — it fails closed.
+        confirmed_by: Optional[str] = None
+        contradicted_by: Optional[str] = None
+        for slot in (_adjacent_in_run(spans, text, hi, +1),
+                     _adjacent_in_run(spans, text, lo, -1)):
+            if slot is None or slot in brand or slot in full_tokens:
+                if slot in versions:
+                    confirmed_by = slot
+                continue
+            if _VERSION_TOKEN_RE.match(slot) or slot in vocabulary:
+                contradicted_by = contradicted_by or slot
+        if confirmed_by and not contradicted_by:
+            return "confirmed", candidate_edition, confirmed_by
+        if contradicted_by:
+            contradiction = contradiction or contradicted_by
+    if contradiction:
+        return "contradicted", candidate_edition, contradiction
+    return "neutral", candidate_edition, None
 
 
 def _min_identity_window(
@@ -205,7 +341,26 @@ def unresolved_product_signals(
         "unknown_uins": unknown_uins,
         "rider_uins_without_fact_cards": rider_uins_without_fact_cards,
         "declared_products_without_fact_cards": sorted(set(missing_names)),
+        # Products the document names by base but contradicts by edition
+        # ("Goal Plus" against the card for "Goal III"). The corpus has no
+        # card for what the document actually names.
+        "edition_conflicts": edition_conflicts(text, fact_card_service),
     }
+
+
+def edition_conflicts(text: str, fact_card_service) -> List[Dict[str, Any]]:
+    """Candidates the document names by base but contradicts by edition.
+
+    "Invest Protect Goal Plus" against the card for "Invest Protect Goal III":
+    the identity phrase is locally present and the similarity score is high,
+    but the document's edition slot says `plus` and the candidate's `iii`
+    appears nowhere. These are NOT resolved — and they are not silently dropped
+    either. The document is naming a product the corpus has no card for, and
+    the reviewer must see that. Surfaced through unresolved_product_signals as
+    `edition_conflicts` and on the run as an `edition_conflicts` warning.
+    """
+    _, conflicts = _resolve(text or "", fact_card_service)
+    return conflicts
 
 
 def resolve_products(
@@ -221,7 +376,32 @@ def resolve_products(
     shortlist. It is NOT the grounding budget and no longer defaults to one:
     truncating here silently narrowed the regulatory scope.
     """
-    text = text or ""
+    ranked, _ = _resolve(text or "", fact_card_service, min_fuzzy_score=min_fuzzy_score)
+    if max_matches is not None and len(ranked) > max_matches:
+        logger.info(
+            "product_resolver: %d products matched; caller capped to %d (dropped %s)",
+            len(ranked), max_matches, [m["uin"] for m in ranked[max_matches:]],
+        )
+        return ranked[:max_matches]
+    return ranked
+
+
+def _resolve(
+    text: str,
+    fact_card_service,
+    *,
+    min_fuzzy_score: Optional[int] = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """(ranked matches, edition conflicts). One pass, so the two never disagree.
+
+    `min_fuzzy_score` falls back to settings when the caller only wants the
+    conflicts — the contradiction check runs before the score is consulted, so
+    the reported conflicts do not depend on the threshold anyway.
+    """
+    if min_fuzzy_score is None:
+        from app.config import settings as _settings
+        min_fuzzy_score = _settings.kb_min_fuzzy_score
+    conflicts: List[Dict[str, Any]] = []
     products = fact_card_service.all_products()
     known_uins = {str(p["uin"]).upper() for p in products}
     name_by_uin = {
@@ -273,6 +453,8 @@ def resolve_products(
     # name the product LOCALLY before its score is allowed to mean anything.
     brand = _brand_tokens([p.get("product_name") or "" for p in products])
     text_positions = _token_positions(text)
+    text_spans = _token_spans(text)
+    vocabulary = _name_vocabulary([p.get("product_name") or "" for p in products], brand)
     best_fuzzy: Dict[str, Dict[str, Any]] = {}
 
     def _consider(uin: str, display_name: str, confidence: float, method: str) -> None:
@@ -286,9 +468,29 @@ def resolve_products(
             continue
         name = (p.get("product_name") or "").strip()
         if name and _document_names(text_positions, name, brand):
-            score = fuzz.partial_ratio(name.lower(), lowered)
-            if score >= min_fuzzy_score:
-                _consider(p["uin"], name, round(score / 100.0, 3), "name_fuzzy")
+            # Locality proved the base name is here. Before similarity is even
+            # consulted, the document's edition evidence gets the last word:
+            # a high score for "Invest Protect Goal III" against "Invest
+            # Protect Goal Plus" is similarity, not identity. A contradiction
+            # refuses the NAME path only — the alias loop below still runs,
+            # because an exact alias outranks local name identity.
+            verdict, cand_ed, doc_ed = _classify_edition(
+                text, text_spans, text_positions, name, brand, vocabulary
+            )
+            if verdict == "contradicted":
+                logger.warning(
+                    "product_resolver: %s (%s) named by base only — the document "
+                    "says edition %r where the card says %r; not resolved by name",
+                    name, p["uin"], doc_ed, cand_ed,
+                )
+                conflicts.append({
+                    "uin": p["uin"], "candidate": name,
+                    "candidate_edition": cand_ed, "document_edition": doc_ed,
+                })
+            else:
+                score = fuzz.partial_ratio(name.lower(), lowered)
+                if score >= min_fuzzy_score:
+                    _consider(p["uin"], name, round(score / 100.0, 3), "name_fuzzy")
         for alias in (p.get("aliases") or []):
             alias = (alias or "").strip()
             if not alias:
@@ -304,11 +506,9 @@ def resolve_products(
                 _consider(p["uin"], name or alias, round(score / 100.0, 3), "alias_match")
     fuzzy = sorted(best_fuzzy.values(), key=lambda x: x["confidence"], reverse=True)
 
-    ranked = matches + fuzzy
-    if max_matches is not None and len(ranked) > max_matches:
-        logger.info(
-            "product_resolver: %d products matched; caller capped to %d (dropped %s)",
-            len(ranked), max_matches, [m["uin"] for m in ranked[max_matches:]],
-        )
-        return ranked[:max_matches]
-    return ranked
+    # Conflicts are reported even when an alias went on to resolve the same
+    # UIN: the document's name evidence still contradicts that card, and the
+    # reviewer should see both facts. An exact UIN never reaches here (the
+    # product loop skips it), and a confirmed sibling mention never appends
+    # one, so nothing is filtered — what is here is what the document said.
+    return matches + fuzzy, sorted(conflicts, key=lambda c: c["uin"])

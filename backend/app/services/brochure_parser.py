@@ -90,6 +90,81 @@ class BrochureSection:
 
 
 @dataclass
+class UinEvidence:
+    """One UIN occurrence, with everything needed to judge what it identifies.
+
+    The parser used to keep only the bare strings, which threw away the single
+    thing that distinguishes a plan's own UIN from the riders it lists: WHERE
+    it was quoted. Kept as a record so the choice below is auditable and so a
+    later Product/ProductIdentifier model can re-decide without re-parsing.
+    """
+    value: str
+    page: int
+    char_offset: int          # offset into ParsedBrochure.full_text
+    line_text: str
+
+
+def select_primary_uin(
+    evidence: List[UinEvidence],
+    descriptor: Optional[str],
+    product_name: str,
+    full_text: str,
+) -> Tuple[Optional[str], str]:
+    """The plan UIN this document is ABOUT, plus why. (None, reason) if unsure.
+
+    This replaces `uins[0]`. Document order is not evidence: brochures list
+    their riders early, so the first UIN on the page is routinely a rider's.
+    Measured on the ingested corpus, that put a rider UIN on the primary slot
+    of 14 of 49 documents — five different products all stamped 116A057V02 —
+    and those stamps propagated onto 860 retrieval vectors.
+
+    Precedence, strongest evidence first:
+
+      1. descriptor_local — a UIN on the IRDAI-mandated regulatory descriptor
+         line. That line is the document's own statement of what it is, and
+         every one of the 44 curated fact cards carries one.
+      2. name_local — a UIN quoted on a line that also names the product. Among
+         several on such a line, the one nearest a name mention.
+      3. role_unresolved — nothing qualifies. Return None and let the caller
+         quarantine the row. Guessing is what produced the corpus damage.
+
+    Both rules are CO-LOCATION rules, not distance thresholds: a UIN and a name
+    on one line are one statement. Absolute character distance was tried first
+    and is wrong — in "Riders: Family Protect (UIN: 116B056V01)\\nBajaj Life
+    eTouch II (UIN:116N198V07)" the RIDER's UIN is nearer to the start of the
+    plan's name than the plan's own UIN is, so nearest-wins picks the rider.
+    There is no tuned constant here for that reason.
+
+    Deliberately NOT used: the UIN category letter. On this corpus A/B happens
+    to mean rider and L/N/G plan, but 116N216V01 is an N-lettered rider, so it
+    is a correlation, not a regulatory invariant.
+    """
+    if not evidence:
+        return None, "role_unresolved"
+
+    if descriptor:
+        wanted = _norm(descriptor)
+        on_descriptor = [e for e in evidence if wanted and wanted in _norm(e.line_text)]
+        if on_descriptor:
+            return min(on_descriptor, key=lambda e: e.char_offset).value, "descriptor_local"
+
+    name = (product_name or "").strip()
+    if name and full_text:
+        named = re.compile(re.escape(name), re.IGNORECASE)
+        on_name_line = [e for e in evidence if named.search(e.line_text or "")]
+        if on_name_line:
+            mentions = [m.start() for m in named.finditer(full_text)] or [0]
+            best = min(
+                on_name_line,
+                key=lambda e: (min(abs(e.char_offset - at) for at in mentions),
+                               e.char_offset),
+            )
+            return best.value, "name_local"
+
+    return None, "role_unresolved"
+
+
+@dataclass
 class ParsedBrochure:
     source_file: str
     page_count: int
@@ -98,6 +173,11 @@ class ParsedBrochure:
     descriptor: Optional[str]
     uin: Optional[str]
     uins: List[str]
+    #: Every UIN occurrence with its position. Never truncated — the riders a
+    #: document lists stay discoverable even though only one is primary.
+    uin_evidence: List[UinEvidence] = field(default_factory=list)
+    #: Which rule chose `uin`: descriptor_local | name_local | role_unresolved.
+    uin_selection_reason: str = "role_unresolved"
     sections: List[BrochureSection] = field(default_factory=list)
     tables: List[BrochureTable] = field(default_factory=list)
     full_text: str = ""
@@ -331,11 +411,45 @@ def parse_brochure(path: str) -> ParsedBrochure:
         product_name = _extract_product_name(running, page_lines, path)
 
         # ---- pass 3: metadata -----------------------------------------------
+        # full_text with a line index, so every UIN keeps the page and the line
+        # it was quoted on. That position is the only thing distinguishing a
+        # plan's own identifier from the riders it lists (select_primary_uin).
+        line_spans: List[Tuple[int, int, int, str]] = []  # start, end, page, text
+        cursor = 0
+        for page_index, line in page_lines:
+            text_ = line["text"]
+            line_spans.append((cursor, cursor + len(text_), page_index, text_))
+            cursor += len(text_) + 1  # the "\n" join adds one
         full_text = "\n".join(line["text"] for _, line in page_lines)
-        uins = list(dict.fromkeys(_UIN_RE.findall(full_text)))
+
+        uin_evidence: List[UinEvidence] = []
+        for match in _UIN_RE.finditer(full_text):
+            value, at = match.group(1), match.start(1)
+            page, line_text = 1, ""
+            for start, end, page_index, text_ in line_spans:
+                if start <= at < end:
+                    page, line_text = page_index, text_
+                    break
+            uin_evidence.append(
+                UinEvidence(value=value, page=page, char_offset=at, line_text=line_text)
+            )
+        # Preserved in first-seen order, exactly as before — every rider a
+        # document lists stays discoverable even though only one UIN is primary.
+        uins = list(dict.fromkeys(e.value for e in uin_evidence))
+
         page1_text = "\n".join(line["text"] for pi, line in page_lines if pi == 1)
         m = _DESCRIPTOR_RE.search(page1_text)
         descriptor = m.group(0).strip() if m else None
+        primary_uin, uin_reason = select_primary_uin(
+            uin_evidence, descriptor, product_name, full_text
+        )
+        if primary_uin is None and uins:
+            logger.warning(
+                "brochure_parser: %s quotes %d UIN(s) %s but none is locally "
+                "tied to the descriptor or the product name %r — leaving the "
+                "primary UIN unresolved rather than guessing",
+                os.path.basename(path), len(uins), uins, product_name,
+            )
 
         # ---- pass 4: heading hierarchy + section assembly -------------------
         heading_sizes = sorted(
@@ -404,8 +518,10 @@ def parse_brochure(path: str) -> ParsedBrochure:
             body_font_size=float(body_size),
             product_name=product_name,
             descriptor=descriptor,
-            uin=uins[0] if uins else None,
+            uin=primary_uin,
             uins=uins,
+            uin_evidence=uin_evidence,
+            uin_selection_reason=uin_reason,
             sections=sections,
             tables=tables,
             full_text=full_text,
