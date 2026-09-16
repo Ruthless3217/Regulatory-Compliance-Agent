@@ -78,6 +78,18 @@ def _rule_fingerprint(rule: Dict[str, Any]) -> str:
     )
 
 
+def _card_fingerprint(card: Dict[str, Any]) -> str:
+    """Content hash of one product fact card.
+
+    The WHOLE card, not a chosen subset: guardrails, structural flags, the
+    regulatory descriptor, eligibility and benefits all change what the prompt
+    asserts and what findings can be emitted, so picking fields to hash would
+    just be a smaller version of the bug this fixes. `sort_keys` makes it
+    independent of the JSON key order the file happens to use.
+    """
+    return sha256_hex(json.dumps(card, sort_keys=True, default=str))
+
+
 def run_context_fingerprint(
     settings: Any,
     active_rules: Optional[Dict[str, List[Dict]]] = None,
@@ -132,9 +144,18 @@ def run_context_fingerprint(
                 if p.get("id")
             }
         ),
-        "products": sorted(
-            {str(c.get("uin")) for c in (product_facts or []) if c.get("uin")}
-        ),
+        # {uin: hash of the card's CONTENT}, not just the set of UINs. A fact
+        # card is knowledge, and re-curating one without changing its UIN used
+        # to leave this fingerprint byte-identical, so every cached chunk
+        # verdict was reused against guardrails that no longer existed. Rules
+        # were already content-fingerprinted (_rule_fingerprint above); only
+        # products were not, which made the asymmetry an oversight rather than
+        # a decision. Keyed per UIN so editing one product cannot invalidate
+        # another's chunks.
+        "products": {
+            str(c.get("uin")): _card_fingerprint(c)
+            for c in (product_facts or []) if c.get("uin")
+        },
     }
     return sha256_hex(json.dumps(parts, sort_keys=True, default=str))
 

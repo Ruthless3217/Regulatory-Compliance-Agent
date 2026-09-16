@@ -45,7 +45,20 @@ def validate_brochure(parsed) -> List[str]:
             f"heading detection likely failed for this layout"
         )
     if not parsed.uin:
-        reasons.append("no UIN found — every IRDAI-approved product document carries one")
+        found = list(getattr(parsed, "uins", None) or [])
+        if found:
+            # UINs were found but none is locally tied to the descriptor or the
+            # product name (brochure_parser.select_primary_uin). The old rule
+            # took the first one in text order and stamped a rider onto 14 of
+            # 49 documents; quarantining for a human is the correct answer.
+            reasons.append(
+                f"{len(found)} UIN(s) found {found} but none is on the regulatory "
+                f"descriptor line or a product-name line "
+                f"({getattr(parsed, 'uin_selection_reason', 'role_unresolved')}) "
+                f"— primary UIN left unresolved rather than guessed"
+            )
+        else:
+            reasons.append("no UIN found — every IRDAI-approved product document carries one")
     if not parsed.product_name:
         reasons.append("no product name detected (no running header?)")
     return reasons

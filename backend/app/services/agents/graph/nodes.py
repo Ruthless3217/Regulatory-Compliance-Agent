@@ -872,6 +872,22 @@ async def preprocess_node(state: ComplianceState) -> Dict:
                         )
                         detail["by_uin"] = located
                     _add_warning(md, signal, detail)
+                # A product the document names by base but contradicts by
+                # edition — "Invest Protect Goal Plus" against the card for
+                # "Invest Protect Goal III". The resolver refused the card; the
+                # reviewer must still see that the document names a product
+                # the corpus has no record of. The refused candidate's UIN is
+                # evidence, not a location: it appears nowhere in the text.
+                conflicts = list(product_unresolved.get("edition_conflicts") or [])
+                if conflicts:
+                    _add_warning(md, "edition_conflicts", {
+                        "candidates": [
+                            {"uin": c.get("uin"), "candidate": c.get("candidate"),
+                             "document_edition": c.get("document_edition"),
+                             "candidate_edition": c.get("candidate_edition")}
+                            for c in conflicts
+                        ],
+                    })
                 logger.warning(
                     "product grounding: %s cannot be grounded (%s); grading "
                     "under the proven scope with an explicit warning",

@@ -153,11 +153,21 @@ def test_missing_product_name_requires_a_complete_name_boundary():
     assert signals["declared_products_without_fact_cards"] == []
 
 
-def test_get_remains_deterministic_for_compat(cards_dir):
-    """get() keeps returning one card (callers depend on it) — but which one is
-    now deterministic and documented, not an accident of dict overwrites."""
+def test_get_refuses_a_colliding_uin_instead_of_picking_one(cards_dir):
+    """This used to assert `get(UIN_DUP) is not None` on the claim that
+    "callers depend on it". The consumer audit (2026-09-11) found none did:
+    build_scope and the disclaimer triggers use get_all(), and the only get()
+    caller was an unapplied script. What the old contract DID do was pick the
+    last-sorted variant — on the real 116L214V01 that is the one card with
+    offers_guaranteed_benefits=False, so filename order decided whether
+    "guaranteed" wording was legal. A unique UIN still resolves; a colliding
+    one resolves to nothing and names its candidates."""
     svc = FactCardService(cards_dir)
-    assert svc.get(UIN_DUP) is not None
+
+    assert svc.get(UIN_DUP) is None
+    resolution = svc.resolve_one(UIN_DUP)
+    assert resolution.ambiguous is True
+    assert len(resolution.candidates) == 2
     assert svc.get(UIN_UNIQUE)["product_name"] == "Bajaj Life Elite Assure"
 
 

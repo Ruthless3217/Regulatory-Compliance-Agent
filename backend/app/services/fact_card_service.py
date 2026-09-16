@@ -3,14 +3,20 @@
 Loads the hand-curated product fact cards (backend/data/product_fact_cards/*.json)
 into a UIN-keyed dict. These are authoritative, exact facts + compliance
 guardrails — NOT embedded; they are looked up by UIN and injected verbatim into
-the analysis prompt as deterministic ground truth. Both a card's plan `uin` and
-every `rider_uins` entry resolve to the same card.
+the analysis prompt as deterministic ground truth.
+
+A card answers ONLY its own plan `uin`. A rider UIN is recognised (it is in
+`known_uins`) but resolves to no card of its own — use `parents_of_rider()` for
+the relationship. A UIN carrying several variant cards resolves to none of them;
+`resolve_one()` reports the ambiguity. Neither is a lookup miss, and telling
+them apart is what stops a rider being graded against its parent's guardrails.
 """
 from __future__ import annotations
 
 import json
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Union
 
@@ -31,9 +37,28 @@ def _base_product_name(name: str) -> str:
     return value
 
 
+@dataclass(frozen=True)
+class CardResolution:
+    """What a UIN resolves to, and why — never a silently-chosen card.
+
+    `card` is set only when exactly one fact card answers the UIN. `reason` is
+    one of: resolved | ambiguous_variants | rider_without_card | unknown.
+    `candidates` keeps every variant so a reviewer (or a later
+    Product/ProductVariant model) can see what was in contention.
+    """
+    uin: str
+    card: Optional[Dict[str, Any]]
+    candidates: List[Dict[str, Any]]
+    ambiguous: bool
+    rider_parents: List[Dict[str, Any]]
+    reason: str
+
+
 class FactCardService:
     def __init__(self, cards_dir: Union[str, Path]):
-        self._by_uin: Dict[str, Dict[str, Any]] = {}
+        # There is deliberately no `_by_uin` single-card dict any more: every
+        # lookup goes through resolve_one(), which refuses to pick among
+        # variants. A dict keyed by a non-unique UIN is the bug, not a cache.
         self._all_by_uin: Dict[str, List[Dict[str, Any]]] = {}
         self._primary_uins: set[str] = set()
         self._rider_parents_by_uin: Dict[str, List[Dict[str, Any]]] = {}
@@ -63,26 +88,32 @@ class FactCardService:
                 continue
             self._cards.append(card)
             self._primary_uins.add(uin)
-            self._by_uin[uin] = card
             self._all_by_uin.setdefault(uin, []).append(card)
             for rider in (card.get("rider_uins") or []):
-                # Plan UIN wins if a rider UIN collides with a plan UIN.
-                self._by_uin.setdefault(rider, card)
+                # The rider→parent GRAPH is kept; the rider→parent CARD
+                # substitution is not. `_by_uin.setdefault(rider, card)` used to
+                # live here, which made get("116N216V01") return "Bajaj Life
+                # Smart Secure ROP" — a rider silently inheriting a different
+                # product's guardrails, which is exactly the false grounding the
+                # rider gate exists to prevent. Ask for the relationship
+                # explicitly via parents_of_rider().
                 self._rider_parents_by_uin.setdefault(rider, []).append(card)
         self._cards_loaded_ok = bool(self._cards) and not self._load_errors
         # Product/variant records sharing one UIN (real data: 116L211V02 Supreme
         # Gold/Horizon; 116L214V01 Smart Wealth Goal VI ×3, whose guardrails and
-        # offers_guaranteed_benefits DISAGREE). get() keeps returning the
-        # last-sorted card for compatibility, but the collision must be loud and
-        # queryable so resolution can expose the ambiguity instead of silently
-        # grading against an arbitrary variant.
+        # offers_guaranteed_benefits DISAGREE). get() used to return the
+        # last-sorted card — on 116L214V01 that was the one variant with
+        # offers_guaranteed_benefits=False, so filename order decided whether
+        # "guaranteed" wording was permissible. It now resolves to NO card and
+        # resolve_one() reports the candidates.
         for uin, cards in self._all_by_uin.items():
             if len(cards) > 1:
                 names = [c.get("product_name") or "?" for c in cards]
                 logger.warning(
                     "FactCardService: UIN collision — %s maps to %d cards %s; "
-                    "get() returns the last-sorted card, use get_all() to see "
-                    "every variant", uin, len(cards), names,
+                    "it resolves to none of them. Use resolve_one() for the "
+                    "ambiguity or get_all() for every variant",
+                    uin, len(cards), names,
                 )
         self._load_declared_gaps(cards_dir.parent / "product_segments.json")
 
@@ -143,8 +174,18 @@ class FactCardService:
 
     @property
     def known_uins(self) -> set[str]:
-        """Every plan/rider UIN that resolves to at least one fact card."""
-        return set(self._by_uin)
+        """Every UIN the corpus RECOGNISES — plan UINs plus every rider UIN a
+        card cites.
+
+        Recognition is not resolution. A rider UIN is known (so it is never
+        reported as an unknown identifier) while resolving to no card of its
+        own (so it is reported as a grounding gap instead). This used to read
+        `set(self._by_uin)` and depended on the rider→parent substitution to
+        include riders at all; with that gone it has to say so explicitly, or
+        every rider UIN would be double-reported as unknown_uins AND
+        rider_uins_without_fact_cards.
+        """
+        return set(self._primary_uins) | set(self._rider_parents_by_uin)
 
     @property
     def availability_issues(self) -> List[str]:
@@ -182,18 +223,69 @@ class FactCardService:
         """Business-declared products that cannot be deterministically grounded."""
         return [dict(product) for product in self._declared_without_cards]
 
+    def resolve_one(self, uin: str) -> CardResolution:
+        """What this UIN authoritatively identifies — or why it does not.
+
+        The one entry point that never guesses. `get()` used to be total over a
+        key that is not unique: 116L214V01 maps to three variant cards whose
+        guardrails disagree (offers_guaranteed_benefits is False on one and
+        True on two), and it returned whichever sorted last — the permissive
+        one. A UIN with more than one card is AMBIGUOUS, and saying so is the
+        only safe answer.
+        """
+        candidates = list(self._all_by_uin.get(uin) or [])
+        parents = list(self._rider_parents_by_uin.get(uin) or [])
+        if len(candidates) == 1:
+            return CardResolution(uin, candidates[0], candidates, False,
+                                  parents, "resolved")
+        if len(candidates) > 1:
+            # Debug, not warning: lookup_many() runs per chunk, and the
+            # collision is already announced once at load time.
+            logger.debug(
+                "FactCardService: %s is ambiguous — %d variant cards %s; "
+                "refusing to pick one", uin, len(candidates),
+                [c.get("product_name") for c in candidates],
+            )
+            return CardResolution(uin, None, candidates, True, parents,
+                                  "ambiguous_variants")
+        if parents:
+            return CardResolution(uin, None, [], False, parents,
+                                  "rider_without_card")
+        return CardResolution(uin, None, [], False, [], "unknown")
+
     def get(self, uin: str) -> Optional[Dict[str, Any]]:
-        return self._by_uin.get(uin)
+        """The single authoritative card for this UIN, else None.
+
+        None now means one of three things — unknown UIN, a rider with no card
+        of its own, or a UIN whose variants disagree. Callers that need to tell
+        them apart must use resolve_one().
+        """
+        return self.resolve_one(uin).card
 
     def get_all(self, uin: str) -> List[Dict[str, Any]]:
         """Every card for this UIN (variants included), [] when unknown."""
         return list(self._all_by_uin.get(uin) or [])
 
+    def parents_of_rider(self, uin: str) -> List[Dict[str, Any]]:
+        """The plan cards that cite this UIN among their `rider_uins`.
+
+        Explicit, and never a substitute for the rider's own record: a parent
+        proves compatibility, not the rider's benefits or guardrails.
+        """
+        return list(self._rider_parents_by_uin.get(uin) or [])
+
     def lookup_many(self, uins: Iterable[str]) -> List[Dict[str, Any]]:
+        """Cards for these UINs, skipping anything that cannot be resolved.
+
+        An ambiguous or rider-only UIN contributes NOTHING rather than a
+        stand-in. Silence here is correct: the run's own gates
+        (product_ambiguous / rider_uins_without_fact_cards) are what tell the
+        reviewer the grounding is missing.
+        """
         out: List[Dict[str, Any]] = []
         seen: set = set()
         for u in uins:
-            card = self._by_uin.get(u)
+            card = self.resolve_one(u).card
             if card is None:
                 continue
             key = card["uin"]

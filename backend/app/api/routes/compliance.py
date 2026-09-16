@@ -592,6 +592,11 @@ _WARNING_EXPLANATIONS = {
         "a product named in this document is on the declared catalogue but has "
         "no authoritative record yet, so its own obligations were not checked"
     ),
+    "edition_conflicts": (
+        "this document names an edition or variant of a product that the "
+        "corpus has no record of; the nearest known edition was NOT used in "
+        "its place, so that product's own obligations were not checked"
+    ),
     "precedent_evidence_unavailable": (
         "no prior reviewer cases were available, so findings rest on rules and "
         "product facts alone"
