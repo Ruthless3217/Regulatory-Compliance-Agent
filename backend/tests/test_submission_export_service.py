@@ -466,3 +466,65 @@ def test_build_export_passes_the_runs_warnings_into_the_report():
     text = _docx_text(ses.build_export(db, _submission("irrelevant"), "report.docx"))
 
     assert "incomplete evidence" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Warning KINDS (warning-semantics fix, 2026-09-17). The file that leaves the
+# system must state the true limitation: "PARTIAL ANALYSIS" only when part of
+# THIS document could not be grounded; a knowledge-base or retrieval
+# limitation is "LIMITED EVIDENCE" and must not claim reduced coverage.
+# ---------------------------------------------------------------------------
+
+TIER_ONLY = [
+    {"code": "precedent_corpus_empty", "detail": {"corpus": "rag_compliance_examples"}},
+    {"code": "rule_scope_metadata_incomplete", "detail": {"count": 3}},
+]
+INFRA_ONLY = [
+    {"code": "retrieval_degraded", "detail": {"reason": "embedding model mismatch"}},
+]
+
+
+def test_report_docx_tier_only_warnings_are_limited_evidence_not_partial():
+    check = ComplianceCheck(id=uuid.uuid4(), overall_score=100.0, grade="A")
+    text = _docx_text(
+        ses._report_docx(_submission("irrelevant"), check, [], analysis_warnings=TIER_ONLY)
+    )
+
+    assert "LIMITED EVIDENCE" in text
+    assert "PARTIAL ANALYSIS" not in text
+    assert "less than the whole document" not in text.lower()
+    assert "every section was analysed" in text.lower()
+    assert "not a certification of compliance" in text.lower()
+    assert "precedent_corpus_empty" in text
+    assert "rule_scope_metadata_incomplete" in text
+
+
+def test_report_docx_infrastructure_only_warning_names_the_retrieval_failure():
+    check = ComplianceCheck(id=uuid.uuid4(), overall_score=100.0, grade="A")
+    text = _docx_text(
+        ses._report_docx(_submission("irrelevant"), check, [], analysis_warnings=INFRA_ONLY)
+    )
+
+    assert "LIMITED EVIDENCE" in text
+    assert "retrieval component failed" in text.lower()
+    assert "less than the whole document" not in text.lower()
+    assert "retrieval_degraded" in text
+
+
+def test_report_docx_coverage_warning_is_partial_analysis():
+    check = ComplianceCheck(id=uuid.uuid4(), overall_score=100.0, grade="A")
+    text = _docx_text(
+        ses._report_docx(_submission("irrelevant"), check, [], analysis_warnings=WARNINGS)
+    )
+
+    assert "PARTIAL ANALYSIS" in text
+    assert "less than the whole document" in text.lower()
+
+
+def test_annotated_docx_tier_only_is_limited_evidence_too():
+    text = _docx_text(
+        ses._annotated_docx(_submission("Some text."), [], analysis_warnings=TIER_ONLY)
+    )
+
+    assert "LIMITED EVIDENCE" in text
+    assert "less than the whole document" not in text.lower()

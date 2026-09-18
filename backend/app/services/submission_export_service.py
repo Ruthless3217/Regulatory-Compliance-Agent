@@ -83,6 +83,8 @@ def _analysis_state_note(doc: Document, analysis_warnings) -> None:
     silent about what was not, so the file has to say which limitations
     applied. No-ops for a fully grounded run.
     """
+    from app.services import analysis_warnings as aw
+
     warnings = [
         w for w in (analysis_warnings or [])
         if isinstance(w, dict) and w.get("code")
@@ -90,10 +92,15 @@ def _analysis_state_note(doc: Document, analysis_warnings) -> None:
     if not warnings:
         return
     para = doc.add_paragraph()
+    # The heading names the KIND of limitation. "PARTIAL ANALYSIS" and "covers
+    # less than the whole document" are true only for a coverage warning; a
+    # tier or infrastructure warning means every section was analysed with a
+    # thinner evidence base, and the file must not overclaim.
+    heading = ("PARTIAL ANALYSIS" if aw.evidence_coverage_state(warnings) == "partial"
+               else "LIMITED EVIDENCE")
     para.add_run(
-        "PARTIAL ANALYSIS — this document was graded on incomplete evidence. "
-        "The score below covers less than the whole document and is not a "
-        "certification of compliance."
+        f"{heading} — {aw.limitation_statement(warnings)} "
+        "The score below is not a certification of compliance."
     ).bold = True
     for warning in warnings:
         detail = warning.get("detail") if isinstance(warning.get("detail"), dict) else {}

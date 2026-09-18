@@ -961,16 +961,21 @@ def _approval_gate(db: Session, submission: Submission) -> dict:
         blockers.append(("scoped_run", False, SCOPED_RUN_REFUSAL))
     warnings = _latest_run_warnings(db, check) if check is not None else []
     if warnings:
-        # A grade built on incomplete evidence. Overridable, deliberately: the
+        # A grade built with a named limitation. Overridable, deliberately: the
         # analysis IS valid for what it covered, and a human who states a
         # reason may sign it off. What must not happen is signing it off
-        # without being told — "not evaluated" is not "compliant".
+        # without being told — "not evaluated" is not "compliant". Every KIND
+        # of limitation blocks (fail-safe), but the message must say the true
+        # thing: a tier or infrastructure warning does not mean part of the
+        # document went ungraded, and claiming so was the defect the
+        # provenance audit found on 9 of 9 documents.
+        from app.services import analysis_warnings as aw
+
         blockers.append((
             "partial_analysis", True,
-            "This document was graded on incomplete evidence "
-            f"({', '.join(w['code'] for w in warnings)}) — the score covers "
-            "less than the whole document. Approving it requires an explicit "
-            "override_reason.",
+            f"{aw.limitation_statement(warnings)} "
+            f"({', '.join(w['code'] for w in warnings)}). Approving it "
+            "requires an explicit override_reason.",
         ))
 
     criticals = _unresolved_criticals(db, check)

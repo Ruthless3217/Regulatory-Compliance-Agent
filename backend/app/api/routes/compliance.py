@@ -60,6 +60,7 @@ def _submission_id_for_violation(db, violation_id):
     )
     return getattr(check, "submission_id", None)
 from app.services.agents.compliance.engine import ComplianceEngine
+from app.services import analysis_warnings as _aw
 from app.services.violation_serializer import (
     finding_counts,
     latest_feedback_map,
@@ -597,9 +598,23 @@ _WARNING_EXPLANATIONS = {
         "corpus has no record of; the nearest known edition was NOT used in "
         "its place, so that product's own obligations were not checked"
     ),
+    # Legacy single precedent code (runs persisted before the vocabulary split).
     "precedent_evidence_unavailable": (
         "no prior reviewer cases were available, so findings rest on rules and "
         "product facts alone"
+    ),
+    "precedent_tier_unavailable": (
+        "the precedent tier could not be retrieved because a retrieval "
+        "component failed; every section was still analysed against rules and "
+        "product facts"
+    ),
+    "precedent_corpus_empty": (
+        "the precedent corpus contains no cases yet, so findings rest on rules "
+        "and product facts alone"
+    ),
+    "precedent_scope_metadata_incomplete": (
+        "prior cases were retrieved for this document but carry no product "
+        "scope and could not be proven applicable, so they were not used"
     ),
     "rule_scope_metadata_incomplete": (
         "some rules carry no product scope and could not be proven applicable, "
@@ -617,7 +632,15 @@ _WARNING_EXPLANATIONS = {
 
 
 def _warnings_payload(run) -> list:
-    """The run's warnings, each with a reviewer-facing explanation."""
+    """The run's warnings, each with a reviewer-facing explanation and its
+    KIND (coverage / tier / infrastructure — app.services.analysis_warnings).
+
+    The kind is what lets every surface say the right thing: only a coverage
+    warning may claim the score covers less than the whole document. Runs
+    persisted before kinds existed are classified by code here, so the
+    frontend never has to guess."""
+    from app.services import analysis_warnings as aw
+
     raw = ((getattr(run, "run_metadata", None) or {}).get("analysis_warnings") or [])
     out = []
     for warning in raw:
@@ -626,6 +649,7 @@ def _warnings_payload(run) -> list:
         code = str(warning.get("code") or "")
         out.append({
             "code": code,
+            "kind": aw.warning_kind(warning),
             "detail": warning.get("detail"),
             "explanation": _WARNING_EXPLANATIONS.get(code, ""),
         })
@@ -720,6 +744,11 @@ async def get_compliance_results(
         "submission_id": submission_id,
         "check_id": str(check.id),
         "analysis_state": "completed_with_warnings" if warnings else "completed",
+        # Separate from the state above on purpose: a tier or infrastructure
+        # warning makes the run "with warnings" but does NOT mean part of the
+        # document went ungraded. Only a coverage warning does.
+        "evidence_coverage": _aw.evidence_coverage_state(warnings),
+        "limitation_statement": _aw.limitation_statement(warnings),
         "analysis_warnings": warnings,
         "overall_score": check.overall_score,
         "grade": check.grade,
