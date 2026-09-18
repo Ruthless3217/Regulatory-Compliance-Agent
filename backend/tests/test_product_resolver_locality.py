@@ -117,9 +117,13 @@ def _embedded(mention):
     "full", "in_sentence", "no_brand", "no_version", "punctuation", "whitespace",
 ])
 def test_every_product_resolves_from_every_legitimate_formulation(form, cards):
+    by_uin = {p["uin"]: p for p in cards.all_products()}
     misses = []
     for product in cards.all_products():
         name = product["product_name"]
+        # A superseded card resolves as its successor (same name, current UIN).
+        expected = (product["superseded_by"]
+                    if product.get("superseded_by") in by_uin else product["uin"])
         mention = {
             "full": name,
             "in_sentence": f"Presenting {name}, a plan designed for your family.",
@@ -128,7 +132,7 @@ def test_every_product_resolves_from_every_legitimate_formulation(form, cards):
             "punctuation": f"{name} - A Non-Linked Individual Plan (see brochure).",
             "whitespace": re.sub(r"\s+", "   ", name),
         }[form]
-        if product["uin"] not in _uins(_resolve(_embedded(mention), cards)):
+        if expected not in _uins(_resolve(_embedded(mention), cards)):
             misses.append(product["uin"])
 
     # 116N186V04 "Bajaj Life ACE" reduces to the bare token "ACE" once the brand
@@ -194,11 +198,13 @@ def test_rider_uin_without_a_fact_card_still_fails_closed(cards):
     """The real document's genuine refusal must survive the precision fix."""
     from app.services.product_resolver import unresolved_product_signals
 
+    # 116N216V01 has its own card since 2026-09-18; 116B036V02 (cited by six
+    # parent cards, no card of its own) reproduces the genuine gap.
     signals = unresolved_product_signals(
-        SCATTER + " Shield with ROP Variant (UIN:116N216V01).", cards
+        SCATTER + " Health Shield Rider (UIN:116B036V02).", cards
     )
 
-    assert signals["rider_uins_without_fact_cards"] == ["116N216V01"]
+    assert signals["rider_uins_without_fact_cards"] == ["116B036V02"]
 
 
 def test_ambiguous_uin_is_still_flagged_when_genuinely_named(cards):

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 _ALLOWED_PRODUCT_LINES = {
     "global", "term", "ulip", "rider", "group", "savings_endowment",
-    "pension_annuity", "par", "non_par",
+    "pension_annuity", "health", "par", "non_par",
 }
 
 

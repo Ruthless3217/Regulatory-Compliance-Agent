@@ -33,7 +33,7 @@ _ALLOWED_DOC_EXTS = {".pdf", ".docx", ".html", ".htm", ".md", ".txt"}
 _MAX_DOC_CHARS = 200_000
 _ALLOWED_PRODUCT_LINES = {
     "global", "term", "ulip", "rider", "group", "savings_endowment",
-    "pension_annuity", "par", "non_par",
+    "pension_annuity", "health", "par", "non_par",
 }
 
 

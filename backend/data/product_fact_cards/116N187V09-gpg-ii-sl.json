@@ -2,6 +2,7 @@
   "schema_version": "1.0",
   "product_name": "Bajaj Life Guaranteed Pension Goal II",
   "uin": "116N187V09",
+  "superseded_by": "116N187V11",
   "rider_uins": [],
   "source_file": "gpg-ii-sl.pdf",
   "product_category": "pension_annuity",

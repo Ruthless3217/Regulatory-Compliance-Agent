@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Secure Plus",
+  "uin": "116N216V01",
+  "rider_uins": [],
+  "source_file": "secure-plus-sl.pdf",
+  "product_category": "health",
+  "regulatory_descriptor": "A Non-Participating, Non-Linked, Individual Health Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": true,
+    "offers_loan": false
+  },
+  "variants": [
+    "Variant 1: Shield (no maturity benefit)",
+    "Variant 2: Shield with Return of Premium (ROP) — Total Premiums Paid for unclaimed covers returned at maturity"
+  ],
+  "marketing_aliases": [
+    "Bajaj Life Secure Plus - Shield with ROP Variant",
+    "Secure Plus - Shield with ROP Variant"
+  ],
+  "key_benefits": [
+    "Four optional covers, one or more chosen at inception: Terminal Illness with Term Booster (TI with TB), Accidental Death Benefit (ADB), Accidental Total Permanent Disability (ATPD) Benefit, Critical Illness (CI) Benefit",
+    "Each cover pays the higher of its Sum Assured or the Guaranteed Benefit (105% of Total Premiums Paid for that cover)",
+    "TI with TB: payable on diagnosis of Terminal Illness OR death, whichever occurs first; the TI with TB cover then terminates",
+    "ADB: on accidental death, ADB Sum Assured (plus TI with TB Sum Assured if opted); all covers terminate on payment",
+    "ATPD: on accidental total permanent disability the ATPD Sum Assured is paid and the remaining covers continue",
+    "CI: first diagnosis of a covered critical illness — Critical (10 illnesses), Enhanced (25) or Comprehensive (60) option; 90-day waiting period and 14-day survival period apply",
+    "Maturity Benefit ONLY under Variant 2 (Shield with ROP): Total Premiums Paid for the unclaimed cover(s) returned on the Maturity Date if the life assured is alive and the policy is in force",
+    "Benefit payout as lump sum, monthly/yearly instalments over 5-40 years, or a combination — chosen at inception, cannot be altered; premium discount equal to the instalment period chosen (5%-40%)",
+    "Single, Regular or Limited premium payment; Yearly/Half-yearly/Quarterly/Monthly frequencies",
+    "Benefit Enhancer when bought in combination with a Companion Product (e.g. as Bajaj Life Smart Secure ROP with Invest Protect Goal Plus - Elite Variant, UIN 116L215V01)",
+    "5% premium rebate for opting more than one cover; female lives get a 3-year age set-back on the TI with TB cover",
+    "Health Management Services (medical second opinion, case management, consultation) from registered third-party providers at no additional cost, at the company's discretion"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": 18,
+    "max_entry_age_years": 65,
+    "max_entry_age_note": "Single Pay for TI with TB: maximum entry age 50 years",
+    "min_maturity_age_years": 19,
+    "min_maturity_age_note": "Variant 1: 19 (Single Pay) / 20 (Regular Pay) / 21 (Limited Pay); Variant 2: 28",
+    "max_maturity_age_years": 85,
+    "min_sum_assured": "Rs 50,000 for each cover option",
+    "max_sum_assured": "No limit, subject to Board Approved Underwriting Policy",
+    "policy_term": "Variant 1 Shield: Single Pay 1-67 years (CI: 1-30), Regular Pay = PPT, Limited Pay PPT+1 to 67 years (CI: to 30). Variant 2 Shield with ROP: Single Pay 10-67 years (CI: 10-30), Regular Pay = PPT, Limited Pay PPT+5 to 67 years (CI: to 30)",
+    "premium_payment_term": "Single Pay 1 year; Variant 1 Regular 2-67 / Limited 2-66 years (CI: Regular 2-30, Limited 2-29); Variant 2 Regular 10-67 / Limited 5-62 years (CI: Regular 10-30, Limited 5-25)",
+    "premium_frequency": "Single, Yearly, Half-yearly, Quarterly, Monthly (frequency factors 1 / 0.5084 / 0.2564 / 0.0859)",
+    "note": "Sold through online mode. Variant and payout option are chosen at inception and cannot be changed during the policy term."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from receipt of the policy document (electronic or otherwise), except policies with tenure under a year; refund less proportionate risk premium, medical-examination expenses and stamp duty, within 7 days of the request.",
+    "grace_period": "30 days for frequencies other than monthly; 15 days for monthly. Cover continues during the grace period; unpaid premium is deducted from any benefit.",
+    "suicide_clause": "ADB is not payable on death by suicide; ATPD excludes attempted self-injury; CI excludes intentional self-inflicted injury, suicide or attempted suicide. Death by suicide is otherwise dealt with per the policy document.",
+    "guaranteed_benefit_note": "Guaranteed Benefit for each cover = 105% of Total Premiums Paid with respect to that cover; each cover pays the higher of its Sum Assured or the Guaranteed Benefit.",
+    "waiting_period_note": "CI: no benefit if the critical illness is diagnosed within 90 days of the start of cover; the insured must survive 14 days from diagnosis.",
+    "surrender_note": "Variant 1 Shield: no termination value under Regular Pay; Termination Value (Termination Factor x Total Premiums Paid, factors not guaranteed) after the PPT under Limited Pay and immediately under Single Pay. Variant 2 Shield with ROP: higher of GSV (GSV Factor x Total Premiums Paid, guaranteed) or SSV (not guaranteed, reviewed against 10-year G-Sec + 50 bps), capped at 100% of Total Premiums Paid.",
+    "paid_up_note": "Variant 2 only: a policy that has acquired surrender value becomes paid-up on non-payment; paid-up sum assured is never lower than 105% of Total Premiums Paid for each cover.",
+    "revival_note": "Within 5 years of the first unpaid premium and before the end of the policy term; arrears plus interest (currently 10% p.a. compounded half-yearly, benchmarked to 10-year G-Sec + 2%).",
+    "loan_note": "No policy loan facility is described in the brochure.",
+    "tax_note": "Tax benefits as per applicable tax laws, subject to amendment; GST applicable per prevailing law."
+  },
+  "mandatory_disclosures_present": [
+    "Free-look period disclosure",
+    "Grace period disclosure",
+    "Surrender / termination value disclosure (GSV / SSV)",
+    "Cover-wise exclusions (ADB, ATPD, CI) including the CI waiting and survival periods",
+    "Health Management Services third-party disclaimer",
+    "Grievance redressal (company, IRDAI IGCC, Bima Bharosa, Ombudsman)",
+    "Section 38 Assignment, Section 39 Nomination, Section 41 Prohibition of Rebate, Section 45 Fraud & Misstatement",
+    "GST applicability",
+    "Beware of spurious phone calls warning"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "'Get your premiums back' / 'Return of Premium' / 'ROP' claims apply ONLY to Variant 2 (Shield with ROP), ONLY for covers that have not been claimed, and ONLY on survival to the Maturity Date with the policy in force — Variant 1 (Shield) has NO maturity benefit.",
+      "Any critical-illness claim must name the option (Critical 10 / Enhanced 25 / Comprehensive 60) and cannot hide the 90-day waiting period and 14-day survival period.",
+      "ADB and ATPD claims must be bound to accidental cause; death or disability from disease or infection is excluded.",
+      "'Terminal illness' benefit is an accelerated cover — paying it on diagnosis terminates the TI with TB cover; it is not an additional payout on top of the same cover.",
+      "Guaranteed-benefit language must be tied to the 105%-of-premiums floor per cover, not to a guaranteed return on money.",
+      "Instalment payout options and the associated premium discount are chosen at inception and cannot be altered.",
+      "Any 'health services' / second-opinion claim must state the services are optional, provided by third parties, and may be discontinued."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT position this as a savings, investment, wealth-creation or market-linked product — it is a non-linked, non-participating individual HEALTH plan.",
+      "Do NOT use 'bonus' language — the plan is non-participating.",
+      "Do NOT imply a maturity benefit or premium refund without the Shield-with-ROP variant qualification.",
+      "Do NOT present it as a comprehensive life-insurance term plan — death is covered only through the covers chosen (TI with TB pays on death or terminal illness; ADB only on accidental death).",
+      "Do NOT promise coverage for all critical illnesses — coverage is limited to the illnesses listed under the chosen option.",
+      "Do NOT omit that only one variant can be chosen at inception and that it cannot be changed.",
+      "Do NOT describe Bajaj Life Smart Secure ROP as a single product — it is a combination offering of this plan's Shield with ROP variant with Bajaj Life Invest Protect Goal Plus - Elite Variant (UIN 116L215V01); combination collateral must carry both UINs and both regulatory descriptors."
+    ],
+    "must_state": [
+      "Plan UIN 116N216V01",
+      "Full regulatory descriptor: A Non-Participating, Non-Linked, Individual Health Plan",
+      "Variant qualification (Shield vs Shield with ROP) on any maturity/premium-return claim",
+      "CI waiting period (90 days) and survival period (14 days) wherever critical illness is promoted",
+      "Standard disclaimer to read the sales brochure, benefit illustration and policy document for full terms and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-5 (session 2026-09-18)",
+    "curated_from": "Bajaj Life Secure Plus sales brochure secure-plus-sl.pdf (26 pages, BLIC-BR-EC-21900/26) downloaded from bajajlifeinsurance.com/content/dam/balic-web/pdf/health-insurance/secure-plus-sl.pdf; combination wording cross-checked against smart-secure-leaflet.pdf",
+    "confidence": "high",
+    "gaps": [
+      "The brochure is not present in uploads/Broch or rag_product_docs — passages for this UIN cannot be retrieved until the PDF is ingested.",
+      "Suicide treatment for the TI with TB cover outside the ADB/ATPD/CI exclusion lists is governed by the policy document, not isolated in the brochure.",
+      "The named lists of critical illnesses (10/25/60) are in the brochure but not reproduced here."
+    ]
+  }
+}

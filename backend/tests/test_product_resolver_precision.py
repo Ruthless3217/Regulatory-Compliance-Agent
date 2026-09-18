@@ -90,10 +90,15 @@ def _named(matches, uin):
 
 @pytest.mark.parametrize("form", ["full", "short", "no_version", "sentence"])
 def test_every_product_still_resolves_from_its_own_name(form, cards):
-    """All 44 products, four phrasings each — no product may become unmatchable."""
+    """Every product, four phrasings each — no product may become unmatchable.
+    A superseded card (116N187V09 -> V11) is expected to resolve as its
+    successor: same product name, current approved UIN."""
+    by_uin = {p["uin"]: p for p in cards.all_products()}
     misses = []
     for product in cards.all_products():
         name, uin = product["product_name"], product["uin"]
+        if product.get("superseded_by") in by_uin:
+            uin = product["superseded_by"]
         text = {
             "full": name,
             "short": re.sub(r"^\s*bajaj\s+life\s*", "", name, flags=re.I),

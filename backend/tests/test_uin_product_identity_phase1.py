@@ -188,7 +188,6 @@ def test_the_real_smart_secure_combi_line_selects_the_plan_not_the_component():
 
 
 @pytest.mark.parametrize("rider", [
-    "116N216V01",  # the GEO Smart Secure health component
     "116B036V02",  # cited by six different parents
     "116B061V01",
 ])
@@ -208,8 +207,22 @@ def test_the_parent_relationship_is_still_available_explicitly(cards):
 
 
 def test_the_rider_gate_still_reports_the_gap(cards):
-    assert "116N216V01" in cards.rider_uins_without_fact_cards
-    assert "116N216V01" in cards.known_uins, "still a recognised identifier"
+    # 116N216V01 (Secure Plus) got its own card on 2026-09-18 and left this
+    # list; 116B036V02 is still cited by six parents and has no card of its own.
+    assert "116B036V02" in cards.rider_uins_without_fact_cards
+    assert "116N216V01" not in cards.rider_uins_without_fact_cards
+    assert "116N216V01" in cards.known_uins and "116B036V02" in cards.known_uins
+
+
+def test_a_cited_component_with_its_own_card_is_its_own_product(cards):
+    """The GEO Smart Secure health component. The Smart Secure card still
+    cites it (rider_uins), but a lookup returns Secure Plus's OWN card — never
+    the parent's — and the parent link is still explicit."""
+    card = cards.get("116N216V01")
+
+    assert card["product_name"] == "Bajaj Life Secure Plus"
+    assert card["product_category"] == "health"
+    assert [p["uin"] for p in cards.parents_of_rider("116N216V01")] == ["116L215V01"]
 
 
 def test_a_colliding_uin_never_silently_resolves_to_one_card(cards):
@@ -279,7 +292,7 @@ def test_a_card_less_rider_yields_no_product_family(cards):
     116N216V01, savings_endowment for 116B036V02."""
     from scripts.backfill_product_metadata import product_line_for_uin
 
-    assert product_line_for_uin("116N216V01", cards) is None
+    assert product_line_for_uin("116N216V01", cards) == "health", "has its OWN card now"
     assert product_line_for_uin("116B036V02", cards) is None
     assert product_line_for_uin("116A059V01", cards) == "rider", "has its OWN card"
     assert product_line_for_uin("116L215V01", cards) == "ulip"
@@ -412,10 +425,10 @@ def test_the_rider_gap_still_warns_rather_than_refusing(cards):
     from app.services.product_resolver import unresolved_product_signals
 
     text = ("Bajaj Life Smart Secure ROP (UIN: 116L215V01) guarantees 12%. "
-            "Shield with ROP Variant (UIN:116N216V01).")
+            "Bajaj Life Health Shield Rider (UIN:116B036V02).")
     signals = unresolved_product_signals(text, cards)
 
-    assert signals["rider_uins_without_fact_cards"] == ["116N216V01"]
+    assert signals["rider_uins_without_fact_cards"] == ["116B036V02"]
     assert ComplianceEngine.evaluate_persistability({
         "chunks": [{"id": "c1", "text": text}], "status": "completed",
         "metadata": {
