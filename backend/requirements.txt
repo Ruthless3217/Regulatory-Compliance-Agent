@@ -58,6 +58,7 @@ langchain-core==1.4.0
 langchain-openai==1.2.1
 langchain-community==0.4.1
 langsmith==0.8.5
+langfuse==4.15.4
 
 # RAG — Azure AI Search (loaded lazily; only required when
 # RAG_VECTOR_BACKEND=azure_search). Safe to keep installed under pgvector

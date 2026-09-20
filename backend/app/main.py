@@ -68,6 +68,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Super-admin seed skipped: {e}")
 
+    # Langfuse tracing (optional - no-op without LANGFUSE_* keys)
+    try:
+        from .services.observability.tracing import init_tracing
+        if init_tracing():
+            logger.info("✅ Langfuse tracing enabled")
+        else:
+            logger.info("ℹ️ Langfuse tracing disabled (no LANGFUSE_PUBLIC_KEY/SECRET_KEY)")
+    except Exception as e:
+        logger.warning(f"⚠️ Langfuse init failed: {e}")
+
     # Initialize Redis (optional - falls back to MemorySaver)
     try:
         from .services.cache.redis_client import init_redis
@@ -101,6 +111,13 @@ async def lifespan(app: FastAPI):
     try:
         from .services.cache.redis_client import close_redis
         await close_redis()
+    except Exception:
+        pass
+    # Drain buffered Langfuse spans so the last traces of a run aren't lost on
+    # a container stop / --reload.
+    try:
+        from .services.observability.tracing import shutdown as shutdown_tracing
+        shutdown_tracing()
     except Exception:
         pass
 

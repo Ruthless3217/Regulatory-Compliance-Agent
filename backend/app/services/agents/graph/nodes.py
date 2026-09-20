@@ -21,6 +21,10 @@ except Exception:  # pragma: no cover
         def _d(fn): return fn
         return _d if not (_a and callable(_a[0])) else _a[0]
 
+# Langfuse (alongside LangSmith): each node is a `chain` observation whose
+# input/output are compact state summaries, never the raw graph state.
+from app.services.observability.tracing import graph_node, observe, update_span
+
 from .state import ComplianceState
 
 logger = logging.getLogger(__name__)
@@ -703,6 +707,7 @@ def map_findings_to_violations(
     return out
 
 
+@graph_node("preprocess")
 @traceable(run_type="chain", name="graph.preprocess_node")
 async def preprocess_node(state: ComplianceState) -> Dict:
     """
@@ -1434,6 +1439,7 @@ async def _resolve_product_grounding(
     return product_facts, product_passages
 
 
+@graph_node("dispatch")
 @traceable(run_type="chain", name="graph.dispatch_node")
 async def dispatch_node(state: ComplianceState) -> Dict:
     """
@@ -1983,6 +1989,7 @@ def _load_reuse_inputs(db, submission_id: str, chunks: List[Dict]) -> tuple:
     return stored_keys, prior
 
 
+@graph_node("analysis")
 @traceable(run_type="chain", name="graph.analysis_node")
 async def analysis_node(state: ComplianceState) -> Dict:
     """
@@ -2101,6 +2108,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
             logger.warning(f"Analysis reuse lookup failed; grading every chunk: {e}")
             reuse_hits = {}
 
+    @observe(name="grade-chunk", as_type="chain", capture_input=False, capture_output=False)
     async def grade_chunk(chunk_data: Dict) -> Dict:
         chunk_id = chunk_data.get("id")
         chunk_index = chunk_data.get("chunk_index")
@@ -2112,11 +2120,22 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 "Chunk %s unchanged since the last persisted run — carrying "
                 "forward %d finding(s), no LLM call.", chunk_index, len(cached),
             )
+            update_span(
+                input={"chunk_index": chunk_index, "chars": len(chunk_text)},
+                output={"violations": len(cached), "reused": True, "failed": False},
+            )
             return {"violations": cached, "failed": False}
 
         precedents = retrieved.get(str(chunk_id), [])
         rules = _rules_for_chunk(chunk_id)
         passages = product_passages_by_chunk.get(str(chunk_id), [])
+        update_span(input={
+            "chunk_index": chunk_index,
+            "chars": len(chunk_text),
+            "precedents": len(precedents),
+            "rules": len(rules),
+            "product_passages": len(passages),
+        })
         # This chunk's own fact cards; the document-level set is the fallback
         # for a chunk that names no product (see _chunk_product_facts). The SAME
         # list feeds the prompt and the finding parser, because a
@@ -2374,6 +2393,7 @@ def _log_grade_error(chunk_id, violation: Dict, errors: List[str]) -> None:
         f.write(_json.dumps({"chunk_id": str(chunk_id), "errors": errors, "violation": violation}) + "\n")
 
 
+@graph_node("disclosure")
 @traceable(run_type="chain", name="graph.disclosure_node")
 async def disclosure_node(state: ComplianceState) -> Dict:
     """Deterministic mandatory-disclosure checker. Runs after analysis so it
@@ -2439,6 +2459,7 @@ async def disclosure_node(state: ComplianceState) -> Dict:
     }
 
 
+@graph_node("scoring")
 @traceable(run_type="chain", name="graph.scoring_node")
 async def scoring_node(state: ComplianceState) -> Dict:
     """

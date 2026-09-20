@@ -31,6 +31,8 @@ except Exception:  # pragma: no cover
         def _d(fn): return fn
         return _d if not (_a and callable(_a[0])) else _a[0]
 
+from app.services.observability.tracing import observe, update_generation
+
 logger = logging.getLogger(__name__)
 
 # Cohere caps a single embed request at 96 inputs.
@@ -93,17 +95,26 @@ class AzureCohereEmbedder:
             connection_verify=verify,
         )
 
+    # Prompt tokens reported by the service across the batches of one
+    # embed() call; read + reset by embed() for the trace's usage_details.
+    _usage_tokens: int = 0
+
     async def _embed_batch(self, batch: List[str], input_type: str) -> List[List[float]]:
         resp = await self._client.embed(
             input=batch,
             model=self.model,
             input_type=input_type,
         )
+        try:
+            self._usage_tokens += int(getattr(getattr(resp, "usage", None), "prompt_tokens", 0) or 0)
+        except Exception:  # pragma: no cover - usage is best-effort
+            pass
         # The service may return items out of submission order; re-sort by index
         # so vectors line up with the input texts.
         ordered = sorted(resp.data, key=lambda item: item.index)
         return [list(item.embedding) for item in ordered]
 
+    @observe(name="embed-texts", as_type="embedding", capture_input=False, capture_output=False)
     @traceable(run_type="embedding", name="AzureCohere.embed")
     async def embed(
         self, texts: List[str], input_type: str = "search_document"
@@ -115,11 +126,22 @@ class AzureCohereEmbedder:
             return []
 
         azure_input_type = _INPUT_TYPE_MAP.get(input_type, "document")
+        # Never put the vectors on the trace (1024 floats × N); counts + model
+        # are what a reviewer needs, usage is filled from the service response.
+        update_generation(
+            model=self.model,
+            input={"texts": len(texts), "input_type": input_type, "chars": sum(len(t) for t in texts)},
+        )
         vectors: List[List[float]] = []
         try:
             for start in range(0, len(texts), _BATCH_SIZE):
                 batch = texts[start : start + _BATCH_SIZE]
                 vectors.extend(await self._embed_batch(batch, azure_input_type))
+            update_generation(
+                output={"vectors": len(vectors), "dim": len(vectors[0]) if vectors else 0},
+                usage_details=({"input": self._usage_tokens} if self._usage_tokens else None),
+            )
+            self._usage_tokens = 0
             return vectors
         except Exception as e:
             logger.error(f"Azure Cohere embedding failed: {e}")

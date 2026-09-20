@@ -30,6 +30,8 @@ except Exception:  # pragma: no cover
         def _d(fn): return fn
         return _d if not (_a and callable(_a[0])) else _a[0]
 
+from app.services.observability.tracing import observe
+
 
 def _hit_to_product_doc(hit: SearchHit) -> Dict[str, Any]:
     f = hit.fields or {}
@@ -51,6 +53,7 @@ class ProductDocsRetriever:
     optionally scoped to a product (``uin``/``product_name``) or block type
     (e.g. ``disclosure`` for disclaimer wording)."""
 
+    @observe(name="retrieve-product-docs", as_type="retriever")
     @traceable(run_type="retriever", name="RAG.product_docs_retriever")
     async def retrieve(
         self,

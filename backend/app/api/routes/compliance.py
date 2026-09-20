@@ -34,6 +34,7 @@ from app.services.llm_budget import llm_budget_guard
 from app.services import export_common
 from app.models.rule import Rule
 from app.services.llm_service import LLMUnavailableError, chat_llm_service
+from app.services.observability.tracing import trace_root
 from app.database import get_db, SessionLocal
 from app.models.submission import Submission
 from app.models.compliance_check import ComplianceCheck
@@ -1352,6 +1353,21 @@ _REWRITE_SYSTEM = (
 )
 
 
+def _trace_user_id(user) -> Optional[str]:
+    """Reviewer identity for Langfuse ``user_id`` (username, else id)."""
+    if user is None:
+        return None
+    return getattr(user, "username", None) or (str(user.id) if getattr(user, "id", None) else None)
+
+
+def _violation_submission_id(violation) -> Optional[str]:
+    """Submission a finding belongs to — the Langfuse session key, so a rewrite
+    sits next to the analysis runs of the same document."""
+    check = getattr(violation, "compliance_check", None)
+    sid = getattr(check, "submission_id", None) if check is not None else None
+    return str(sid) if sid else None
+
+
 @router.post(
     "/violations/{violation_id}/rewrite",
     dependencies=[Depends(llm_rate_limit), Depends(llm_budget_guard)],
@@ -1396,18 +1412,36 @@ async def rewrite_violation_text(
     if payload.instruction:
         parts.append(f"\nReviewer instruction (follow it):\n{payload.instruction.strip()}")
 
-    try:
-        proposed = await chat_llm_service.generate_response(
-            prompt="\n".join(parts),
-            system_prompt=_REWRITE_SYSTEM,
-            temperature=0.2,
-        )
-    except LLMUnavailableError as e:
-        raise HTTPException(status_code=503, detail=f"Rewrite unavailable: {e}")
+    # Own Langfuse trace, in the same session as the document's analysis runs.
+    with trace_root(
+        "rewrite-violation",
+        as_type="chain",
+        input={
+            "violation_id": str(violation.id),
+            "rule_id": str(violation.rule_id) if violation.rule_id else None,
+            "original_text": original,
+            "instruction": payload.instruction,
+        },
+        user_id=_trace_user_id(user),
+        session_id=_violation_submission_id(violation),
+        tags=["rewrite"],
+        metadata={"violation_id": str(violation.id), "severity": violation.severity},
+    ) as trace:
+        try:
+            proposed = await chat_llm_service.generate_response(
+                prompt="\n".join(parts),
+                system_prompt=_REWRITE_SYSTEM,
+                temperature=0.2,
+                purpose="rewrite",
+            )
+        except LLMUnavailableError as e:
+            raise HTTPException(status_code=503, detail=f"Rewrite unavailable: {e}")
 
-    proposed = (proposed or "").strip().strip('"').strip()
-    if not proposed:
-        raise HTTPException(status_code=502, detail="Model returned an empty rewrite")
+        proposed = (proposed or "").strip().strip('"').strip()
+        if not proposed:
+            raise HTTPException(status_code=502, detail="Model returned an empty rewrite")
+        if trace is not None:
+            trace.update(output={"proposed_text": proposed})
 
     return {
         "violation_id": str(violation.id),

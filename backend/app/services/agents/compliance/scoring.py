@@ -11,6 +11,8 @@ except Exception:  # pragma: no cover
         def _d(fn): return fn
         return _d if not (_a and callable(_a[0])) else _a[0]
 
+from app.services.observability.tracing import observe, update_span
+
 
 class ScoringService:
     """Calculate compliance scores based on violations."""
@@ -33,6 +35,7 @@ class ScoringService:
     CRITICAL_SCORE_CAP = 70.0
 
     @staticmethod
+    @observe(name="calculate-scores", as_type="tool", capture_input=False)
     @traceable(run_type="tool", name="Scoring.calculate_scores")
     def calculate_scores(
         violations: List[Dict],

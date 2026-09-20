@@ -14,6 +14,7 @@ from app.services.rag.factory import get_embedder, get_vector_store
 from app.services.rag.ports import SearchHit
 from app.services.rag.precedent_filters import is_thin_comment
 from app.services.rag import trace as rag_trace
+from app.services.observability.tracing import observe, update_span
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +190,7 @@ def _check_precedent_cases_populated() -> bool:
 
 
 class PrecedentRetriever:
+    @observe(name="retrieve-precedents", as_type="retriever", capture_input=False, capture_output=False)
     async def retrieve_per_chunk(
         self,
         chunks: List[Dict[str, Any]],
@@ -223,6 +225,10 @@ class PrecedentRetriever:
         k = top_k or settings.pgvector_top_k
         embedder = get_embedder()
         store = get_vector_store()
+        update_span(input={
+            "chunks": len(chunks), "top_k": k, "index": index,
+            "product_scope": product_scope, "exclude_document_id": exclude_document_id,
+        })
 
         corpus_empty = (not use_v2) and not _check_legacy_corpus_populated()
         out = PrecedentRetrieval(
@@ -285,6 +291,16 @@ class PrecedentRetriever:
                 out[cid] = []
                 out.degraded_chunk_ids.add(cid)
                 out.degraded_reason = out.degraded_reason or str(e)
+        update_span(
+            output={
+                "chunks": len(out),
+                "precedents_per_chunk": {cid: len(ps) for cid, ps in list(out.items())[:50]},
+                "corpus_empty": corpus_empty,
+                "degraded_chunks": len(out.degraded_chunk_ids),
+            },
+            level=("WARNING" if out.degraded_chunk_ids else None),
+            status_message=(out.degraded_reason or None),
+        )
         return out
 
 
