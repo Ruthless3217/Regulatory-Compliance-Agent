@@ -1,0 +1,103 @@
+{
+  "schema_version": "1.0",
+  "product_name": "Bajaj Life Guaranteed Pension Goal II",
+  "uin": "116N187V11",
+  "supersedes": "116N187V09",
+  "rider_uins": [],
+  "source_file": "gpg-ii-sl.pdf",
+  "product_category": "pension_annuity",
+  "regulatory_descriptor": "A Non-Linked, Non-Participating, Individual/Group General Annuity Plan",
+  "structural_flags": {
+    "is_unit_linked": false,
+    "is_participating": false,
+    "market_risk_borne_by_policyholder": false,
+    "offers_guaranteed_benefits": true,
+    "offers_maturity_benefit": false,
+    "offers_loan": true
+  },
+  "variants": ["Immediate Annuity", "Deferred Annuity"],
+  "key_benefits": [
+    "Guaranteed lifelong annuity income; annuity amount is guaranteed at policy inception and paid at the chosen frequency (Yearly/Half-yearly/Quarterly/Monthly)",
+    "Immediate Annuity: annuity payable in arrears from inception; Deferred Annuity: annuity payable from the end of the chosen deferment period (1-30 years; 10 years max for Options G and H)",
+    "Option A: Life Annuity (throughout life)",
+    "Option B: Life Annuity with Return of Purchase Price (ROP, 50%-100% chosen at inception) on death — the only option available through the POS channel (immediate annuity, fixed ROP%)",
+    "Option C: Annuity certain (5/10/15/20 years) and life thereafter (immediate annuity only)",
+    "Option D/E: Joint Life Last Survivor with 50% or 100% annuity to spouse (D immediate only; E deferred only with regular premium)",
+    "Option F: Joint Life Last Survivor with 100% annuity to spouse and ROP on death of last survivor (single-premium deferred: ROP mandatorily 100%)",
+    "Option G: Life Annuity with Return of Purchase Price on death or survival — purchase price returned after the 25th policy year or age 85, whichever is later (single premium only under deferred)",
+    "Option H: Life Annuity with Return of Purchase Price on death or in instalments on survival — 5% of purchase price per year from the 15th policy year or age 70, whichever is later, until 100% is returned (single premium only under deferred)",
+    "Option I: Family Pension (NPS subscribers only) — Option F terms with a spouse, Option B terms without; ROP re-purchases annuity for dependent mother then father; 100% of purchase price on the last death",
+    "Death during the deferment period pays Death Benefit Factor x Total Premiums Paid, minimum 105% of Total Premiums Paid",
+    "Policy loan available under ROP options once Surrender Value is acquired (up to 80% of Surrender Value)",
+    "Higher annuity rate for single premium of Rs 5 lakh+ or regular premium of Rs 2 lakh+; annuity increased by 2% for superannuation/pension/NPS purchase price (staff: 4.5% / 2%)"
+  ],
+  "riders_available": [],
+  "eligibility": {
+    "min_entry_age_years": 30,
+    "max_entry_age_years": 85,
+    "entry_age_note": "Immediate annuity 30-85 years; Deferred annuity 35-84 years, subject to annuity starting at a maximum age of 85. Different entry ages apply when the purchase price comes from a Bajaj Life deferred pension policy, QROPS or NPS.",
+    "max_maturity_age_years": null,
+    "min_purchase_price": "As per minimum annuity instalment: Rs 12,000 yearly / 6,000 half-yearly / 3,000 quarterly / 1,000 monthly (minimum annuity not applicable when purchased from a superannuation fund, pension fund/policy or NPS fund)",
+    "max_purchase_price": "No limit, subject to Board Approved Underwriting Policy",
+    "policy_term": "Whole-life annuity (immediate) / deferment period 1-30 years chosen at inception (deferred; 1-10 years for Options G and H)",
+    "premium_payment_term": "Single Premium (immediate or deferred); Regular/Limited Premium 2-12 years (deferred annuity only); deferment period for regular/limited premium is at least the greater of 2 years and the PPT chosen",
+    "min_group_size": 5,
+    "note": "Annuity option and ROP proportion, once chosen at inception, cannot be changed. Quarterly and monthly premium frequencies only with auto-debit."
+  },
+  "key_terms": {
+    "free_look_period_days": 30,
+    "free_look_note": "30 days from the date of receipt of the policy document (electronic or otherwise), except policies with tenure under a year; refund within 7 days of the request. For QROPS purchases the proceeds return only to the originating fund house per HMRC rules; for NPS purchases per NPS/PFRDA guidelines.",
+    "grace_period": "Deferred annuity with regular/limited premium only: 30 days for frequencies other than monthly, 15 days for monthly. Death during the grace period pays the death benefit less unpaid premiums.",
+    "suicide_clause": "Deferred annuity during the deferment period only: on suicide of the Annuitant (or last survivor) within 12 months of commencement or latest revival, the higher of 80% of Total Premiums Paid or the Surrender Value is payable. No suicide clause or other exclusion applies during the annuity period or under an immediate annuity.",
+    "guaranteed_benefit_note": "The annuity amount is guaranteed at inception and depends on the purchase price, age, frequency and the annuity option chosen ('Conditions Apply'). Return of Purchase Price proportion (50%-100%) is chosen at inception and cannot be changed.",
+    "surrender_note": "Surrender Value available under ROP / Annuity-Certain options: during the deferment period the higher of GSV or SSV; after the deferment period the SSV. GSV is a proportion of the purchase price (single premium) or of total regular/limited premiums; SSV factors are not guaranteed. A surrendered policy cannot be revived.",
+    "paid_up_note": "Regular/limited premium deferred annuity: fewer than one full year's premiums -> lapse with no benefit; one full year paid -> paid-up annuity and survival benefit.",
+    "revival_note": "Within 5 years of the first unpaid premium; arrears plus interest currently 10% p.a. compounded half-yearly (benchmarked to 10-year G-Sec + 2%).",
+    "loan_note": "Available only where the annuity option carries Return of Purchase Price and the policy has acquired Surrender Value; maximum 80% of Surrender Value; outstanding loan plus interest deducted from death/surrender value and each annuity payment adjusted for loan interest; current loan interest 10% p.a. compounding half-yearly (V09 brochure stated 9%), benchmarked to 10-year G-Sec + 2%; policy must be assigned to the company.",
+    "tax_note": "As per applicable tax laws, subject to amendment; GST and cess collected over and above the premium."
+  },
+  "mandatory_disclosures_present": [
+    "Free-look period disclosure (individual and group)",
+    "Grace period, paid-up and revival disclosure",
+    "Surrender Value (GSV / SSV) disclosure",
+    "Suicide-clause disclosure",
+    "Loan facility disclosure",
+    "QROPS / NPS-corpus / PFRDA annuity disclosure",
+    "POS channel restriction (Option B immediate annuity only)",
+    "'Conditions Apply' caveat on the guaranteed-income headline"
+  ],
+  "compliance_guardrails": {
+    "claims_marketing_must_support": [
+      "Any 'guaranteed income for life' claim must carry the 'Conditions Apply — depends on purchase price and annuity option chosen' caveat present in the brochure.",
+      "Return of Purchase Price (ROP) is option-specific (Options B, F, G, H, I) and the percentage (50%-100%) is chosen at inception — any 'get your money back' claim must be option-qualified.",
+      "Joint-life / spouse-continuation benefits apply ONLY to the joint-life options (D, E, F, and I for NPS subscribers).",
+      "Annuity-certain payout (Option C) is for the chosen 5/10/15/20-year guaranteed period and is available under immediate annuity only.",
+      "Survival-benefit return of purchase price (Options G and H) is tied to the 25th policy year / age 85 or the 15th policy year / age 70 thresholds, whichever is later.",
+      "Loan availability must be qualified: ROP options only, after Surrender Value is acquired, up to 80% of Surrender Value."
+    ],
+    "claims_marketing_must_avoid": [
+      "Do NOT present this as a market-linked / wealth-creation or growth product — it is a non-linked, non-participating annuity that pays a fixed guaranteed income.",
+      "Do NOT use 'bonus' language — the plan is non-participating.",
+      "Do NOT imply the annuity rate is the same for everyone — the annuity amount varies by option, purchase price, age and frequency.",
+      "Do NOT promise return of the full purchase price unconditionally — ROP only applies under specific options and at the chosen percentage.",
+      "Do NOT omit that the annuity option, once chosen at inception, cannot be changed during the policy term.",
+      "Do NOT cite the superseded UIN 116N187V09 for current collateral — the current approved version is 116N187V11."
+    ],
+    "must_state": [
+      "Plan UIN 116N187V11",
+      "Full regulatory descriptor (Non-Linked, Non-Participating Annuity Plan)",
+      "'Conditions Apply' caveat for the guaranteed-income claim (dependent on purchase price and annuity option)",
+      "Standard disclaimer to read the policy document / benefit illustration for full terms and exclusions"
+    ]
+  },
+  "curation": {
+    "curated_by": "claude-opus-5 (session 2026-09-18)",
+    "curated_from": "Bajaj Life Guaranteed Pension Goal II sales brochure gpg-ii-sl.pdf as currently published (21 pages, BLIC-BR-EC-23752/26, UIN 116N187V11) downloaded from bajajlifeinsurance.com/content/dam/balic-web/pdf/retirement-plans/gpg-ii-sl.pdf; word-level diff against the V09 brochure (BLIC-BR-EC-20579/26) showed only the UIN, the document number, the loan interest rate (9% -> 10%) and the illustrative annuity amounts changed",
+    "confidence": "high",
+    "gaps": [
+      "The V11 brochure is not present in uploads/Broch or rag_product_docs (which hold the V09 edition) — passages retrieved for this product come from the V09 text until the V11 PDF is ingested.",
+      "Verbatim one-line IRDAI descriptor reconstructed from the product type; verify exact wording against the policy document.",
+      "Death Benefit Factors, GSV/SSV factors and current annuity rates are published on the company website, not in the brochure."
+    ]
+  }
+}

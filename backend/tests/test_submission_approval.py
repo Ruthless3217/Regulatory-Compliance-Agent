@@ -701,3 +701,57 @@ def test_the_signoff_lands_in_the_documents_own_trail(audited, reason, event_typ
     event = audited[-1]
     assert event["event_type"] == event_type
     assert event["scope_submission_id"] == sub.id
+
+
+# ---------------------------------------------------------------------------
+# Warning KINDS (warning-semantics fix, 2026-09-17). Every kind blocks — the
+# gate is fail-safe — but the message must state the true limitation: a tier
+# or infrastructure warning does not mean part of the document went ungraded.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("warning, claims_partial, phrase", [
+    ({"code": "rider_uins_without_fact_cards", "detail": {"uins": ["116N216V01"]}},
+     True, "less than the whole document"),
+    ({"code": "precedent_corpus_empty", "detail": {"corpus": "rag_compliance_examples"}},
+     False, "limited evidence sources"),
+    ({"code": "rule_scope_metadata_incomplete", "detail": {"count": 3}},
+     False, "limited evidence sources"),
+    ({"code": "retrieval_degraded", "detail": {"reason": "embedding model mismatch"}},
+     False, "retrieval component failed"),
+    ({"code": "precedent_tier_unavailable", "detail": {"chunks_failed": 4}},
+     False, "retrieval component failed"),
+])
+def test_every_warning_kind_blocks_approval_with_its_own_true_message(
+    warning, claims_partial, phrase
+):
+    db = FakeSession()
+    sub = _submission(db)
+    _analyzed(db, sub, warnings=[warning])
+
+    err = _refusal(db, sub)
+    assert err.status_code == 409
+    assert warning["code"] in err.detail
+    assert phrase in err.detail
+    assert ("less than the whole document" in err.detail) is claims_partial
+    assert sub.approval_status == "pending"
+
+    state = _state(db, sub)
+    assert _codes(state) == {"partial_analysis"}
+    assert [b["overridable"] for b in state["blockers"]] == [True]
+
+    _approve(db, sub, override_reason="Limitation reviewed out of band.")
+    assert sub.approval_status == "approved"
+
+
+def test_mixed_kinds_block_with_the_coverage_message():
+    # Coverage is the most restrictive claim and wins the sentence.
+    db = FakeSession()
+    sub = _submission(db)
+    _analyzed(db, sub, warnings=[
+        {"code": "retrieval_degraded", "detail": {"reason": "x"}},
+        {"code": "product_grounding_budget", "detail": {"chunk_indexes": [3]}},
+    ])
+
+    err = _refusal(db, sub)
+    assert "less than the whole document" in err.detail
+    assert "retrieval_degraded" in err.detail and "product_grounding_budget" in err.detail

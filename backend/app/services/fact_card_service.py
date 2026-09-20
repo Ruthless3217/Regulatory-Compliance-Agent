@@ -168,6 +168,10 @@ class FactCardService:
                 # Services") so feature collateral without a product name still
                 # resolves to its product.
                 "aliases": list(c.get("marketing_aliases") or []),
+                # A newer approved version of the same product (same name,
+                # new UIN — 116N187V09 -> 116N187V11). The resolver only
+                # resolves a superseded card by its exact UIN, never by name.
+                "superseded_by": c.get("superseded_by") or None,
             }
             for c in self._cards
         ]

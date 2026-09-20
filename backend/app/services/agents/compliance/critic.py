@@ -45,6 +45,8 @@ except Exception:  # pragma: no cover
         def _d(fn): return fn
         return _d if not (_a and callable(_a[0])) else _a[0]
 
+from app.services.observability.tracing import observe, update_span
+
 
 class CritiqueItem(BaseModel):
     index: int = Field(..., description="Index of the violation in the input list (0-based)")
@@ -145,6 +147,7 @@ PRIMARY VIOLATIONS TO REVIEW:
 Return JSON with one critique per input violation, in input order."""
 
 
+@observe(name="critic-review-violations", as_type="evaluator", capture_input=False, capture_output=False)
 @traceable(run_type="llm", name="Critic.review_violations")
 async def critique_violations(
     chunk_text: str,
@@ -163,6 +166,11 @@ async def critique_violations(
     """
     if not violations:
         return violations
+    update_span(input={
+        "violations": len(violations),
+        "rules": len(rules or []),
+        "chunk_chars": len(chunk_text or ""),
+    })
     try:
         result = await critic_llm_service.generate_structured_response(
             prompt=_build_critic_prompt(chunk_text, rules, violations),
@@ -179,6 +187,10 @@ async def critique_violations(
         )
     except Exception as e:
         logger.warning(f"Critic call failed; passing primary violations through: {e}")
+        update_span(
+            output={"passed_through": len(violations)},
+            level="WARNING", status_message=f"critic failed, passed through: {e}"[:500],
+        )
         return violations
 
     keep_by_index: Dict[int, CritiqueItem] = {c.index: c for c in result.critiques}
@@ -229,4 +241,12 @@ async def critique_violations(
             f"Critic pass: {len(violations)} in → {len(surviving)} out "
             f"(dropped={dropped}, downgraded={downgraded})"
         )
+    update_span(output={
+        "in": len(violations), "out": len(surviving),
+        "dropped": dropped, "downgraded": downgraded,
+        "critiques": [
+            {"index": c.index, "keep": c.keep, "confidence": c.confidence, "reason": (c.reason or "")[:200]}
+            for c in result.critiques[:50]
+        ],
+    })
     return surviving

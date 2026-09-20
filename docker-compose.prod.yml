@@ -130,6 +130,14 @@ services:
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
       LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
       LANGCHAIN_PROJECT: "${LANGCHAIN_PROJECT:-Regulatory Compliance Agent}"
+      # --- Langfuse tracing (optional; no-op when the keys are empty) ---
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+      LANGFUSE_TRACING_ENABLED: ${LANGFUSE_TRACING_ENABLED:-true}
+      LANGFUSE_ENVIRONMENT: ${LANGFUSE_ENVIRONMENT:-production}
+      LANGFUSE_RELEASE: ${LANGFUSE_RELEASE:-}
+      LANGFUSE_MASK_PII: ${LANGFUSE_MASK_PII:-true}
       # --- Feature flags ---
       CRITIC_ENABLED: ${CRITIC_ENABLED:-true}
       COMPLETENESS_SWEEP_ENABLED: ${COMPLETENESS_SWEEP_ENABLED:-true}

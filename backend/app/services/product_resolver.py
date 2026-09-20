@@ -463,10 +463,26 @@ def _resolve(
         if prev is None or entry["confidence"] > prev["confidence"]:
             best_fuzzy[uin] = entry
 
+    # Version siblings: a document that cites "Guaranteed Pension Goal II
+    # (UIN 116N187V11)" names ONE product. The V09 card carries the identical
+    # name, so name matching would resolve it too and the run would ground on
+    # two editions of one plan. Any card whose identity equals a UIN-matched
+    # card's is that product under another version and is skipped here; a
+    # superseded card whose successor is in the corpus is never resolved by
+    # name at all — only its exact UIN may bring it back.
+    uin_matched_identities = {
+        frozenset(_identity_tokens(name_by_uin.get(u, ""), brand)) for u in seen_uins
+    }
+    uin_matched_identities.discard(frozenset())
     for p in products:
         if p["uin"] in seen_uins:
             continue
         name = (p.get("product_name") or "").strip()
+        if name and frozenset(_identity_tokens(name, brand)) in uin_matched_identities:
+            continue
+        successor = str(p.get("superseded_by") or "").upper()
+        if successor and successor in known_uins:
+            continue
         if name and _document_names(text_positions, name, brand):
             # Locality proved the base name is here. Before similarity is even
             # consulted, the document's edition evidence gets the last word:
@@ -510,5 +526,73 @@ def _resolve(
     # UIN: the document's name evidence still contradicts that card, and the
     # reviewer should see both facts. An exact UIN never reaches here (the
     # product loop skips it), and a confirmed sibling mention never appends
-    # one, so nothing is filtered — what is here is what the document said.
-    return matches + fuzzy, sorted(conflicts, key=lambda c: c["uin"])
+    # one. The one thing that IS filtered: a conflict the corpus itself
+    # explains. "Invest Protect Goal Plus" contradicts the Goal III card, but
+    # the Smart Secure card (116L215V01) carries that exact name as an alias
+    # and resolved in this same pass — the document named a product the corpus
+    # DOES have a card for, so there is no gap to warn about. Only a card that
+    # resolved may explain a conflict; an alias on an unresolved card is not
+    # evidence of anything.
+    resolved = matches + fuzzy
+    explained = _explained_conflicts(conflicts, resolved, products, brand)
+    conflicts = [c for c in conflicts if id(c) not in explained]
+    return resolved, sorted(conflicts, key=lambda c: c["uin"])
+
+
+def _explained_conflicts(
+    conflicts: List[Dict[str, Any]],
+    resolved: List[Dict[str, Any]],
+    products: List[Dict[str, Any]],
+    brand: FrozenSet[str],
+) -> Set[int]:
+    """ids of conflicts whose document-side name is a known alias of a product
+    that resolved to a DIFFERENT UIN in this pass.
+
+    The document-side name is the candidate's name with the candidate's edition
+    replaced by the document's ("... Goal III" -> "... Goal Plus"); it is
+    compared by identity tokens (brand and version tokens stripped) against
+    the product name and every alias of each resolved card, so "Bajaj Life
+    Invest Protect Goal Plus" and "Invest Protect Goal Plus - Elite Variant"
+    both explain the same conflict.
+    """
+    if not conflicts or not resolved:
+        return set()
+    resolved_uins = {str(m.get("uin") or "").upper() for m in resolved}
+    identities: Dict[str, Set[FrozenSet[str]]] = {}
+    for p in products:
+        uin = str(p.get("uin") or "").upper()
+        if uin not in resolved_uins:
+            continue
+        for name in [p.get("product_name") or ""] + list(p.get("aliases") or []):
+            tokens = _identity_tokens(name, brand)
+            if tokens:
+                identities.setdefault(uin, set()).add(frozenset(tokens))
+    out: Set[int] = set()
+    for c in conflicts:
+        cand_ed = str(c.get("candidate_edition") or "")
+        doc_ed = str(c.get("document_edition") or "")
+        if not cand_ed or not doc_ed:
+            continue
+        doc_name = re.sub(
+            rf"\b{re.escape(cand_ed)}\b", doc_ed, c.get("candidate") or "",
+            flags=re.IGNORECASE,
+        )
+        # The document's edition word is part of THIS product's identity, so
+        # it must survive the version-token strip that _identity_tokens does.
+        doc_identity = frozenset(
+            t for t in _tokens(doc_name) if t not in brand and t != cand_ed.lower()
+        )
+        if not doc_identity:
+            continue
+        for uin, names in identities.items():
+            if uin == str(c.get("uin") or "").upper():
+                continue
+            if any(
+                doc_identity == frozenset(
+                    t for t in _tokens(" ".join(n)) if t != cand_ed.lower()
+                ) or doc_identity == n
+                for n in names
+            ):
+                out.add(id(c))
+                break
+    return out

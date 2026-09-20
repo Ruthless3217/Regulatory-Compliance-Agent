@@ -14,6 +14,7 @@ from app.services.rag.factory import get_embedder, get_vector_store
 from app.services.rag.ports import SearchHit
 from app.services.rag.precedent_filters import is_thin_comment
 from app.services.rag import trace as rag_trace
+from app.services.observability.tracing import observe, update_span
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +114,53 @@ def warn_legacy_corpus_is_unscoped() -> None:
     )
 
 
+class PrecedentRetrieval(dict):
+    """{chunk_id: [precedent, ...]} plus WHY a chunk has none.
+
+    The dict shape is unchanged for every existing consumer. The attributes
+    are what let dispatch_node tell apart the four things an empty list used
+    to mean: the tier FAILED for that chunk (`degraded_chunk_ids`), the corpus
+    is genuinely EMPTY (`corpus_empty`), the candidates were refused
+    downstream, or retrieval worked and found nothing relevant. One warning
+    code for all four made "no precedent for this document" indistinguishable
+    from "the embedding store refused to answer".
+    """
+
+    def __init__(self, *args, source: str = "", corpus_empty: bool = False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.source = source
+        self.corpus_empty = corpus_empty
+        self.degraded_chunk_ids: set = set()
+        self.degraded_reason: Optional[str] = None
+
+
 # Cache: None = not checked, True = has rows, False = empty.
 _precedent_cases_populated: Optional[bool] = None
+_legacy_corpus_populated: Optional[bool] = None
+
+
+def _check_legacy_corpus_populated() -> bool:
+    """Once per process: does rag_compliance_examples have any rows at all?
+
+    Needed to tell "the precedent corpus is empty" (a knowledge-base fact)
+    from "retrieval returned nothing" (which can also be a healthy result)."""
+    global _legacy_corpus_populated
+    if _legacy_corpus_populated is not None:
+        return _legacy_corpus_populated
+    try:
+        from sqlalchemy import text as sa_text
+        from app.database import SessionLocal
+        db = SessionLocal()
+        try:
+            row = db.execute(sa_text(
+                "SELECT EXISTS(SELECT 1 FROM rag_compliance_examples LIMIT 1)"
+            )).scalar()
+            _legacy_corpus_populated = bool(row)
+        finally:
+            db.close()
+    except Exception:
+        _legacy_corpus_populated = False
+    return _legacy_corpus_populated
 
 
 def _check_precedent_cases_populated() -> bool:
@@ -144,6 +190,7 @@ def _check_precedent_cases_populated() -> bool:
 
 
 class PrecedentRetriever:
+    @observe(name="retrieve-precedents", as_type="retriever", capture_input=False, capture_output=False)
     async def retrieve_per_chunk(
         self,
         chunks: List[Dict[str, Any]],
@@ -178,13 +225,24 @@ class PrecedentRetriever:
         k = top_k or settings.pgvector_top_k
         embedder = get_embedder()
         store = get_vector_store()
+        update_span(input={
+            "chunks": len(chunks), "top_k": k, "index": index,
+            "product_scope": product_scope, "exclude_document_id": exclude_document_id,
+        })
+
+        corpus_empty = (not use_v2) and not _check_legacy_corpus_populated()
+        out = PrecedentRetrieval(
+            {str(c.get("id")): [] for c in chunks}, source=index, corpus_empty=corpus_empty
+        )
 
         texts = [c.get("text", "") for c in chunks]
         try:
             vectors = await embedder.embed(texts, input_type="search_query")
         except (RAGEmbedFailed, RAGDegraded) as e:
             logger.warning(f"precedent retrieval embed failed: {e}")
-            return {str(c.get("id")): [] for c in chunks}
+            out.degraded_chunk_ids = set(out)
+            out.degraded_reason = str(e)
+            return out
 
         if len(vectors) != len(chunks):
             logger.error(
@@ -193,9 +251,10 @@ class PrecedentRetriever:
                 len(vectors),
                 len(chunks),
             )
-            return {str(c.get("id")): [] for c in chunks}
+            out.degraded_chunk_ids = set(out)
+            out.degraded_reason = "embedder returned the wrong number of vectors"
+            return out
 
-        out: Dict[str, List[Dict[str, Any]]] = {}
         for chunk, qvec in zip(chunks, vectors):
             cid = str(chunk.get("id"))
             try:
@@ -230,6 +289,18 @@ class PrecedentRetriever:
             except RAGDegraded as e:
                 logger.warning(f"precedent retrieval degraded for chunk {cid}: {e}")
                 out[cid] = []
+                out.degraded_chunk_ids.add(cid)
+                out.degraded_reason = out.degraded_reason or str(e)
+        update_span(
+            output={
+                "chunks": len(out),
+                "precedents_per_chunk": {cid: len(ps) for cid, ps in list(out.items())[:50]},
+                "corpus_empty": corpus_empty,
+                "degraded_chunks": len(out.degraded_chunk_ids),
+            },
+            level=("WARNING" if out.degraded_chunk_ids else None),
+            status_message=(out.degraded_reason or None),
+        )
         return out
 
 

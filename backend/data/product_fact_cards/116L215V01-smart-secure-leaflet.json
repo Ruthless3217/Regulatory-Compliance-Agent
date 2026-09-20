@@ -15,6 +15,12 @@
     "offers_loan": false
   },
   "variants": ["Bajaj Life Invest Protect Goal Plus - Elite Variant (ULIP base, UIN 116L215V01)", "Bajaj Life Secure Plus - Shield with ROP Variant (health component, UIN 116N216V01)"],
+  "marketing_aliases": [
+    "Bajaj Life Invest Protect Goal Plus",
+    "Invest Protect Goal Plus - Elite Variant",
+    "Smart Secure ROP"
+  ],
+  "companion_product_uins": ["116N216V01"],
   "key_benefits": [
     "Death Benefit — higher of Prevailing Sum Assured or Regular Premium Fund Value, plus Top-up component, plus Terminal Illness with Term Booster cover; not less than 105% of Total Premiums Paid (Guaranteed Benefit)",
     "Accidental Death Benefit (ADB) — additional payout (higher of ADB Sum Assured or 105% of premiums for that cover) on accidental death",

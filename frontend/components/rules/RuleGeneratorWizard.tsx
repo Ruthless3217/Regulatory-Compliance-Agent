@@ -33,6 +33,7 @@ const PRODUCT_SCOPES = [
   ["non_par", "Non-participating"],
   ["savings_endowment", "Savings / endowment"],
   ["pension_annuity", "Pension / annuity"],
+  ["health", "Health"],
   ["rider", "Rider"],
   ["group", "Group"],
 ] as const;

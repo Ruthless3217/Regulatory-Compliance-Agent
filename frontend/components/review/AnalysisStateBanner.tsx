@@ -55,6 +55,43 @@ export function analysisIsIncomplete({
  * reading the score as coverage it does not have. Renders nothing when the run
  * was fully grounded.
  */
+/** Which of the three kinds a warning is. Mirrors the backend's
+ * `analysis_warnings.KIND_BY_CODE` for runs whose payload predates `kind`;
+ * an unknown code is read as coverage — the most restrictive reading. */
+const KIND_BY_CODE: Record<string, "coverage" | "tier" | "infrastructure"> = {
+  rider_uins_without_fact_cards: "coverage",
+  unknown_uins: "coverage",
+  declared_products_without_fact_cards: "coverage",
+  edition_conflicts: "coverage",
+  product_grounding_budget: "coverage",
+  precedent_corpus_empty: "tier",
+  precedent_scope_metadata_incomplete: "tier",
+  rule_scope_metadata_incomplete: "tier",
+  precedent_evidence_unavailable: "tier",
+  retrieval_degraded: "infrastructure",
+  precedent_tier_unavailable: "infrastructure",
+};
+
+export function warningKind(w: AnalysisWarning): "coverage" | "tier" | "infrastructure" {
+  if (w.kind === "coverage" || w.kind === "tier" || w.kind === "infrastructure") return w.kind;
+  return KIND_BY_CODE[w.code] ?? "coverage";
+}
+
+/** The one sentence the banner may assert. Coverage wins, then
+ * infrastructure, then tier — the same order as the backend's
+ * `limitation_statement`, so every surface makes the same claim. */
+export function limitationStatement(warnings: AnalysisWarning[]): string {
+  const kinds = new Set(warnings.map(warningKind));
+  if (kinds.size === 0) return "";
+  if (kinds.has("coverage")) {
+    return "This document was graded on incomplete evidence — the score covers less than the whole document.";
+  }
+  if (kinds.has("infrastructure")) {
+    return "This document was graded while a retrieval component failed — every section was analysed, but evidence that retrieval would have supplied was unavailable.";
+  }
+  return "This document was graded with limited evidence sources — every section was analysed, but some knowledge-base evidence was unavailable.";
+}
+
 export function AnalysisWarningsBanner({
   warnings,
   className,
@@ -74,10 +111,7 @@ export function AnalysisWarningsBanner({
     >
       <Info className="mt-px h-4 w-4 shrink-0 text-info" />
       <div className="text-[12.5px] leading-snug text-info">
-        <p className="font-medium">
-          This document was graded on incomplete evidence — the score covers
-          less than the whole document.
-        </p>
+        <p className="font-medium">{limitationStatement(warnings)}</p>
         <ul className="mt-1 space-y-0.5 opacity-90">
           {warnings.map((warning) => (
             <li key={warning.code}>

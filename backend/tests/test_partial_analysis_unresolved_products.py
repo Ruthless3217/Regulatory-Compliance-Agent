@@ -52,7 +52,7 @@ gives you market linked returns with a return of premium.
 Guaranteed returns of 12% every year with zero risk.
 
 Disclaimers: this advertisement is designed for a combination of two individual
-products. Bajaj Life Secure Plus - Shield with ROP Variant (UIN:116N216V01).
+products. Riders: Bajaj Life Health Shield Rider (UIN:116B036V02).
 """
 
 KNOWN_ONLY = """Bajaj Life Smart Secure ROP (UIN: 116L215V01) gives you market
@@ -542,7 +542,10 @@ def test_known_product_plus_ungrounded_rider_warns_and_grades(preprocess):
     out = preprocess(KNOWN_PLUS_UNGROUNDED_RIDER, "ulip")
     md = out["metadata"]
 
-    assert md["product_unresolved"]["rider_uins_without_fact_cards"] == ["116N216V01"]
+    # 116N216V01 (Secure Plus) has its own card since 2026-09-18, so the shape
+    # is reproduced with a rider that still has none (116B036V02, cited by six
+    # parent cards).
+    assert md["product_unresolved"]["rider_uins_without_fact_cards"] == ["116B036V02"]
     assert "degraded" not in md
     codes = [w["code"] for w in md["analysis_warnings"]]
     assert "rider_uins_without_fact_cards" in codes
@@ -559,7 +562,7 @@ def test_the_warning_carries_the_uin_and_where_it_occurs(preprocess):
         if w["code"] == "rider_uins_without_fact_cards"
     )
 
-    assert warning["detail"]["uins"] == ["116N216V01"]
+    assert warning["detail"]["uins"] == ["116B036V02"]
     assert warning["detail"]["chunk_indexes"] == [0]
 
 

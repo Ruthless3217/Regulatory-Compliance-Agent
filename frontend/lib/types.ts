@@ -260,11 +260,21 @@ export interface ComplianceResults {
   /** Named limitations of a run that DID produce a grade — what the score does
    * not cover. Empty on a fully grounded run. */
   analysis_warnings?: AnalysisWarning[];
+  /** "partial" only when a coverage warning exists; "complete" otherwise —
+   * a tier/infrastructure warning does not reduce document coverage. */
+  evidence_coverage?: "complete" | "partial";
+  /** The one sentence the backend is willing to assert about the warnings. */
+  limitation_statement?: string;
 }
 
 /** One named evidence limitation of a completed run. */
 export interface AnalysisWarning {
   code: string;
+  /** coverage: part of THIS document could not be grounded (the score covers
+   * less than the whole document). tier: an evidence tier is limited by the
+   * knowledge base. infrastructure: a retrieval component failed. Absent on
+   * runs persisted before kinds existed — treat as coverage. */
+  kind?: "coverage" | "tier" | "infrastructure" | string;
   detail?: Record<string, unknown> | null;
   explanation?: string;
 }

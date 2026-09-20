@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # share one scope vocabulary so rules/precedents can be tagged with either.
 _CANONICAL = {
     "term", "ulip", "rider", "group", "savings_endowment", "pension_annuity",
-    "par", "non_par",
+    "health", "par", "non_par",
 }
 
 # Aliases from other taggers (precedent ingest hints, prose) → canonical.
@@ -158,7 +158,7 @@ def derive_segments(card: Dict[str, Any]) -> FrozenSet[str]:
       par     — is_participating
       ulip    — is_unit_linked
       term    — product_category == term (its own segment, never non_par)
-      non_par — neither flag, on an individual savings/pension product
+      non_par — neither flag, on an individual savings/pension/health product
     """
     flags = card.get("structural_flags") or {}
     cat = normalize_category(card.get("product_category"))
@@ -172,7 +172,7 @@ def derive_segments(card: Dict[str, Any]) -> FrozenSet[str]:
     if (
         not flags.get("is_unit_linked")
         and not flags.get("is_participating")
-        and cat in {"savings_endowment", "pension_annuity"}
+        and cat in {"savings_endowment", "pension_annuity", "health"}
     ):
         segs.add("non_par")
     return frozenset(segs)

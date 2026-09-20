@@ -19,7 +19,7 @@ const CATEGORIES = ["all", "irdai", "brand", "sebi", "regulatory", "seo"] as con
 const SEVERITIES = ["all", "critical", "high", "medium", "low"] as const;
 const PRODUCT_SCOPES = [
   "global", "term", "ulip", "par", "non_par", "savings_endowment",
-  "pension_annuity", "rider", "group",
+  "pension_annuity", "health", "rider", "group",
 ] as const;
 
 type Cat = (typeof CATEGORIES)[number];

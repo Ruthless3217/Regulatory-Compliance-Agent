@@ -19,6 +19,7 @@ from app.services.rag.errors import RAGDegraded, RAGEmbedFailed
 from app.services.rag.factory import get_embedder, get_vector_store
 from app.services.rag.ports import SearchHit
 from app.services.rag import trace as rag_trace
+from app.services.observability.tracing import observe, update_span
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ def _hit_to_rule_dict(hit: SearchHit) -> Dict[str, Any]:
 class RulesRetriever:
     """Retrieves the most relevant rules per chunk and category."""
 
+    @observe(name="retrieve-rules", as_type="retriever", capture_input=False, capture_output=False)
     async def retrieve_per_chunk(
         self,
         chunks: List[Dict[str, Any]],
@@ -62,6 +64,10 @@ class RulesRetriever:
             return {}
 
         recall = recall_pool if recall_pool is not None else settings.rag_recall_pool
+        update_span(input={
+            "chunks": len(chunks), "categories": list(categories), "top_k": top_k,
+            "recall_pool": recall, "product_scope": product_scope,
+        })
         threshold = (
             score_threshold if score_threshold is not None else settings.rag_score_threshold
         )
@@ -119,6 +125,15 @@ class RulesRetriever:
         for chunk_id, category, hits in results:
             out.setdefault(chunk_id, {}).setdefault(category, [])
             out[chunk_id][category] = [_hit_to_rule_dict(h) for h in hits]
+        # Rule ids per chunk/category (the full rule text reaches the model and
+        # is visible on the grading generation's input).
+        update_span(output={
+            "chunks": len(out),
+            "rules_per_chunk": {
+                cid: {cat: [str(r.get("id") or r.get("rule_id")) for r in rules] for cat, rules in cats.items()}
+                for cid, cats in list(out.items())[:50]
+            },
+        })
         return out
 
 

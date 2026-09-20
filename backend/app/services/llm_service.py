@@ -8,19 +8,34 @@ import logging
 from datetime import datetime
 from pydantic import BaseModel, ValidationError
 from ..config import settings
-from openai import AsyncOpenAI
-try:  # AsyncAzureOpenAI ships with openai>=1.0; guard so import never hard-fails
-    from openai import AsyncAzureOpenAI
-except Exception:  # pragma: no cover
-    AsyncAzureOpenAI = None  # type: ignore
+from app.services.observability import usage_recorder
+from app.services.observability.tracing import init_tracing, observe, update_span
+
+# Langfuse must be configured BEFORE the OpenAI client classes are imported so
+# its drop-in wrapper binds to the live client (import order matters).
+init_tracing()
+# Prefer Langfuse's drop-in OpenAI clients: every chat.completions.create()
+# becomes a `generation` observation with model, messages, token usage and
+# cost captured automatically (incl. streaming + Azure deployments). Falls
+# back to the plain SDK when langfuse isn't installed.
+try:
+    from langfuse.openai import AsyncOpenAI, AsyncAzureOpenAI
+    _LANGFUSE_OPENAI = True
+except Exception:  # pragma: no cover - langfuse not installed
+    from openai import AsyncOpenAI
+    try:  # AsyncAzureOpenAI ships with openai>=1.0; guard so import never hard-fails
+        from openai import AsyncAzureOpenAI
+    except Exception:  # pragma: no cover
+        AsyncAzureOpenAI = None  # type: ignore
+    _LANGFUSE_OPENAI = False
 try:  # openai>=1.0 ships RateLimitError; guard so import never hard-fails
     from openai import RateLimitError
 except Exception:  # pragma: no cover
     RateLimitError = None  # type: ignore
 import httpx
-from app.services.observability import usage_recorder
 
-# LangSmith tracing — no-op decorator if the SDK isn't installed.
+# LangSmith tracing — no-op decorator if the SDK isn't installed. Runs side by
+# side with Langfuse: LangSmith keeps the run tree, Langfuse the generations.
 try:
     try:
         from langsmith import traceable, get_current_run_tree
@@ -276,6 +291,23 @@ class LLMService:
             client_kwargs["http_client"] = http_client
         return AsyncOpenAI(**client_kwargs)
 
+    def _trace_kwargs(self, name: str, **metadata: Any) -> Dict[str, Any]:
+        """Extra kwargs for ``chat.completions.create`` that the Langfuse
+        OpenAI wrapper consumes (and strips before the request goes out):
+        the generation's name — the call's *purpose*, e.g. ``precedent_citation``
+        — plus provider/profile metadata for filtering. Empty when the plain
+        OpenAI SDK is in use, because it would reject unknown kwargs."""
+        if not _LANGFUSE_OPENAI:
+            return {}
+        return {
+            "name": name,
+            "metadata": {
+                "provider": self.provider,
+                "profile": self.profile,
+                **{k: v for k, v in metadata.items() if v is not None},
+            },
+        }
+
     def _gen_params(self, temperature, max_tokens=None) -> Dict[str, Any]:
         """Build the provider-variable generation params: the token-limit kwarg
         under the right name (``max_tokens`` vs ``max_completion_tokens`` for
@@ -344,6 +376,7 @@ class LLMService:
         _HEALTH_CACHE[self.model] = (now, ok)
         return ok
 
+    @observe(name="llm-generate-response", as_type="span", capture_input=False, capture_output=False)
     @traceable(run_type="llm", name="LLM.generate_response")
     async def generate_response(
         self,
@@ -352,7 +385,13 @@ class LLMService:
         context: Dict[str, Any] = None,
         **kwargs
     ) -> str:
-        """Generate response from LLM."""
+        """Generate response from LLM.
+
+        ``purpose`` (kwarg, optional) names the Langfuse generation, e.g.
+        ``"rewrite"``; the prompt itself is captured on the generation.
+        """
+        purpose = kwargs.get("purpose") or "generate_response"
+        update_span(input={"purpose": purpose, "profile": self.profile, "model": self.model})
         messages = self._build_chat_messages(prompt, system_prompt, context)
         self._enforce_context_budget(messages)
         from app.services.llm_budget import get_global_budget
@@ -369,6 +408,7 @@ class LLMService:
                         kwargs.get("temperature", 0.7),
                         kwargs.get("max_tokens"),
                     ),
+                    **self._trace_kwargs(purpose, key_id=key_id),
                 )
                 response_text = response.choices[0].message.content.strip()
 
@@ -395,6 +435,7 @@ class LLMService:
                 actual = total_tokens or estimate
                 await global_budget.reconcile(estimate, actual)
                 await self._log_to_json(prompt, response_text, system_prompt, context)
+                update_span(output={"chars": len(response_text), "total_tokens": total_tokens})
                 return response_text
             except Exception as e:
                 if _is_rate_limit_error(e) and len(self._client_pool) > 1:
@@ -410,6 +451,7 @@ class LLMService:
             f"All {len(self._client_pool)} LLM key(s) rate-limited; last error: {last_exc}"
         ) from last_exc
 
+    @observe(name="llm-stream-response", as_type="span", capture_input=False, capture_output=False)
     @traceable(run_type="llm", name="LLM.stream_response")
     async def stream_response(
         self,
@@ -448,6 +490,7 @@ class LLMService:
                     stream=True,
                     stream_options={"include_usage": True},
                     **self._gen_params(temperature),
+                    **self._trace_kwargs("chat_stream", key_id=key_id),
                 )
             except Exception as e:
                 if _is_rate_limit_error(e) and len(self._client_pool) > 1:
@@ -491,6 +534,7 @@ class LLMService:
         logger.error(f"LLM streaming failed — all keys rate-limited: {last_exc}")
         yield "\n\n[Error: streaming failed — all API keys are rate-limited]"
 
+    @observe(name="llm-structured-response", as_type="span", capture_input=False, capture_output=False)
     @traceable(run_type="llm", name="LLM.generate_structured_response")
     async def generate_structured_response(
         self,
@@ -514,6 +558,12 @@ class LLMService:
         we fail closed.
         """
         use_model = model or self.model
+        update_span(input={
+            "purpose": tool_name,
+            "output_schema": output_model.__name__,
+            "profile": self.profile,
+            "model": use_model,
+        })
         schema_instruction = (
             f"\nYou must output JSON that adheres to this schema:\n"
             f"{output_model.model_json_schema()}\n"
@@ -602,14 +652,18 @@ class LLMService:
         for attempt in range(max_retries):
             try:
                 # Plain create (not with_raw_response): standard for Azure/OpenAI
-                # and the path wrap_openai instruments, so token usage is
-                # captured on the LangSmith run automatically. (The old raw path
-                # existed only to parse Gemini's non-standard usageMetadata.)
+                # and the path both wrap_openai and the Langfuse OpenAI wrapper
+                # instrument, so token usage lands on the LangSmith run and the
+                # Langfuse generation automatically. (The old raw path existed
+                # only to parse Gemini's non-standard usageMetadata.)
                 response = await client.chat.completions.create(
                     model=model,
                     messages=current_messages,
                     response_format={"type": "json_object"},
                     **self._gen_params(temperature),
+                    **self._trace_kwargs(
+                        tool_name, attempt=attempt, output_schema=output_model.__name__
+                    ),
                 )
 
                 response_text = response.choices[0].message.content.strip()
@@ -677,6 +731,10 @@ class LLMService:
 
                 result = output_model.model_validate_json(response_text)
                 end_time = time.time()
+                # The parsed object is what the pipeline consumes; surface it on
+                # the Langfuse wrapper span so a reviewer sees it without
+                # opening the raw generation.
+                update_span(output=result.model_dump(mode="json"), metadata={"attempts": attempt + 1})
 
                 # Correct the reserved estimate against the provider's usage.
                 actual = token_usage or token_estimate

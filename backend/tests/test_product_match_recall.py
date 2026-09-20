@@ -210,10 +210,20 @@ def test_generic_corporate_text_still_resolves_to_no_product(text, cards):
 
 
 def test_full_corpus_recall_is_unchanged(cards):
-    misses = [
-        p["uin"] for p in cards.all_products()
-        if p["uin"] not in {m["uin"] for m in _resolve(p["product_name"], cards)}
-    ]
+    """Every card resolves from its own name — except a superseded card, whose
+    name now belongs to its successor (116N187V09 -> 116N187V11): naming the
+    product resolves the CURRENT version, and the old one only by exact UIN."""
+    by_uin = {p["uin"]: p for p in cards.all_products()}
+    misses = []
+    for p in cards.all_products():
+        resolved = {m["uin"] for m in _resolve(p["product_name"], cards)}
+        successor = p.get("superseded_by")
+        expected = successor if successor in by_uin else p["uin"]
+        if expected not in resolved:
+            misses.append(p["uin"])
+        if successor in by_uin:
+            assert p["uin"] not in resolved, (p["uin"], "superseded card resolved by name")
+            assert p["uin"] in {m["uin"] for m in _resolve(f"UIN {p['uin']}", cards)}
 
     assert not misses
 

@@ -21,6 +21,10 @@ except Exception:  # pragma: no cover
         def _d(fn): return fn
         return _d if not (_a and callable(_a[0])) else _a[0]
 
+# Langfuse (alongside LangSmith): each node is a `chain` observation whose
+# input/output are compact state summaries, never the raw graph state.
+from app.services.observability.tracing import graph_node, observe, update_span
+
 from .state import ComplianceState
 
 logger = logging.getLogger(__name__)
@@ -703,6 +707,7 @@ def map_findings_to_violations(
     return out
 
 
+@graph_node("preprocess")
 @traceable(run_type="chain", name="graph.preprocess_node")
 async def preprocess_node(state: ComplianceState) -> Dict:
     """
@@ -939,7 +944,9 @@ def scope_is_unprovable(metadata: Dict[str, Any]) -> bool:
     return bool(unresolved.get(_SCOPE_UNPROVABLE_SIGNAL))
 
 
-def _add_warning(md: Dict[str, Any], code: str, detail: Any = None) -> None:
+def _add_warning(
+    md: Dict[str, Any], code: str, detail: Any = None, kind: Optional[str] = None
+) -> None:
     """Record a named limitation of a run that still reached a determination.
 
     A warning is not a refusal (engine.evaluate_persistability): it says which
@@ -948,11 +955,19 @@ def _add_warning(md: Dict[str, Any], code: str, detail: Any = None) -> None:
     last-writer-wins slot, and the real 8a3c2db4 run proved the cost of that:
     dispatch overwrote `product_unresolved` with `knowledge_base_empty`, so the
     run record named one of its three limitations and hid the other two.
+
+    Every warning also carries its KIND — coverage / tier / infrastructure
+    (app.services.analysis_warnings) — because the three say very different
+    things to a reviewer and only the first may claim the score covers less
+    than the whole document. The provenance audit of 2026-09-17 found three
+    tier/infrastructure codes on 9 of 9 documents all making that claim.
     """
+    from app.services import analysis_warnings as aw
+
     warnings = list(md.get("analysis_warnings") or [])
     if any(w.get("code") == code for w in warnings):
         return
-    entry: Dict[str, Any] = {"code": code}
+    entry: Dict[str, Any] = {"code": code, "kind": kind or aw.warning_kind({"code": code})}
     if detail is not None:
         entry["detail"] = detail
     warnings.append(entry)
@@ -1424,6 +1439,7 @@ async def _resolve_product_grounding(
     return product_facts, product_passages
 
 
+@graph_node("dispatch")
 @traceable(run_type="chain", name="graph.dispatch_node")
 async def dispatch_node(state: ComplianceState) -> Dict:
     """
@@ -1526,6 +1542,7 @@ async def dispatch_node(state: ComplianceState) -> Dict:
     categories = list(rules_serializable.keys())
     chunk_rules: Dict[str, Dict[str, List[Dict]]] = {}
     rag_degraded = False
+    rag_degraded_reason: Optional[str] = None
 
     if chunks and categories:
         try:
@@ -1570,6 +1587,7 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         except Exception as e:
             logger.warning(f"RAG rule retrieval failed; falling back to all-rules: {e}")
             rag_degraded = True
+            rag_degraded_reason = str(e)[:300]
 
     # Applicability validation of per-chunk retrieved rules (contract C1/C6).
     for cid, cat_map in (chunk_rules or {}).items():
@@ -1621,6 +1639,16 @@ async def dispatch_node(state: ComplianceState) -> Dict:
     except Exception as e:
         logger.warning(f"Precedent retrieval failed (analysis will find no violations): {e}")
         retrieved_examples = {str(c.get("id")): [] for c in chunks}
+        _precedent_failed_chunks = set(retrieved_examples)
+        _precedent_failed_reason = str(e)[:300]
+    else:
+        # PrecedentRetrieval carries WHY a chunk came back empty; a plain dict
+        # (older retriever, or a test stub) carries nothing and is read as a
+        # healthy result.
+        _precedent_failed_chunks = set(getattr(retrieved_examples, "degraded_chunk_ids", ()) or ())
+        _precedent_failed_reason = getattr(retrieved_examples, "degraded_reason", None)
+    _precedent_corpus_empty = bool(getattr(retrieved_examples, "corpus_empty", False))
+    _precedents_retrieved = sum(len(v) for v in retrieved_examples.values())
 
     # Applicability validation of retrieved precedents (contract C1/C6): a
     # ULIP surrender precedent must not grade a term creative however similar
@@ -1632,23 +1660,51 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         _gated.extend({**d, "tier": "precedents", "chunk_id": str(cid)} for d in dbg)
 
     total_precedents = sum(len(v) for v in retrieved_examples.values())
+    _precedent_scope_rejected = sum(
+        1 for d in retrieval_debug
+        if d.get("tier") == "precedents" and d.get("verdict") == "rejected"
+        and str(d.get("reason") or "").startswith("scope_metadata_missing:")
+    )
     # Only label "knowledge_base_empty" when chunks exist but the knowledge
     # base returned nothing — the empty-chunks case is already labelled
     # "no_content" above and must not be overwritten with a misleading reason.
     if chunks and total_precedents == 0:
-        # A warning, not a refusal. An empty precedent corpus removes ONE
-        # evidence tier; the rule and product-fact tiers are unaffected, and
-        # `grounded_evidence` below still refuses a run that has no tier left.
-        # Representing "we have no prior cases" as a compliance failure told
-        # the reviewer nothing and withheld the findings the other tiers did
-        # support.
         md["knowledge_base_empty"] = True
-        _add_warning(md, "precedent_evidence_unavailable", {"precedents": 0})
-        logger.warning(
-            "Knowledge base returned ZERO precedents across all chunks — "
-            "analysis will produce no violations. Ingest the precedent corpus "
-            "(scripts.ingest_knowledge_base) to enable grading."
-        )
+    if chunks:
+        # One code used to cover every way a chunk ends up with no precedent.
+        # They are not the same thing, and only two of them are the knowledge
+        # base's fault; the third is infrastructure and the fourth is a
+        # perfectly complete result. Tell them apart:
+        #   tier FAILED           -> precedent_tier_unavailable   (infrastructure)
+        #   corpus EMPTY          -> precedent_corpus_empty       (tier)
+        #   candidates REFUSED    -> precedent_scope_metadata_incomplete (tier)
+        #   retrieved, nothing relevant -> no warning at all.
+        if _precedent_failed_chunks:
+            _add_warning(md, "precedent_tier_unavailable", {
+                "chunks_failed": len(_precedent_failed_chunks),
+                "chunks": len(chunks),
+                "reason": _precedent_failed_reason,
+            })
+        elif _precedent_corpus_empty:
+            _add_warning(md, "precedent_corpus_empty", {
+                "corpora": ["precedent_cases", "rag_compliance_examples"],
+            })
+        elif _precedent_scope_rejected:
+            # These WERE this document's candidates; the knowledge base's
+            # metadata is what refused them. A limitation of the tier, and a
+            # real one — but not a claim about the document's coverage.
+            _add_warning(md, "precedent_scope_metadata_incomplete", {
+                "rejected": _precedent_scope_rejected,
+                "retrieved": _precedents_retrieved,
+                "accepted": total_precedents,
+            })
+        if total_precedents == 0:
+            logger.warning(
+                "precedent tier contributed nothing for this run (retrieved=%d, "
+                "failed_chunks=%d, corpus_empty=%s, scope_rejected=%d)",
+                _precedents_retrieved, len(_precedent_failed_chunks),
+                _precedent_corpus_empty, _precedent_scope_rejected,
+            )
     md["precedents_per_chunk"] = {cid: len(v) for cid, v in retrieved_examples.items()}
 
     # Retrieval debugger (contract C6): why every candidate entered or was
@@ -1667,6 +1723,9 @@ async def dispatch_node(state: ComplianceState) -> Dict:
         if str(d.get("reason") or "").startswith("scope_metadata_missing:")
     ]
     if _scope_gap_rows:
+        # The corpus-level fact, recorded whole: these items carry no scope
+        # metadata. That is true of the knowledge base whether or not this
+        # document ever met them.
         unique_gaps = {
             (str(row.get("corpus")), str(row.get("id")), str(row.get("scope_value")))
             for row in _scope_gap_rows
@@ -1678,15 +1737,25 @@ async def dispatch_node(state: ComplianceState) -> Dict:
                 for corpus, item_id, scope_value in sorted(unique_gaps)[:100]
             ],
         }
-        # Never SILENTLY grade with an incomplete grounded corpus — but the
-        # applicability judge already fails closed per item (every untagged
-        # candidate is rejected, never admitted on a guess), so this is a
-        # recall loss with a known cause, not an unprovable determination.
-        # Name it; `grounded_evidence` below still refuses if it left the run
-        # with no evidence tier at all.
+    # The WARNING is about this document, so it counts only the rules that
+    # were actually its candidates: the ones per-chunk retrieval brought back,
+    # or — only when retrieval failed and the flat set therefore became the
+    # candidates — the flat set. The flat set is scope-validated above on
+    # every run regardless, and counting those rejections here is exactly what
+    # put rule_scope_metadata_incomplete on 9 of 9 documents while 0/178 rules
+    # were tagged: a fact about the corpus dressed as a fact about the
+    # document. The applicability judge still fails closed per item either
+    # way; nothing is admitted on a guess.
+    _candidate_rule_tiers = {"chunk_rules"} | ({"active_rules_fallback"} if rag_degraded else set())
+    _candidate_rule_gaps = [
+        d for d in _scope_gap_rows
+        if d.get("tier") in _candidate_rule_tiers and str(d.get("corpus")) == "rules"
+    ]
+    if _candidate_rule_gaps:
         _add_warning(md, "rule_scope_metadata_incomplete", {
-            "count": md["scope_metadata_missing"]["count"],
-            "corpora": sorted({str(row.get("corpus")) for row in _scope_gap_rows}),
+            "count": len({str(d.get("id")) for d in _candidate_rule_gaps}),
+            "tiers": sorted({str(d.get("tier")) for d in _candidate_rule_gaps}),
+            "corpora": ["rules"],
         })
     md["retrieval_debug"] = {
         "scope": scope.as_dict(),
@@ -1789,7 +1858,10 @@ async def dispatch_node(state: ComplianceState) -> Dict:
     # opinion, never a regulatory determination. Recorded unconditionally so
     # the gate is judging a measurement rather than the absence of one.
     if rag_degraded:
-        _add_warning(md, "retrieval_degraded", {"per_chunk_retrieval": "failed"})
+        _add_warning(md, "retrieval_degraded", {
+            "per_chunk_retrieval": "failed",
+            "reason": rag_degraded_reason,
+        })
     md["grounded_evidence"] = {
         "rules": len({
             str(rule.get("id"))
@@ -1917,6 +1989,7 @@ def _load_reuse_inputs(db, submission_id: str, chunks: List[Dict]) -> tuple:
     return stored_keys, prior
 
 
+@graph_node("analysis")
 @traceable(run_type="chain", name="graph.analysis_node")
 async def analysis_node(state: ComplianceState) -> Dict:
     """
@@ -2035,6 +2108,7 @@ async def analysis_node(state: ComplianceState) -> Dict:
             logger.warning(f"Analysis reuse lookup failed; grading every chunk: {e}")
             reuse_hits = {}
 
+    @observe(name="grade-chunk", as_type="chain", capture_input=False, capture_output=False)
     async def grade_chunk(chunk_data: Dict) -> Dict:
         chunk_id = chunk_data.get("id")
         chunk_index = chunk_data.get("chunk_index")
@@ -2046,11 +2120,22 @@ async def analysis_node(state: ComplianceState) -> Dict:
                 "Chunk %s unchanged since the last persisted run — carrying "
                 "forward %d finding(s), no LLM call.", chunk_index, len(cached),
             )
+            update_span(
+                input={"chunk_index": chunk_index, "chars": len(chunk_text)},
+                output={"violations": len(cached), "reused": True, "failed": False},
+            )
             return {"violations": cached, "failed": False}
 
         precedents = retrieved.get(str(chunk_id), [])
         rules = _rules_for_chunk(chunk_id)
         passages = product_passages_by_chunk.get(str(chunk_id), [])
+        update_span(input={
+            "chunk_index": chunk_index,
+            "chars": len(chunk_text),
+            "precedents": len(precedents),
+            "rules": len(rules),
+            "product_passages": len(passages),
+        })
         # This chunk's own fact cards; the document-level set is the fallback
         # for a chunk that names no product (see _chunk_product_facts). The SAME
         # list feeds the prompt and the finding parser, because a
@@ -2308,6 +2393,7 @@ def _log_grade_error(chunk_id, violation: Dict, errors: List[str]) -> None:
         f.write(_json.dumps({"chunk_id": str(chunk_id), "errors": errors, "violation": violation}) + "\n")
 
 
+@graph_node("disclosure")
 @traceable(run_type="chain", name="graph.disclosure_node")
 async def disclosure_node(state: ComplianceState) -> Dict:
     """Deterministic mandatory-disclosure checker. Runs after analysis so it
@@ -2373,6 +2459,7 @@ async def disclosure_node(state: ComplianceState) -> Dict:
     }
 
 
+@graph_node("scoring")
 @traceable(run_type="chain", name="graph.scoring_node")
 async def scoring_node(state: ComplianceState) -> Dict:
     """

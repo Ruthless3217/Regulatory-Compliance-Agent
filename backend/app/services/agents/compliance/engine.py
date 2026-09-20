@@ -18,6 +18,10 @@ except Exception:  # pragma: no cover
         def _d(fn): return fn
         return _d if not (_a and callable(_a[0])) else _a[0]
 
+from app.services.observability.tracing import (
+    observe, trace_attributes, update_span, summarize_violations,
+)
+
 from app.models.submission import Submission
 from app.models.compliance_check import ComplianceCheck
 from app.models.violation import Violation
@@ -217,6 +221,7 @@ class ComplianceEngine:
         return out
 
     @staticmethod
+    @observe(name="analyze-submission", as_type="chain", capture_input=False, capture_output=False)
     @traceable(run_type="chain", name="ComplianceEngine.analyze_submission")
     async def analyze_submission(submission_id: str, db: Session, user=None, session_id: str = None) -> Optional[ComplianceCheck]:
         """
@@ -285,6 +290,32 @@ class ComplianceEngine:
             
             run = await open_run(db, str(submission_id), user, session_id or "local")
             set_usage_context(user_id=str(user.id) if user else None, session_id=session_id or "local", submission_id=str(submission_id), run_id=str(run.id), feature="compliance_analysis")
+
+            # Langfuse root trace: one trace per analysis run, grouped into a
+            # session per submission (every re-run / rewrite of one document
+            # sits together in the Sessions view) and attributed to the
+            # reviewer. Entered here (run id known) and exited in the finally
+            # below, so every node/retriever/generation inherits it.
+            _trace_ctx = trace_attributes(
+                trace_name="analyze-submission",
+                user_id=(getattr(user, "username", None) or str(user.id)) if user else None,
+                session_id=str(submission_id),
+                tags=["compliance-analysis"],
+                metadata={
+                    "submission_id": str(submission_id),
+                    "run_id": str(run.id),
+                    "product_line": submission.product_line,
+                    "content_type": getattr(submission, "content_type", None),
+                },
+            )
+            _trace_ctx.__enter__()
+            update_span(input={
+                "submission_id": str(submission_id),
+                "title": submission.title,
+                "product_line": submission.product_line,
+                "content_type": getattr(submission, "content_type", None),
+                "run_id": str(run.id),
+            })
 
             # 3. Initialize Graph Context
             from app.services.agents.orchestrator import orchestrator
@@ -355,6 +386,11 @@ class ComplianceEngine:
                         "status": submission.status, "error": block_reason,
                         "run_metadata": ComplianceEngine.run_metadata_from_state(final_state),
                     }, user)
+                    update_span(
+                        output={"status": submission.status, "block_reason": block_reason},
+                        level="WARNING",
+                        status_message=f"not persisted: {block_reason}",
+                    )
                     return None
 
                 # 6. Persist results. The submission status flip to 'analyzed'
@@ -392,9 +428,21 @@ class ComplianceEngine:
                     "status": "completed", "check_id": str(compliance_check.id),
                     "run_metadata": ComplianceEngine.run_metadata_from_state(final_state),
                 }, user)
+                update_span(output={
+                    "status": "completed",
+                    "check_id": str(compliance_check.id),
+                    "overall_score": compliance_check.overall_score,
+                    "grade": compliance_check.grade,
+                    "violations": summarize_violations(final_state.get("violations", [])),
+                    "analysis_warnings": (final_state.get("metadata") or {}).get("analysis_warnings"),
+                })
                 return compliance_check
 
             finally:
+                try:
+                    _trace_ctx.__exit__(None, None, None)
+                except Exception:
+                    pass
                 # Reset the request-scoped DB session ContextVar so it does not
                 # leak a (now closing) session into whatever task reuses this
                 # context next. Previously this block was dead (`pass`), so the

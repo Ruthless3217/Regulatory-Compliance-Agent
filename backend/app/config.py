@@ -233,11 +233,27 @@ class Settings(BaseSettings):
     # this tree is rejected (prevents arbitrary server-side file read — audit C8).
     kb_ingest_root: str = "./uploads"
 
-    # LangSmith Tracing
+    # LangSmith Tracing (legacy; app-level tracing now goes to Langfuse below)
     langchain_tracing_v2: str = "false"
     langchain_endpoint: str = "https://api.smith.langchain.com"
     langchain_api_key: str = ""
     langchain_project: str = "Regulatory Compliance Agent"
+
+    # Langfuse tracing — LLM observability (traces, token cost, sessions).
+    # Enabled only when BOTH keys are set; see app/services/observability/tracing.py.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_base_url: str = "https://cloud.langfuse.com"
+    langfuse_tracing_enabled: bool = True
+    # Tags every trace with the deployment so local/dev runs don't pollute the
+    # production dashboards ("local", "staging", "production").
+    langfuse_environment: str = ""
+    langfuse_release: str = ""
+    # 1.0 = trace every run. Lower it only if Langfuse ingestion becomes a cost.
+    langfuse_sample_rate: Optional[float] = None
+    # Scrub emails/phones/PAN/Aadhaar from everything sent to Langfuse Cloud.
+    langfuse_mask_pii: bool = True
+    langfuse_debug: bool = False
 
     # RAG — pluggable backend
     rag_embedding_provider: str = "azure_cohere"   # ONLY azure_cohere is supported

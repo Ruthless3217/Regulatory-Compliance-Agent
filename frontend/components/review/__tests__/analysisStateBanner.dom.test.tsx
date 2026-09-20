@@ -20,6 +20,8 @@ import {
   AnalysisStateBanner,
   AnalysisWarningsBanner,
   analysisIsIncomplete,
+  limitationStatement,
+  warningKind,
 } from "@/components/review/AnalysisStateBanner";
 
 describe("analysisIsIncomplete", () => {
@@ -176,5 +178,94 @@ describe("AnalysisWarningsBanner", () => {
     render(<AnalysisWarningsBanner warnings={[{ code: "brand_new_gap" }]} />);
 
     expect(screen.getAllByText(/brand_new_gap/).length).toBeGreaterThan(0);
+  });
+});
+
+/** Warning KINDS (warning-semantics fix, 2026-09-17).
+ *
+ * The provenance audit found the "covers less than the whole document"
+ * sentence on 9 of 9 graded documents, driven by two warnings that describe
+ * the knowledge base (untagged rules, an unreachable precedent corpus) and one
+ * that describes a failed retrieval component — none of which is about THIS
+ * document's coverage. The banner may make the coverage claim only for a
+ * coverage warning; the other kinds still render, still block, but say what
+ * is actually true.
+ */
+describe("AnalysisWarningsBanner — warning kinds", () => {
+  const COVERAGE = {
+    code: "rider_uins_without_fact_cards",
+    kind: "coverage",
+    detail: { uins: ["116N216V01"], chunk_indexes: [24] },
+    explanation: "a rider named in this document has no authoritative record of its own",
+  };
+  const TIER_RULES = {
+    code: "rule_scope_metadata_incomplete",
+    kind: "tier",
+    detail: { count: 3, tiers: ["chunk_rules"] },
+    explanation: "some retrieved rules carry no product scope and were not applied",
+  };
+  const TIER_PRECEDENT = {
+    code: "precedent_corpus_empty",
+    kind: "tier",
+    explanation: "the precedent corpus contains no cases yet",
+  };
+  const INFRA = {
+    code: "retrieval_degraded",
+    kind: "infrastructure",
+    detail: { reason: "embedding model mismatch" },
+    explanation: "a vector search could not run against the knowledge base",
+  };
+
+  it("classifies by stored kind, and by code for payloads that predate kinds", () => {
+    expect(warningKind(COVERAGE)).toBe("coverage");
+    expect(warningKind({ code: "rule_scope_metadata_incomplete" })).toBe("tier");
+    expect(warningKind({ code: "precedent_evidence_unavailable" })).toBe("tier");
+    expect(warningKind({ code: "retrieval_degraded" })).toBe("infrastructure");
+    // Unknown → the most restrictive reading.
+    expect(warningKind({ code: "brand_new_gap" })).toBe("coverage");
+    // A stored kind wins over the code table.
+    expect(warningKind({ code: "brand_new_gap", kind: "tier" })).toBe("tier");
+  });
+
+  it("claims reduced coverage only for a coverage warning", () => {
+    render(<AnalysisWarningsBanner warnings={[COVERAGE]} />);
+    expect(screen.getByText(/covers less than the whole document/i)).toBeTruthy();
+  });
+
+  it("does NOT claim reduced coverage for tier-only warnings", () => {
+    render(<AnalysisWarningsBanner warnings={[TIER_RULES, TIER_PRECEDENT]} />);
+
+    expect(screen.getByRole("status")).toBeTruthy();
+    expect(screen.queryByText(/less than the whole document/i)).toBeNull();
+    expect(screen.getByText(/limited evidence sources/i)).toBeTruthy();
+    expect(screen.getByText(/every section was analysed/i)).toBeTruthy();
+    // Both limitations are still named — the information is kept, not hidden.
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText(/rule_scope_metadata_incomplete/)).toBeTruthy();
+    expect(screen.getByText(/precedent_corpus_empty/)).toBeTruthy();
+  });
+
+  it("names the retrieval failure for an infrastructure-only warning", () => {
+    render(<AnalysisWarningsBanner warnings={[INFRA]} />);
+
+    expect(screen.queryByText(/less than the whole document/i)).toBeNull();
+    expect(screen.getByText(/retrieval component failed/i)).toBeTruthy();
+    expect(screen.getByText(/retrieval_degraded/)).toBeTruthy();
+  });
+
+  it("lets the coverage claim win when kinds are mixed", () => {
+    render(<AnalysisWarningsBanner warnings={[INFRA, TIER_RULES, COVERAGE]} />);
+
+    expect(screen.getByText(/covers less than the whole document/i)).toBeTruthy();
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+  });
+
+  it("ranks the statement coverage > infrastructure > tier, matching the backend", () => {
+    expect(limitationStatement([])).toBe("");
+    expect(limitationStatement([TIER_RULES])).toMatch(/limited evidence sources/);
+    expect(limitationStatement([TIER_RULES, INFRA])).toMatch(/retrieval component failed/);
+    expect(limitationStatement([TIER_RULES, INFRA, COVERAGE])).toMatch(
+      /less than the whole document/
+    );
   });
 });

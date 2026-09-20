@@ -66,6 +66,33 @@ def cards():
     return svc
 
 
+@pytest.fixture(scope="module")
+def synthetic_cards(tmp_path_factory):
+    """A corpus that knows Invest Protect Goal III but NOT Goal Plus — the
+    state the real corpus was in before the Smart Secure card carried the
+    alias. Keeps the contradiction rule itself under test."""
+    root = tmp_path_factory.mktemp("corpus_no_alias")
+    root.joinpath("product_segments.json").write_text(
+        (CARDS_DIR.parent / "product_segments.json").read_text(encoding="utf-8"),
+        encoding="utf-8")
+    d = root / "product_fact_cards"
+    d.mkdir()
+    # The whole real corpus as it stood before 2026-09-18: no Secure Plus
+    # card, and no "Invest Protect Goal Plus" alias on the Smart Secure card.
+    # The full set matters — brand tokens and the name vocabulary the edition
+    # check relies on are derived from every card name.
+    for path in CARDS_DIR.glob("*.json"):
+        if path.name.startswith("116N216V01"):
+            continue
+        card = json.loads(path.read_text(encoding="utf-8"))
+        if card.get("uin") == "116L215V01":
+            card.pop("marketing_aliases", None)
+        d.joinpath(path.name).write_text(json.dumps(card), encoding="utf-8")
+    svc = FactCardService(d)
+    assert not svc.availability_issues, svc.availability_issues
+    return svc
+
+
 def _uins(text, cards):
     return {m["uin"] for m in resolve_products(text, cards, min_fuzzy_score=MIN_FUZZY)}
 
@@ -101,9 +128,10 @@ def test_the_real_disclaimer_line_does_not_resolve_goal_iii(cards):
     assert "116L205V01" not in resolved, "the fuzzy cross-edition match does not"
 
 
-def test_a_rejected_candidate_is_reported_not_silently_dropped(cards):
+def test_a_rejected_candidate_is_reported_not_silently_dropped(synthetic_cards):
+    """On a corpus that knows only Goal III, 'Goal Plus' is a real gap."""
     text = "Bajaj Life Invest Protect Goal Plus - Elite Variant is a ULIP."
-    conflicts = edition_conflicts(text, cards)
+    conflicts = edition_conflicts(text, synthetic_cards)
 
     assert [c["uin"] for c in conflicts] == ["116L205V01"]
     conflict = conflicts[0]
@@ -112,12 +140,35 @@ def test_a_rejected_candidate_is_reported_not_silently_dropped(cards):
     assert conflict["candidate_edition"] == "iii"
 
 
-def test_the_conflict_reaches_the_unresolved_signals(cards):
+def test_the_conflict_reaches_the_unresolved_signals(synthetic_cards):
     signals = unresolved_product_signals(
-        "Bajaj Life Invest Protect Goal Plus - Elite Variant is a ULIP.", cards
+        "Bajaj Life Invest Protect Goal Plus - Elite Variant is a ULIP.", synthetic_cards
     )
 
     assert [c["uin"] for c in signals["edition_conflicts"]] == ["116L205V01"]
+
+
+def test_a_conflict_the_corpus_explains_is_not_a_gap(cards):
+    """The real corpus DOES know 'Invest Protect Goal Plus': the Smart Secure
+    card (116L215V01) carries it as a marketing alias, because Smart Secure ROP
+    is the combination of Invest Protect Goal Plus – Elite Variant and Secure
+    Plus. The Goal III contradiction is still detected — and then explained by
+    the alias that resolved — so there is nothing to warn the reviewer about."""
+    text = "Bajaj Life Invest Protect Goal Plus - Elite Variant is a ULIP."
+
+    assert [(m["uin"], m["method"]) for m in
+            resolve_products(text, cards, min_fuzzy_score=MIN_FUZZY)] == [
+        ("116L215V01", "alias_match")]
+    assert edition_conflicts(text, cards) == []
+    assert unresolved_product_signals(text, cards)["edition_conflicts"] == []
+
+
+def test_an_unexplained_conflict_next_to_an_explained_one_is_still_reported(cards):
+    text = ("Bajaj Life Invest Protect Goal Plus is a ULIP. "
+            "Bajaj Life Fortune Gain III offers market-linked growth.")
+    conflicts = edition_conflicts(text, cards)
+
+    assert [(c["uin"], c["document_edition"]) for c in conflicts] == [("116L196V04", "iii")]
 
 
 # --------------------------------------------------------------------------
@@ -239,14 +290,19 @@ def test_recall_across_every_version_bearing_card_is_preserved(cards):
     full name AND from its version-stripped name — the existing recall rule."""
     from app.services.product_resolver import _VERSION_TOKEN_RE
 
+    by_uin = {p["uin"]: p for p in cards.all_products()}
     misses = []
     for product in cards.all_products():
         name = product["product_name"]
         stripped = " ".join(t for t in name.split() if not _VERSION_TOKEN_RE.match(t))
         if stripped == name:
             continue
+        # A superseded card's name resolves its successor (same product, newer
+        # approved UIN); the old UIN is reachable only by citing it exactly.
+        successor = product.get("superseded_by")
+        expected = successor if successor in by_uin else product["uin"]
         for form in (name, stripped):
-            if product["uin"] not in _uins(_long(form), cards):
+            if expected not in _uins(_long(form), cards):
                 misses.append((product["uin"], form))
     assert misses == []
 
@@ -275,13 +331,16 @@ def test_116n198_filing_versions_remain_distinct(cards):
     assert _uins("Bajaj Life eTouch II (UIN: 116N198V07).", cards) == {"116N198V07"}
 
 
-def test_116n216v01_remains_a_rider_knowledge_gap(cards):
+def test_116n216v01_is_now_a_grounded_product(cards):
+    """Bajaj Life Secure Plus (116N216V01) got its own card on 2026-09-18 —
+    the health component of Smart Secure ROP is no longer a knowledge gap."""
     text = "Shield with ROP Variant (UIN:116N216V01)."
     signals = unresolved_product_signals(text, cards)
 
-    assert _uins(text, cards) == set()
-    assert signals["rider_uins_without_fact_cards"] == ["116N216V01"]
+    assert _uins(text, cards) == {"116N216V01"}
+    assert signals["rider_uins_without_fact_cards"] == []
     assert signals["unknown_uins"] == []
+    assert cards.get("116N216V01")["product_name"] == "Bajaj Life Secure Plus"
 
 
 # --------------------------------------------------------------------------
@@ -309,17 +368,29 @@ def geo_text():
 
 
 def test_geo_smart_secure_resolves_no_fabricated_goal_iii(geo_text, cards):
+    """Both UINs the leaflet prints, nothing fabricated. Since 2026-09-18 the
+    health component (116N216V01, Secure Plus) has its own card."""
     matches = resolve_products(geo_text, cards, min_fuzzy_score=MIN_FUZZY)
 
-    assert [(m["uin"], m["method"]) for m in matches] == [("116L215V01", "uin_regex")]
+    assert [(m["uin"], m["method"]) for m in matches] == [
+        ("116L215V01", "uin_regex"), ("116N216V01", "uin_regex")]
 
 
-def test_geo_smart_secure_reports_the_cross_edition_name(geo_text, cards):
-    signals = unresolved_product_signals(geo_text, cards)
+def test_geo_smart_secure_reports_the_cross_edition_name(geo_text, synthetic_cards):
+    """On the pre-alias corpus the leaflet's 'Invest Protect Goal Plus' is a
+    detected, reported contradiction of the Goal III card."""
+    signals = unresolved_product_signals(geo_text, synthetic_cards)
 
     assert [c["uin"] for c in signals["edition_conflicts"]] == ["116L205V01"]
     assert signals["edition_conflicts"][0]["document_edition"] == "plus"
-    assert signals["rider_uins_without_fact_cards"] == ["116N216V01"]
+
+
+def test_geo_smart_secure_is_fully_grounded_on_the_current_corpus(geo_text, cards):
+    signals = unresolved_product_signals(geo_text, cards)
+
+    assert signals["edition_conflicts"] == []
+    assert signals["rider_uins_without_fact_cards"] == []
+    assert signals["unknown_uins"] == []
 
 
 def test_geo_smart_secure_grounds_only_the_proven_product(geo_text, cards, monkeypatch):
@@ -348,7 +419,8 @@ def test_geo_smart_secure_grounds_only_the_proven_product(geo_text, cards, monke
         [{"id": "c0", "text": geo_text[:2000]}],
     ))
 
-    assert [c["uin"] for c in facts] == ["116L215V01"]
+    assert sorted(c["uin"] for c in facts) == ["116L215V01", "116N216V01"]
+    assert "116L205V01" not in {c["uin"] for c in facts}
 
 
 # --------------------------------------------------------------------------
@@ -356,7 +428,8 @@ def test_geo_smart_secure_grounds_only_the_proven_product(geo_text, cards, monke
 # --------------------------------------------------------------------------
 
 
-def test_the_conflict_becomes_a_run_warning_not_a_refusal(cards, monkeypatch):
+def test_the_conflict_becomes_a_run_warning_not_a_refusal(synthetic_cards, monkeypatch):
+    cards = synthetic_cards
     import asyncio
     import uuid
 
@@ -415,3 +488,43 @@ def test_the_conflict_becomes_a_run_warning_not_a_refusal(cards, monkeypatch):
         "chunks": out["chunks"], "status": "completed",
         "metadata": {**md, "grounded_evidence": {"rules": 0, "precedents": 0, "product_facts": 1}},
     }) == (True, None)
+
+
+# --------------------------------------------------------------------------
+# Version successors (2026-09-18): one product, two approved UINs.
+# --------------------------------------------------------------------------
+
+
+def test_a_superseded_card_resolves_only_by_its_exact_uin(cards):
+    """Guaranteed Pension Goal II was re-approved as 116N187V11; the V09 card
+    stays (old collateral still cites it) but is marked superseded_by. Naming
+    the product resolves the CURRENT version only; the old UIN is reachable by
+    citing it exactly."""
+    by_name = resolve_products(
+        "Bajaj Life Guaranteed Pension Goal II gives guaranteed income for life.",
+        cards, min_fuzzy_score=MIN_FUZZY)
+    assert [(m["uin"], m["method"]) for m in by_name] == [("116N187V11", "name_fuzzy")]
+
+    old = resolve_products("Guaranteed Pension Goal II (UIN: 116N187V09).", cards,
+                           min_fuzzy_score=MIN_FUZZY)
+    assert [(m["uin"], m["method"]) for m in old] == [("116N187V09", "uin_regex")]
+
+
+def test_a_uin_matched_product_is_not_also_resolved_under_its_sibling_version(cards):
+    """The real retirement document: 'Guaranteed Pension Goal II ... (UIN:
+    116N187V11)'. Before, the identical name on the V09 card produced a second
+    match and the run grounded on two editions of one plan."""
+    text = ("Bajaj Life Guaranteed Pension Goal II is A Non Linked Non Participating "
+            "Immediate & Deferred Annuity Plan (UIN: 116N187V11).")
+    matches = resolve_products(text, cards, min_fuzzy_score=MIN_FUZZY)
+
+    assert [(m["uin"], m["method"]) for m in matches] == [("116N187V11", "uin_regex")]
+    assert unresolved_product_signals(text, cards)["unknown_uins"] == []
+
+
+def test_the_secure_plus_card_scopes_as_health_and_non_par(cards):
+    from app.services.rag.applicability import build_scope
+
+    scope = build_scope([{"uin": "116N216V01"}], cards)
+
+    assert scope.categories == {"health", "non_par"}

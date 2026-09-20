@@ -29,6 +29,7 @@ const PRODUCT_LINES = [
   { key: "ulip", label: "ULIP" },
   { key: "savings_endowment", label: "Savings / endowment" },
   { key: "pension_annuity", label: "Pension / annuity" },
+  { key: "health", label: "Health" },
   { key: "rider", label: "Rider" },
   { key: "group", label: "Group insurance" },
   { key: "par", label: "Participating (Par)" },
