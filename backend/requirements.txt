@@ -35,9 +35,11 @@ tiktoken==0.13.0
 pdfplumber==0.11.9
 pypdfium2==5.8.0
 
-# OCR fallback for scanned/image PDFs in the Compare tool. Needs the
-# tesseract-ocr system binary (installed in the Dockerfile); pytesseract is a
-# thin wrapper. Compare degrades to a clear "run OCR" message if absent.
+# OCR for scanned/image PDFs in the Compare tool.
+# PaddleOCR is the primary OCR engine; Tesseract (pytesseract) is the fallback.
+# Compare degrades cleanly to Tesseract if PaddleOCR is not installed or encounters an error.
+paddlepaddle==2.6.2; sys_platform == 'linux' or sys_platform == 'darwin' or sys_platform == 'win32'
+paddleocr==2.9.1
 pytesseract==0.3.13
 
 # Compare — pixel-faithful export rendering (page PNG overlay burn-in -> PDF).

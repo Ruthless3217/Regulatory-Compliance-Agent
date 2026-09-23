@@ -59,8 +59,8 @@ def run_render(comparison_id: str) -> None:
             return
 
         renderable = (
-            c.old_content_type == "pdf"
-            and c.new_content_type == "pdf"
+            c.old_content_type in ("pdf", "docx")
+            and c.new_content_type in ("pdf", "docx")
             and c.old_file_path
             and c.new_file_path
         )
@@ -72,7 +72,13 @@ def run_render(comparison_id: str) -> None:
             return
 
         try:
-            c.render_result = _render_pair(str(c.id), c.old_file_path, c.new_file_path)
+            c.render_result = _render_pair(
+                str(c.id),
+                c.old_file_path,
+                c.new_file_path,
+                c.old_content_type,
+                c.new_content_type,
+            )
             c.render_status = "completed"
             c.render_error = None
         except Exception as e:  # noqa: BLE001 — render must never crash the worker
@@ -85,7 +91,13 @@ def run_render(comparison_id: str) -> None:
         db.close()
 
 
-def _render_pair(comparison_id: str, old_path: str, new_path: str) -> dict:
+def _render_pair(
+    comparison_id: str,
+    old_path: str,
+    new_path: str,
+    old_content_type: str = "pdf",
+    new_content_type: str = "pdf",
+) -> dict:
     """Render both sides and assemble the RenderResult overlay model."""
     base = renders_dir(comparison_id)
     # Rebuild cleanly so a re-run never mixes stale images with fresh ones.
@@ -93,8 +105,8 @@ def _render_pair(comparison_id: str, old_path: str, new_path: str) -> dict:
         shutil.rmtree(base, ignore_errors=True)
     cap = settings.pixel_render_page_cap
 
-    old_pdf = to_pdf(old_path, "pdf", os.path.join(base, "old"), "old")
-    new_pdf = to_pdf(new_path, "pdf", os.path.join(base, "new"), "new")
+    old_pdf = to_pdf(old_path, old_content_type, os.path.join(base, "old"), "old")
+    new_pdf = to_pdf(new_path, new_content_type, os.path.join(base, "new"), "new")
 
     old_metas, old_trunc = render_pages(old_pdf, os.path.join(base, "old"), cap)
     new_metas, new_trunc = render_pages(new_pdf, os.path.join(base, "new"), cap)

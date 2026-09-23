@@ -223,12 +223,14 @@ class Settings(BaseSettings):
     # silently dropped.
     pixel_render_page_cap: int = 60
     # --- OCR fallback for scanned/image PDFs (no selectable text layer) ---
-    # When a PDF yields no extractable text, rasterize its pages and OCR them so
-    # the comparison still runs instead of failing. Needs the tesseract-ocr
-    # binary (installed in the backend image) + pytesseract; degrades to a clear
-    # "run OCR" message if either is missing. OCR is slow, so cap the pages.
+    # When a PDF page yields no extractable text or garbage/corrupted text,
+    # rasterize the page and OCR it so the comparison still runs instead of failing.
+    # Uses PaddleOCR as the primary engine with Tesseract as a fallback.
     compare_ocr_enabled: bool = True
+    compare_ocr_engine: str = "paddle"  # "paddle" | "tesseract"
     compare_ocr_page_cap: int = 30
+    compare_ocr_min_confidence: float = 0.5
+    compare_ocr_garbage_threshold: float = 0.2
     # Root that knowledge-base ingest is confined to. Any folder_path outside
     # this tree is rejected (prevents arbitrary server-side file read — audit C8).
     kb_ingest_root: str = "./uploads"

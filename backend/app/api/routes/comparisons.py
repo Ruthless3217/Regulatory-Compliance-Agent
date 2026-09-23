@@ -140,10 +140,10 @@ async def _persist_upload(file: UploadFile):
     return file_path, detected_type
 
 
-def _both_pdf(c: DocumentComparison) -> bool:
+def _is_renderable(c: DocumentComparison) -> bool:
     return (
-        c.old_content_type == "pdf"
-        and c.new_content_type == "pdf"
+        c.old_content_type in ("pdf", "docx")
+        and c.new_content_type in ("pdf", "docx")
         and bool(c.old_file_path)
         and bool(c.new_file_path)
     )
@@ -185,16 +185,28 @@ def _serialize(
 
 
 def _search_pdf(pdf_path: str, q: str, cap: int = 200) -> List[dict]:
-    """Scan every page of a PDF for `q`, returning positioned hits (capped)."""
-    import pdfplumber
+    """Scan every page of a PDF for `q`, returning positioned hits (capped).
+    Supports scanned and mixed PDFs via positioned_words OCR integration.
+    """
+    from app.services.pdf_render_service import positioned_words
+
+    words = positioned_words(pdf_path)
+    by_page: dict = {}
+    for w in words:
+        by_page.setdefault(w.page, []).append({
+            "text": w.text,
+            "x0": w.x0,
+            "top": w.y0,
+            "x1": w.x1,
+            "bottom": w.y1,
+        })
 
     hits: List[dict] = []
-    with pdfplumber.open(pdf_path) as pdf:
-        for page_no, page in enumerate(pdf.pages, start=1):
-            words = page.extract_words() or []
-            hits.extend(match_query_in_words(words, q, page_no, cap - len(hits)))
-            if len(hits) >= cap:
-                break
+    for page_no in sorted(by_page.keys()):
+        page_words = by_page[page_no]
+        hits.extend(match_query_in_words(page_words, q, page_no, cap - len(hits)))
+        if len(hits) >= cap:
+            break
     return hits[:cap]
 
 
@@ -259,7 +271,7 @@ async def create_comparison(
         comparison.status = "failed"
         comparison.error_message = str(e)
 
-    will_render = comparison.status == "completed" and _both_pdf(comparison)
+    will_render = comparison.status == "completed" and _is_renderable(comparison)
     comparison.render_status = "processing" if will_render else "skipped"
 
     db.add(comparison)
@@ -528,7 +540,7 @@ async def rerun_comparison(
         shutil.rmtree(render_dir, ignore_errors=True)
     comparison.render_result = None
     comparison.render_error = None
-    will_render = comparison.status == "completed" and _both_pdf(comparison)
+    will_render = comparison.status == "completed" and _is_renderable(comparison)
     comparison.render_status = "processing" if will_render else "skipped"
 
     db.commit()
