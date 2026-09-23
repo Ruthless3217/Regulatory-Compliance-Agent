@@ -118,6 +118,19 @@ export function ChangeCard({
           <span className={cn("inline-block h-1.5 w-1.5 rounded-full", kindDot(change.kind))} />
           <span className="micro-label">{KIND_LABEL[change.kind]}</span>
           <span className="font-mono text-[10px] text-muted-foreground">#{index}</span>
+          {change.oldPage !== undefined || change.newPage !== undefined || change.page !== undefined ? (
+            <span className="rounded bg-muted/60 px-1 py-0.5 font-mono text-[9px] text-muted-foreground">
+              {change.oldPage !== undefined && change.newPage !== undefined
+                ? change.oldPage === change.newPage
+                  ? `p. ${change.oldPage}`
+                  : `p. ${change.oldPage} → ${change.newPage}`
+                : change.oldPage !== undefined
+                ? `p. ${change.oldPage}`
+                : change.newPage !== undefined
+                ? `p. ${change.newPage}`
+                : `p. ${change.page}`}
+            </span>
+          ) : null}
           <span className="ml-auto flex items-center gap-2 font-mono text-[10px]">
             {nRemoved > 0 && <span className="text-sev-critical">−{nRemoved}</span>}
             {nAdded > 0 && <span className="text-success">+{nAdded}</span>}

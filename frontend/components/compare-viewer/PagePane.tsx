@@ -79,7 +79,7 @@ export function PagePane({ side, className }: { side: Side; className?: string }
   React.useEffect(() => {
     if (!selectedChangeId || !scrollElRef.current) return;
     const el = scrollElRef.current.querySelector<HTMLElement>(
-      `#${CSS.escape(boxDomId(side, selectedChangeId))}`
+      `[data-change-id="${CSS.escape(selectedChangeId)}"]`
     );
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [selectedChangeId, side]);
@@ -310,17 +310,19 @@ function PageTile({
           ? "bg-sev-critical/25 ring-sev-critical/50"
           : "bg-success/25 ring-success/50";
         const selected = selectedChangeId === b.change_id;
+        const boxId = b.box_id || `${b.change_id}-p${page.n}-b${i}`;
         return (
           <button
-            key={i}
-            id={boxDomId(side, b.change_id)}
+            key={boxId}
+            id={boxDomId(side, boxId)}
+            data-change-id={b.change_id}
             type="button"
             onClick={() => onSelect(b.change_id)}
             className={cn(
               "absolute rounded-[1px] ring-1 transition-shadow",
               color,
               moved && !showMoves && "opacity-10",
-              selected && "ring-2 ring-primary"
+              selected && "ring-2 ring-primary bg-primary/20 shadow-sm"
             )}
             style={{
               left: pct(b.x0, page.w_pt),

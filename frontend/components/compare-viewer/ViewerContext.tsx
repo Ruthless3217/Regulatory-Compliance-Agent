@@ -98,7 +98,11 @@ export interface ViewerChange {
   blockIndex?: number; // text mode only
   side?: Side; // pixel: side of the primary ref
   page?: number; // pixel: 1-based page of the primary ref
+  oldPage?: number;
+  newPage?: number;
   bbox?: [number, number, number, number];
+  oldLocations?: RenderChangeRef["locations"];
+  newLocations?: RenderChangeRef["locations"];
   fraction: number; // 0..1 vertical position for the heat strip
 }
 
@@ -128,7 +132,11 @@ export function deriveViewerChanges(
         addedText: c.new?.text,
         side,
         page: ref?.page,
+        oldPage: c.old?.page,
+        newPage: c.new?.page,
         bbox: ref?.bbox,
+        oldLocations: c.old?.locations,
+        newLocations: c.new?.locations,
         fraction: ref ? fracFor(side, ref) : 0,
       };
     });
@@ -175,6 +183,7 @@ interface ViewerState {
 
   selectedChangeId: string | null;
   setSelectedChangeId: (id: string | null) => void;
+  jumpToChange: (id: string | null) => void;
 
   viewMode: ViewMode; // requested
   setViewMode: (m: ViewMode) => void;
@@ -233,6 +242,10 @@ export function ViewerProvider({
   const hasPixel = comparison.render_status === "completed" && !!comparison.render_result;
   const effectiveMode: ViewMode = hasPixel && viewMode === "pixel" ? "pixel" : "text";
 
+  const jumpToChange = React.useCallback((id: string | null) => {
+    setSelectedChangeId(id);
+  }, []);
+
   const setZoom = React.useCallback((side: Side, value: number) => {
     const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
     setZoomState((z) => ({ ...z, [side]: clamped }));
@@ -260,6 +273,7 @@ export function ViewerProvider({
     setComparison,
     selectedChangeId,
     setSelectedChangeId,
+    jumpToChange,
     viewMode,
     setViewMode,
     hasPixel,
