@@ -3,7 +3,12 @@ import * as React from "react";
 import { AlertTriangle } from "lucide-react";
 import type { DocumentComparison } from "@/lib/types";
 import { getComparison } from "@/lib/api";
-import { ViewerProvider, useViewer, deriveViewerChanges } from "./ViewerContext";
+import {
+  ViewerProvider,
+  useViewer,
+  deriveViewerChanges,
+  matchesViewerFilter,
+} from "./ViewerContext";
 import { Toolbar } from "./Toolbar";
 import { PagePane } from "./PagePane";
 import { TextRedline } from "./TextRedline";
@@ -26,9 +31,19 @@ function ViewerShellInner() {
     layoutMode,
     singleSide,
     showMoves,
+    filter,
+    annotationFor,
     selectedChangeId,
     setSelectedChangeId,
   } = useViewer();
+
+  const isNoted = React.useCallback(
+    (c: { id: string }) => {
+      const a = annotationFor(c.id);
+      return !!a && (!!a.note?.trim() || a.tags.length > 0);
+    },
+    [annotationFor]
+  );
 
   // Left/Right arrow keys step through changes (same order as the Toolbar's
   // Prev/Next). Selecting a change scrolls it into view in both panes. We use
@@ -48,7 +63,8 @@ function ViewerShellInner() {
       ) {
         return;
       }
-      const changes = deriveViewerChanges(comparison, effectiveMode, showMoves);
+      const allChanges = deriveViewerChanges(comparison, effectiveMode, showMoves);
+      const changes = allChanges.filter((c) => matchesViewerFilter(c, filter, isNoted(c)));
       if (changes.length === 0) return;
       e.preventDefault();
       const dir = e.key === "ArrowRight" ? 1 : -1;
@@ -63,7 +79,7 @@ function ViewerShellInner() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [comparison, effectiveMode, showMoves, selectedChangeId, setSelectedChangeId]);
+  }, [comparison, effectiveMode, showMoves, filter, isNoted, selectedChangeId, setSelectedChangeId]);
 
   // Poll while the pixel render is processing: 2 s, backing off to 5 s after
   // 60 s, and stopping on any terminal status.

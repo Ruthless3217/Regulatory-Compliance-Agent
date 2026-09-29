@@ -163,19 +163,19 @@ def _pdf_text_layer_lines(file_path: str) -> List[List[str]]:
 
 
 def _pdf_ocr_lines(file_path: str) -> List[List[str]]:
-    """OCR a scanned/image PDF into per-page text lines.
+    """OCR a scanned/image PDF into per-page text lines using comparison_ocr_service.
 
-    Rasterizes each page with pypdfium2 (already a dependency for the pixel view)
-    and runs Tesseract via pytesseract. Returns ``[]`` — never raises — if OCR is
-    disabled or the tooling isn't installed, so the caller can fall back to the
-    clear "run OCR" message. Capped at ``settings.compare_ocr_page_cap`` pages.
+    Rasterizes each page with pypdfium2 and runs the OCR adapter (PaddleOCR / Tesseract).
+    Returns ``[]`` — never raises — if OCR is disabled or the tooling isn't installed.
+    Capped at ``settings.compare_ocr_page_cap`` pages.
     """
     from app.config import settings
+    from app.services.comparison_ocr_service import ocr_page_to_lines
+
     if not settings.compare_ocr_enabled:
         return []
     try:
         import pypdfium2 as pdfium
-        import pytesseract
     except Exception as e:  # noqa: BLE001 — OCR tooling not present in this image
         logger.warning("OCR fallback unavailable (%s); scanned PDF will not be read", e)
         return []
@@ -190,16 +190,14 @@ def _pdf_ocr_lines(file_path: str) -> List[List[str]]:
         cap = min(len(pdf), max(1, settings.compare_ocr_page_cap))
         for i in range(cap):
             try:
-                # scale 3.0 ≈ 216 DPI — enough for Tesseract without huge bitmaps.
-                # draw_annots=False: reviewer annotations (FreeText notes, stamps,
-                # popups) must not be rasterized into text that downstream
-                # consumers treat as page content — pypdfium2 draws them by default.
-                pil = pdf[i].render(scale=3.0, draw_annots=False).to_pil()
-                txt = pytesseract.image_to_string(pil) or ""
+                page = pdf[i]
+                w_pt, h_pt = page.get_size()
+                pil = page.render(scale=3.0, draw_annots=False).to_pil()
+                lines = ocr_page_to_lines(pil, i + 1, float(w_pt), float(h_pt))
             except Exception as e:  # noqa: BLE001 — skip a page OCR can't handle
                 logger.warning("OCR failed on page %s: %s", i + 1, e)
-                txt = ""
-            page_lines.append([ln.strip() for ln in txt.split("\n") if ln.strip()])
+                lines = []
+            page_lines.append(lines)
     finally:
         pdf.close()
     if any(page_lines):
@@ -210,15 +208,40 @@ def _pdf_ocr_lines(file_path: str) -> List[List[str]]:
 def extract_pdf_segments(file_path: str) -> List[str]:
     """Extract sentence-level segments from a PDF, normalized for cross-format diff.
 
-    Strips repeated running headers/footers and page numbers, de-hyphenates
-    line-wraps, unwraps physical lines back into flowing text, then segments into
-    sentences. Falls back to OCR for a scanned/image PDF (no text layer); raises
-    ValueError only if neither the text layer nor OCR yields any text.
+    Evaluates text quality per-page and falls back to OCR (PaddleOCR / Tesseract)
+    for empty or garbage/corrupted pages. Strips repeated running headers/footers
+    and page numbers, de-hyphenates line-wraps, unwraps physical lines back into
+    flowing text, then segments into sentences.
     """
+    from app.config import settings
+    from app.services.comparison_ocr_service import is_page_text_usable, ocr_page_to_lines
+
     page_lines = _pdf_text_layer_lines(file_path)
 
-    if not any(page_lines):  # no selectable text — try OCR before giving up
-        page_lines = _pdf_ocr_lines(file_path)
+    # Check if any page is unusable (empty or corrupted/garbage text layer)
+    has_unusable_pages = any(not is_page_text_usable(lines) for lines in page_lines)
+
+    if has_unusable_pages and settings.compare_ocr_enabled:
+        try:
+            import pypdfium2 as pdfium
+            pdf = pdfium.PdfDocument(file_path)
+            try:
+                cap = min(len(pdf), max(1, settings.compare_ocr_page_cap))
+                for i in range(min(len(page_lines), cap)):
+                    if not is_page_text_usable(page_lines[i]):
+                        try:
+                            page = pdf[i]
+                            w_pt, h_pt = page.get_size()
+                            pil = page.render(scale=3.0, draw_annots=False).to_pil()
+                            ocr_lines = ocr_page_to_lines(pil, i + 1, float(w_pt), float(h_pt))
+                            if ocr_lines:
+                                page_lines[i] = ocr_lines
+                        except Exception as e:
+                            logger.warning("Per-page OCR failed for page %d: %s", i + 1, e)
+            finally:
+                pdf.close()
+        except Exception as e:
+            logger.warning("Per-page OCR rasterization could not open %s: %s", file_path, e)
 
     if not any(page_lines):
         raise ValueError(
@@ -634,13 +657,13 @@ def _detect_moves_in_changes(new_marks: List[dict], changes: List[dict]) -> None
 def build_diff(old_paragraphs: List[str], new_paragraphs: List[str]) -> List[dict]:
     """Align two documents at the word-token level and return ordered diff blocks.
 
-    Both sides are flattened to a normalized token stream (placeholder-aware,
-    heading-marker/whitespace/case-insensitive) and aligned with difflib. Because
-    alignment ignores how each extractor chunked the text, identical content stays
-    matched across formats even when segmentation drifts. The resulting token
-    opcodes are re-grouped into sentence-sized rows carrying the existing
-    equal/delete/insert/replace block schema the frontend already renders.
+    Uses structure-first alignment when enabled to prevent cross-region mismatch.
     """
+    from app.config import settings
+    if getattr(settings, "compare_structural_alignment_enabled", True):
+        from app.services.structural_alignment_service import structural_build_diff
+        return structural_build_diff(old_paragraphs, new_paragraphs)
+
     old_tokens = _tokenize(old_paragraphs)
     new_tokens = _tokenize(new_paragraphs)
     matcher = SequenceMatcher(

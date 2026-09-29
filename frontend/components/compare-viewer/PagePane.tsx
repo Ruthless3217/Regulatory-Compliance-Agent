@@ -11,7 +11,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import type { ChangeKind, RenderPage, SearchHit } from "@/lib/types";
+import type { ChangeKind, RenderChange, RenderPage, SearchHit } from "@/lib/types";
 import { comparisonPageImageUrl, searchComparison } from "@/lib/api";
 import { sideLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -38,6 +38,12 @@ export function PagePane({ side, className }: { side: Side; className?: string }
   const contentType = side === "old" ? comparison.old_content_type : comparison.new_content_type;
   const isPdf = contentType === "pdf";
   const paneName = sideLabel(comparison, side);
+
+  const changeById = React.useMemo(() => {
+    const m = new Map<string, (typeof render.changes)[number]>();
+    for (const c of render.changes) m.set(c.id, c);
+    return m;
+  }, [render.changes]);
 
   const kindById = React.useMemo(() => {
     const m = new Map<string, ChangeKind>();
@@ -79,7 +85,7 @@ export function PagePane({ side, className }: { side: Side; className?: string }
   React.useEffect(() => {
     if (!selectedChangeId || !scrollElRef.current) return;
     const el = scrollElRef.current.querySelector<HTMLElement>(
-      `#${CSS.escape(boxDomId(side, selectedChangeId))}`
+      `[data-change-id="${CSS.escape(selectedChangeId)}"]`
     );
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [selectedChangeId, side]);
@@ -248,6 +254,7 @@ export function PagePane({ side, className }: { side: Side; className?: string }
               comparisonId={comparison.id}
               page={p}
               kindById={kindById}
+              changeById={changeById}
               showMoves={showMoves}
               selectedChangeId={selectedChangeId}
               onSelect={setSelectedChangeId}
@@ -270,6 +277,7 @@ function PageTile({
   comparisonId,
   page,
   kindById,
+  changeById,
   showMoves,
   selectedChangeId,
   onSelect,
@@ -281,6 +289,7 @@ function PageTile({
   comparisonId: string;
   page: RenderPage;
   kindById: Map<string, ChangeKind>;
+  changeById: Map<string, RenderChange>;
   showMoves: boolean;
   selectedChangeId: string | null;
   onSelect: (id: string) => void;
@@ -304,23 +313,47 @@ function PageTile({
       />
       {page.boxes.map((b, i) => {
         const moved = kindById.get(b.change_id) === "moved";
+        const ch = changeById.get(b.change_id);
+        const ct = ch?.change_type;
+        const tooltip =
+          ct === "numeric_only"
+            ? "Numeric change"
+            : ct === "identifier_only"
+            ? "Identifier change"
+            : ct === "replacement"
+            ? "Text replacement"
+            : ct === "insertion"
+            ? "Inserted text"
+            : ct === "deletion"
+            ? "Deleted text"
+            : ct === "reordered" || moved
+            ? "Section moved"
+            : ct === "punctuation_only" || ct === "whitespace_only"
+            ? "Formatting change"
+            : b.type === "removed"
+            ? "Deleted text"
+            : "Added text";
         const color = moved
           ? "bg-violet-600/25 ring-violet-600/50"
           : b.type === "removed"
           ? "bg-sev-critical/25 ring-sev-critical/50"
           : "bg-success/25 ring-success/50";
         const selected = selectedChangeId === b.change_id;
+        const boxId = b.box_id || `${b.change_id}-p${page.n}-b${i}`;
         return (
           <button
-            key={i}
-            id={boxDomId(side, b.change_id)}
+            key={boxId}
+            id={boxDomId(side, boxId)}
+            data-change-id={b.change_id}
             type="button"
+            title={tooltip}
+            aria-label={tooltip}
             onClick={() => onSelect(b.change_id)}
             className={cn(
               "absolute rounded-[1px] ring-1 transition-shadow",
               color,
               moved && !showMoves && "opacity-10",
-              selected && "ring-2 ring-primary"
+              selected && "ring-2 ring-primary bg-primary/20 shadow-sm"
             )}
             style={{
               left: pct(b.x0, page.w_pt),

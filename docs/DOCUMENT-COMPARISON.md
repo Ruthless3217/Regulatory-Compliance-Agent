@@ -263,8 +263,52 @@ Patterns already in this codebase that fit naturally into a Compare rework:
 | Types | `frontend/lib/types.ts` (`DiffBlock` … `DocumentComparison`) |
 | REST routes | `backend/app/api/routes/comparisons.py` |
 | Diff engine | `backend/app/services/comparison_service.py` |
+| OCR abstraction & adapter | `backend/app/services/comparison_ocr_service.py` |
 | Pixel render service | `backend/app/services/pdf_render_service.py` |
 | Gotenberg client | `backend/app/services/gotenberg_client.py` |
 | Model / migrations | `backend/app/models/document_comparison.py` · `alembic/versions/0013`, `0017` |
-| Config | `backend/app/config.py` (`gotenberg_url`, `pixel_render_page_cap`, upload settings) |
+| Config | `backend/app/config.py` (`compare_ocr_enabled`, `compare_ocr_engine`, `pixel_render_page_cap`, upload settings) |
 | OKF pages (higher-level, partly dated) | `okf/services/comparison-service.md` · `okf/data-model/document-comparisons.md` · `okf/frontend/routing.md` |
+
+## 9. OCR Architecture (PaddleOCR & Tesseract Fallback)
+
+For scanned, image-only, or corrupted PDF pages (e.g. font encoding failures like `(cid:...)`),
+an OCR subsystem evaluates text quality **per-page** and extracts word tokens with accurate
+PDF-point coordinates:
+
+```
+                      PDF Document
+                           │
+             ┌─────────────┴─────────────┐
+             ▼                           ▼
+     Native Text Page            Scanned / Corrupted Page
+   (pdfplumber extraction)        (is_page_text_usable == False)
+             │                                   │
+             │                     pypdfium2 page rasterization
+             │                                   │
+             │                    PaddleOCR (primary engine)
+             │                     └─ if fails: Tesseract
+             │                                   │
+             │                            OCRWord tokens
+             │                      (PDF-point coordinates)
+             │                                   │
+             └─────────────┬─────────────────────┘
+                           ▼
+                  PositionedWord Stream
+                           │
+             ┌─────────────┴─────────────┐
+             ▼                           ▼
+        Text Diff                   Pixel Diff
+       build_diff()              word_level_ops()
+             │                           │
+             ▼                           ▼
+        DiffViewer                 RenderResult
+                                (PixelDiffViewer)
+```
+
+### Key Components
+- **`comparison_ocr_service.py`**: Encapsulates `OCRWord`, `is_text_usable` heuristics,
+  `_run_paddle_ocr`, `_run_tesseract_ocr`, and coordinate scaling between image pixels and PDF points.
+- **Page-level fallback**: Clean text pages bypass OCR completely; only degraded pages undergo rasterization and recognition.
+- **Unified coordinates**: OCR bounding boxes scale directly into PDF points (top-left origin),
+  so `word_level_ops()` and `match_query_in_words()` process OCR and native words identically.

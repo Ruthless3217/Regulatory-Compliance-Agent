@@ -46,8 +46,13 @@ def test_scanned_pdf_ocr_fallback_recovers_text(tmp_path, monkeypatch):
 
 
 def test_scanned_pdf_without_engine_gives_clear_message(tmp_path, monkeypatch):
+    from app.services.comparison_ocr_service import ocr_cache
+    ocr_cache.clear()
     pdf = _image_only_pdf(tmp_path)
-    # Simulate the tesseract tooling being absent: importing pytesseract fails.
+    # Simulate both OCR engines being unavailable
+    def fail_paddle(*a, **k):
+        raise RuntimeError("PaddleOCR unavailable")
+    monkeypatch.setattr("app.services.comparison_ocr_service._run_paddle_ocr", fail_paddle)
     monkeypatch.setitem(sys.modules, "pytesseract", None)
     with pytest.raises(ValueError) as ei:
         extract_pdf_segments(pdf)

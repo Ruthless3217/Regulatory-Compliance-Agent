@@ -52,6 +52,8 @@ EXTENSION_CONTENT_TYPES = {
 
 _PDF_EXPORT_KINDS = {"old-highlighted.pdf", "new-highlighted.pdf", "side-by-side.pdf"}
 _EXPORT_MEDIA = {
+    "audit-snapshot.json": "application/json",
+    "audit-report.pdf": "application/pdf",
     "changes-report.docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "old-highlighted.pdf": "application/pdf",
     "new-highlighted.pdf": "application/pdf",
@@ -140,10 +142,10 @@ async def _persist_upload(file: UploadFile):
     return file_path, detected_type
 
 
-def _both_pdf(c: DocumentComparison) -> bool:
+def _is_renderable(c: DocumentComparison) -> bool:
     return (
-        c.old_content_type == "pdf"
-        and c.new_content_type == "pdf"
+        c.old_content_type in ("pdf", "docx")
+        and c.new_content_type in ("pdf", "docx")
         and bool(c.old_file_path)
         and bool(c.new_file_path)
     )
@@ -185,16 +187,28 @@ def _serialize(
 
 
 def _search_pdf(pdf_path: str, q: str, cap: int = 200) -> List[dict]:
-    """Scan every page of a PDF for `q`, returning positioned hits (capped)."""
-    import pdfplumber
+    """Scan every page of a PDF for `q`, returning positioned hits (capped).
+    Supports scanned and mixed PDFs via positioned_words OCR integration.
+    """
+    from app.services.pdf_render_service import positioned_words
+
+    words = positioned_words(pdf_path)
+    by_page: dict = {}
+    for w in words:
+        by_page.setdefault(w.page, []).append({
+            "text": w.text,
+            "x0": w.x0,
+            "top": w.y0,
+            "x1": w.x1,
+            "bottom": w.y1,
+        })
 
     hits: List[dict] = []
-    with pdfplumber.open(pdf_path) as pdf:
-        for page_no, page in enumerate(pdf.pages, start=1):
-            words = page.extract_words() or []
-            hits.extend(match_query_in_words(words, q, page_no, cap - len(hits)))
-            if len(hits) >= cap:
-                break
+    for page_no in sorted(by_page.keys()):
+        page_words = by_page[page_no]
+        hits.extend(match_query_in_words(page_words, q, page_no, cap - len(hits)))
+        if len(hits) >= cap:
+            break
     return hits[:cap]
 
 
@@ -259,7 +273,7 @@ async def create_comparison(
         comparison.status = "failed"
         comparison.error_message = str(e)
 
-    will_render = comparison.status == "completed" and _both_pdf(comparison)
+    will_render = comparison.status == "completed" and _is_renderable(comparison)
     comparison.render_status = "processing" if will_render else "skipped"
 
     db.add(comparison)
@@ -410,10 +424,32 @@ async def delete_annotation(
     return {"message": "Annotation deleted", "change_id": change_id}
 
 
+@router.get("/{comparison_id}/snapshot")
+async def get_comparison_snapshot(
+    comparison_id: str,
+    filter: Optional[str] = Query(None),
+    user: dict = Depends(require("comparison:use")),
+    db: Session = Depends(get_db),
+):
+    """Retrieve the full immutable comparison snapshot and audit trail as structured JSON."""
+    from app.services.comparison_snapshot_service import build_comparison_snapshot
+    comparison = get_visible_comparison(db, comparison_id, user)
+    annotations = (
+        db.query(ComparisonAnnotation)
+        .filter(ComparisonAnnotation.comparison_id == comparison.id)
+        .all()
+    )
+    try:
+        return build_comparison_snapshot(comparison, annotations, filter_type=filter)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
 @router.get("/{comparison_id}/export/{kind}")
 async def export_comparison(
     comparison_id: str,
     kind: str,
+    filter: Optional[str] = Query(None),
     user: dict = Depends(require("comparison:use")),
     db: Session = Depends(get_db),
 ):
@@ -430,7 +466,11 @@ async def export_comparison(
         .all()
     )
     try:
-        if kind == "changes-report.docx":
+        if kind == "audit-snapshot.json":
+            data = export_service.audit_snapshot_json(comparison, annotations, filter_type=filter)
+        elif kind == "audit-report.pdf":
+            data = export_service.audit_report_pdf(comparison, annotations, filter_type=filter)
+        elif kind == "changes-report.docx":
             data = export_service.changes_report_docx(comparison, annotations)
         elif kind == "old-highlighted.pdf":
             data = export_service.highlighted_pdf(comparison, "old", annotations)
@@ -441,6 +481,8 @@ async def export_comparison(
         else:  # bundle.zip
             data = export_service.bundle_zip(comparison, annotations)
     except ValueError as e:
+        if "filter" in str(e).lower():
+            raise HTTPException(status_code=422, detail=str(e))
         raise HTTPException(status_code=409, detail=str(e))
 
     filename = f"{_safe_title(comparison.title)}-{kind}"
@@ -528,7 +570,7 @@ async def rerun_comparison(
         shutil.rmtree(render_dir, ignore_errors=True)
     comparison.render_result = None
     comparison.render_error = None
-    will_render = comparison.status == "completed" and _both_pdf(comparison)
+    will_render = comparison.status == "completed" and _is_renderable(comparison)
     comparison.render_status = "processing" if will_render else "skipped"
 
     db.commit()

@@ -3,6 +3,7 @@ import * as React from "react";
 import type {
   Annotation,
   ChangeKind,
+  ChangeType,
   DocumentComparison,
   RenderChangeRef,
 } from "@/lib/types";
@@ -11,7 +12,20 @@ export type ViewMode = "pixel" | "text";
 export type LayoutMode = "side-by-side" | "single";
 export type Side = "old" | "new";
 export type CursorMode = "scroll" | "select";
-export type ViewerFilter = "all" | ChangeKind | "noted";
+export type ViewerFilter =
+  | "all"
+  | "numeric"
+  | "identifier"
+  | "replacement"
+  | "insertion"
+  | "deletion"
+  | "reordered"
+  | "formatting"
+  | "removed"
+  | "added"
+  | "modified"
+  | "moved"
+  | "noted";
 
 export const ZOOM_MIN = 0.5;
 export const ZOOM_MAX = 3;
@@ -92,14 +106,71 @@ function createScrollRegistry(): ScrollRegistry {
 export interface ViewerChange {
   id: string; // selection id (pixel: backend id; text: "b{index}")
   kind: ChangeKind;
+  changeType?: ChangeType | string;
+  metadata?: Record<string, unknown>;
+  structure?: {
+    anchor_type?: string;
+    anchor_key?: string;
+    title?: string;
+  };
   removedText?: string;
   addedText?: string;
   moveId?: string;
   blockIndex?: number; // text mode only
   side?: Side; // pixel: side of the primary ref
   page?: number; // pixel: 1-based page of the primary ref
+  oldPage?: number;
+  newPage?: number;
   bbox?: [number, number, number, number];
+  oldLocations?: RenderChangeRef["locations"];
+  newLocations?: RenderChangeRef["locations"];
   fraction: number; // 0..1 vertical position for the heat strip
+}
+
+export function matchesViewerFilter(
+  change: ViewerChange,
+  filter: ViewerFilter,
+  isNoted?: boolean
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "noted") return !!isNoted;
+
+  const ct = change.changeType;
+  const k = change.kind;
+
+  switch (filter) {
+    case "numeric":
+      return ct === "numeric_only";
+    case "identifier":
+      return ct === "identifier_only";
+    case "replacement":
+      return ct === "replacement" || (!ct && k === "modified");
+    case "insertion":
+      return ct === "insertion" || (!ct && k === "added");
+    case "deletion":
+      return ct === "deletion" || (!ct && k === "removed");
+    case "reordered":
+      return ct === "reordered" || (!ct && k === "moved");
+    case "formatting":
+      return ct === "punctuation_only" || ct === "whitespace_only";
+    case "removed":
+      return k === "removed" || ct === "deletion";
+    case "added":
+      return k === "added" || ct === "insertion";
+    case "modified":
+      return (
+        k === "modified" ||
+        ct === "replacement" ||
+        ct === "numeric_only" ||
+        ct === "identifier_only" ||
+        ct === "punctuation_only" ||
+        ct === "whitespace_only"
+      );
+    case "moved":
+      return k === "moved" || ct === "reordered";
+    default:
+      return true;
+  }
 }
 
 export function deriveViewerChanges(
@@ -124,11 +195,18 @@ export function deriveViewerChanges(
       return {
         id: c.id,
         kind: c.kind,
+        changeType: c.change_type,
+        metadata: c.metadata,
+        structure: c.structure,
         removedText: c.old?.text,
         addedText: c.new?.text,
         side,
         page: ref?.page,
+        oldPage: c.old?.page,
+        newPage: c.new?.page,
         bbox: ref?.bbox,
+        oldLocations: c.old?.locations,
+        newLocations: c.new?.locations,
         fraction: ref ? fracFor(side, ref) : 0,
       };
     });
@@ -157,6 +235,7 @@ export function deriveViewerChanges(
     out.push({
       id: textSelId(i),
       kind: moved ? "moved" : kind,
+      changeType: moved ? "reordered" : kind === "removed" ? "deletion" : kind === "added" ? "insertion" : "replacement",
       removedText,
       addedText,
       moveId: b.move_id,
@@ -175,6 +254,7 @@ interface ViewerState {
 
   selectedChangeId: string | null;
   setSelectedChangeId: (id: string | null) => void;
+  jumpToChange: (id: string | null) => void;
 
   viewMode: ViewMode; // requested
   setViewMode: (m: ViewMode) => void;
@@ -233,6 +313,10 @@ export function ViewerProvider({
   const hasPixel = comparison.render_status === "completed" && !!comparison.render_result;
   const effectiveMode: ViewMode = hasPixel && viewMode === "pixel" ? "pixel" : "text";
 
+  const jumpToChange = React.useCallback((id: string | null) => {
+    setSelectedChangeId(id);
+  }, []);
+
   const setZoom = React.useCallback((side: Side, value: number) => {
     const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
     setZoomState((z) => ({ ...z, [side]: clamped }));
@@ -260,6 +344,7 @@ export function ViewerProvider({
     setComparison,
     selectedChangeId,
     setSelectedChangeId,
+    jumpToChange,
     viewMode,
     setViewMode,
     hasPixel,

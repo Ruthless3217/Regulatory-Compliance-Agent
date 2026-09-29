@@ -450,15 +450,52 @@ export type DiffBlock =
 export type RenderBoxType = "removed" | "added";
 
 export interface RenderBox {
-  x0: number; y0: number; x1: number; y1: number;
+  box_id?: string;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
   type: RenderBoxType;
   change_id: string;
 }
-export interface RenderPage { n: number; w_pt: number; h_pt: number; boxes: RenderBox[]; }
-export interface RenderChangeRef { page: number; bbox: [number, number, number, number]; text: string; }
+export interface RenderPage {
+  n: number;
+  w_pt: number;
+  h_pt: number;
+  boxes: RenderBox[];
+}
+export interface RenderChangeLocation {
+  page: number;
+  bbox: [number, number, number, number];
+  text?: string;
+  box_id?: string;
+}
+export interface RenderChangeRef {
+  page: number;
+  bbox: [number, number, number, number];
+  text: string;
+  locations?: RenderChangeLocation[];
+}
+export type ChangeType =
+  | "whitespace_only"
+  | "numeric_only"
+  | "identifier_only"
+  | "punctuation_only"
+  | "reordered"
+  | "insertion"
+  | "deletion"
+  | "replacement";
+
 export interface RenderChange {
   id: string;
   kind: ChangeKind;
+  change_type?: ChangeType | string;
+  metadata?: Record<string, unknown>;
+  structure?: {
+    anchor_type?: string;
+    anchor_key?: string;
+    title?: string;
+  };
   old?: RenderChangeRef;
   new?: RenderChangeRef;
 }

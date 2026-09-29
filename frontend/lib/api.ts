@@ -629,6 +629,8 @@ export async function deleteAnnotation(id: string, changeId: string): Promise<{ 
 }
 
 export type ExportKind =
+  | "audit-snapshot.json"
+  | "audit-report.pdf"
   | "changes-report.docx"
   | "old-highlighted.pdf"
   | "new-highlighted.pdf"
@@ -636,8 +638,14 @@ export type ExportKind =
   | "bundle.zip";
 
 /** Same-origin URL for an export artifact (feed to a download anchor / window.open). */
-export function exportComparisonUrl(id: string, kind: ExportKind): string {
-  return `${BROWSER_BASE}/comparisons/${id}/export/${kind}`;
+export function exportComparisonUrl(id: string, kind: ExportKind, filter?: string): string {
+  const q = filter && filter !== "all" ? `?filter=${encodeURIComponent(filter)}` : "";
+  return `${BROWSER_BASE}/comparisons/${id}/export/${kind}${q}`;
+}
+
+export async function getComparisonSnapshot(id: string, filter?: string): Promise<Record<string, unknown>> {
+  const q = filter && filter !== "all" ? `?filter=${encodeURIComponent(filter)}` : "";
+  return jsonFetch<Record<string, unknown>>(`${base()}/comparisons/${id}/snapshot${q}`);
 }
 
 /**

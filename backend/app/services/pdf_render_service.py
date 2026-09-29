@@ -19,6 +19,9 @@ class PositionedWord:
     y0: float          # top
     x1: float
     y1: float          # bottom
+    confidence: float = 1.0
+    line_id: int = 0
+    col_id: int = 0
 
 
 @dataclass
@@ -82,20 +85,57 @@ def render_pages(pdf_path: str, out_dir: str, cap: int) -> Tuple[List[PageMeta],
 
 def positioned_words(pdf_path: str) -> List[PositionedWord]:
     """Words in reading order with bboxes (PDF points), running headers/footers
-    and page-number lines removed (same policy as the text extractor)."""
+    and page-number lines removed (same policy as the text extractor).
+
+    Evaluates per-page text quality and falls back to OCR (PaddleOCR / Tesseract)
+    for scanned/image or corrupted pages.
+    """
     import pdfplumber
+    from app.config import settings
+    from app.services.comparison_ocr_service import is_text_usable, ocr_page_to_words
 
     page_lines: List[List[str]] = []
     raw: List[List[dict]] = []
+
     with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            words = page.extract_words() or []
-            raw.append(words)
-            # group words into visual lines (by rounded top) to reuse running-line detection
-            lines: dict = {}
-            for w in words:
-                lines.setdefault(round(w["top"]), []).append(w["text"])
-            page_lines.append([" ".join(v) for v in lines.values()])
+        pdfium_doc = None
+        try:
+            for page_no, page in enumerate(pdf.pages, start=1):
+                words = page.extract_words() or []
+                page_text = " ".join(w["text"] for w in words)
+
+                # Check if page text needs OCR
+                if not is_text_usable(page_text) and settings.compare_ocr_enabled and page_no <= settings.compare_ocr_page_cap:
+                    if pdfium_doc is None:
+                        try:
+                            import pypdfium2 as pdfium
+                            pdfium_doc = pdfium.PdfDocument(pdf_path)
+                        except Exception as e:
+                            logger.warning("positioned_words: failed to open pypdfium2 for %s: %s", pdf_path, e)
+
+                    if pdfium_doc is not None and (page_no - 1) < len(pdfium_doc):
+                        try:
+                            pdfium_page = pdfium_doc[page_no - 1]
+                            w_pt, h_pt = pdfium_page.get_size()
+                            pil = pdfium_page.render(scale=2.0, draw_annots=False).to_pil()
+                            ocr_words = ocr_page_to_words(pil, page_no, float(w_pt), float(h_pt))
+                            if ocr_words:
+                                words = [
+                                    {"text": ow.text, "x0": ow.x0, "top": ow.y0, "x1": ow.x1, "bottom": ow.y1}
+                                    for ow in ocr_words
+                                ]
+                        except Exception as e:
+                            logger.warning("positioned_words OCR failed on page %d: %s", page_no, e)
+
+                raw.append(words)
+                # group words into visual lines (by rounded top) to reuse running-line detection
+                lines: dict = {}
+                for w in words:
+                    lines.setdefault(round(w["top"]), []).append(w["text"])
+                page_lines.append([" ".join(v) for v in lines.values()])
+        finally:
+            if pdfium_doc is not None:
+                pdfium_doc.close()
 
     running = _detect_running_lines(page_lines)
 

@@ -7,6 +7,7 @@ import { countDiffStats, pluralizeWords } from "@/lib/format";
 import {
   useViewer,
   deriveViewerChanges,
+  matchesViewerFilter,
   type ViewerFilter,
   type ViewerChange,
 } from "./ViewerContext";
@@ -14,10 +15,13 @@ import { ChangeCard } from "./ChangeCard";
 
 const CHIPS: { key: ViewerFilter; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "removed", label: "Removed" },
-  { key: "added", label: "Added" },
-  { key: "modified", label: "Modified" },
-  { key: "moved", label: "Moved" },
+  { key: "numeric", label: "Numeric" },
+  { key: "identifier", label: "Identifier" },
+  { key: "replacement", label: "Replacement" },
+  { key: "insertion", label: "Insertion" },
+  { key: "deletion", label: "Deletion" },
+  { key: "reordered", label: "Reordered" },
+  { key: "formatting", label: "Formatting" },
   { key: "noted", label: "Noted" },
 ];
 
@@ -49,6 +53,13 @@ export function ChangesPanel() {
   const counts = React.useMemo(() => {
     const base: Record<ViewerFilter, number> = {
       all: changes.length,
+      numeric: 0,
+      identifier: 0,
+      replacement: 0,
+      insertion: 0,
+      deletion: 0,
+      reordered: 0,
+      formatting: 0,
       removed: 0,
       added: 0,
       modified: 0,
@@ -56,16 +67,20 @@ export function ChangesPanel() {
       noted: 0,
     };
     for (const c of changes) {
-      base[c.kind] += 1;
-      if (isNoted(c)) base.noted += 1;
+      const noted = isNoted(c);
+      if (noted) base.noted += 1;
+      for (const chip of CHIPS) {
+        if (chip.key === "all" || chip.key === "noted") continue;
+        if (matchesViewerFilter(c, chip.key, noted)) {
+          base[chip.key] += 1;
+        }
+      }
     }
     return base;
   }, [changes, isNoted]);
 
   const filtered = React.useMemo(() => {
-    if (filter === "all") return changes;
-    if (filter === "noted") return changes.filter(isNoted);
-    return changes.filter((c) => c.kind === filter);
+    return changes.filter((c) => matchesViewerFilter(c, filter, isNoted(c)));
   }, [filter, changes, isNoted]);
 
   const { removed, added } = React.useMemo(

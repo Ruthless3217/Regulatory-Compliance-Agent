@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Popover } from "@/components/ui/popover";
 import { sideLabel } from "@/lib/format";
-import { useViewer, deriveViewerChanges } from "./ViewerContext";
+import { useViewer, deriveViewerChanges, matchesViewerFilter } from "./ViewerContext";
 import { ExportPopover } from "./ExportPopover";
 import { AdjustComparisonPopover } from "./AdjustComparisonPopover";
 
@@ -73,6 +73,8 @@ export function Toolbar() {
     setShowMoves,
     selectedChangeId,
     setSelectedChangeId,
+    filter,
+    annotationFor,
   } = useViewer();
 
   const changes = React.useMemo(
@@ -80,14 +82,31 @@ export function Toolbar() {
     [comparison, effectiveMode, showMoves]
   );
 
+  const isNoted = React.useCallback(
+    (c: { id: string }) => {
+      const a = annotationFor(c.id);
+      return !!a && (!!a.note?.trim() || a.tags.length > 0);
+    },
+    [annotationFor]
+  );
+
+  const activeChanges = React.useMemo(() => {
+    return changes.filter((c) => matchesViewerFilter(c, filter, isNoted(c)));
+  }, [filter, changes, isNoted]);
+
   const oldLabel = sideLabel(comparison, "old");
   const newLabel = sideLabel(comparison, "new");
 
   const step = (dir: 1 | -1) => {
-    if (changes.length === 0) return;
-    const cur = changes.findIndex((c) => c.id === selectedChangeId);
-    const next = cur < 0 ? (dir === 1 ? 0 : changes.length - 1) : (cur + dir + changes.length) % changes.length;
-    setSelectedChangeId(changes[next].id);
+    if (activeChanges.length === 0) return;
+    const cur = activeChanges.findIndex((c) => c.id === selectedChangeId);
+    const next =
+      cur < 0
+        ? dir === 1
+          ? 0
+          : activeChanges.length - 1
+        : (cur + dir + activeChanges.length) % activeChanges.length;
+    setSelectedChangeId(activeChanges[next].id);
   };
 
   const email = () => {
@@ -252,11 +271,11 @@ export function Toolbar() {
 
         {/* Right group */}
         <div className="ml-auto flex items-center gap-1.5">
-          <ToolButton onClick={() => step(-1)} title="Previous change" disabled={changes.length === 0}>
+          <ToolButton onClick={() => step(-1)} title="Previous change" disabled={activeChanges.length === 0}>
             <ChevronLeft className="h-3 w-3" />
             Prev
           </ToolButton>
-          <ToolButton onClick={() => step(1)} title="Next change" disabled={changes.length === 0}>
+          <ToolButton onClick={() => step(1)} title="Next change" disabled={activeChanges.length === 0}>
             Next
             <ChevronRight className="h-3 w-3" />
           </ToolButton>
