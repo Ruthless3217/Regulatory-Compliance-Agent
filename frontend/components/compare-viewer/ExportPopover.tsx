@@ -13,6 +13,8 @@ interface Row {
 }
 
 const ROWS: Row[] = [
+  { kind: "audit-report.pdf", label: "Audit Report (PDF)", needsRender: false },
+  { kind: "audit-snapshot.json", label: "Audit Snapshot (JSON)", needsRender: false },
   { kind: "changes-report.docx", label: "Changes Report (DOCX)", needsRender: false },
   { kind: "side-by-side.pdf", label: "Side by Side (PDF)", needsRender: true },
   { kind: "old-highlighted.pdf", label: "Original + highlights (PDF)", needsRender: true },

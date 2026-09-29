@@ -1,31 +1,15 @@
 "use client";
 import * as React from "react";
 import { toast } from "sonner";
-import type { Annotation, ChangeKind } from "@/lib/types";
+import type { Annotation } from "@/lib/types";
 import { upsertAnnotation, deleteAnnotation } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useViewer, type ViewerChange } from "./ViewerContext";
-
-const KIND_LABEL: Record<ChangeKind, string> = {
-  removed: "Removed",
-  added: "Added",
-  modified: "Modified",
-  moved: "Moved",
-};
+import { SemanticBadge } from "./SemanticBadge";
 
 const PRESET_TAGS = ["critical", "review", "approved", "question"];
 
 const wordCount = (s?: string) => (s && s.trim() ? s.trim().split(/\s+/).length : 0);
-
-function kindDot(kind: ChangeKind) {
-  return kind === "removed"
-    ? "bg-sev-critical"
-    : kind === "added"
-    ? "bg-success"
-    : kind === "moved"
-    ? "bg-violet-600"
-    : "bg-primary";
-}
 
 export function ChangeCard({
   change,
@@ -102,22 +86,30 @@ export function ChangeCard({
 
   const nRemoved = wordCount(change.removedText);
   const nAdded = wordCount(change.addedText);
-  const movedTone = change.kind === "moved";
+  const isReordered = change.changeType === "reordered" || change.kind === "moved";
+
+  const nOldLocs = change.oldLocations?.length ?? (change.removedText ? 1 : 0);
+  const nNewLocs = change.newLocations?.length ?? (change.addedText ? 1 : 0);
+  const totalLocations = Math.max(nOldLocs, nNewLocs);
+
+  const sectionTitle = change.structure?.title;
 
   return (
     <div
       className={cn(
         "rounded-md border transition-colors",
         selected
-          ? "border-primary/50 bg-primary-50"
+          ? "border-primary/50 bg-primary-50 dark:bg-primary-950/20"
           : "border-border bg-background hover:border-foreground/40 hover:bg-muted/40"
       )}
     >
       <button type="button" onClick={onSelect} className="block w-full px-3 py-2 text-left">
-        <div className="mb-1 flex items-center gap-1.5">
-          <span className={cn("inline-block h-1.5 w-1.5 rounded-full", kindDot(change.kind))} />
-          <span className="micro-label">{KIND_LABEL[change.kind]}</span>
+        {/* Header row: Semantic Badge, #Index, Page, Multi-location, Word Delta */}
+        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+          <SemanticBadge changeType={change.changeType} kind={change.kind} />
           <span className="font-mono text-[10px] text-muted-foreground">#{index}</span>
+
+          {/* Page Badge */}
           {change.oldPage !== undefined || change.newPage !== undefined || change.page !== undefined ? (
             <span className="rounded bg-muted/60 px-1 py-0.5 font-mono text-[9px] text-muted-foreground">
               {change.oldPage !== undefined && change.newPage !== undefined
@@ -131,26 +123,54 @@ export function ChangeCard({
                 : `p. ${change.page}`}
             </span>
           ) : null}
-          <span className="ml-auto flex items-center gap-2 font-mono text-[10px]">
+
+          {/* Multi-location indicator */}
+          {totalLocations > 1 && (
+            <span
+              className="rounded bg-muted/80 px-1 py-0.5 font-mono text-[9px] text-muted-foreground"
+              title={`Spans ${totalLocations} rendered boxes`}
+            >
+              {totalLocations} locs
+            </span>
+          )}
+
+          {/* Word count delta */}
+          <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px]">
             {nRemoved > 0 && <span className="text-sev-critical">−{nRemoved}</span>}
             {nAdded > 0 && <span className="text-success">+{nAdded}</span>}
           </span>
         </div>
+
+        {/* Structural Section Header (if present) */}
+        {sectionTitle && (
+          <div className="mb-1 truncate text-[10px] font-medium text-muted-foreground" title={sectionTitle}>
+            § {sectionTitle}
+          </div>
+        )}
+
+        {/* Value / Text Diff */}
         {change.removedText ? (
           <p
             className={cn(
               "line-clamp-2 text-[12px] leading-snug",
-              movedTone ? "text-violet-600" : "text-sev-critical line-through"
+              isReordered ? "text-violet-700 dark:text-violet-300" : "text-sev-critical line-through"
             )}
           >
             {change.removedText}
           </p>
         ) : null}
         {change.addedText ? (
-          <p className={cn("line-clamp-2 text-[12px] leading-snug", movedTone ? "text-violet-600" : "text-success")}>
+          <p
+            className={cn(
+              "line-clamp-2 text-[12px] leading-snug",
+              isReordered ? "text-violet-700 dark:text-violet-300" : "text-success"
+            )}
+          >
             {change.addedText}
           </p>
         ) : null}
+
+        {/* Annotations & Tags Preview */}
         {annotation && (annotation.note?.trim() || annotation.tags.length > 0) && !selected ? (
           <div className="mt-1 flex flex-wrap items-center gap-1">
             {annotation.tags.map((t) => (
@@ -163,6 +183,7 @@ export function ChangeCard({
         ) : null}
       </button>
 
+      {/* Selected Card Note Editor */}
       {selected && (
         <div className="border-t border-border/60 px-3 py-2">
           <div className="mb-2 flex flex-wrap gap-1">

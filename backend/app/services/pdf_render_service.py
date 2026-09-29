@@ -19,6 +19,9 @@ class PositionedWord:
     y0: float          # top
     x1: float
     y1: float          # bottom
+    confidence: float = 1.0
+    line_id: int = 0
+    col_id: int = 0
 
 
 @dataclass

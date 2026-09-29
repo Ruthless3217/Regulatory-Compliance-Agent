@@ -476,9 +476,26 @@ export interface RenderChangeRef {
   text: string;
   locations?: RenderChangeLocation[];
 }
+export type ChangeType =
+  | "whitespace_only"
+  | "numeric_only"
+  | "identifier_only"
+  | "punctuation_only"
+  | "reordered"
+  | "insertion"
+  | "deletion"
+  | "replacement";
+
 export interface RenderChange {
   id: string;
   kind: ChangeKind;
+  change_type?: ChangeType | string;
+  metadata?: Record<string, unknown>;
+  structure?: {
+    anchor_type?: string;
+    anchor_key?: string;
+    title?: string;
+  };
   old?: RenderChangeRef;
   new?: RenderChangeRef;
 }

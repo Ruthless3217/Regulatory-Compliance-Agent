@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Popover } from "@/components/ui/popover";
 import { sideLabel } from "@/lib/format";
-import { useViewer, deriveViewerChanges } from "./ViewerContext";
+import { useViewer, deriveViewerChanges, matchesViewerFilter } from "./ViewerContext";
 import { ExportPopover } from "./ExportPopover";
 import { AdjustComparisonPopover } from "./AdjustComparisonPopover";
 
@@ -91,9 +91,7 @@ export function Toolbar() {
   );
 
   const activeChanges = React.useMemo(() => {
-    if (filter === "all") return changes;
-    if (filter === "noted") return changes.filter(isNoted);
-    return changes.filter((c) => c.kind === filter);
+    return changes.filter((c) => matchesViewerFilter(c, filter, isNoted(c)));
   }, [filter, changes, isNoted]);
 
   const oldLabel = sideLabel(comparison, "old");

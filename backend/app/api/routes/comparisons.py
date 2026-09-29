@@ -52,6 +52,8 @@ EXTENSION_CONTENT_TYPES = {
 
 _PDF_EXPORT_KINDS = {"old-highlighted.pdf", "new-highlighted.pdf", "side-by-side.pdf"}
 _EXPORT_MEDIA = {
+    "audit-snapshot.json": "application/json",
+    "audit-report.pdf": "application/pdf",
     "changes-report.docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "old-highlighted.pdf": "application/pdf",
     "new-highlighted.pdf": "application/pdf",
@@ -422,10 +424,32 @@ async def delete_annotation(
     return {"message": "Annotation deleted", "change_id": change_id}
 
 
+@router.get("/{comparison_id}/snapshot")
+async def get_comparison_snapshot(
+    comparison_id: str,
+    filter: Optional[str] = Query(None),
+    user: dict = Depends(require("comparison:use")),
+    db: Session = Depends(get_db),
+):
+    """Retrieve the full immutable comparison snapshot and audit trail as structured JSON."""
+    from app.services.comparison_snapshot_service import build_comparison_snapshot
+    comparison = get_visible_comparison(db, comparison_id, user)
+    annotations = (
+        db.query(ComparisonAnnotation)
+        .filter(ComparisonAnnotation.comparison_id == comparison.id)
+        .all()
+    )
+    try:
+        return build_comparison_snapshot(comparison, annotations, filter_type=filter)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
 @router.get("/{comparison_id}/export/{kind}")
 async def export_comparison(
     comparison_id: str,
     kind: str,
+    filter: Optional[str] = Query(None),
     user: dict = Depends(require("comparison:use")),
     db: Session = Depends(get_db),
 ):
@@ -442,7 +466,11 @@ async def export_comparison(
         .all()
     )
     try:
-        if kind == "changes-report.docx":
+        if kind == "audit-snapshot.json":
+            data = export_service.audit_snapshot_json(comparison, annotations, filter_type=filter)
+        elif kind == "audit-report.pdf":
+            data = export_service.audit_report_pdf(comparison, annotations, filter_type=filter)
+        elif kind == "changes-report.docx":
             data = export_service.changes_report_docx(comparison, annotations)
         elif kind == "old-highlighted.pdf":
             data = export_service.highlighted_pdf(comparison, "old", annotations)
@@ -453,6 +481,8 @@ async def export_comparison(
         else:  # bundle.zip
             data = export_service.bundle_zip(comparison, annotations)
     except ValueError as e:
+        if "filter" in str(e).lower():
+            raise HTTPException(status_code=422, detail=str(e))
         raise HTTPException(status_code=409, detail=str(e))
 
     filename = f"{_safe_title(comparison.title)}-{kind}"

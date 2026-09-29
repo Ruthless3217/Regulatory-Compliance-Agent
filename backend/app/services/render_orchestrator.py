@@ -29,6 +29,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models.document_comparison import DocumentComparison
 from app.services.comparison_service import word_level_ops
+from app.services.structural_alignment_service import structural_word_level_ops
 from app.services.pdf_render_service import (
     to_pdf,
     render_pages,
@@ -114,9 +115,12 @@ def _render_pair(
     old_words = positioned_words(old_pdf)
     new_words = positioned_words(new_pdf)
 
-    old_marks, new_marks, changes = word_level_ops(
-        [w.text for w in old_words], [w.text for w in new_words]
-    )
+    if getattr(settings, "compare_structural_alignment_enabled", True):
+        old_marks, new_marks, changes = structural_word_level_ops(old_words, new_words)
+    else:
+        old_marks, new_marks, changes = word_level_ops(
+            [w.text for w in old_words], [w.text for w in new_words]
+        )
 
     return {
         "old": {"pages": _build_pages(old_metas, old_words, old_marks, "removed")},
@@ -266,6 +270,12 @@ def _build_changes(
     for c in changes:
         cid = c["id"]
         entry: dict = {"id": cid, "kind": c["kind"]}
+        if "change_type" in c:
+            entry["change_type"] = c["change_type"]
+        if "metadata" in c:
+            entry["metadata"] = c["metadata"]
+        if "structure" in c:
+            entry["structure"] = c["structure"]
 
         old_locs = old_by_cid.get(cid, [])
         if old_locs:

@@ -40,7 +40,10 @@ def test_derive_changes_from_text_blocks():
     changes = derive_changes(_text_comparison())
     kinds = [c["kind"] for c in changes]
     assert kinds == ["removed", "added", "modified"]  # equal skipped
-    assert changes[0] == {"change_id": "b1", "kind": "removed", "old_text": "Removed clause.", "new_text": ""}
+    assert changes[0]["change_id"] == "b1"
+    assert changes[0]["kind"] == "removed"
+    assert changes[0]["old_text"] == "Removed clause."
+    assert changes[0]["new_text"] == ""
     assert changes[1]["change_id"] == "b2" and changes[1]["new_text"] == "Added clause."
     # replace keeps only changed words
     assert changes[2]["old_text"] == "old" and changes[2]["new_text"] == "new"
@@ -73,7 +76,7 @@ def test_changes_report_docx_is_valid_and_includes_annotations():
     assert any("Brochure v1 vs v2" in p.text for p in doc.paragraphs)
     table = doc.tables[0]
     header = [c.text for c in table.rows[0].cells]
-    assert header == ["#", "Type", "Original", "Revised", "Note", "Tags"]
+    assert header == ["#", "Type", "Section", "Original", "Revised", "Note", "Tags"]
     # 3 non-equal changes -> 3 body rows
     assert len(table.rows) == 1 + 3
     body_text = "\n".join(cell.text for row in table.rows[1:] for cell in row.cells)

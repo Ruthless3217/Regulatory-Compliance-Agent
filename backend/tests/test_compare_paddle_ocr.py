@@ -389,3 +389,275 @@ def test_search_pdf_on_scanned_ocr_page(tmp_path, monkeypatch):
     assert len(hits) == 1
     assert hits[0]["page"] == 1
     assert hits[0]["bbox"] == [135.0, 100.0, 250.0, 115.0]
+
+
+# ---------------------------------------------------------------------------
+# 11. Phase 2 Section 25 Explicit Test Suite
+# ---------------------------------------------------------------------------
+
+from app.services.comparison_ocr_service import (
+    OCRProvider,
+    PaddleOCRProvider,
+    TesseractOCRProvider,
+    OCRPage,
+    OCRBlock,
+    OCRLine,
+    ocr_cache,
+    ocr_bbox_to_page_bbox,
+    ocr_page_to_page,
+)
+from app.services.structural_alignment_service import (
+    structural_build_diff,
+    structural_word_level_ops,
+    PositionedWord as StructPositionedWord,
+    segment_positioned_words,
+    match_structural_regions,
+)
+
+
+def test_paddleocr_provider_initializes():
+    """Verify PaddleOCRProvider and TesseractOCRProvider initialize and adhere to OCRProvider."""
+    provider = PaddleOCRProvider()
+    assert isinstance(provider, OCRProvider)
+    tess_provider = TesseractOCRProvider()
+    assert isinstance(tess_provider, OCRProvider)
+
+
+def test_paddleocr_extracts_words():
+    """Verify PaddleOCRProvider extract_words returns structured OCRWords."""
+    provider = PaddleOCRProvider()
+    img = Image.new("RGB", (200, 100), (255, 255, 255))
+    dummy_words = [OCRWord(text="Test", confidence=0.99, page=1, x0=10.0, y0=20.0, x1=50.0, y1=35.0)]
+    with patch("app.services.comparison_ocr_service._run_paddle_ocr", return_value=dummy_words):
+        words = provider.extract_words(img, page=1, pdf_w=200.0, pdf_h=100.0)
+        assert len(words) == 1
+        assert words[0].text == "Test"
+        assert words[0].confidence == 0.99
+
+
+def test_paddleocr_preserves_bbox():
+    """Verify OCRWord bounding box values are accurately preserved within page bounds."""
+    w = OCRWord(text="Grace", confidence=0.95, page=1, x0=72.0, y0=140.0, x1=120.0, y1=155.0)
+    assert w.x0 == 72.0
+    assert w.y0 == 140.0
+    assert w.x1 == 120.0
+    assert w.y1 == 155.0
+    assert w.x1 > w.x0
+    assert w.y1 > w.y0
+
+
+def test_paddleocr_preserves_confidence():
+    """Verify OCR word and line confidence scores are preserved."""
+    w = OCRWord(text="Period", confidence=0.982, page=1, x0=125.0, y0=140.0, x1=170.0, y1=155.0)
+    assert round(w.confidence, 2) == 0.98
+
+
+def test_paddleocr_groups_lines():
+    """Verify OCR lines group child words correctly."""
+    words = [
+        OCRWord("Grace", 0.95, 1, 72.0, 100.0, 110.0, 115.0, line_id=0),
+        OCRWord("Period", 0.95, 1, 115.0, 100.0, 160.0, 115.0, line_id=0),
+        OCRWord("means", 0.95, 1, 165.0, 100.0, 205.0, 115.0, line_id=0),
+    ]
+    img = Image.new("RGB", (300, 200), (255, 255, 255))
+    with patch("app.services.comparison_ocr_service._run_paddle_ocr", return_value=words):
+        lines = ocr_page_to_lines(img, page=1, pdf_w=300.0, pdf_h=200.0)
+        assert len(lines) == 1
+        assert lines[0] == "Grace Period means"
+
+
+def test_paddleocr_reading_order():
+    """Verify top-to-bottom and left-to-right reading order across multi-line OCR results."""
+    words = [
+        OCRWord("Line2", 0.95, 1, 50.0, 150.0, 90.0, 165.0, line_id=1),
+        OCRWord("Line1", 0.95, 1, 50.0, 100.0, 90.0, 115.0, line_id=0),
+    ]
+    img = Image.new("RGB", (300, 300), (255, 255, 255))
+    with patch("app.services.comparison_ocr_service._run_paddle_ocr", return_value=words):
+        lines = ocr_page_to_lines(img, page=1, pdf_w=300.0, pdf_h=300.0)
+        assert lines == ["Line1", "Line2"]
+
+
+def test_paddleocr_cache_hit():
+    """Verify OCR result cache returns cached OCRPage without re-executing."""
+    ocr_cache.clear()
+    img = Image.new("RGB", (100, 100), (200, 200, 200))
+    dummy_page = OCRPage(page=1, width_pt=100.0, height_pt=100.0, image_width_px=100.0, image_height_px=100.0)
+    ocr_cache.set_page(img, 1, 100.0, 100.0, dummy_page, engine="paddle")
+    cached = ocr_cache.get_page(img, 1, 100.0, 100.0, engine="paddle")
+    assert cached is not None
+    assert cached.page == 1
+
+
+def test_paddleocr_cache_miss():
+    """Verify OCR result cache returns None for un-cached page."""
+    ocr_cache.clear()
+    img = Image.new("RGB", (100, 100), (100, 100, 100))
+    cached = ocr_cache.get_page(img, 2, 100.0, 100.0, engine="paddle")
+    assert cached is None
+
+
+def test_native_text_preferred_when_reliable(tmp_path):
+    """Verify that clean native text layer is used and OCR is NOT called."""
+    pdf = _create_multi_page_pdf(
+        [("native", "Clean reliable compliance text clause 123")],
+        tmp_path,
+        "clean_pref.pdf"
+    )
+    with patch("app.services.comparison_ocr_service.ocr_page_to_lines") as mock_ocr:
+        segments = extract_pdf_segments(pdf)
+        assert len(segments) == 1
+        assert "compliance text clause 123" in segments[0]
+        assert mock_ocr.call_count == 0
+
+
+def test_ocr_fallback_for_scanned_page(tmp_path, monkeypatch):
+    """Verify scanned page triggers OCR fallback."""
+    pdf = _create_multi_page_pdf(
+        [("image", "SCANNED PAGE FALLBACK BENEFIT")],
+        tmp_path,
+        "scanned_fb.pdf"
+    )
+    mock_words = [OCRWord("SCANNED", 0.95, 1, 10, 10, 50, 20), OCRWord("BENEFIT", 0.95, 1, 55, 10, 100, 20)]
+    monkeypatch.setattr("app.services.comparison_ocr_service._run_paddle_ocr", lambda pil, p, w, h: mock_words)
+    segments = extract_pdf_segments(pdf)
+    assert any("BENEFIT" in s for s in segments)
+
+
+def test_ocr_fallback_for_garbage_text_layer(tmp_path, monkeypatch):
+    """Verify corrupted/garbage text triggers OCR fallback."""
+    pdf = _create_multi_page_pdf(
+        [("garbage", "(cid:100) (cid:101) (cid:102) (cid:103)")],
+        tmp_path,
+        "garbage_fb.pdf"
+    )
+    mock_words = [OCRWord("Recovered", 0.95, 1, 10, 10, 60, 20), OCRWord("FromCID", 0.95, 1, 65, 10, 120, 20)]
+    monkeypatch.setattr("app.services.comparison_ocr_service._run_paddle_ocr", lambda pil, p, w, h: mock_words)
+    segments = extract_pdf_segments(pdf)
+    assert any("Recovered FromCID" in s for s in segments)
+
+
+def test_mixed_pdf_page_level_fallback(tmp_path, monkeypatch):
+    """Verify mixed PDF only runs OCR on the unreadable page."""
+    pdf = _create_multi_page_pdf(
+        [
+            ("native", "Page 1 clean native clause."),
+            ("image", "Page 2 scanned clause."),
+            ("native", "Page 3 clean native clause."),
+        ],
+        tmp_path,
+        "mixed_fb.pdf"
+    )
+    calls = []
+    def stub_ocr(pil, page, w, h):
+        calls.append(page)
+        return [
+            OCRWord("Page", 0.9, page, 10, 10, 40, 20),
+            OCRWord("2", 0.9, page, 45, 10, 60, 20),
+            OCRWord("scanned", 0.9, page, 65, 10, 100, 20),
+            OCRWord("clause.", 0.9, page, 105, 10, 140, 20),
+        ]
+    monkeypatch.setattr("app.services.comparison_ocr_service._run_paddle_ocr", stub_ocr)
+    segments = extract_pdf_segments(pdf)
+    assert calls == [2]
+    assert any("Page 1 clean" in s for s in segments)
+    assert any("Page 2 scanned" in s for s in segments)
+    assert any("Page 3 clean" in s for s in segments)
+
+
+def test_ocr_bbox_coordinate_transform():
+    """Verify raster pixel to PDF points transformation with arbitrary DPI/scaling."""
+    # 300 DPI image (2400 x 3300) -> Standard letter PDF (612 x 792 pt)
+    px_bbox = (240.0, 330.0, 1200.0, 1650.0)
+    pdf_bbox = ocr_bbox_to_page_bbox(px_bbox, 2400.0, 3300.0, 612.0, 792.0)
+    # Scale x = 612 / 2400 = 0.255; Scale y = 792 / 3300 = 0.24
+    assert pdf_bbox == (61.2, 79.2, 306.0, 396.0)
+
+
+def test_changed_word_maps_to_exact_ocr_bbox():
+    """Verify that a changed OCR word maps to its exact bounding box in structural diff."""
+    from app.services.render_orchestrator import _build_changes
+    old_words = [
+        PositionedWord("5.", 1, 50.0, 100.0, 60.0, 115.0),
+        PositionedWord('"Grace', 1, 65.0, 100.0, 100.0, 115.0),
+        PositionedWord('Period"', 1, 105.0, 100.0, 140.0, 115.0),
+        PositionedWord("means", 1, 145.0, 100.0, 180.0, 115.0),
+        PositionedWord("15", 1, 185.0, 100.0, 200.0, 115.0),
+        PositionedWord("days", 1, 205.0, 100.0, 230.0, 115.0),
+    ]
+    new_words = [
+        PositionedWord("5.", 1, 50.0, 100.0, 60.0, 115.0),
+        PositionedWord('"Grace', 1, 65.0, 100.0, 100.0, 115.0),
+        PositionedWord('Period"', 1, 105.0, 100.0, 140.0, 115.0),
+        PositionedWord("means", 1, 145.0, 100.0, 180.0, 115.0),
+        PositionedWord("30", 1, 185.0, 100.0, 200.0, 115.0),
+        PositionedWord("days", 1, 205.0, 100.0, 230.0, 115.0),
+    ]
+    old_marks, new_marks, changes = structural_word_level_ops(old_words, new_words)
+    render_changes = _build_changes(changes, old_words, old_marks, new_words, new_marks)
+
+    assert len(render_changes) == 1
+    ch = render_changes[0]
+    assert ch["kind"] == "modified"
+    assert len(ch["old"]["locations"]) == 1
+    assert ch["old"]["bbox"] == [185.0, 100.0, 200.0, 115.0]
+    assert len(ch["new"]["locations"]) == 1
+    assert ch["new"]["bbox"] == [185.0, 100.0, 200.0, 115.0]
+
+
+def test_multiline_change_generates_multiple_bboxes():
+    """Verify that a replacement spanning across lines produces multiple line bounding boxes."""
+    from app.services.render_orchestrator import _build_changes
+    old_words = [
+        PositionedWord("Annual", 1, 50.0, 100.0, 90.0, 115.0),
+        PositionedWord("Premium", 1, 95.0, 100.0, 140.0, 115.0),
+        PositionedWord("payable", 1, 50.0, 130.0, 90.0, 145.0),
+        PositionedWord("yearly", 1, 95.0, 130.0, 130.0, 145.0),
+    ]
+    new_words = [
+        PositionedWord("Single", 1, 50.0, 100.0, 90.0, 115.0),
+        PositionedWord("Premium", 1, 95.0, 100.0, 140.0, 115.0),
+        PositionedWord("payable", 1, 50.0, 130.0, 90.0, 145.0),
+        PositionedWord("once", 1, 95.0, 130.0, 125.0, 145.0),
+    ]
+    old_marks, new_marks, changes = structural_word_level_ops(old_words, new_words)
+    render_changes = _build_changes(changes, old_words, old_marks, new_words, new_marks)
+
+    # 2 separate changes on distinct lines
+    assert len(render_changes) == 2
+    assert render_changes[0]["old"]["bbox"] == [50.0, 100.0, 90.0, 115.0]
+    assert render_changes[1]["old"]["bbox"] == [95.0, 130.0, 130.0, 145.0]
+
+
+def test_ocr_does_not_merge_structural_regions():
+    """Verify that OCR-extracted tokens from separate numbered definitions are never merged."""
+    from app.services.render_orchestrator import _build_changes
+    old_words = [
+        PositionedWord("5.", 1, 50.0, 100.0, 60.0, 115.0),
+        PositionedWord('"Grace', 1, 65.0, 100.0, 100.0, 115.0),
+        PositionedWord('Period"', 1, 105.0, 100.0, 140.0, 115.0),
+        PositionedWord("means", 1, 145.0, 100.0, 180.0, 115.0),
+        PositionedWord("15", 1, 185.0, 100.0, 200.0, 115.0),
+        PositionedWord("days", 1, 205.0, 100.0, 230.0, 115.0),
+        PositionedWord("20.", 1, 50.0, 200.0, 65.0, 215.0),
+        PositionedWord('"UIN"', 1, 70.0, 200.0, 100.0, 215.0),
+        PositionedWord("means", 1, 105.0, 200.0, 140.0, 215.0),
+        PositionedWord("116N216V01", 1, 145.0, 200.0, 210.0, 215.0),
+    ]
+    new_words = [
+        PositionedWord("5.", 1, 50.0, 100.0, 60.0, 115.0),
+        PositionedWord('"Grace', 1, 65.0, 100.0, 100.0, 115.0),
+        PositionedWord('Period"', 1, 105.0, 100.0, 140.0, 115.0),
+        PositionedWord("means", 1, 145.0, 100.0, 180.0, 115.0),
+        PositionedWord("30", 1, 185.0, 100.0, 200.0, 115.0),
+        PositionedWord("days", 1, 205.0, 100.0, 230.0, 115.0),
+    ]
+    old_marks, new_marks, changes = structural_word_level_ops(old_words, new_words)
+    render_changes = _build_changes(changes, old_words, old_marks, new_words, new_marks)
+
+    # Item 5 is matched and has 1 change (15 -> 30)
+    # Item 20 is recognized as DELETED
+    assert len(render_changes) == 2
+    for c in render_changes:
+        if "15" in (c.get("old_text") or ""):
+            assert "UIN" not in (c.get("old_text") or "")

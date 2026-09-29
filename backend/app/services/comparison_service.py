@@ -657,13 +657,13 @@ def _detect_moves_in_changes(new_marks: List[dict], changes: List[dict]) -> None
 def build_diff(old_paragraphs: List[str], new_paragraphs: List[str]) -> List[dict]:
     """Align two documents at the word-token level and return ordered diff blocks.
 
-    Both sides are flattened to a normalized token stream (placeholder-aware,
-    heading-marker/whitespace/case-insensitive) and aligned with difflib. Because
-    alignment ignores how each extractor chunked the text, identical content stays
-    matched across formats even when segmentation drifts. The resulting token
-    opcodes are re-grouped into sentence-sized rows carrying the existing
-    equal/delete/insert/replace block schema the frontend already renders.
+    Uses structure-first alignment when enabled to prevent cross-region mismatch.
     """
+    from app.config import settings
+    if getattr(settings, "compare_structural_alignment_enabled", True):
+        from app.services.structural_alignment_service import structural_build_diff
+        return structural_build_diff(old_paragraphs, new_paragraphs)
+
     old_tokens = _tokenize(old_paragraphs)
     new_tokens = _tokenize(new_paragraphs)
     matcher = SequenceMatcher(

@@ -3,6 +3,7 @@ import * as React from "react";
 import type {
   Annotation,
   ChangeKind,
+  ChangeType,
   DocumentComparison,
   RenderChangeRef,
 } from "@/lib/types";
@@ -11,7 +12,20 @@ export type ViewMode = "pixel" | "text";
 export type LayoutMode = "side-by-side" | "single";
 export type Side = "old" | "new";
 export type CursorMode = "scroll" | "select";
-export type ViewerFilter = "all" | ChangeKind | "noted";
+export type ViewerFilter =
+  | "all"
+  | "numeric"
+  | "identifier"
+  | "replacement"
+  | "insertion"
+  | "deletion"
+  | "reordered"
+  | "formatting"
+  | "removed"
+  | "added"
+  | "modified"
+  | "moved"
+  | "noted";
 
 export const ZOOM_MIN = 0.5;
 export const ZOOM_MAX = 3;
@@ -92,6 +106,13 @@ function createScrollRegistry(): ScrollRegistry {
 export interface ViewerChange {
   id: string; // selection id (pixel: backend id; text: "b{index}")
   kind: ChangeKind;
+  changeType?: ChangeType | string;
+  metadata?: Record<string, unknown>;
+  structure?: {
+    anchor_type?: string;
+    anchor_key?: string;
+    title?: string;
+  };
   removedText?: string;
   addedText?: string;
   moveId?: string;
@@ -104,6 +125,52 @@ export interface ViewerChange {
   oldLocations?: RenderChangeRef["locations"];
   newLocations?: RenderChangeRef["locations"];
   fraction: number; // 0..1 vertical position for the heat strip
+}
+
+export function matchesViewerFilter(
+  change: ViewerChange,
+  filter: ViewerFilter,
+  isNoted?: boolean
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "noted") return !!isNoted;
+
+  const ct = change.changeType;
+  const k = change.kind;
+
+  switch (filter) {
+    case "numeric":
+      return ct === "numeric_only";
+    case "identifier":
+      return ct === "identifier_only";
+    case "replacement":
+      return ct === "replacement" || (!ct && k === "modified");
+    case "insertion":
+      return ct === "insertion" || (!ct && k === "added");
+    case "deletion":
+      return ct === "deletion" || (!ct && k === "removed");
+    case "reordered":
+      return ct === "reordered" || (!ct && k === "moved");
+    case "formatting":
+      return ct === "punctuation_only" || ct === "whitespace_only";
+    case "removed":
+      return k === "removed" || ct === "deletion";
+    case "added":
+      return k === "added" || ct === "insertion";
+    case "modified":
+      return (
+        k === "modified" ||
+        ct === "replacement" ||
+        ct === "numeric_only" ||
+        ct === "identifier_only" ||
+        ct === "punctuation_only" ||
+        ct === "whitespace_only"
+      );
+    case "moved":
+      return k === "moved" || ct === "reordered";
+    default:
+      return true;
+  }
 }
 
 export function deriveViewerChanges(
@@ -128,6 +195,9 @@ export function deriveViewerChanges(
       return {
         id: c.id,
         kind: c.kind,
+        changeType: c.change_type,
+        metadata: c.metadata,
+        structure: c.structure,
         removedText: c.old?.text,
         addedText: c.new?.text,
         side,
@@ -165,6 +235,7 @@ export function deriveViewerChanges(
     out.push({
       id: textSelId(i),
       kind: moved ? "moved" : kind,
+      changeType: moved ? "reordered" : kind === "removed" ? "deletion" : kind === "added" ? "insertion" : "replacement",
       removedText,
       addedText,
       moveId: b.move_id,
