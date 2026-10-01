@@ -2,16 +2,14 @@
 import * as React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { SemanticBadge, getSemanticMeta } from "../SemanticBadge";
+import { SemanticBadge } from "../SemanticBadge";
 import { ChangeCard } from "../ChangeCard";
 import {
   ViewerProvider,
   matchesViewerFilter,
-  deriveViewerChanges,
   type ViewerChange,
 } from "../ViewerContext";
 import { ChangesPanel } from "../ChangesPanel";
-import { Toolbar } from "../Toolbar";
 import type { DocumentComparison } from "@/lib/types";
 
 // Mock @tanstack/react-virtual for jsdom testing
@@ -100,7 +98,7 @@ describe("SemanticBadge Component", () => {
 });
 
 describe("Filter Matcher Contract", () => {
-  const sampleChange = (changeType: string, kind: any = "modified"): ViewerChange => ({
+  const sampleChange = (changeType: string, kind: ViewerChange["kind"] = "modified"): ViewerChange => ({
     id: "r1",
     kind,
     changeType,
