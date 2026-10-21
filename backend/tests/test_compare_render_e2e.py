@@ -53,7 +53,7 @@ def test_render_pair_shape_and_boxes(pdf_pair, tmp_path, monkeypatch):
     result = _render_pair("cmp-e2e", old_p, new_p)
 
     # Top-level shape matches RenderResult.
-    assert set(result.keys()) == {"old", "new", "changes", "truncated_pages"}
+    assert {"old", "new", "changes", "truncated_pages"} <= set(result.keys())  # additive: page_map
     assert result["truncated_pages"] == 0
     for side in ("old", "new"):
         pages = result[side]["pages"]

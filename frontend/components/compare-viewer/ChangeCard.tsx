@@ -4,8 +4,15 @@ import { toast } from "sonner";
 import type { Annotation } from "@/lib/types";
 import { upsertAnnotation, deleteAnnotation } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { useViewer, type ViewerChange } from "./ViewerContext";
+import { useViewer, markupFor, type ViewerChange } from "./ViewerContext";
 import { SemanticBadge } from "./SemanticBadge";
+
+const KIND_LABEL: Record<string, string> = { added: "Inserted", removed: "Deleted", modified: "Replaced", moved: "Moved" };
+const GROUP_NOTE: Record<string, string> = {
+  case: "Case only", punctuation: "Punctuation only", quotes: "Quote style", spacing: "Spacing only",
+  currency: "Currency symbol", placeholders: "Placeholder / blank", renumbering: "Renumbering", layout: "Repeated header",
+  headers_footers: "Header / footer",
+};
 
 const PRESET_TAGS = ["critical", "review", "approved", "question"];
 
@@ -13,18 +20,16 @@ const wordCount = (s?: string) => (s && s.trim() ? s.trim().split(/\s+/).length 
 
 export function ChangeCard({
   change,
-  index,
   selected,
   annotation,
   onSelect,
 }: {
   change: ViewerChange;
-  index: number;
   selected: boolean;
   annotation?: Annotation;
   onSelect: () => void;
 }) {
-  const { comparison, setAnnotationLocal, removeAnnotationLocal } = useViewer();
+  const { comparison, setAnnotationLocal, removeAnnotationLocal, markup, showMoves, hover } = useViewer();
 
   const [note, setNote] = React.useState(annotation?.note ?? "");
   const [tags, setTags] = React.useState<string[]>(annotation?.tags ?? []);
@@ -86,91 +91,79 @@ export function ChangeCard({
 
   const nRemoved = wordCount(change.removedText);
   const nAdded = wordCount(change.addedText);
-  const isReordered = change.changeType === "reordered" || change.kind === "moved";
-
-  const nOldLocs = change.oldLocations?.length ?? (change.removedText ? 1 : 0);
-  const nNewLocs = change.newLocations?.length ?? (change.addedText ? 1 : 0);
-  const totalLocations = Math.max(nOldLocs, nNewLocs);
-
+  const moved = change.kind === "moved" && showMoves;
+  const del = markupFor({ kind: moved ? "moved" : "removed", group: change.group }, markup, showMoves);
+  const ins = markupFor({ kind: moved ? "moved" : "added", group: change.group }, markup, showMoves);
+  const oldPage = change.old && !change.old.anchor ? change.old.page : undefined;
+  const newPage = change.new && !change.new.anchor ? change.new.page : undefined;
+  const pageLabel =
+    oldPage !== undefined && newPage !== undefined
+      ? oldPage === newPage ? `p. ${oldPage}` : `p. ${oldPage} → ${newPage}`
+      : oldPage !== undefined ? `p. ${oldPage}` : newPage !== undefined ? `p. ${newPage}` : undefined;
+  const groupNote = GROUP_NOTE[change.group];
+  const totalLocations = Math.max(change.old?.locations?.length ?? 0, change.new?.locations?.length ?? 0);
   const sectionTitle = change.structure?.title;
 
   return (
     <div
+      data-testid="change-card"
+      data-change-id={change.id}
+      data-selected={selected || undefined}
+      // Draftable: hovering a card outlines its change on both documents
+      onMouseEnter={() => hover.set({ kind: "change", id: change.id })}
+      onMouseLeave={() => hover.clear(change.id)}
       className={cn(
-        "rounded-md border transition-colors",
-        selected
-          ? "border-primary/50 bg-primary-50 dark:bg-primary-950/20"
-          : "border-border bg-background hover:border-foreground/40 hover:bg-muted/40"
+        "rounded-md border bg-background transition-colors",
+        selected ? "border-[#00B2FF] ring-1 ring-[#00B2FF]" : "border-border hover:border-foreground/40"
       )}
     >
       <button type="button" onClick={onSelect} className="block w-full px-3 py-2 text-left">
-        {/* Header row: Semantic Badge, #Index, Page, Multi-location, Word Delta */}
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-          <SemanticBadge changeType={change.changeType} kind={change.kind} />
-          <span className="font-mono text-[10px] text-muted-foreground">#{index}</span>
-
-          {/* Page Badge */}
-          {change.oldPage !== undefined || change.newPage !== undefined || change.page !== undefined ? (
-            <span className="rounded bg-muted/60 px-1 py-0.5 font-mono text-[9px] text-muted-foreground">
-              {change.oldPage !== undefined && change.newPage !== undefined
-                ? change.oldPage === change.newPage
-                  ? `p. ${change.oldPage}`
-                  : `p. ${change.oldPage} → ${change.newPage}`
-                : change.oldPage !== undefined
-                ? `p. ${change.oldPage}`
-                : change.newPage !== undefined
-                ? `p. ${change.newPage}`
-                : `p. ${change.page}`}
-            </span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {change.order}. {KIND_LABEL[change.kind] ?? change.kind}
+          </span>
+          {groupNote && (
+            <span className="rounded bg-muted px-1 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">{groupNote}</span>
+          )}
+          {change.category === "content" || !change.category ? (
+            <SemanticBadge changeType={change.changeType} kind={change.kind} />
           ) : null}
-
-          {/* Multi-location indicator */}
+          {pageLabel && (
+            <span className="rounded bg-muted/60 px-1 py-0.5 font-mono text-[9px] text-muted-foreground">{pageLabel}</span>
+          )}
           {totalLocations > 1 && (
-            <span
-              className="rounded bg-muted/80 px-1 py-0.5 font-mono text-[9px] text-muted-foreground"
-              title={`Spans ${totalLocations} rendered boxes`}
-            >
+            <span className="rounded bg-muted/80 px-1 py-0.5 font-mono text-[9px] text-muted-foreground" title={`Spans ${totalLocations} rendered boxes`}>
               {totalLocations} locs
             </span>
           )}
-
-          {/* Word count delta */}
-          <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px]">
-            {nRemoved > 0 && <span className="text-sev-critical">−{nRemoved}</span>}
-            {nAdded > 0 && <span className="text-success">+{nAdded}</span>}
+          <span className="ml-auto flex items-center gap-1.5 font-mono text-[11px]">
+            {nRemoved > 0 && <span style={{ color: del.text }}>−{nRemoved}</span>}
+            {nRemoved > 0 && nAdded > 0 && <span className="text-border">|</span>}
+            {nAdded > 0 && <span style={{ color: ins.text }}>+{nAdded}</span>}
           </span>
         </div>
 
-        {/* Structural Section Header (if present) */}
         {sectionTitle && (
           <div className="mb-1 truncate text-[10px] font-medium text-muted-foreground" title={sectionTitle}>
             § {sectionTitle}
           </div>
         )}
 
-        {/* Value / Text Diff */}
         {change.removedText ? (
-          <p
-            className={cn(
-              "line-clamp-2 text-[12px] leading-snug",
-              isReordered ? "text-violet-700 dark:text-violet-300" : "text-sev-critical line-through"
-            )}
-          >
-            {change.removedText}
+          <p className="mb-1 line-clamp-3 text-[12px] leading-snug">
+            <span className="rounded-[2px] px-0.5 box-decoration-clone text-[#212121]" style={{ background: del.fill }}>
+              {change.removedText}
+            </span>
           </p>
         ) : null}
         {change.addedText ? (
-          <p
-            className={cn(
-              "line-clamp-2 text-[12px] leading-snug",
-              isReordered ? "text-violet-700 dark:text-violet-300" : "text-success"
-            )}
-          >
-            {change.addedText}
+          <p className="line-clamp-3 text-[12px] leading-snug">
+            <span className="rounded-[2px] px-0.5 box-decoration-clone text-[#212121]" style={{ background: ins.fill }}>
+              {change.addedText}
+            </span>
           </p>
         ) : null}
 
-        {/* Annotations & Tags Preview */}
         {annotation && (annotation.note?.trim() || annotation.tags.length > 0) && !selected ? (
           <div className="mt-1 flex flex-wrap items-center gap-1">
             {annotation.tags.map((t) => (

@@ -206,6 +206,8 @@ def build_comparison_snapshot(
 
     if render_status == "completed" and rr and rr.get("changes"):
         for c in rr["changes"]:
+            if c.get("default_visible") is False:
+                continue  # audit snapshot = the reviewer's default (substantive) view
             cid = c.get("id")
             kind = c.get("kind", "modified")
             meta = dict(c.get("metadata") or {})

@@ -36,18 +36,33 @@ _KIND_LABEL = {
 }
 
 # RGBA fills / outlines for page-overlay burn-in (match the viewer palette).
+# Draftable-style markup: deletions red, insertions blue, moves green.
 _FILL = {
-    "removed": (220, 38, 38, 90),   # sev-critical red
-    "added": (22, 163, 74, 90),     # success green
-    "moved": (124, 58, 237, 90),    # violet-600
-    "modified": (14, 165, 233, 90), # sky blue
+    "removed": (255, 129, 133, 110),
+    "added": (81, 149, 246, 95),
+    "moved": (4, 135, 126, 80),
+    "modified": (81, 149, 246, 95),
 }
 _OUTLINE = {
-    "removed": (220, 38, 38, 255),
-    "added": (22, 163, 74, 255),
-    "moved": (124, 58, 237, 255),
-    "modified": (14, 165, 233, 255),
+    "removed": (209, 52, 56, 255),
+    "added": (5, 99, 193, 255),
+    "moved": (4, 135, 126, 255),
+    "modified": (5, 99, 193, 255),
 }
+
+
+def enabled_change_ids(render_result: dict, groups=None) -> set:
+    """Change ids an export should draw: the viewer's default view (``default_visible``)
+    unless the caller passes the filter groups the reviewer has switched on."""
+    out = set()
+    for c in (render_result or {}).get("changes", []):
+        g = c.get("filter_group")
+        if groups is None or g is None:
+            if c.get("default_visible", True):
+                out.add(c["id"])
+        elif g in groups:
+            out.add(c["id"])
+    return out
 
 
 def _page_image_path(comparison_id: str, side: str, n: int) -> str:
@@ -59,7 +74,7 @@ def _open_page(comparison_id: str, side: str, n: int) -> Optional[Image.Image]:
     return Image.open(path) if os.path.exists(path) else None
 
 
-def derive_changes(comparison) -> List[dict]:
+def derive_changes(comparison, groups=None) -> List[dict]:
     """Normalize either render_result.changes or diff blocks into report rows.
 
     Returns ``[{change_id, kind, change_type, semantic_label, structure, old_text, new_text}]``
@@ -68,7 +83,10 @@ def derive_changes(comparison) -> List[dict]:
     rr = comparison.render_result
     if comparison.render_status == "completed" and rr and rr.get("changes"):
         out: List[dict] = []
+        enabled = enabled_change_ids(rr, groups)
         for c in rr["changes"]:
+            if c["id"] not in enabled:
+                continue
             meta = c.get("metadata") or {}
             ctype = c.get("change_type") or c.get("semantic_type") or meta.get("category")
             if not ctype:
@@ -110,8 +128,11 @@ def derive_changes(comparison) -> List[dict]:
         elif t == "insert":
             old_text, new_text = "", b.get("new_text", "")
         elif t == "replace":
-            old_text = " ".join(w["text"] for w in b.get("old_words", []) if w.get("changed"))
-            new_text = " ".join(w["text"] for w in b.get("new_words", []) if w.get("changed"))
+            on = lambda w: w.get("changed") or (groups is not None and w.get("filter_group") in groups)  # noqa: E731
+            old_text = " ".join(w["text"] for w in b.get("old_words", []) if on(w))
+            new_text = " ".join(w["text"] for w in b.get("new_words", []) if on(w))
+            if not old_text and not new_text:
+                continue
         else:
             old_text = new_text = ""
         out.append({
@@ -380,10 +401,10 @@ def audit_report_pdf(comparison, annotations=None, filter_type: Optional[str] = 
     return img2pdf.convert(out_pdf_bytes)
 
 
-def changes_report_docx(comparison, annotations) -> bytes:
+def changes_report_docx(comparison, annotations, groups=None) -> bytes:
     """The change list as a Word document with semantic classifications."""
     ann_by_change = {a.change_id: a for a in (annotations or [])}
-    changes = derive_changes(comparison)
+    changes = derive_changes(comparison, groups)
 
     doc = Document()
     doc.add_heading(comparison.title or "Document comparison", level=0)
@@ -426,40 +447,50 @@ def changes_report_docx(comparison, annotations) -> bytes:
     return buf.getvalue()
 
 
-def highlighted_pdf(comparison, side: str, annotations=None) -> bytes:
-    """One side's rendered pages with overlay boxes burned in, as a PDF."""
-    rr = comparison.render_result or {}
-    kind_by_change = {c["id"]: c["kind"] for c in rr.get("changes", [])}
-    pages = (rr.get(side) or {}).get("pages", [])
-    number_by, rows = _numbered_annotations(comparison, annotations)
-
-    png_pages: List[bytes] = []
-    for pg in pages:
-        img = _open_page(str(comparison.id), side, pg["n"])
-        if img is None:
+def _highlighted_page(comparison, side: str, pg: dict, enabled: set, kind_by: dict, number_by: dict):
+    """One rendered page with the enabled changes' boxes burned in (RGB image) or None."""
+    img = _open_page(str(comparison.id), side, pg["n"])
+    if img is None:
+        return None
+    img = img.convert("RGBA")
+    w_px, h_px = img.size
+    sx = w_px / pg["w_pt"] if pg.get("w_pt") else 1.0
+    sy = h_px / pg["h_pt"] if pg.get("h_pt") else 1.0
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    for b in pg.get("boxes", []):
+        if b["change_id"] not in enabled:
             continue
-        img = img.convert("RGBA")
-        w_px, h_px = img.size
-        sx = w_px / pg["w_pt"] if pg.get("w_pt") else 1.0
-        sy = h_px / pg["h_pt"] if pg.get("h_pt") else 1.0
-        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-        draw = ImageDraw.Draw(overlay)
-        for b in pg.get("boxes", []):
-            kind = "moved" if kind_by_change.get(b["change_id"]) == "moved" else b["type"]
-            draw.rectangle(
-                [b["x0"] * sx, b["y0"] * sy, b["x1"] * sx, b["y1"] * sy],
-                fill=_FILL.get(kind, _FILL["added"]),
-                outline=_OUTLINE.get(kind, _OUTLINE["added"]),
-                width=1,
-            )
-            num = number_by.get(b["change_id"])
-            if num is not None:
-                _draw_badge(draw, max(11.0, b["x0"] * sx), max(11.0, b["y0"] * sy), num, kind)
-        flat = Image.alpha_composite(img, overlay).convert("RGB")
-        out = io.BytesIO()
-        flat.save(out, format="PNG")
-        png_pages.append(out.getvalue())
+        kind = "moved" if kind_by.get(b["change_id"]) == "moved" else b["type"]
+        draw.rectangle(
+            [b["x0"] * sx, b["y0"] * sy, b["x1"] * sx, b["y1"] * sy],
+            fill=_FILL.get(kind, _FILL["added"]),
+            outline=_OUTLINE.get(kind, _OUTLINE["added"]),
+            width=1,
+        )
+        num = number_by.get(b["change_id"])
+        if num is not None:
+            _draw_badge(draw, max(11.0, b["x0"] * sx), max(11.0, b["y0"] * sy), num, kind)
+    return Image.alpha_composite(img, overlay).convert("RGB"), (sx, sy), draw
 
+
+def _png(img) -> bytes:
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
+def highlighted_pdf(comparison, side: str, annotations=None, groups=None) -> bytes:
+    """One side's rendered pages with the enabled changes burned in, as a PDF."""
+    rr = comparison.render_result or {}
+    enabled = enabled_change_ids(rr, groups)
+    kind_by_change = {c["id"]: c["kind"] for c in rr.get("changes", [])}
+    number_by, rows = _numbered_annotations(comparison, annotations)
+    png_pages: List[bytes] = []
+    for pg in (rr.get(side) or {}).get("pages", []):
+        res = _highlighted_page(comparison, side, pg, enabled, kind_by_change, number_by)
+        if res is not None:
+            png_pages.append(_png(res[0]))
     if not png_pages:
         raise ValueError("No rendered pages available to highlight")
     if rows:
@@ -467,40 +498,75 @@ def highlighted_pdf(comparison, side: str, annotations=None) -> bytes:
     return img2pdf.convert(png_pages)
 
 
-def side_by_side_pdf(comparison, annotations=None) -> bytes:
-    """Old and new pages composited left/right per sheet, as a PDF."""
+def side_by_side_pdf(comparison, annotations=None, groups=None) -> bytes:
+    """Original and revised pages side by side with the enabled changes burned in on both.
+
+    Sheets follow ``render_result.page_map`` (pages aligned by their matching text, blank
+    fillers where one document has no counterpart page) — never a naive page-index pairing
+    that drifts as soon as page counts differ."""
     rr = comparison.render_result or {}
-    old_pages = (rr.get("old") or {}).get("pages", [])
-    new_pages = (rr.get("new") or {}).get("pages", [])
+    old_pages = {p["n"]: p for p in (rr.get("old") or {}).get("pages", [])}
+    new_pages = {p["n"]: p for p in (rr.get("new") or {}).get("pages", [])}
+    pairs = rr.get("page_map") or [
+        [o, n] for o, n in zip(sorted(old_pages) + [None] * max(0, len(new_pages) - len(old_pages)),
+                               sorted(new_pages) + [None] * max(0, len(old_pages) - len(new_pages)))
+    ]
+    enabled = enabled_change_ids(rr, groups)
+    kind_by = {c["id"]: c["kind"] for c in rr.get("changes", [])}
+    number_by, rows = _numbered_annotations(comparison, annotations)
     gap = 24
     sheets: List[bytes] = []
-
-    for k in range(max(len(old_pages), len(new_pages))):
-        left = _open_page(str(comparison.id), "old", old_pages[k]["n"]) if k < len(old_pages) else None
-        right = _open_page(str(comparison.id), "new", new_pages[k]["n"]) if k < len(new_pages) else None
-        if left is None and right is None:
+    for o, n in pairs:
+        left = _highlighted_page(comparison, "old", old_pages[o], enabled, kind_by, number_by) if o in old_pages else None
+        right = _highlighted_page(comparison, "new", new_pages[n], enabled, kind_by, number_by) if n in new_pages else None
+        left_img = left[0] if left else None
+        right_img = right[0] if right else None
+        if left_img is None and right_img is None:
             continue
-        lw, lh = (left.size if left else (0, 0))
-        rw, rh = (right.size if right else (0, 0))
-        if left is None:
-            lw = rw
-        if right is None:
-            rw = lw
-        canvas = Image.new("RGB", (lw + gap + rw, max(lh, rh) or 1), (255, 255, 255))
-        if left is not None:
-            canvas.paste(left.convert("RGB"), (0, 0))
-        if right is not None:
-            canvas.paste(right.convert("RGB"), (lw + gap, 0))
-        out = io.BytesIO()
-        canvas.save(out, format="PNG")
-        sheets.append(out.getvalue())
-
+        lw, lh = left_img.size if left_img else right_img.size
+        rw, rh = right_img.size if right_img else left_img.size
+        canvas = Image.new("RGB", (lw + gap + rw, max(lh, rh)), (255, 255, 255))
+        if left_img is not None:
+            canvas.paste(left_img, (0, 0))
+        if right_img is not None:
+            canvas.paste(right_img, (lw + gap, 0))
+        sheets.append(_png(canvas))
     if not sheets:
         raise ValueError("No rendered pages available")
-    _, rows = _numbered_annotations(comparison, annotations)
     if rows:
         sheets.extend(_comments_pages(rows))
     return img2pdf.convert(sheets)
+
+
+def single_document_pdf(comparison, annotations=None, groups=None) -> bytes:
+    """The revised document with insertions/replacements highlighted and a red caret where
+    text was deleted (Draftable's single-document view), as a PDF."""
+    rr = comparison.render_result or {}
+    enabled = enabled_change_ids(rr, groups)
+    kind_by = {c["id"]: c["kind"] for c in rr.get("changes", [])}
+    number_by, rows = _numbered_annotations(comparison, annotations)
+    carets: dict = {}
+    for c in rr.get("changes", []):
+        ref = c.get("new") or {}
+        if c["id"] in enabled and ref.get("anchor"):
+            carets.setdefault(ref["page"], []).append(ref["bbox"])
+    pages: List[bytes] = []
+    for pg in (rr.get("new") or {}).get("pages", []):
+        res = _highlighted_page(comparison, "new", pg, enabled, kind_by, number_by)
+        if res is None:
+            continue
+        img, (sx, sy), _ = res
+        draw = ImageDraw.Draw(img)
+        for x0, y0, x1, y1 in carets.get(pg["n"], []):
+            x, top, bot = x0 * sx, y0 * sy, y1 * sy
+            draw.line([x, top, x, bot], fill=_OUTLINE["removed"][:3], width=3)
+            draw.polygon([(x - 7, bot + 9), (x + 7, bot + 9), (x, bot)], fill=_OUTLINE["removed"][:3])
+        pages.append(_png(img))
+    if not pages:
+        raise ValueError("No rendered pages available")
+    if rows:
+        pages.extend(_comments_pages(rows))
+    return img2pdf.convert(pages)
 
 
 def bundle_zip(comparison, annotations) -> bytes:
@@ -515,6 +581,7 @@ def bundle_zip(comparison, annotations) -> bytes:
                 z.writestr("old-highlighted.pdf", highlighted_pdf(comparison, "old", annotations))
                 z.writestr("new-highlighted.pdf", highlighted_pdf(comparison, "new", annotations))
                 z.writestr("side-by-side.pdf", side_by_side_pdf(comparison, annotations))
+                z.writestr("single-document.pdf", single_document_pdf(comparison, annotations))
             except Exception as e:
                 logger.warning("bundle_zip: skipping visual PDFs for %s: %s", comparison.id, e)
         for label, path in (("original", comparison.old_file_path), ("revised", comparison.new_file_path)):

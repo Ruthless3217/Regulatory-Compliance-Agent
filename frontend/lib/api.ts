@@ -635,12 +635,22 @@ export type ExportKind =
   | "old-highlighted.pdf"
   | "new-highlighted.pdf"
   | "side-by-side.pdf"
+  | "single-document.pdf"
   | "bundle.zip";
 
-/** Same-origin URL for an export artifact (feed to a download anchor / window.open). */
-export function exportComparisonUrl(id: string, kind: ExportKind, filter?: string): string {
-  const q = filter && filter !== "all" ? `?filter=${encodeURIComponent(filter)}` : "";
-  return `${BROWSER_BASE}/comparisons/${id}/export/${kind}${q}`;
+/** Same-origin URL for an export artifact (feed to a download anchor / window.open).
+ *  `groups` = the viewer filter groups to draw (omitted = the default view). */
+export function exportComparisonUrl(
+  id: string,
+  kind: ExportKind,
+  filter?: string,
+  groups?: readonly string[]
+): string {
+  const qs = new URLSearchParams();
+  if (filter && filter !== "all") qs.set("filter", filter);
+  if (groups) qs.set("groups", [...groups].sort().join(","));
+  const q = qs.toString();
+  return `${BROWSER_BASE}/comparisons/${id}/export/${kind}${q ? `?${q}` : ""}`;
 }
 
 export async function getComparisonSnapshot(id: string, filter?: string): Promise<Record<string, unknown>> {

@@ -196,3 +196,19 @@
     background: hsl(var(--primary-50));
   }
 }
+
+/* Compare viewer: attention blink on a clicked change and its counterpart (box or caret). */
+@keyframes cmp-blink {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 178, 255, 0); }
+  30% { box-shadow: 0 0 0 4px rgba(0, 178, 255, 0.85); }
+  60% { box-shadow: 0 0 0 1px rgba(0, 178, 255, 0.25); }
+}
+[data-blink="true"] {
+  animation: cmp-blink 0.45s ease-in-out 3;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-blink="true"] {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(0, 178, 255, 0.85);
+  }
+}
