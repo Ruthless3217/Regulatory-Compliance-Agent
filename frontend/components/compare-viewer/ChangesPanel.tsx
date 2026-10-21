@@ -1,183 +1,62 @@
 "use client";
 import * as React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { cn } from "@/lib/utils";
-import { countDiffStats, pluralizeWords } from "@/lib/format";
-import {
-  useViewer,
-  deriveViewerChanges,
-  matchesViewerFilter,
-  type ViewerFilter,
-  type ViewerChange,
-} from "./ViewerContext";
+import { useViewer } from "./ViewerContext";
 import { ChangeCard } from "./ChangeCard";
-
-const CHIPS: { key: ViewerFilter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "numeric", label: "Numeric" },
-  { key: "identifier", label: "Identifier" },
-  { key: "replacement", label: "Replacement" },
-  { key: "insertion", label: "Insertion" },
-  { key: "deletion", label: "Deletion" },
-  { key: "reordered", label: "Reordered" },
-  { key: "formatting", label: "Formatting" },
-  { key: "noted", label: "Noted" },
-];
+import { FiltersPopover } from "./FiltersPopover";
 
 export function ChangesPanel() {
-  const {
-    comparison,
-    effectiveMode,
-    showMoves,
-    filter,
-    setFilter,
-    selectedChangeId,
-    setSelectedChangeId,
-    annotationFor,
-  } = useViewer();
-
-  const changes = React.useMemo(
-    () => deriveViewerChanges(comparison, effectiveMode, showMoves),
-    [comparison, effectiveMode, showMoves]
-  );
-
-  const isNoted = React.useCallback(
-    (c: ViewerChange) => {
-      const a = annotationFor(c.id);
-      return !!a && (!!a.note?.trim() || a.tags.length > 0);
-    },
-    [annotationFor]
-  );
-
-  const counts = React.useMemo(() => {
-    const base: Record<ViewerFilter, number> = {
-      all: changes.length,
-      numeric: 0,
-      identifier: 0,
-      replacement: 0,
-      insertion: 0,
-      deletion: 0,
-      reordered: 0,
-      formatting: 0,
-      removed: 0,
-      added: 0,
-      modified: 0,
-      moved: 0,
-      noted: 0,
-    };
-    for (const c of changes) {
-      const noted = isNoted(c);
-      if (noted) base.noted += 1;
-      for (const chip of CHIPS) {
-        if (chip.key === "all" || chip.key === "noted") continue;
-        if (matchesViewerFilter(c, chip.key, noted)) {
-          base[chip.key] += 1;
-        }
-      }
-    }
-    return base;
-  }, [changes, isNoted]);
-
-  const filtered = React.useMemo(() => {
-    return changes.filter((c) => matchesViewerFilter(c, filter, isNoted(c)));
-  }, [filter, changes, isNoted]);
-
-  const { removed, added } = React.useMemo(
-    () => countDiffStats(comparison.diff_result ?? []),
-    [comparison.diff_result]
-  );
+  const { allChanges, visibleChanges, selectedChangeId, selectChange, stepChange, annotationFor } = useViewer();
 
   const scrollParentRef = React.useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
-    count: filtered.length,
+    count: visibleChanges.length,
     getScrollElement: () => scrollParentRef.current,
-    estimateSize: () => 96,
+    estimateSize: () => 92,
     overscan: 8,
   });
 
-  // Keep the selected card in view.
+  // Keep the selected card in view (selection may come from either pane or the map).
   React.useEffect(() => {
     if (!selectedChangeId) return;
-    const idx = filtered.findIndex((c) => c.id === selectedChangeId);
+    const idx = visibleChanges.findIndex((c) => c.id === selectedChangeId);
     if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChangeId]);
 
-  const selectedPos = filtered.findIndex((c) => c.id === selectedChangeId);
-  const step = (dir: 1 | -1) => {
-    if (filtered.length === 0) return;
-    const base = selectedPos < 0 ? (dir === 1 ? -1 : 0) : selectedPos;
-    const next = (base + dir + filtered.length) % filtered.length;
-    setSelectedChangeId(filtered[next].id);
-  };
+  const selectedPos = visibleChanges.findIndex((c) => c.id === selectedChangeId);
+  const navBtn = "rounded-sm border border-border p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-40";
 
   return (
-    <aside className="flex min-h-0 flex-col border-l border-border bg-background">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/30 px-4 py-2.5">
-        <span className="micro-label">Changes</span>
-        <span className="flex items-center gap-3 text-[11px]">
-          <span className="font-mono text-sev-critical">− {pluralizeWords(removed)}</span>
-          <span className="font-mono text-success">+ {pluralizeWords(added)}</span>
-        </span>
+    <aside className="flex min-h-0 flex-col border-l border-border bg-background" data-testid="changes-panel">
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/30 px-3 py-2">
+        <span className="text-[13px] font-medium text-[#1E579B] dark:text-sky-300">Changes</span>
+        <FiltersPopover />
       </div>
 
-      {/* Filter chips */}
-      <div className="flex flex-wrap gap-1.5 border-b border-border px-3 py-2">
-        {CHIPS.map((c) => {
-          const active = filter === c.key;
-          return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => setFilter(c.key)}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-[11px] transition-colors",
-                active
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground"
-              )}
-            >
-              {c.label}
-              <span className="font-mono opacity-70">{counts[c.key]}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Virtualized list */}
       <div ref={scrollParentRef} className="min-h-0 flex-1 overflow-y-auto p-2">
-        {filtered.length === 0 ? (
+        {visibleChanges.length === 0 ? (
           <div className="px-3 py-10 text-center text-sm text-muted-foreground">
-            {changes.length === 0
-              ? "No changes — the documents are identical."
-              : "No changes in this filter."}
+            {allChanges.length === 0 ? "No changes — the documents are identical." : "No changes match the current filters."}
           </div>
         ) : (
           <div style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}>
             {virtualizer.getVirtualItems().map((vi) => {
-              const c = filtered[vi.index];
+              const c = visibleChanges[vi.index];
               return (
                 <div
                   key={c.id}
                   ref={virtualizer.measureElement}
                   data-index={vi.index}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${vi.start}px)`,
-                  }}
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vi.start}px)` }}
                   className="p-0.5"
                 >
                   <ChangeCard
                     change={c}
-                    index={vi.index + 1}
                     selected={selectedChangeId === c.id}
                     annotation={annotationFor(c.id)}
-                    onSelect={() => setSelectedChangeId(c.id)}
+                    onSelect={() => selectChange(c.id, "list")}
                   />
                 </div>
               );
@@ -186,38 +65,31 @@ export function ChangesPanel() {
         )}
       </div>
 
-      {/* Footer: Change N of M */}
       <div className="flex items-center justify-between border-t border-border bg-muted/20 px-3 py-2 text-[11px]">
-        <span className="text-muted-foreground">
+        <span className="text-muted-foreground" data-testid="change-counter">
           {selectedPos >= 0 ? (
             <>
               Change <span className="font-mono text-foreground">{selectedPos + 1}</span> of{" "}
-              <span className="font-mono text-foreground">{filtered.length}</span>
+              <span className="font-mono text-foreground">{visibleChanges.length}</span>
             </>
           ) : (
             <>
-              <span className="font-mono text-foreground">{filtered.length}</span> changes
+              <span className="font-mono text-foreground">{visibleChanges.length}</span> changes
             </>
           )}
         </span>
         <span className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => step(-1)}
-            disabled={filtered.length === 0}
-            className="rounded-sm border border-border p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
-            title="Previous change"
-          >
+          <button type="button" onClick={() => stepChange("first")} disabled={!visibleChanges.length} className={navBtn} title="Jump to first change" aria-label="Jump to first change">
+            <ChevronsLeft className="h-3.5 w-3.5" />
+          </button>
+          <button type="button" onClick={() => stepChange(-1)} disabled={!visibleChanges.length} className={navBtn} title="Previous change" aria-label="Previous change">
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => step(1)}
-            disabled={filtered.length === 0}
-            className="rounded-sm border border-border p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
-            title="Next change"
-          >
+          <button type="button" onClick={() => stepChange(1)} disabled={!visibleChanges.length} className={navBtn} title="Next change" aria-label="Next change">
             <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+          <button type="button" onClick={() => stepChange("last")} disabled={!visibleChanges.length} className={navBtn} title="Jump to last change" aria-label="Jump to last change">
+            <ChevronsRight className="h-3.5 w-3.5" />
           </button>
         </span>
       </div>

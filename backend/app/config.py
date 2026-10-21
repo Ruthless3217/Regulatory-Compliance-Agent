@@ -222,6 +222,11 @@ class Settings(BaseSettings):
     # Max pages rendered per side; surplus is reported as truncated_pages, never
     # silently dropped.
     pixel_render_page_cap: int = 60
+    # Compare engine: "content" (content-first: a highlight needs a content difference;
+    # layout only orders words — both views share one change set), "structural"
+    # (region-paired, previous default) or "legacy" (flat token diff). Kept switchable
+    # for side-by-side validation.
+    compare_engine: str = "content"
     # --- OCR fallback for scanned/image PDFs (no selectable text layer) ---
     # When a PDF page yields no extractable text or garbage/corrupted text,
     # rasterize the page and OCR it so the comparison still runs instead of failing.

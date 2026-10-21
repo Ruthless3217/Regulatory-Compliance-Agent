@@ -1,48 +1,46 @@
 "use client";
 import * as React from "react";
-import type {
-  Annotation,
-  ChangeKind,
-  ChangeType,
-  DocumentComparison,
-  RenderChangeRef,
-} from "@/lib/types";
+import type { Annotation, DocumentComparison, FilterGroup } from "@/lib/types";
+import {
+  DEFAULT_GROUPS,
+  filterChanges,
+  modelFromBlocks,
+  modelFromRender,
+  type ModelChange,
+} from "@/lib/compareModel";
 
 export type ViewMode = "pixel" | "text";
 export type LayoutMode = "side-by-side" | "single";
 export type Side = "old" | "new";
 export type CursorMode = "scroll" | "select";
-export type ViewerFilter =
-  | "all"
-  | "numeric"
-  | "identifier"
-  | "replacement"
-  | "insertion"
-  | "deletion"
-  | "reordered"
-  | "formatting"
-  | "removed"
-  | "added"
-  | "modified"
-  | "moved"
-  | "noted";
+/** Where a selection came from — decides which lane marker is "selected" vs "linked". */
+export type SelectionSource = Side | "list" | "map" | "keyboard";
+
+/** A change as the viewer shows it: one backend engine record. */
+export type ViewerChange = ModelChange;
 
 export const ZOOM_MIN = 0.5;
 export const ZOOM_MAX = 3;
 
-/** Text-mode selection id from a diff-block index, and its inverse. */
-export const textSelId = (index: number) => `b${index}`;
-export function blockIndexFromSelId(id: string | null): number | null {
-  if (!id || id[0] !== "b") return null;
-  const n = Number(id.slice(1));
-  return Number.isInteger(n) ? n : null;
+/** Draftable-style markup palette (fill / marker), switchable per change type. */
+export type MarkupColor = "red" | "blue" | "green";
+export interface MarkupColors {
+  deletions: MarkupColor;
+  insertions: MarkupColor;
+  moves: MarkupColor;
 }
+export const DEFAULT_MARKUP: MarkupColors = { deletions: "red", insertions: "blue", moves: "green" };
+export const MARKUP_SWATCH: Record<MarkupColor, { fill: string; marker: string; text: string }> = {
+  red: { fill: "#FFC9CB", marker: "#FF8185", text: "#D13438" },
+  blue: { fill: "#C0D8EF", marker: "#94B9FF", text: "#0563C1" },
+  green: { fill: "#D6EFE8", marker: "#7FD1B9", text: "#04877E" },
+};
 
 /* ------------------------------------------------------------------ *
- * Shared scroll registry: PagePanes register their scroll containers so
- * scroll-lock can proportionally sync the sibling pane, and the HeatStrip
- * can subscribe to the live scroll fraction for its viewport band. A single
- * `syncing` flag guards against the sync feedback loop.
+ * Shared scroll registry. Panes register their scroll containers so scroll
+ * lock can sync the sibling pane and the change map can follow the viewport.
+ * `hold(ms)` suspends lock-sync while the viewer itself scrolls both panes to a
+ * selected change, so the two smooth scrolls don't fight each other.
  * ------------------------------------------------------------------ */
 type ScrollSubscriber = (fraction: number, side: Side) => void;
 
@@ -52,12 +50,14 @@ export interface ScrollRegistry {
   handleScroll: (side: Side, scrollLock: boolean) => void;
   scrollToFraction: (side: Side, fraction: number) => void;
   subscribe: (cb: ScrollSubscriber) => () => void;
+  hold: (ms: number) => void;
 }
 
-function createScrollRegistry(): ScrollRegistry {
+export function createScrollRegistry(): ScrollRegistry {
   const els: Record<Side, HTMLDivElement | null> = { old: null, new: null };
   const subs = new Set<ScrollSubscriber>();
   let syncing = false;
+  let heldUntil = 0;
   return {
     register(side, el) {
       els[side] = el;
@@ -71,12 +71,21 @@ function createScrollRegistry(): ScrollRegistry {
         subs.delete(cb);
       };
     },
+    hold(ms) {
+      heldUntil = Date.now() + ms;
+    },
     handleScroll(side, scrollLock) {
       const el = els[side];
       if (!el) return;
       const max = el.scrollHeight - el.clientHeight;
       const frac = max > 0 ? el.scrollTop / max : 0;
       subs.forEach((cb) => cb(frac, side));
+      const now = Date.now();
+      if (now < heldUntil) {
+        // a navigation scroll is still animating: keep holding until the panes settle
+        heldUntil = Math.max(heldUntil, now + 300);
+        return;
+      }
       if (syncing || !scrollLock) return;
       const other: Side = side === "old" ? "new" : "old";
       const oel = els[other];
@@ -98,152 +107,53 @@ function createScrollRegistry(): ScrollRegistry {
 }
 
 /* ------------------------------------------------------------------ *
- * Shared change derivation — one source of truth for the ChangesPanel,
- * HeatStrip and Toolbar prev/next. Mirrors CompareWorkspace's mapping:
- * pixel → render_result.changes, text → diff blocks. `fraction` is the
- * 0..1 vertical position used by the heat strip.
+ * Hover target shared by both panes (Draftable: hovering text or a change outlines it
+ * AND its counterpart on the other document). A tiny external store so a hover only
+ * re-renders the outline layers, never the page tiles.
  * ------------------------------------------------------------------ */
-export interface ViewerChange {
-  id: string; // selection id (pixel: backend id; text: "b{index}")
-  kind: ChangeKind;
-  changeType?: ChangeType | string;
-  metadata?: Record<string, unknown>;
-  structure?: {
-    anchor_type?: string;
-    anchor_key?: string;
-    title?: string;
-  };
-  removedText?: string;
-  addedText?: string;
-  moveId?: string;
-  blockIndex?: number; // text mode only
-  side?: Side; // pixel: side of the primary ref
-  page?: number; // pixel: 1-based page of the primary ref
-  oldPage?: number;
-  newPage?: number;
-  bbox?: [number, number, number, number];
-  oldLocations?: RenderChangeRef["locations"];
-  newLocations?: RenderChangeRef["locations"];
-  fraction: number; // 0..1 vertical position for the heat strip
+export type HoverTarget = { kind: "match" | "change"; id: string } | null;
+
+export interface HoverStore {
+  get: () => HoverTarget;
+  set: (t: HoverTarget) => void;
+  /** clear only if `id` is still the hovered target (mouse-leave races mouse-enter) */
+  clear: (id: string) => void;
+  subscribe: (cb: () => void) => () => void;
 }
 
-export function matchesViewerFilter(
-  change: ViewerChange,
-  filter: ViewerFilter,
-  isNoted?: boolean
-): boolean {
-  if (filter === "all") return true;
-  if (filter === "noted") return !!isNoted;
-
-  const ct = change.changeType;
-  const k = change.kind;
-
-  switch (filter) {
-    case "numeric":
-      return ct === "numeric_only";
-    case "identifier":
-      return ct === "identifier_only";
-    case "replacement":
-      return ct === "replacement" || (!ct && k === "modified");
-    case "insertion":
-      return ct === "insertion" || (!ct && k === "added");
-    case "deletion":
-      return ct === "deletion" || (!ct && k === "removed");
-    case "reordered":
-      return ct === "reordered" || (!ct && k === "moved");
-    case "formatting":
-      return ct === "punctuation_only" || ct === "whitespace_only";
-    case "removed":
-      return k === "removed" || ct === "deletion";
-    case "added":
-      return k === "added" || ct === "insertion";
-    case "modified":
-      return (
-        k === "modified" ||
-        ct === "replacement" ||
-        ct === "numeric_only" ||
-        ct === "identifier_only" ||
-        ct === "punctuation_only" ||
-        ct === "whitespace_only"
-      );
-    case "moved":
-      return k === "moved" || ct === "reordered";
-    default:
-      return true;
-  }
-}
-
-export function deriveViewerChanges(
-  comparison: DocumentComparison,
-  mode: ViewMode,
-  showMoves: boolean
-): ViewerChange[] {
-  if (mode === "pixel" && comparison.render_result) {
-    const rr = comparison.render_result;
-    const fracFor = (side: Side, ref: RenderChangeRef): number => {
-      const pages = side === "old" ? rr.old.pages : rr.new.pages;
-      const total = pages.length || 1;
-      const idx = pages.findIndex((p) => p.n === ref.page);
-      const i = idx >= 0 ? idx : Math.max(0, ref.page - 1);
-      const page = idx >= 0 ? pages[idx] : undefined;
-      const cy = page && page.h_pt ? (ref.bbox[1] + ref.bbox[3]) / 2 / page.h_pt : 0;
-      return Math.min(1, Math.max(0, (i + cy) / total));
-    };
-    return rr.changes.map((c) => {
-      const side: Side = c.new ? "new" : "old";
-      const ref = c.new ?? c.old;
-      return {
-        id: c.id,
-        kind: c.kind,
-        changeType: c.change_type,
-        metadata: c.metadata,
-        structure: c.structure,
-        removedText: c.old?.text,
-        addedText: c.new?.text,
-        side,
-        page: ref?.page,
-        oldPage: c.old?.page,
-        newPage: c.new?.page,
-        bbox: ref?.bbox,
-        oldLocations: c.old?.locations,
-        newLocations: c.new?.locations,
-        fraction: ref ? fracFor(side, ref) : 0,
+export function createHoverStore(): HoverStore {
+  let cur: HoverTarget = null;
+  const subs = new Set<() => void>();
+  const emit = () => subs.forEach((cb) => cb());
+  return {
+    get: () => cur,
+    set(t) {
+      if (cur?.kind === t?.kind && cur?.id === t?.id) return;
+      cur = t;
+      emit();
+    },
+    clear(id) {
+      if (cur?.id !== id) return;
+      cur = null;
+      emit();
+    },
+    subscribe(cb) {
+      subs.add(cb);
+      return () => {
+        subs.delete(cb);
       };
-    });
-  }
+    },
+  };
+}
 
-  const blocks = comparison.diff_result ?? [];
-  const total = Math.max(1, blocks.length);
-  const out: ViewerChange[] = [];
-  blocks.forEach((b, i) => {
-    if (b.type === "equal") return;
-    const moved = showMoves && !!b.moved;
-    let kind: ChangeKind;
-    let removedText: string | undefined;
-    let addedText: string | undefined;
-    if (b.type === "delete") {
-      kind = "removed";
-      removedText = b.old_text;
-    } else if (b.type === "insert") {
-      kind = "added";
-      addedText = b.new_text;
-    } else {
-      kind = "modified";
-      removedText = b.old_words.filter((w) => w.changed).map((w) => w.text).join(" ");
-      addedText = b.new_words.filter((w) => w.changed).map((w) => w.text).join(" ");
-    }
-    out.push({
-      id: textSelId(i),
-      kind: moved ? "moved" : kind,
-      changeType: moved ? "reordered" : kind === "removed" ? "deletion" : kind === "added" ? "insertion" : "replacement",
-      removedText,
-      addedText,
-      moveId: b.move_id,
-      blockIndex: i,
-      fraction: i / total,
-    });
-  });
-  return out;
+export function useHoverTarget(store: HoverStore): HoverTarget {
+  return React.useSyncExternalStore(store.subscribe, store.get, store.get);
+}
+
+/** All engine records for the current view mode (pixel render or text blocks). */
+export function deriveViewerChanges(comparison: DocumentComparison, mode: ViewMode, showMoves = true): ViewerChange[] {
+  if (mode === "pixel" && comparison.render_result) return modelFromRender(comparison.render_result);
+  return modelFromBlocks(comparison.diff_result ?? [], showMoves);
 }
 
 /* ------------------------------------------------------------------ */
@@ -252,14 +162,36 @@ interface ViewerState {
   comparison: DocumentComparison;
   setComparison: React.Dispatch<React.SetStateAction<DocumentComparison>>;
 
-  selectedChangeId: string | null;
-  setSelectedChangeId: (id: string | null) => void;
-  jumpToChange: (id: string | null) => void;
+  /** every record (hidden ones included) and the ones the filter shows */
+  allChanges: ViewerChange[];
+  visibleChanges: ViewerChange[];
+  visibleIds: ReadonlySet<string>;
 
-  viewMode: ViewMode; // requested
+  groups: ReadonlySet<FilterGroup>;
+  toggleGroup: (g: FilterGroup) => void;
+  setGroups: (g: ReadonlySet<FilterGroup>) => void;
+  resetGroups: () => void;
+  notedOnly: boolean;
+  setNotedOnly: (v: boolean) => void;
+
+  selectedChangeId: string | null;
+  selectionSource: SelectionSource | null;
+  /** increments on every selection — even re-clicking the same change — so panes
+   *  re-scroll to it and replay the highlight blink */
+  selectionNonce: number;
+  selectChange: (id: string | null, source?: SelectionSource) => void;
+  /** clicked unchanged text (a matched unit): outlined on both sides, both panes aligned */
+  selectedMatchId: string | null;
+  selectMatch: (id: string | null, source?: SelectionSource) => void;
+  hover: HoverStore;
+  /** @deprecated use selectChange */
+  setSelectedChangeId: (id: string | null) => void;
+  stepChange: (dir: 1 | -1 | "first" | "last") => void;
+
+  viewMode: ViewMode;
   setViewMode: (m: ViewMode) => void;
-  hasPixel: boolean; // render availability
-  effectiveMode: ViewMode; // derived from availability
+  hasPixel: boolean;
+  effectiveMode: ViewMode;
 
   layoutMode: LayoutMode;
   setLayoutMode: (m: LayoutMode) => void;
@@ -276,8 +208,8 @@ interface ViewerState {
   showMoves: boolean;
   setShowMoves: (v: boolean) => void;
 
-  filter: ViewerFilter;
-  setFilter: (f: ViewerFilter) => void;
+  markup: MarkupColors;
+  setMarkup: (m: MarkupColors) => void;
 
   scroll: ScrollRegistry;
 
@@ -296,7 +228,13 @@ export function ViewerProvider({
   children: React.ReactNode;
 }) {
   const [comparison, setComparison] = React.useState<DocumentComparison>(initial);
-  const [selectedChangeId, setSelectedChangeId] = React.useState<string | null>(null);
+  const [selectedChangeId, setSelected] = React.useState<string | null>(null);
+  const [selectionSource, setSelectionSource] = React.useState<SelectionSource | null>(null);
+  const [selectionNonce, setSelectionNonce] = React.useState(0);
+  const [selectedMatchId, setSelectedMatch] = React.useState<string | null>(null);
+  const hoverRef = React.useRef<HoverStore | null>(null);
+  if (hoverRef.current === null) hoverRef.current = createHoverStore();
+  const hover = hoverRef.current;
   const [viewMode, setViewMode] = React.useState<ViewMode>("pixel");
   const [layoutMode, setLayoutMode] = React.useState<LayoutMode>("side-by-side");
   const [singleSide, setSingleSide] = React.useState<Side>("new");
@@ -304,7 +242,9 @@ export function ViewerProvider({
   const [scrollLock, setScrollLock] = React.useState(true);
   const [cursorMode, setCursorMode] = React.useState<CursorMode>("scroll");
   const [showMoves, setShowMoves] = React.useState(true);
-  const [filter, setFilter] = React.useState<ViewerFilter>("all");
+  const [groups, setGroupsState] = React.useState<ReadonlySet<FilterGroup>>(DEFAULT_GROUPS);
+  const [notedOnly, setNotedOnly] = React.useState(false);
+  const [markup, setMarkup] = React.useState<MarkupColors>(DEFAULT_MARKUP);
 
   const scrollRef = React.useRef<ScrollRegistry | null>(null);
   if (scrollRef.current === null) scrollRef.current = createScrollRegistry();
@@ -313,19 +253,76 @@ export function ViewerProvider({
   const hasPixel = comparison.render_status === "completed" && !!comparison.render_result;
   const effectiveMode: ViewMode = hasPixel && viewMode === "pixel" ? "pixel" : "text";
 
-  const jumpToChange = React.useCallback((id: string | null) => {
-    setSelectedChangeId(id);
+  const annotationFor = React.useCallback(
+    (changeId: string) => comparison.annotations?.find((a) => a.change_id === changeId),
+    [comparison.annotations]
+  );
+
+  const allChanges = React.useMemo(
+    () => deriveViewerChanges(comparison, effectiveMode, showMoves),
+    [comparison, effectiveMode, showMoves]
+  );
+  const visibleChanges = React.useMemo(() => {
+    const byGroup = filterChanges(allChanges, groups);
+    if (!notedOnly) return byGroup;
+    return byGroup.filter((c) => {
+      const a = annotationFor(c.id);
+      return !!a && (!!a.note?.trim() || a.tags.length > 0);
+    });
+  }, [allChanges, groups, notedOnly, annotationFor]);
+  const visibleIds = React.useMemo(() => new Set(visibleChanges.map((c) => c.id)), [visibleChanges]);
+
+  const selectChange = React.useCallback(
+    (id: string | null, source: SelectionSource = "list") => {
+      // both panes are about to scroll to the change: keep lock-sync out of the way
+      scroll.hold(900);
+      setSelectionSource(id ? source : null);
+      setSelected(id);
+      setSelectedMatch(null);
+      setSelectionNonce((n) => n + 1);
+    },
+    [scroll]
+  );
+  const selectMatch = React.useCallback(
+    (id: string | null, source: SelectionSource = "list") => {
+      scroll.hold(900);
+      setSelectionSource(id ? source : null);
+      setSelected(null);
+      setSelectedMatch(id);
+      setSelectionNonce((n) => n + 1);
+    },
+    [scroll]
+  );
+  const setSelectedChangeId = React.useCallback((id: string | null) => selectChange(id, "list"), [selectChange]);
+
+  const stepChange = React.useCallback(
+    (dir: 1 | -1 | "first" | "last") => {
+      const list = visibleChanges;
+      if (!list.length) return;
+      if (dir === "first") return selectChange(list[0].id, "keyboard");
+      if (dir === "last") return selectChange(list[list.length - 1].id, "keyboard");
+      const cur = list.findIndex((c) => c.id === selectedChangeId);
+      const next = cur < 0 ? (dir === 1 ? 0 : list.length - 1) : (cur + dir + list.length) % list.length;
+      selectChange(list[next].id, "keyboard");
+    },
+    [visibleChanges, selectedChangeId, selectChange]
+  );
+
+  const toggleGroup = React.useCallback((g: FilterGroup) => {
+    setGroupsState((cur) => {
+      const next = new Set(cur);
+      if (next.has(g)) next.delete(g);
+      else next.add(g);
+      return next;
+    });
   }, []);
+  const resetGroups = React.useCallback(() => setGroupsState(DEFAULT_GROUPS), []);
 
   const setZoom = React.useCallback((side: Side, value: number) => {
     const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
     setZoomState((z) => ({ ...z, [side]: clamped }));
   }, []);
 
-  const annotationFor = React.useCallback(
-    (changeId: string) => comparison.annotations?.find((a) => a.change_id === changeId),
-    [comparison.annotations]
-  );
   const setAnnotationLocal = React.useCallback((a: Annotation) => {
     setComparison((c) => {
       const rest = (c.annotations ?? []).filter((x) => x.change_id !== a.change_id);
@@ -342,9 +339,24 @@ export function ViewerProvider({
   const value: ViewerState = {
     comparison,
     setComparison,
+    allChanges,
+    visibleChanges,
+    visibleIds,
+    groups,
+    toggleGroup,
+    setGroups: setGroupsState,
+    resetGroups,
+    notedOnly,
+    setNotedOnly,
     selectedChangeId,
+    selectionSource,
+    selectionNonce,
+    selectChange,
+    selectedMatchId,
+    selectMatch,
+    hover,
     setSelectedChangeId,
-    jumpToChange,
+    stepChange,
     viewMode,
     setViewMode,
     hasPixel,
@@ -361,8 +373,8 @@ export function ViewerProvider({
     setCursorMode,
     showMoves,
     setShowMoves,
-    filter,
-    setFilter,
+    markup,
+    setMarkup,
     scroll,
     annotationFor,
     setAnnotationLocal,
@@ -376,4 +388,12 @@ export function useViewer(): ViewerState {
   const ctx = React.useContext(ViewerCtx);
   if (!ctx) throw new Error("useViewer must be used within a ViewerProvider");
   return ctx;
+}
+
+/** Markup colours for one change (fill for highlights, marker for the change map). */
+export function markupFor(change: Pick<ViewerChange, "kind" | "group"> | undefined, markup: MarkupColors, showMoves: boolean) {
+  if (!change) return MARKUP_SWATCH[markup.insertions];
+  if (change.kind === "moved" && showMoves) return MARKUP_SWATCH[markup.moves];
+  if (change.kind === "removed") return MARKUP_SWATCH[markup.deletions];
+  return MARKUP_SWATCH[markup.insertions];
 }

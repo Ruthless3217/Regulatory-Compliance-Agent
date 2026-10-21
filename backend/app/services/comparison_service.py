@@ -138,11 +138,59 @@ def _detect_running_lines(page_lines: List[List[str]]) -> Set[str]:
     if len(page_lines) < 3:
         return set()
     band = Counter()
+    raw_by_key: dict = {}
     for lines in page_lines:
+        keys_on_page = set()
         for ln in lines[:3] + lines[-3:]:
-            band[ln] += 1
+            k = _running_key(ln)
+            raw_by_key.setdefault(k, set()).add(ln)
+            keys_on_page.add(k)
+        band.update(keys_on_page)
     threshold = max(3, len(page_lines) // 2)
-    return {ln for ln, count in band.items() if count >= threshold}
+    return {ln for k, count in band.items() if count >= threshold for ln in raw_by_key[k]}
+
+
+# A footer such as "<file>.docx Page 7 of 26" differs on every page only by its
+# counter; lines carrying page-counter evidence are matched with digits masked.
+# Lines without it must repeat verbatim, so numbered clauses are never stripped.
+_PAGE_COUNTER = re.compile(r"(?:\bpage\s*\d+(?:\s*(?:of|/)(?:\s*\d+)?)?|\b\d+\s*(?:of|/)\s*\d+)\s*$", re.IGNORECASE)
+
+
+_BAND = 3  # running headers/footers and page numbers live in the first/last lines of a page
+
+
+def is_page_number_line(line: str) -> bool:
+    """'12', 'Page 4 of 26', '3 / 22' — but not a phone pair like '26652048 / 26652049'."""
+    if not _PAGE_NUMBER.match(line or ""):
+        return False
+    nums = [int(n) for n in re.findall(r"\d+", line)]
+    if any(n > 9999 for n in nums):
+        return False
+    return len(nums) < 2 or nums[0] <= nums[1]
+
+
+def page_furniture_indices(lines: List[str], running: Set[str]) -> Set[int]:
+    """Indices of running-header/footer and page-number lines — only inside the
+    top/bottom band of the page, so body text that happens to repeat a header (a title
+    page's product name) or looks like 'N / M' (a phone pair) is kept."""
+    n = len(lines)
+    return {
+        i for i, ln in enumerate(lines)
+        if (i < _BAND or i >= n - _BAND) and (ln in running or is_page_number_line(ln))
+    }
+
+
+def strip_page_furniture(lines: List[str], running: Set[str]) -> List[str]:
+    drop = page_furniture_indices(lines, running)
+    return [ln for i, ln in enumerate(lines) if i not in drop]
+
+
+def _running_key(line: str) -> str:
+    # the counter itself may wrap differently per page ("Page 7 of" / "Page 17"), so the
+    # key is the text *before* the counter, digits masked
+    if _PAGE_COUNTER.search(line):
+        return re.sub(r"\d+", "#", _PAGE_COUNTER.sub("", line).rstrip()) + " <page>"
+    return line
 
 
 def _pdf_text_layer_lines(file_path: str) -> List[List[str]]:
@@ -252,7 +300,7 @@ def extract_pdf_segments(file_path: str) -> List[str]:
     running = _detect_running_lines(page_lines)
     cleaned: List[str] = []
     for lines in page_lines:
-        body = [ln for ln in lines if ln not in running and not _PAGE_NUMBER.match(ln)]
+        body = strip_page_furniture(lines, running)
         text = "\n".join(body)
         text = _HYPHEN_WRAP.sub(r"\1\2", text)  # join hyphenated line-wraps
         text = text.replace("\n", " ")          # unwrap remaining physical lines
@@ -654,13 +702,32 @@ def _detect_moves_in_changes(new_marks: List[dict], changes: List[dict]) -> None
         changes[:] = [c for c in changes if c["id"] not in drop_ids]
 
 
+def segments_to_words(segments: List[str]) -> list:
+    """Extracted text segments as position-less words for the content engine: one
+    block/line per segment (no geometry, so no layout-based word joins across them)."""
+    from app.services.pdf_render_service import PositionedWord
+    out = []
+    for s_i, seg in enumerate(segments):
+        x = 0.0
+        for m in _TOKEN_RE.finditer(_HEADING_MARKER.sub("", seg)):
+            t = m.group(0)
+            out.append(PositionedWord(text=t, page=1, x0=x, y0=20.0 * s_i, x1=x + 5.0 * len(t), y1=20.0 * s_i + 10.0,
+                                      line_id=s_i, block_id=s_i))
+            x += 5.0 * len(t) + 3.0
+    return out
+
+
 def build_diff(old_paragraphs: List[str], new_paragraphs: List[str]) -> List[dict]:
     """Align two documents at the word-token level and return ordered diff blocks.
 
     Uses structure-first alignment when enabled to prevent cross-region mismatch.
     """
     from app.config import settings
-    if getattr(settings, "compare_structural_alignment_enabled", True):
+    engine = getattr(settings, "compare_engine", "content")
+    if engine == "content":
+        from app.services.content_diff_service import compare_words, to_blocks
+        return to_blocks(compare_words(segments_to_words(old_paragraphs), segments_to_words(new_paragraphs)))
+    if engine == "structural":
         from app.services.structural_alignment_service import structural_build_diff
         return structural_build_diff(old_paragraphs, new_paragraphs)
 

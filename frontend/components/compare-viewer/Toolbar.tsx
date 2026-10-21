@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/tooltip";
 import { Popover } from "@/components/ui/popover";
 import { sideLabel } from "@/lib/format";
-import { useViewer, deriveViewerChanges, matchesViewerFilter } from "./ViewerContext";
-import { ExportPopover } from "./ExportPopover";
+import { useViewer, DEFAULT_MARKUP, MARKUP_SWATCH, type MarkupColor, type MarkupColors } from "./ViewerContext";
+import { PrintMenu, DownloadMenu } from "./ExportMenus";
 import { AdjustComparisonPopover } from "./AdjustComparisonPopover";
 
 /** Small bordered 11px control, mirroring CompareWorkspace's ViewToggle. */
@@ -71,43 +71,17 @@ export function Toolbar() {
     setScrollLock,
     showMoves,
     setShowMoves,
-    selectedChangeId,
-    setSelectedChangeId,
-    filter,
-    annotationFor,
+    visibleChanges,
+    stepChange,
+    markup,
+    setMarkup,
   } = useViewer();
-
-  const changes = React.useMemo(
-    () => deriveViewerChanges(comparison, effectiveMode, showMoves),
-    [comparison, effectiveMode, showMoves]
-  );
-
-  const isNoted = React.useCallback(
-    (c: { id: string }) => {
-      const a = annotationFor(c.id);
-      return !!a && (!!a.note?.trim() || a.tags.length > 0);
-    },
-    [annotationFor]
-  );
-
-  const activeChanges = React.useMemo(() => {
-    return changes.filter((c) => matchesViewerFilter(c, filter, isNoted(c)));
-  }, [filter, changes, isNoted]);
 
   const oldLabel = sideLabel(comparison, "old");
   const newLabel = sideLabel(comparison, "new");
-
-  const step = (dir: 1 | -1) => {
-    if (activeChanges.length === 0) return;
-    const cur = activeChanges.findIndex((c) => c.id === selectedChangeId);
-    const next =
-      cur < 0
-        ? dir === 1
-          ? 0
-          : activeChanges.length - 1
-        : (cur + dir + activeChanges.length) % activeChanges.length;
-    setSelectedChangeId(activeChanges[next].id);
-  };
+  const step = (dir: 1 | -1) => stepChange(dir);
+  const activeChanges = visibleChanges;
+  const setColor = (key: keyof MarkupColors, value: MarkupColor) => setMarkup({ ...markup, [key]: value });
 
   const email = () => {
     if (typeof window === "undefined") return;
@@ -135,10 +109,8 @@ export function Toolbar() {
           <Plus className="h-3 w-3" />
           New
         </Link>
-        <ToolButton title="Print" onClick={() => window.print()}>
-          Print
-        </ToolButton>
-        <ExportPopover />
+        <PrintMenu />
+        <DownloadMenu />
         <ToolButton title="Email a link to this comparison" onClick={email}>
           Email
         </ToolButton>
@@ -244,7 +216,7 @@ export function Toolbar() {
         {/* Changes settings popover */}
         <Popover
           align="start"
-          className="w-56 p-3"
+          className="w-60 p-3"
           trigger={({ open, toggle }) => (
             <ToolButton active={open} onClick={toggle} title="Changes settings">
               <Settings2 className="h-3 w-3" />
@@ -263,9 +235,33 @@ export function Toolbar() {
               Enable Moves
             </label>
             <p className="text-[11px] leading-snug text-muted-foreground">
-              Show relocated content as a single violet &ldquo;moved&rdquo; change instead of a
-              separate deletion and insertion.
+              Show relocated content as a moved change instead of a separate deletion and insertion.
             </p>
+            <div className="micro-label pt-1">Markup colors</div>
+            {(["deletions", "insertions", "moves"] as const).map((key) => (
+              <label key={key} className="flex items-center justify-between gap-2 text-[12px] capitalize">
+                {key}
+                <select
+                  aria-label={`${key} color`}
+                  value={markup[key]}
+                  onChange={(e) => setColor(key, e.target.value as MarkupColor)}
+                  className="rounded-sm border border-border bg-background px-1 py-0.5 text-[11px]"
+                >
+                  {(Object.keys(MARKUP_SWATCH) as MarkupColor[]).map((c) => (
+                    <option key={c} value={c}>
+                      {c[0].toUpperCase() + c.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+            <button
+              type="button"
+              onClick={() => setMarkup(DEFAULT_MARKUP)}
+              className="w-full rounded-sm border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:border-foreground hover:text-foreground"
+            >
+              Restore default colors
+            </button>
           </div>
         </Popover>
 

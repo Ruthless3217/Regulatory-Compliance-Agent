@@ -23,22 +23,37 @@ looking up its change's ``kind == "moved"``.
 import os
 import shutil
 import logging
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from app.config import settings
 from app.database import SessionLocal
 from app.models.document_comparison import DocumentComparison
 from app.services.comparison_service import word_level_ops
 from app.services.structural_alignment_service import structural_word_level_ops
+from app.services.content_diff_service import (
+    compare_furniture,
+    compare_words,
+    match_segments,
+    page_alignment,
+    to_blocks,
+    to_overlay,
+)
 from app.services.pdf_render_service import (
     to_pdf,
     render_pages,
-    positioned_words,
+    positioned_words_split,
     PositionedWord,
     PageMeta,
 )
 
 logger = logging.getLogger(__name__)
+
+# Draftable-style loader: Convert -> Extract -> Compute -> Compare, each 0..100 %.
+ProgressFn = Callable[[str, int, str], None]
+
+
+def _noop_progress(stage: str, pct: int, message: str) -> None:
+    return None
 
 
 def renders_dir(comparison_id: str) -> str:
@@ -72,14 +87,30 @@ def run_render(comparison_id: str) -> None:
             db.commit()
             return
 
+        def report(stage: str, pct: int, message: str) -> None:
+            # Progress rides in render_result while the render is processing; the API
+            # exposes it as render_progress. Best-effort: never fails the render.
+            try:
+                c.render_result = {"progress": {"stage": stage, "percent": int(pct), "message": message}}
+                db.commit()
+            except Exception as e:  # noqa: BLE001
+                logger.warning("progress update failed for %s: %s", comparison_id, e)
+                db.rollback()
+
         try:
-            c.render_result = _render_pair(
+            render, text_blocks = _render_pair_with_text(
                 str(c.id),
                 c.old_file_path,
                 c.new_file_path,
                 c.old_content_type,
                 c.new_content_type,
+                on_progress=report,
             )
+            c.render_result = render
+            if text_blocks is not None:
+                # one change set for both views: the text redline is rebuilt from the
+                # same records as the overlay so they cannot disagree
+                c.diff_result = text_blocks
             c.render_status = "completed"
             c.render_error = None
         except Exception as e:  # noqa: BLE001 — render must never crash the worker
@@ -100,34 +131,139 @@ def _render_pair(
     new_content_type: str = "pdf",
 ) -> dict:
     """Render both sides and assemble the RenderResult overlay model."""
+    return _render_pair_with_text(comparison_id, old_path, new_path, old_content_type, new_content_type)[0]
+
+
+def _render_pair_with_text(
+    comparison_id: str,
+    old_path: str,
+    new_path: str,
+    old_content_type: str = "pdf",
+    new_content_type: str = "pdf",
+    on_progress: Optional[ProgressFn] = None,
+):
+    """(RenderResult, text DiffBlocks or None). The content engine returns the text
+    redline built from the same change records; the older engines return None.
+    ``on_progress(stage, percent, message)`` drives the viewer's loader."""
+    progress = on_progress or _noop_progress
     base = renders_dir(comparison_id)
     # Rebuild cleanly so a re-run never mixes stale images with fresh ones.
     if os.path.isdir(base):
         shutil.rmtree(base, ignore_errors=True)
     cap = settings.pixel_render_page_cap
 
+    progress("convert", 0, "Converting the original document")
     old_pdf = to_pdf(old_path, old_content_type, os.path.join(base, "old"), "old")
+    progress("convert", 25, "Converting the revised document")
     new_pdf = to_pdf(new_path, new_content_type, os.path.join(base, "new"), "new")
 
+    progress("convert", 50, "Rendering pages of the original")
     old_metas, old_trunc = render_pages(old_pdf, os.path.join(base, "old"), cap)
+    progress("convert", 75, "Rendering pages of the revised")
     new_metas, new_trunc = render_pages(new_pdf, os.path.join(base, "new"), cap)
+    progress("convert", 100, "Documents converted")
 
-    old_words = positioned_words(old_pdf)
-    new_words = positioned_words(new_pdf)
+    progress("extract", 0, "Extracting content from the original")
+    old_words, old_furn = positioned_words_split(old_pdf)
+    progress("extract", 50, "Extracting content from the revised")
+    new_words, new_furn = positioned_words_split(new_pdf)
+    progress("extract", 100, "Content extracted")
 
-    if getattr(settings, "compare_structural_alignment_enabled", True):
+    engine = getattr(settings, "compare_engine", "content")
+    text_blocks = None
+    page_map = None
+    matches = None
+    progress("compute", 0, "Aligning the two documents")
+    if engine == "content":
+        diff = compare_words(old_words, new_words)
+        progress("compute", 40, "Classifying changes")
+        old_marks, new_marks, changes = to_overlay(diff)
+        text_blocks = to_blocks(diff)
+        progress("compute", 60, "Aligning pages")
+        page_map = page_alignment(diff, len(old_metas), len(new_metas))
+        progress("compute", 75, "Linking unchanged text")
+        segs = match_segments(diff)
+        progress("compute", 90, "Comparing headers and footers")
+        # running headers/footers: compared page against page, appended after the body
+        # words so every index stays valid on the combined word lists
+        fo, fn, fchanges, fsegs = compare_furniture(old_furn, new_furn, page_map)
+        oo, no = len(old_words), len(new_words)
+        old_marks += [dict(m, index=m["index"] + oo) for m in fo]
+        new_marks += [dict(m, index=m["index"] + no) for m in fn]
+        for c in fchanges:
+            for side, off in (("old_anchor", oo), ("new_anchor", no)):
+                if c.get(side):
+                    c[side] = (c[side][0] + off, c[side][1])
+        changes = changes + fchanges
+        segs += [([i + oo for i in o], [j + no for j in n]) for o, n in fsegs]
+        old_words = list(old_words) + list(old_furn)
+        new_words = list(new_words) + list(new_furn)
+        matches = _build_matches(segs, old_words, new_words)
+    elif engine == "structural":
         old_marks, new_marks, changes = structural_word_level_ops(old_words, new_words)
     else:
         old_marks, new_marks, changes = word_level_ops(
             [w.text for w in old_words], [w.text for w in new_words]
         )
 
-    return {
+    progress("compute", 100, "Changes computed")
+    progress("compare", 0, "Placing highlights on the pages")
+    render = {
         "old": {"pages": _build_pages(old_metas, old_words, old_marks, "removed")},
         "new": {"pages": _build_pages(new_metas, new_words, new_marks, "added")},
         "changes": _build_changes(changes, old_words, old_marks, new_words, new_marks),
         "truncated_pages": old_trunc + new_trunc,
     }
+    if page_map is not None:
+        render["page_map"] = page_map
+        render["changes"] = _document_order(render["changes"], page_map, old_metas, new_metas)
+    if matches is not None:
+        render["matches"] = matches
+    progress("compare", 100, "Comparison ready")
+    return render, text_blocks
+
+
+def _line_rects(words: List[PositionedWord], idx: List[int]) -> List[List[float]]:
+    """[page, x0, y0, x1, y1] per visual line (and per same-line run) of the given words."""
+    by_page: dict = {}
+    for i in idx:
+        by_page.setdefault(words[i].page, []).append(words[i])
+    rects: List[List[float]] = []
+    for page in sorted(by_page):
+        for line in _cluster_words_into_lines(by_page[page]):
+            for run in _split_line_into_runs(line):
+                rects.append([page] + [round(v, 1) for v in (
+                    min(w.x0 for w in run), min(w.y0 for w in run),
+                    max(w.x1 for w in run), max(w.y1 for w in run))])
+    return rects
+
+
+def _build_matches(segs, old_words: List[PositionedWord], new_words: List[PositionedWord]) -> List[dict]:
+    """Matched-text units for hover/click linking: {id, old: [[page,x0,y0,x1,y1]...], new: [...]}."""
+    return [{"id": f"m{k}", "old": _line_rects(old_words, o), "new": _line_rects(new_words, n)}
+            for k, (o, n) in enumerate(segs)]
+
+
+def _document_order(changes: List[dict], page_map, old_metas, new_metas) -> List[dict]:
+    """Changes in reading order of the aligned sheets: a page's header records first, then
+    its body records (already in document order), then its footer records."""
+    sheet_of = {("old", o): k for k, (o, n) in enumerate(page_map) if o is not None}
+    sheet_of.update({("new", n): k for k, (o, n) in enumerate(page_map) if n is not None})
+    heights = {("old", m.n): m.h_pt for m in old_metas}
+    heights.update({("new", m.n): m.h_pt for m in new_metas})
+
+    def key(item):
+        pos, c = item
+        side = "new" if c.get("new") else "old"
+        ref = c.get(side)
+        if not ref:
+            return (len(page_map), 1, pos)
+        band = 1
+        if c.get("filter_group") == "headers_footers":
+            band = 0 if ref["bbox"][1] < heights.get((side, ref["page"]), 1e9) / 2 else 2
+        return (sheet_of.get((side, ref["page"]), len(page_map)), band, pos)
+
+    return [c for _, c in sorted(enumerate(changes), key=key)]
 
 
 def _cluster_words_into_lines(words: List[PositionedWord]) -> List[List[PositionedWord]]:
@@ -270,12 +406,10 @@ def _build_changes(
     for c in changes:
         cid = c["id"]
         entry: dict = {"id": cid, "kind": c["kind"]}
-        if "change_type" in c:
-            entry["change_type"] = c["change_type"]
-        if "metadata" in c:
-            entry["metadata"] = c["metadata"]
-        if "structure" in c:
-            entry["structure"] = c["structure"]
+        for key in ("change_type", "metadata", "structure", "category", "subtype",
+                    "filter_group", "default_visible", "move_id"):
+            if key in c:
+                entry[key] = c[key]
 
         old_locs = old_by_cid.get(cid, [])
         if old_locs:
@@ -312,6 +446,16 @@ def _build_changes(
                     for loc in new_locs
                 ],
             }
+
+        # one-sided change: a caret at the insertion/deletion point on the empty side,
+        # so selecting it can scroll both documents
+        for side, words in (("old", old_words), ("new", new_words)):
+            anchor = c.get(f"{side}_anchor")
+            if side not in entry and anchor and 0 <= anchor[0] < len(words):
+                w = words[anchor[0]]
+                x = w.x1 if anchor[1] == "after" else w.x0
+                entry[side] = {"page": w.page, "bbox": [x, w.y0, x + 1.0, w.y1], "text": "",
+                               "anchor": True, "locations": []}
 
         out.append(entry)
     return out

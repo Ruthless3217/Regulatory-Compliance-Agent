@@ -438,13 +438,40 @@ export type ComparisonStatus = "processing" | "completed" | "failed";
 
 export interface DiffWord {
   text: string;
+  /** true when the word belongs to a change shown in the default (substantive) view */
   changed: boolean;
+  /** id of the engine change record this word belongs to (hidden records included) */
+  change_id?: string;
+  category?: ChangeCategory;
+  subtype?: string | null;
+  filter_group?: FilterGroup;
 }
 
+/** Engine change categories (content-first engine). */
+export type ChangeCategory = "content" | "typographic" | "placeholder" | "renumbering" | "layout";
+
+/** Viewer filter groups — one per record, assigned by the backend engine. */
+export type FilterGroup =
+  | "insertions"
+  | "deletions"
+  | "replacements"
+  | "moves"
+  | "currency"
+  | "case"
+  | "punctuation"
+  | "quotes"
+  | "spacing"
+  | "placeholders"
+  | "renumbering"
+  | "layout"
+  | "headers_footers";
+
+// Word lists on equal/delete/insert blocks are optional (content engine only): they
+// carry the change-record ids so the text view filters with the same records.
 export type DiffBlock =
-  | { type: "equal"; old_text: string; new_text: string }
-  | { type: "delete"; old_text: string; moved?: boolean; move_id?: string }
-  | { type: "insert"; new_text: string; moved?: boolean; move_id?: string }
+  | { type: "equal"; old_text: string; new_text: string; old_words?: DiffWord[]; new_words?: DiffWord[] }
+  | { type: "delete"; old_text: string; old_words?: DiffWord[]; moved?: boolean; move_id?: string; change_id?: string }
+  | { type: "insert"; new_text: string; new_words?: DiffWord[]; moved?: boolean; move_id?: string; change_id?: string }
   | { type: "replace"; old_words: DiffWord[]; new_words: DiffWord[]; moved?: boolean; move_id?: string };
 
 export type RenderBoxType = "removed" | "added";
@@ -475,6 +502,9 @@ export interface RenderChangeRef {
   bbox: [number, number, number, number];
   text: string;
   locations?: RenderChangeLocation[];
+  /** true when this side has no text for the change: bbox is a caret at the
+   *  insertion/deletion point so navigation can still reach this pane */
+  anchor?: boolean;
 }
 export type ChangeType =
   | "whitespace_only"
@@ -498,12 +528,29 @@ export interface RenderChange {
   };
   old?: RenderChangeRef;
   new?: RenderChangeRef;
+  category?: ChangeCategory;
+  subtype?: string | null;
+  filter_group?: FilterGroup;
+  /** shown in the default view (every record, like Draftable); filters can switch groups off */
+  default_visible?: boolean;
+  move_id?: string;
 }
 export interface RenderResult {
   old: { pages: RenderPage[] };
   new: { pages: RenderPage[] };
   changes: RenderChange[];
   truncated_pages: number;
+  /** sheet pairs [old_page|null, new_page|null] aligned by matching text */
+  page_map?: [number | null, number | null][];
+  /** unchanged text linked across the documents (hover outlines both sides, click aligns) */
+  matches?: RenderMatch[];
+}
+/** One line rectangle of matched text: [page, x0, y0, x1, y1] in PDF points. */
+export type MatchRect = [number, number, number, number, number];
+export interface RenderMatch {
+  id: string;
+  old: MatchRect[];
+  new: MatchRect[];
 }
 export type RenderStatus = "processing" | "completed" | "failed" | "skipped";
 
@@ -550,8 +597,18 @@ export interface DocumentComparison {
   render_status?: RenderStatus | null;
   render_result?: RenderResult | null;
   render_error?: string | null;
+  /** while render_status is "processing": the loader's current step */
+  render_progress?: RenderProgress | null;
   annotations?: Annotation[];
   created_at: string;
+}
+
+export type RenderStage = "convert" | "extract" | "compute" | "compare";
+export interface RenderProgress {
+  stage: RenderStage;
+  /** 0..100 within the stage */
+  percent: number;
+  message: string;
 }
 
 export interface Me {

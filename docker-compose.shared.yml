@@ -133,6 +133,8 @@ services:
       LANGFUSE_MASK_PII: ${LANGFUSE_MASK_PII:-true}
       CRITIC_ENABLED: ${CRITIC_ENABLED:-true}
       CROSS_CHUNK_CONTEXT_ENABLED: ${CROSS_CHUNK_CONTEXT_ENABLED:-true}
+      # Compare engine: content (default) | structural | legacy
+      COMPARE_ENGINE: ${COMPARE_ENGINE:-content}
       CROSS_CHUNK_CONTEXT_TOKEN_BUDGET: ${CROSS_CHUNK_CONTEXT_TOKEN_BUDGET:-8000}
       # The disclosure LLM backstop reads the WHOLE document in overlapping
       # windows (it used to see only the first 6,000 chars). Window size mainly

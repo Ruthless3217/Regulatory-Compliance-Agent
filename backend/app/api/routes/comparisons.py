@@ -50,7 +50,7 @@ EXTENSION_CONTENT_TYPES = {
     "pdf": "pdf",
 }
 
-_PDF_EXPORT_KINDS = {"old-highlighted.pdf", "new-highlighted.pdf", "side-by-side.pdf"}
+_PDF_EXPORT_KINDS = {"old-highlighted.pdf", "new-highlighted.pdf", "side-by-side.pdf", "single-document.pdf"}
 _EXPORT_MEDIA = {
     "audit-snapshot.json": "application/json",
     "audit-report.pdf": "application/pdf",
@@ -58,8 +58,16 @@ _EXPORT_MEDIA = {
     "old-highlighted.pdf": "application/pdf",
     "new-highlighted.pdf": "application/pdf",
     "side-by-side.pdf": "application/pdf",
+    "single-document.pdf": "application/pdf",
     "bundle.zip": "application/zip",
 }
+
+
+def _parse_groups(raw: Optional[str]):
+    """'case,quotes' -> {'case', 'quotes'}; absent -> None (= the viewer's default view)."""
+    if raw is None:
+        return None
+    return {g.strip() for g in raw.split(",") if g.strip()}
 
 
 class AnnotationIn(BaseModel):
@@ -178,9 +186,13 @@ def _serialize(
         "render_error": c.render_error,
         "created_at": c.created_at.isoformat() if c.created_at else None,
     }
+    # while rendering, render_result only carries the loader's progress
+    rr = c.render_result if isinstance(c.render_result, dict) else None
+    processing = c.render_status == "processing"
+    data["render_progress"] = (rr or {}).get("progress") if processing else None
     if include_diff:
         data["diff_result"] = c.diff_result
-        data["render_result"] = c.render_result
+        data["render_result"] = None if processing else c.render_result
     if annotations is not None:
         data["annotations"] = [_serialize_annotation(a) for a in annotations]
     return data
@@ -450,6 +462,7 @@ async def export_comparison(
     comparison_id: str,
     kind: str,
     filter: Optional[str] = Query(None),
+    groups: Optional[str] = Query(None, description="comma-separated viewer filter groups to draw"),
     user: dict = Depends(require("comparison:use")),
     db: Session = Depends(get_db),
 ):
@@ -457,6 +470,7 @@ async def export_comparison(
     if kind not in _EXPORT_MEDIA:
         raise HTTPException(status_code=404, detail="Unknown export kind")
     comparison = get_visible_comparison(db, comparison_id, user)
+    group_set = _parse_groups(groups if isinstance(groups, str) else None)  # after the ownership check
     if kind in _PDF_EXPORT_KINDS and comparison.render_status != "completed":
         raise HTTPException(status_code=409, detail="Document rendering unavailable for this comparison")
 
@@ -471,13 +485,15 @@ async def export_comparison(
         elif kind == "audit-report.pdf":
             data = export_service.audit_report_pdf(comparison, annotations, filter_type=filter)
         elif kind == "changes-report.docx":
-            data = export_service.changes_report_docx(comparison, annotations)
+            data = export_service.changes_report_docx(comparison, annotations, group_set)
         elif kind == "old-highlighted.pdf":
-            data = export_service.highlighted_pdf(comparison, "old", annotations)
+            data = export_service.highlighted_pdf(comparison, "old", annotations, group_set)
         elif kind == "new-highlighted.pdf":
-            data = export_service.highlighted_pdf(comparison, "new", annotations)
+            data = export_service.highlighted_pdf(comparison, "new", annotations, group_set)
         elif kind == "side-by-side.pdf":
-            data = export_service.side_by_side_pdf(comparison, annotations)
+            data = export_service.side_by_side_pdf(comparison, annotations, group_set)
+        elif kind == "single-document.pdf":
+            data = export_service.single_document_pdf(comparison, annotations, group_set)
         else:  # bundle.zip
             data = export_service.bundle_zip(comparison, annotations)
     except ValueError as e:

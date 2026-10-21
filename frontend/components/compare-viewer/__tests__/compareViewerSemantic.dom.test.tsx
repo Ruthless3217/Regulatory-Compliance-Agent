@@ -1,14 +1,10 @@
 // @vitest-environment jsdom
 import * as React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SemanticBadge } from "../SemanticBadge";
 import { ChangeCard } from "../ChangeCard";
-import {
-  ViewerProvider,
-  matchesViewerFilter,
-  type ViewerChange,
-} from "../ViewerContext";
+import { ViewerProvider, type ViewerChange } from "../ViewerContext";
 import { ChangesPanel } from "../ChangesPanel";
 import type { DocumentComparison } from "@/lib/types";
 
@@ -97,42 +93,7 @@ describe("SemanticBadge Component", () => {
   });
 });
 
-describe("Filter Matcher Contract", () => {
-  const sampleChange = (changeType: string, kind: ViewerChange["kind"] = "modified"): ViewerChange => ({
-    id: "r1",
-    kind,
-    changeType,
-    fraction: 0.1,
-  });
-
-  it("matches all changes under 'all' filter", () => {
-    expect(matchesViewerFilter(sampleChange("numeric_only"), "all")).toBe(true);
-    expect(matchesViewerFilter(sampleChange("replacement"), "all")).toBe(true);
-  });
-
-  it("correctly isolates numeric changes", () => {
-    expect(matchesViewerFilter(sampleChange("numeric_only"), "numeric")).toBe(true);
-    expect(matchesViewerFilter(sampleChange("replacement"), "numeric")).toBe(false);
-  });
-
-  it("correctly isolates identifier changes", () => {
-    expect(matchesViewerFilter(sampleChange("identifier_only"), "identifier")).toBe(true);
-    expect(matchesViewerFilter(sampleChange("numeric_only"), "identifier")).toBe(false);
-  });
-
-  it("correctly groups formatting changes (whitespace and punctuation)", () => {
-    expect(matchesViewerFilter(sampleChange("whitespace_only"), "formatting")).toBe(true);
-    expect(matchesViewerFilter(sampleChange("punctuation_only"), "formatting")).toBe(true);
-    expect(matchesViewerFilter(sampleChange("replacement"), "formatting")).toBe(false);
-  });
-
-  it("correctly filters reordered moves", () => {
-    expect(matchesViewerFilter(sampleChange("reordered", "moved"), "reordered")).toBe(true);
-    expect(matchesViewerFilter(sampleChange("replacement", "modified"), "reordered")).toBe(false);
-  });
-});
-
-describe("ChangeCard Details & Multi-Location Rendering", () => {
+describe("ChangeCard details & multi-location rendering", () => {
   const mockComparison: DocumentComparison = {
     id: "comp-1",
     title: "Test Comparison",
@@ -143,38 +104,33 @@ describe("ChangeCard Details & Multi-Location Rendering", () => {
     created_at: new Date().toISOString(),
   };
 
-  it("renders structural anchor title and multi-location count", () => {
+  it("renders number, kind, section, locations, page and both excerpts", () => {
     const change: ViewerChange = {
       id: "r5",
+      order: 5,
       kind: "modified",
+      group: "replacements",
+      defaultVisible: true,
+      category: "content",
       changeType: "numeric_only",
-      structure: {
-        anchor_type: "numbered_item",
-        anchor_key: "5",
-        title: "5. Grace Period",
-      },
+      structure: { anchor_type: "numbered_item", anchor_key: "5", title: "5. Grace Period" },
       removedText: "15-days",
       addedText: "30-days",
-      oldPage: 6,
-      newPage: 6,
-      oldLocations: [
-        { page: 6, bbox: [100, 200, 150, 220], text: "15-days" },
-        { page: 6, bbox: [100, 230, 150, 250], text: "15-days" },
-      ],
-      fraction: 0.25,
+      old: {
+        page: 6, bbox: [100, 200, 150, 220], text: "15-days", anchor: false,
+        locations: [
+          { page: 6, bbox: [100, 200, 150, 220], text: "15-days" },
+          { page: 6, bbox: [100, 230, 150, 250], text: "15-days" },
+        ],
+      },
+      new: { page: 6, bbox: [100, 200, 150, 220], text: "30-days", anchor: false },
     };
-
     render(
       <ViewerProvider comparison={mockComparison}>
-        <ChangeCard
-          change={change}
-          index={5}
-          selected={false}
-          onSelect={vi.fn()}
-        />
+        <ChangeCard change={change} selected={false} onSelect={vi.fn()} />
       </ViewerProvider>
     );
-
+    expect(screen.getByText("5. Replaced")).toBeDefined();
     expect(screen.getByText("Numeric")).toBeDefined();
     expect(screen.getByText("§ 5. Grace Period")).toBeDefined();
     expect(screen.getByText("2 locs")).toBeDefined();
@@ -184,7 +140,7 @@ describe("ChangeCard Details & Multi-Location Rendering", () => {
   });
 });
 
-describe("ChangesPanel and Toolbar Integration", () => {
+describe("ChangesPanel integration", () => {
   const comparisonWithChanges: DocumentComparison = {
     id: "comp-2",
     title: "Production Policy Comparison",
@@ -197,51 +153,26 @@ describe("ChangesPanel and Toolbar Integration", () => {
       new: { pages: [{ n: 1, w_pt: 612, h_pt: 792, boxes: [] }] },
       truncated_pages: 0,
       changes: [
-        {
-          id: "r1",
-          kind: "modified",
-          change_type: "identifier_only",
-          old: { page: 1, bbox: [50, 50, 100, 60], text: "116N198V08" },
-          new: { page: 1, bbox: [50, 50, 100, 60], text: "116N198V09" },
-        },
-        {
-          id: "r2",
-          kind: "modified",
-          change_type: "numeric_only",
-          old: { page: 6, bbox: [100, 200, 150, 210], text: "15-days" },
-          new: { page: 6, bbox: [100, 200, 150, 210], text: "30-days" },
-        },
-        {
-          id: "r3",
-          kind: "modified",
-          change_type: "replacement",
-          old: { page: 7, bbox: [100, 300, 200, 310], text: "Old clause" },
-          new: { page: 7, bbox: [100, 300, 200, 310], text: "New clause" },
-        },
+        { id: "r1", kind: "modified", change_type: "identifier_only",
+          old: { page: 1, bbox: [50, 50, 100, 60], text: "116N198V08" }, new: { page: 1, bbox: [50, 50, 100, 60], text: "116N198V09" } },
+        { id: "r2", kind: "modified", change_type: "numeric_only",
+          old: { page: 1, bbox: [100, 200, 150, 210], text: "15-days" }, new: { page: 1, bbox: [100, 200, 150, 210], text: "30-days" } },
+        { id: "r3", kind: "modified", change_type: "replacement",
+          old: { page: 1, bbox: [100, 300, 200, 310], text: "Old clause" }, new: { page: 1, bbox: [100, 300, 200, 310], text: "New clause" } },
       ],
     },
     created_at: new Date().toISOString(),
   };
 
-  it("renders semantic filter chips with correct counts and filters list", () => {
+  it("lists every record from an older engine (no groups) as substantive, in order", () => {
     render(
       <ViewerProvider comparison={comparisonWithChanges}>
         <ChangesPanel />
       </ViewerProvider>
     );
-
-    // Filter chips present
-    expect(screen.getAllByText("Numeric").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Identifier").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Replacement").length).toBeGreaterThanOrEqual(1);
-
-    // Click on Numeric filter chip
-    const numericChip = screen.getByRole("button", { name: /^Numeric\d*$/i });
-    fireEvent.click(numericChip);
-
-    // Only Numeric change should be visible
-    expect(screen.getByText("15-days")).toBeDefined();
-    expect(screen.getByText("30-days")).toBeDefined();
-    expect(screen.queryByText("116N198V08")).toBeNull();
+    const cards = screen.getAllByTestId("change-card");
+    expect(cards.map((c) => c.getAttribute("data-change-id"))).toEqual(["r1", "r2", "r3"]);
+    expect(screen.getByText("116N198V08")).toBeDefined();
+    expect(screen.getByTestId("change-counter").textContent).toContain("3");
   });
 });

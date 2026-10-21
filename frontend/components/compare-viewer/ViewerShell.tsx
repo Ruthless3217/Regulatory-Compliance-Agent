@@ -3,17 +3,13 @@ import * as React from "react";
 import { AlertTriangle } from "lucide-react";
 import type { DocumentComparison } from "@/lib/types";
 import { getComparison } from "@/lib/api";
-import {
-  ViewerProvider,
-  useViewer,
-  deriveViewerChanges,
-  matchesViewerFilter,
-} from "./ViewerContext";
+import { ViewerProvider, useViewer } from "./ViewerContext";
 import { Toolbar } from "./Toolbar";
 import { PagePane } from "./PagePane";
 import { TextRedline } from "./TextRedline";
-import { HeatStrip } from "./HeatStrip";
+import { CenterChangeMap } from "./CenterChangeMap";
 import { ChangesPanel } from "./ChangesPanel";
+import { PreparingComparison } from "./PreparingComparison";
 
 export function ViewerShell({ comparison }: { comparison: DocumentComparison }) {
   return (
@@ -24,26 +20,7 @@ export function ViewerShell({ comparison }: { comparison: DocumentComparison }) 
 }
 
 function ViewerShellInner() {
-  const {
-    comparison,
-    setComparison,
-    effectiveMode,
-    layoutMode,
-    singleSide,
-    showMoves,
-    filter,
-    annotationFor,
-    selectedChangeId,
-    setSelectedChangeId,
-  } = useViewer();
-
-  const isNoted = React.useCallback(
-    (c: { id: string }) => {
-      const a = annotationFor(c.id);
-      return !!a && (!!a.note?.trim() || a.tags.length > 0);
-    },
-    [annotationFor]
-  );
+  const { comparison, setComparison, effectiveMode, layoutMode, singleSide, stepChange } = useViewer();
 
   // Left/Right arrow keys step through changes (same order as the Toolbar's
   // Prev/Next). Selecting a change scrolls it into view in both panes. We use
@@ -63,26 +40,15 @@ function ViewerShellInner() {
       ) {
         return;
       }
-      const allChanges = deriveViewerChanges(comparison, effectiveMode, showMoves);
-      const changes = allChanges.filter((c) => matchesViewerFilter(c, filter, isNoted(c)));
-      if (changes.length === 0) return;
       e.preventDefault();
-      const dir = e.key === "ArrowRight" ? 1 : -1;
-      const cur = changes.findIndex((c) => c.id === selectedChangeId);
-      const next =
-        cur < 0
-          ? dir === 1
-            ? 0
-            : changes.length - 1
-          : (cur + dir + changes.length) % changes.length;
-      setSelectedChangeId(changes[next].id);
+      stepChange(e.key === "ArrowRight" ? 1 : -1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [comparison, effectiveMode, showMoves, filter, isNoted, selectedChangeId, setSelectedChangeId]);
+  }, [stepChange]);
 
-  // Poll while the pixel render is processing: 2 s, backing off to 5 s after
-  // 60 s, and stopping on any terminal status.
+  // Poll while the pixel render is processing: 1 s (the loader shows live progress),
+  // backing off to 3 s after 2 min, and stopping on any terminal status.
   React.useEffect(() => {
     if (comparison.render_status !== "processing") return;
     let active = true;
@@ -98,10 +64,10 @@ function ViewerShellInner() {
         /* transient — keep polling */
       }
       if (!active) return;
-      const interval = Date.now() - start > 60_000 ? 5000 : 2000;
+      const interval = Date.now() - start > 120_000 ? 3000 : 1000;
       timer = setTimeout(tick, interval);
     };
-    timer = setTimeout(tick, 2000);
+    timer = setTimeout(tick, 1000);
     return () => {
       active = false;
       clearTimeout(timer);
@@ -109,6 +75,12 @@ function ViewerShellInner() {
   }, [comparison.id, comparison.render_status, setComparison]);
 
   const renderFailed = comparison.render_status === "failed";
+
+  // Draftable: after upload, a "Preparing your comparison" card until the document
+  // view is ready (then the viewer replaces it in place).
+  if (comparison.render_status === "processing") {
+    return <PreparingComparison progress={comparison.render_progress} />;
+  }
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -124,28 +96,29 @@ function ViewerShellInner() {
         </div>
       )}
 
-      <div
-        className="grid min-h-0 flex-1"
-        style={{ gridTemplateColumns: "minmax(0,1fr) 12px 380px" }}
-      >
-        <div className="min-h-0 overflow-hidden">
-          {effectiveMode === "pixel" ? (
-            layoutMode === "side-by-side" ? (
-              <div className="grid h-full grid-cols-2">
-                <PagePane side="old" />
-                <PagePane side="new" className="border-l border-border" />
-              </div>
-            ) : (
-              <PagePane side={singleSide} />
-            )
-          ) : (
-            <TextRedline />
-          )}
+      {effectiveMode === "pixel" && layoutMode === "side-by-side" ? (
+        // Draftable layout: the change map sits between the two documents
+        <div
+          className="grid min-h-0 flex-1"
+          style={{ gridTemplateColumns: "minmax(0,1fr) 44px minmax(0,1fr) 360px" }}
+        >
+          <PagePane side="old" className="min-h-0 overflow-hidden" />
+          <CenterChangeMap />
+          <PagePane side="new" className="min-h-0 overflow-hidden" />
+          <ChangesPanel />
         </div>
-
-        <HeatStrip />
-        <ChangesPanel />
-      </div>
+      ) : (
+        <div
+          className="grid min-h-0 flex-1"
+          style={{ gridTemplateColumns: "minmax(0,1fr) 44px 360px" }}
+        >
+          <div className="min-h-0 overflow-hidden">
+            {effectiveMode === "pixel" ? <PagePane side={singleSide} /> : <TextRedline />}
+          </div>
+          <CenterChangeMap />
+          <ChangesPanel />
+        </div>
+      )}
     </div>
   );
 }
