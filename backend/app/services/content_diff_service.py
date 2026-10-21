@@ -96,6 +96,8 @@ class ContentDiff:
     old_tokens: List[CompToken]
     new_tokens: List[CompToken]
     changes: List[Change]
+    # the one global alignment of token keys; every view reuses it (it is the costly step)
+    ops: List[Tuple[str, int, int, int, int]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------- token preparation
@@ -313,7 +315,13 @@ def _detect_moves(ot, nt, raw: List[Change]) -> None:
                              or unique_word):
                 best = (1.0, a_i); break
             if min(len(rk), len(ak)) >= _NEAR_MOVE_MIN_TOKENS:
-                ratio = SequenceMatcher(None, rk, ak, autojunk=False).ratio()
+                # length and bag-of-words upper bounds first: exact ratio only for real candidates
+                if 2 * min(len(rk), len(ak)) / (len(rk) + len(ak)) < _NEAR_MOVE_RATIO:
+                    continue
+                sm = SequenceMatcher(None, rk, ak, autojunk=False)
+                if sm.quick_ratio() < _NEAR_MOVE_RATIO:
+                    continue
+                ratio = sm.ratio()
                 if ratio >= _NEAR_MOVE_RATIO and (best is None or ratio > best[0]):
                     best = (ratio, a_i)
         if best is None:
@@ -343,15 +351,23 @@ def _detect_moves(ot, nt, raw: List[Change]) -> None:
 def _detect_repeated_headers(nt, raw: List[Change]) -> None:
     """A table header row the renderer repeats at the top of a continuation page is layout."""
     keys = [t.key for t in nt]
+    page_start: Dict[int, int] = {}
+    positions: Dict[str, List[int]] = {}
+    for k, t in enumerate(nt):
+        page_start.setdefault(t.page, k)
+        positions.setdefault(t.key, []).append(k)
     for c in raw:
         if c.category != "content" or c.kind != "added" or len(c.new_tok) < 4:
             continue
-        seq = keys[c.new_tok[0]:c.new_tok[-1] + 1]
-        first = nt[c.new_tok[0]]
-        page_tokens = [k for k, t in enumerate(nt) if t.page == first.page]
-        at_top = page_tokens and c.new_tok[0] - page_tokens[0] <= 3
-        earlier = any(keys[s:s + len(seq)] == seq for s in range(0, c.new_tok[0] - len(seq) + 1))
-        if at_top and earlier:
+        start = c.new_tok[0]
+        seq = keys[start:c.new_tok[-1] + 1]
+        at_top = start - page_start[nt[start].page] <= 3
+        if not at_top:
+            continue
+        # an identical run that ends before this one starts
+        earlier = any(keys[s:s + len(seq)] == seq
+                      for s in positions.get(seq[0], ()) if s + len(seq) <= start)
+        if earlier:
             c.category = "layout"; c.subtype = "repeated-header"
 
 
@@ -390,13 +406,24 @@ def _anchor(tokens, idx):
     return (tokens[0].src[0], "before") if tokens else None
 
 
+def _alignment(ot, nt) -> List[Tuple[str, int, int, int, int]]:
+    return SequenceMatcher(None, [t.key for t in ot], [t.key for t in nt], autojunk=False).get_opcodes()
+
+
+def _ops_of(diff: ContentDiff) -> List[Tuple[str, int, int, int, int]]:
+    if not diff.ops:
+        diff.ops = _alignment(diff.old_tokens, diff.new_tokens)
+    return diff.ops
+
+
 def _finalise(old_words, new_words, ot, nt, raw: List[Change], ops=None) -> ContentDiff:
     from app.services.structural_alignment_service import classify_change
 
     raw = [c for c in raw if c.old_tok or c.new_tok]
     # document order: position in the new document (old-only changes are placed where
     # the alignment puts their neighbourhood in the new document)
-    o2n = _old_to_new_positions(ot, nt)
+    all_ops = ops if ops is not None else _alignment(ot, nt)
+    o2n = _old_to_new_positions(ot, nt, all_ops)
     if ops is not None:
         o_after, n_after = _anchors(ot, nt, ops)
     raw.sort(key=lambda c: (min(c.new_tok) if c.new_tok else o2n[min(c.old_tok)],
@@ -419,11 +446,10 @@ def _finalise(old_words, new_words, ot, nt, raw: List[Change], ops=None) -> Cont
         else:
             c.change_type = c.category if c.category != "typographic" else (c.subtype or "typographic")
             c.metadata = {"category": c.category, "subtype": c.subtype, **c.metadata}
-    return ContentDiff(old_words, new_words, ot, nt, raw)
+    return ContentDiff(old_words, new_words, ot, nt, raw, all_ops)
 
 
-def _old_to_new_positions(ot, nt) -> List[float]:
-    ops = SequenceMatcher(None, [t.key for t in ot], [t.key for t in nt], autojunk=False).get_opcodes()
+def _old_to_new_positions(ot, nt, ops) -> List[float]:
     pos = [0.0] * len(ot)
     for tag, i1, i2, j1, j2 in ops:
         for k, i in enumerate(range(i1, i2)):
@@ -481,8 +507,7 @@ def to_blocks(diff: ContentDiff) -> List[dict]:
         for j in c.new_tok:
             n_change[j] = c
 
-    keys_o, keys_n = [t.key for t in ot], [t.key for t in nt]
-    ops = SequenceMatcher(None, keys_o, keys_n, autojunk=False).get_opcodes()
+    ops = _ops_of(diff)
     blocks: List[dict] = []
     cur_o: List[dict] = []
     cur_n: List[dict] = []
@@ -565,7 +590,7 @@ def page_alignment(diff: ContentDiff, n_old: int, n_new: int) -> List[List[Optio
     from collections import Counter
 
     ot, nt = diff.old_tokens, diff.new_tokens
-    ops = SequenceMatcher(None, [t.key for t in ot], [t.key for t in nt], autojunk=False).get_opcodes()
+    ops = _ops_of(diff)
     votes: Dict[int, Counter] = {}
     for tag, i1, i2, j1, j2 in ops:
         if tag == "equal":
@@ -626,7 +651,7 @@ def match_segments(diff: ContentDiff) -> List[Tuple[List[int], List[int]]]:
     ot, nt = diff.old_tokens, diff.new_tokens
     o_changed = {i for c in diff.changes for i in c.old_tok}
     n_changed = {j for c in diff.changes for j in c.new_tok}
-    ops = SequenceMatcher(None, [t.key for t in ot], [t.key for t in nt], autojunk=False).get_opcodes()
+    ops = _ops_of(diff)
     ow, nw = diff.old_words, diff.new_words
     geo_o, geo_n = _line_geometry(ow), _line_geometry(nw)
     segs: List[Tuple[List[int], List[int]]] = []

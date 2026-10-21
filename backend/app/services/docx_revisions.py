@@ -17,6 +17,19 @@ from lxml import etree
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
+# Uploaded documents are untrusted. OOXML never uses a DTD, so any DOCTYPE is refused
+# outright, and the parser itself never resolves entities, loads DTDs or touches the
+# network (XXE / entity-expansion bombs).
+_PARSER = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False,
+                          dtd_validation=False, huge_tree=False)
+
+
+def _parse(data: bytes) -> etree._Element:
+    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+        raise ValueError("DTD not allowed in a DOCX part")
+    return etree.fromstring(data, parser=_PARSER)
+
+
 def _q(tag: str) -> str:
     return "{%s}%s" % (W, tag)
 
@@ -87,7 +100,7 @@ def _xml_parts_with_revisions(z: zipfile.ZipFile) -> Iterable[str]:
     for name in z.namelist():
         if not _is_content_part(name):
             continue
-        root = etree.fromstring(z.read(name))
+        root = _parse(z.read(name))
         if any(e.tag in _REVISION_TAGS for e in root.iter()):
             yield name
 
@@ -116,11 +129,11 @@ def accept_all_revisions(src: str, dst: str) -> str:
             for item in zin.infolist():
                 data = zin.read(item.filename)
                 if item.filename in targets:
-                    root = etree.fromstring(data)
+                    root = _parse(data)
                     _accept(root)
                     data = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
                 elif item.filename == "word/settings.xml" and settings_has_tracking:
-                    root = etree.fromstring(data)
+                    root = _parse(data)
                     for el in list(root.iter(_q("trackRevisions"))):
                         el.getparent().remove(el)
                     data = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)

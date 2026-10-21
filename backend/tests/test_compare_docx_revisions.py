@@ -135,3 +135,40 @@ def test_to_pdf_converts_the_accepted_docx(tmp_path, monkeypatch):
     assert out.endswith("old.pdf")
     assert "Removed" not in seen["text"] and "Added" in seen["text"]
     assert seen["path"] != str(src)
+
+
+# ---------------------------------------------------------------- untrusted uploads (XXE)
+def _evil_docx(tmp_path, doctype: str):
+    import zipfile as _z
+    path = tmp_path / "evil.docx"
+    body = (
+        '<?xml version="1.0"?>' + doctype +
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p>'
+        '<w:ins w:id="1" w:author="a"><w:r><w:t>&xxe;</w:t></w:r></w:ins>'
+        '</w:p></w:body></w:document>'
+    )
+    with _z.ZipFile(path, "w") as z:
+        z.writestr("[Content_Types].xml", "<Types/>")
+        z.writestr("word/document.xml", body)
+    return path
+
+
+def test_external_entity_in_an_uploaded_docx_is_rejected(tmp_path):
+    import pytest as _pytest
+    from app.services.docx_revisions import accept_all_revisions, has_revisions
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOP-SECRET")
+    evil = _evil_docx(tmp_path, f'<!DOCTYPE d [<!ENTITY xxe SYSTEM "{secret.as_uri()}">]>')
+    with _pytest.raises(ValueError, match="DTD"):
+        has_revisions(str(evil))
+    with _pytest.raises(ValueError, match="DTD"):
+        accept_all_revisions(str(evil), str(tmp_path / "out.docx"))
+    assert not (tmp_path / "out.docx").exists() or b"TOP-SECRET" not in (tmp_path / "out.docx").read_bytes()
+
+
+def test_entity_expansion_bomb_is_rejected(tmp_path):
+    import pytest as _pytest
+    from app.services.docx_revisions import has_revisions
+    lol = '<!DOCTYPE d [<!ENTITY a "lol"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;"><!ENTITY xxe "&b;&b;&b;&b;&b;&b;">]>'
+    with _pytest.raises(ValueError, match="DTD"):
+        has_revisions(str(_evil_docx(tmp_path, lol)))
